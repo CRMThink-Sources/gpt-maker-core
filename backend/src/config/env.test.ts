@@ -5,6 +5,7 @@ const base = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   REDIS_URL: 'redis://localhost:6379',
   RABBITMQ_URL: 'amqp://u:p@localhost:5672',
+  DATA_ENCRYPTION_KEY: 'a2V5',
 };
 
 describe('loadEnv', () => {

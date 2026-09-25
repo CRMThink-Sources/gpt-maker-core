@@ -7,7 +7,7 @@
 - [x] 1.3 Estruturar módulos Nest (`tenancy`, `bitrix`, `gptmaker`, `models`, `agents`, `training`, `channel`, `triggers`, `billing`, `payments`, `reconciliation`, `backoffice`, `shared`) e teste de arquitetura (`dependency-cruiser`) (~4h)
 - [x] 1.4 Dois entrypoints no mesmo pacote/imagem: `main.api.ts` (HTTP, webhooks) e `main.worker.ts` (consumidores RabbitMQ, jobs) selecionados por `APP_ROLE` (~3h)
 - [x] 1.5 Gerar projeto NextJS (App Router, TypeScript) com áreas `/app` (embutido no Bitrix) e `/admin` (backoffice), consumindo `packages/contracts` (~3h)
-- [x] 1.6 Criar `infra/docker-compose.yml` de dev: postgres, rabbitmq (plugin consistent-hash), redis, minio, backend-api, backend-worker, frontend (hot reload) (~4h)
+- [x] 1.6 Criar `infra/docker-compose.yml` de dev: postgres, rabbitmq (plugin consistent-hash), redis, storage S3 (SeaweedFS; MinIO sem imagem pública), backend-api, backend-worker, frontend (hot reload) (~4h)
 - [x] 1.7 Configurar logs JSON (`nestjs-pino`) com `traceId`/`tenantId` via `AsyncLocalStorage`, health checks (`/health/live`, `/health/ready`) e endpoint `/metrics` Prometheus (~4h)
 
 ## 2. Infraestrutura DigitalOcean e CI/CD GitHub Actions
@@ -24,14 +24,14 @@
 
 ## 3. Modelo de dados base
 
-- [ ] 3.1 Schema Drizzle + migração: `tenant` (`installation_id`, `member_id`, `tenant_code`, status), `app_user_permission` (~3h)
-- [ ] 3.2 Migração: `ai_model`, `ai_model_cost_history`, `plan_entitlement`, `plan_allowed_model` (~2h)
-- [ ] 3.3 Migração: `subscription_state`, `payment_event`, `payments_outbox` (~2h)
-- [ ] 3.4 Migração: `credit_ledger` (`wallet` TRIAL/PLAN/EXTRA, idempotency_key UNIQUE, `model_code`, `unit_cost`), `tenant_balance` (`trial_balance`, `trial_ends_at`, `plan_balance`, `extra_balance`, `expires_at`), `credit_deduction` (`amount`, `remaining`, `ref_charge_id` UNIQUE) (~4h)
-- [ ] 3.5 Migração: `agent`, `agent_bot`, `training`, `dialog_state`, `message_log` (~3h)
-- [ ] 3.6 Migração: `agent_event`, `trigger`, `trigger_action`, `trigger_execution` (~2h)
-- [ ] 3.7 Migração: `usage_daily_real`, `reconciliation_adjustment`, `workspace_sync_finding`, `backoffice_user`, `audit_log` (~3h)
-- [ ] 3.8 Utilitário de cifragem AES-GCM (`node:crypto`) para colunas sensíveis (custom type Drizzle) e testes (~3h)
+- [x] 3.1 Schema Drizzle + migração: `tenant` (`installation_id`, `member_id`, `tenant_code`, status), `app_user_permission` (~3h)
+- [x] 3.2 Migração: `ai_model`, `ai_model_cost_history`, `plan_entitlement`, `plan_allowed_model` (~2h)
+- [x] 3.3 Migração: `subscription_state`, `payment_event`, `payments_outbox` (~2h)
+- [x] 3.4 Migração: `credit_ledger` (`wallet` TRIAL/PLAN/EXTRA, idempotency_key UNIQUE, `model_code`, `unit_cost`), `tenant_balance` (`trial_balance`, `trial_ends_at`, `plan_balance`, `extra_balance`, `expires_at`), `credit_deduction` (`amount`, `remaining`, `ref_charge_id` UNIQUE) (~4h)
+- [x] 3.5 Migração: `agent`, `agent_bot`, `training`, `dialog_state`, `message_log` (~3h)
+- [x] 3.6 Migração: `agent_event`, `trigger`, `trigger_action`, `trigger_execution` (~2h)
+- [x] 3.7 Migração: `usage_daily_real`, `reconciliation_adjustment`, `workspace_sync_finding`, `backoffice_user`, `audit_log` (~3h)
+- [x] 3.8 Utilitário de cifragem AES-GCM (`node:crypto`) para colunas sensíveis (custom type Drizzle) e testes (~3h)
 
 ## 4. Cliente GPTMaker e workspace (gptmaker-workspace)
 
@@ -76,7 +76,7 @@
 
 ## 8. Treinamentos (agent-training)
 
-- [ ] 8.1 Integração com Spaces/MinIO (`@aws-sdk/client-s3`): caminhos aleatórios e URL pré-assinada longa (~4h)
+- [ ] 8.1 Integração com Spaces/SeaweedFS (`@aws-sdk/client-s3`): caminhos aleatórios e URL pré-assinada longa (~4h)
 - [ ] 8.2 Endpoints de criação TEXT, WEBSITE (subpáginas, intervalo), VIDEO e DOCUMENT (validação tamanho/MIME) (~10h)
 - [ ] 8.3 Endpoint de `callbackUrl` com token para status (`PROCESSING`/`DONE`/`FAILED`) (~4h)
 - [ ] 8.4 Listar, editar (TEXT) e remover; apagar objeto do storage ao remover documento (~5h)

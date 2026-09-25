@@ -23,7 +23,7 @@ Requisitos: Node 24 (`.nvmrc`), Docker.
 ```bash
 npm ci
 npm run build -w @gptmaker/contracts
-docker compose -f infra/docker-compose.yml up -d   # postgres, rabbitmq, redis, minio
+docker compose -f infra/docker-compose.yml up -d   # postgres, rabbitmq, redis, storage S3
 cp backend/.env.example backend/.env
 
 npm run dev:api -w backend      # http://localhost:3001 (health: /health/live, /health/ready; /metrics)
@@ -33,7 +33,11 @@ npm run dev -w frontend         # http://localhost:3000
 
 O backend lê as variáveis do ambiente do processo (ver `backend/.env.example`); carregue o `.env` no shell ou na IDE. Para subir tudo em containers: `docker compose -f infra/docker-compose.yml --profile app up -d --build`.
 
-Consoles locais: RabbitMQ http://localhost:15672 (gptmaker/gptmaker), MinIO http://localhost:9001 (gptmaker/gptmaker123).
+Consoles locais: RabbitMQ http://localhost:15672 (gptmaker/gptmaker). Storage S3 (SeaweedFS, substitui o Spaces em dev): http://localhost:8333, chave `gptmaker`/`gptmaker123`, bucket `gptmaker-trainings`.
+
+Portas do host em uso por outro projeto? Sobrescreva com `POSTGRES_PORT`, `REDIS_PORT`, `RABBITMQ_PORT` e `RABBITMQ_UI_PORT` (ajuste também o `backend/.env`).
+
+Migrações: a API aplica as pendentes no start (`RUN_MIGRATIONS=true`). Depois de alterar `backend/src/shared/database/schema/`, gere a migração com `npm run db:generate -w backend` e commite `backend/drizzle/` (o CI falha se esquecer).
 
 ## Verificações
 

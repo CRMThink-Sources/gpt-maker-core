@@ -14,6 +14,10 @@ export const envSchema = z.object({
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
   RABBITMQ_URL: z.url(),
+  /** Chave AES-256 (32 bytes em base64) das colunas cifradas. Gerar: `openssl rand -base64 32`. */
+  DATA_ENCRYPTION_KEY: z.string().min(1),
+  /** Aplica migrações no start da API (desligar só em testes ou execução manual). */
+  RUN_MIGRATIONS: booleanFromString.default(true),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,0 +1,192 @@
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { createdAt, timestamptz, updatedAt } from '../columns';
+import { aiModel } from './models';
+import { tenant } from './tenancy';
+
+export const agentType = pgEnum('agent_type', ['SUPPORT', 'SALE', 'PERSONAL']);
+export const communicationType = pgEnum('communication_type', ['FORMAL', 'NORMAL', 'RELAXED']);
+export const agentStatus = pgEnum('agent_status', ['ACTIVE', 'INACTIVE', 'DELETED', 'OUT_OF_SYNC']);
+export const agentInactiveReason = pgEnum('agent_inactive_reason', [
+  'MANUAL',
+  'SUBSCRIPTION_EXPIRED',
+  'TENANT_SUSPENDED',
+  'UNINSTALLED',
+]);
+
+/** Registro local e dono do agente no workspace GPTMaker compartilhado (design D2). */
+export const agent = pgTable(
+  'agent',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    gptmakerAgentId: text('gptmaker_agent_id').notNull(),
+    /** Nome exibido ao cliente, sem o prefixo `[<tenantCode>]` usado no GPTMaker. */
+    name: text('name').notNull(),
+    avatarUrl: text('avatar_url'),
+    behavior: text('behavior'),
+    type: agentType('type').notNull(),
+    communicationType: communicationType('communication_type').notNull(),
+    jobName: text('job_name'),
+    jobSite: text('job_site'),
+    jobDescription: text('job_description'),
+    modelId: uuid('model_id')
+      .notNull()
+      .references(() => aiModel.id),
+    /** Demais settings enviadas ao GPTMaker (`PUT /agents/{id}/settings`). */
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    status: agentStatus('status').notNull().default('ACTIVE'),
+    inactiveReason: agentInactiveReason('inactive_reason'),
+    /** Hash SHA-256 do token dos webhooks do agente (`?t=`); o token em claro nunca é guardado. */
+    webhookTokenHash: text('webhook_token_hash').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamptz('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('agent_gptmaker_agent_id_uq').on(t.gptmakerAgentId),
+    uniqueIndex('agent_webhook_token_hash_uq').on(t.webhookTokenHash),
+    // Contagem do limite de agentes não removidos por tenant.
+    index('agent_tenant_idx')
+      .on(t.tenantId)
+      .where(sql`${t.status} <> 'DELETED'`),
+    index('agent_model_idx').on(t.modelId),
+  ],
+);
+
+/** Chatbot Bitrix (`imbot.v2`) registrado para o agente no portal do tenant. */
+export const agentBot = pgTable(
+  'agent_bot',
+  {
+    agentId: uuid('agent_id')
+      .primaryKey()
+      .references(() => agent.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    botId: text('bot_id').notNull(),
+    botCode: text('bot_code').notNull(),
+    registeredAt: timestamptz('registered_at').notNull().defaultNow(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('agent_bot_tenant_bot_uq').on(t.tenantId, t.botId),
+    uniqueIndex('agent_bot_tenant_code_uq').on(t.tenantId, t.botCode),
+  ],
+);
+
+export const trainingType = pgEnum('training_type', ['TEXT', 'WEBSITE', 'VIDEO', 'DOCUMENT']);
+export const trainingStatus = pgEnum('training_status', ['PROCESSING', 'DONE', 'FAILED']);
+
+export const training = pgTable(
+  'training',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agent.id),
+    gptmakerTrainingId: text('gptmaker_training_id'),
+    type: trainingType('type').notNull(),
+    /** Texto do treinamento `TEXT`. */
+    content: text('content'),
+    /** URL do site (`WEBSITE`) ou do vídeo (`VIDEO`). */
+    url: text('url'),
+    trainingSubPages: boolean('training_sub_pages'),
+    trainingInterval: text('training_interval'),
+    /** Chave do objeto no Spaces (SeaweedFS em dev) para `DOCUMENT`. */
+    documentKey: text('document_key'),
+    documentName: text('document_name'),
+    documentMimetype: text('document_mimetype'),
+    documentSizeBytes: integer('document_size_bytes'),
+    status: trainingStatus('status').notNull().default('PROCESSING'),
+    /** Hash do token do `callbackUrl` de status. */
+    callbackTokenHash: text('callback_token_hash'),
+    error: text('error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamptz('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('training_gptmaker_training_id_uq').on(t.gptmakerTrainingId),
+    index('training_agent_idx')
+      .on(t.agentId)
+      .where(sql`${t.deletedAt} is null`),
+    index('training_tenant_idx').on(t.tenantId),
+  ],
+);
+
+/** Estado do diálogo da Linha Aberta: atendimento humano em curso e vínculo com o chat do GPTMaker. */
+export const dialogState = pgTable(
+  'dialog_state',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    dialogId: text('dialog_id').notNull(),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agent.id),
+    gptmakerChatId: text('gptmaker_chat_id'),
+    humanActive: boolean('human_active').notNull().default(false),
+    humanStartedAt: timestamptz('human_started_at'),
+    lastMessageAt: timestamptz('last_message_at'),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.dialogId] }),
+    index('dialog_state_gptmaker_chat_idx').on(t.gptmakerChatId),
+  ],
+);
+
+export const messageDirection = pgEnum('message_direction', ['IN', 'OUT']);
+export const messageStatus = pgEnum('message_status', [
+  'RECEIVED',
+  'RESPONDED',
+  'BLOCKED_NO_CREDIT',
+  'SKIPPED_HUMAN',
+  'SKIPPED_INACTIVE',
+  'FAILED',
+]);
+
+export const messageLog = pgTable(
+  'message_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agent.id),
+    dialogId: text('dialog_id').notNull(),
+    bitrixMessageId: text('bitrix_message_id').notNull(),
+    direction: messageDirection('direction').notNull(),
+    status: messageStatus('status').notNull(),
+    modelCode: text('model_code'),
+    attempts: integer('attempts').notNull().default(0),
+    error: text('error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('message_log_message_uq').on(t.tenantId, t.bitrixMessageId, t.direction),
+    index('message_log_agent_idx').on(t.agentId, t.createdAt),
+    index('message_log_dialog_idx').on(t.tenantId, t.dialogId, t.createdAt),
+  ],
+);

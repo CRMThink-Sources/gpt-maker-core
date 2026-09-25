@@ -25,6 +25,7 @@ COPY --from=build /app/packages/contracts/package.json packages/contracts/
 COPY --from=build /app/packages/contracts/dist packages/contracts/dist
 COPY --from=build /app/backend/package.json backend/
 COPY --from=build /app/backend/dist backend/dist
+COPY --from=build /app/backend/drizzle backend/drizzle
 WORKDIR /app/backend
 USER node
 EXPOSE 3001 9464

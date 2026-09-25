@@ -1,6 +1,7 @@
 # Ambiente de desenvolvimento.
 #   Só infraestrutura (API/worker/frontend rodando local com hot reload):
 #     docker compose -f infra/docker-compose.yml up -d
+#   Portas do host sobrescrevíveis: POSTGRES_PORT, REDIS_PORT, RABBITMQ_PORT, RABBITMQ_UI_PORT.
 #   Tudo em containers (imagens de produção):
 #     docker compose -f infra/docker-compose.yml --profile app up -d --build
 name: gptmaker-dev
@@ -11,6 +12,7 @@ x-backend-env: &backend-env
   DATABASE_URL: postgres://gptmaker:gptmaker@postgres:5432/gptmaker
   REDIS_URL: redis://redis:6379
   RABBITMQ_URL: amqp://gptmaker:gptmaker@rabbitmq:5672
+  DATA_ENCRYPTION_KEY: ZGV2LWtleS1kZXYta2V5LWRldi1rZXktZGV2LWtleSE=
 
 services:
   postgres:
@@ -19,7 +21,7 @@ services:
       POSTGRES_USER: gptmaker
       POSTGRES_PASSWORD: gptmaker
       POSTGRES_DB: gptmaker
-    ports: ['5432:5432']
+    ports: ['${POSTGRES_PORT:-5432}:5432']
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U gptmaker -d gptmaker']
@@ -32,7 +34,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: gptmaker
       RABBITMQ_DEFAULT_PASS: gptmaker
-    ports: ['5672:5672', '15672:15672']
+    ports: ['${RABBITMQ_PORT:-5672}:5672', '${RABBITMQ_UI_PORT:-15672}:15672']
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
@@ -44,7 +46,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ['6379:6379']
+    ports: ['${REDIS_PORT:-6379}:6379']
     volumes: [redis-data:/data]
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
@@ -52,28 +54,37 @@ services:
       timeout: 3s
       retries: 20
 
-  # Substitui o DigitalOcean Spaces em dev (S3 compatível). Console: http://localhost:9001
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: gptmaker
-      MINIO_ROOT_PASSWORD: gptmaker123
-    ports: ['9000:9000', '9001:9001']
-    volumes: [minio-data:/data]
+  # Substitui o DigitalOcean Spaces em dev (S3 compatível em http://localhost:8333).
+  # MinIO deixou de publicar imagens; SeaweedFS atende a mesma API S3.
+  storage:
+    image: chrislusf/seaweedfs:latest
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports: ['8333:8333']
+    volumes:
+      - storage-data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9333/cluster/status']
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
 
-  minio-init:
-    image: minio/mc:latest
+  storage-init:
+    image: amazon/aws-cli:latest
     depends_on:
-      minio: { condition: service_healthy }
-    entrypoint: >
-      sh -c "mc alias set local http://minio:9000 gptmaker gptmaker123 &&
-             mc mb --ignore-existing local/gptmaker-trainings"
+      storage: { condition: service_healthy }
+    environment:
+      AWS_ACCESS_KEY_ID: gptmaker
+      AWS_SECRET_ACCESS_KEY: gptmaker123
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ['sh', '-c']
+    # Retenta até o gateway S3 aceitar conexões; bucket já existente não é erro.
+    command:
+      - >
+        for i in $$(seq 1 30); do
+        aws --endpoint-url http://storage:8333 s3api head-bucket --bucket gptmaker-trainings 2>/dev/null && exit 0;
+        aws --endpoint-url http://storage:8333 s3 mb s3://gptmaker-trainings && exit 0;
+        sleep 2; done; exit 1
     restart: 'no'
 
   backend-api:
@@ -84,6 +95,11 @@ services:
       APP_ROLE: api
       PORT: 3001
     ports: ['3001:3001']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/health/ready']
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on: &backend-deps
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -98,16 +114,26 @@ services:
       APP_ROLE: worker
       WORKER_HTTP_PORT: 9464
     ports: ['9464:9464']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9464/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on: *backend-deps
 
   frontend:
     profiles: [app]
     build: { context: .., dockerfile: frontend/Dockerfile }
     ports: ['3000:3000']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on: [backend-api]
 
 volumes:
   postgres-data:
   rabbitmq-data:
   redis-data:
-  minio-data:
+  storage-data:

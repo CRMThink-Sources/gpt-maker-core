@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { loadEnv } from './config/env';
+import { configureFieldCipher } from './shared/crypto/field-cipher';
 import { initMetrics } from './shared/metrics/metrics';
 import { startWorkerHttpServer } from './shared/metrics/worker-http-server';
 import { WorkerModule } from './worker.module';
@@ -9,6 +10,7 @@ import { WorkerModule } from './worker.module';
 async function bootstrap(): Promise<void> {
   const env = loadEnv({ ...process.env, APP_ROLE: 'worker' });
   initMetrics(env.APP_ROLE);
+  configureFieldCipher(env.DATA_ENCRYPTION_KEY);
 
   const app = await NestFactory.createApplicationContext(WorkerModule.forRoot(env), {
     bufferLogs: true,

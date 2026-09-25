@@ -28,6 +28,14 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run depcruise
+      - name: Migrações em dia com o schema Drizzle
+        run: |
+          npm run db:generate -w backend
+          test -z "$(git status --porcelain backend/drizzle)" || {
+            echo "::error::Schema alterado sem migração: rode 'npm run db:generate -w backend' e commite backend/drizzle"
+            git status --porcelain backend/drizzle
+            exit 1
+          }
       - run: npm test
       - run: npm run build -w backend
       - run: npm run build -w frontend

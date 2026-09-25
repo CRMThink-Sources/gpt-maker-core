@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
@@ -28,6 +29,7 @@ describe('api: health e métricas', () => {
       DATABASE_URL: postgres.getConnectionUri(),
       REDIS_URL: redis.getConnectionUrl(),
       RABBITMQ_URL: rabbit.getAmqpUrl(),
+      DATA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     });
     initMetrics(env.APP_ROLE);
     const moduleRef = await Test.createTestingModule({

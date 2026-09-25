@@ -3,7 +3,7 @@ import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
-import * as schema from './schema';
+import * as schema from './schema/index';
 
 export const PG_POOL = Symbol('PG_POOL');
 export const DB = Symbol('DB');

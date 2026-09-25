@@ -129,7 +129,7 @@ Na criação do agente, configura todos os webhooks para `https://api.<dominio>/
 `BitrixClient` com token do `PlatformTokenProvider` (D3), rate limiter por portal (~2 req/s), `batch` quando possível. Sem refresh local, sem tokens em banco.
 
 ### D14. Armazenamento de documentos
-DigitalOcean Spaces (S3-compatível; MinIO em dev) com caminhos aleatórios e URL pré-assinada de longa duração para o GPTMaker baixar via `documentUrl`. Objeto removido junto com o treinamento.
+DigitalOcean Spaces (S3-compatível; SeaweedFS em dev, pois o MinIO deixou de publicar imagens) com caminhos aleatórios e URL pré-assinada de longa duração para o GPTMaker baixar via `documentUrl`. Objeto removido junto com o treinamento.
 
 ### D15. Persistência
 PostgreSQL 16 + Drizzle ORM (migrações versionadas por drizzle-kit; `SELECT ... FOR UPDATE` e SQL explícito onde o ledger exige). Tabelas: `tenant` (`installation_id`, `member_id`, `tenant_code`, status), `app_user_permission`, `plan_entitlement`, `plan_allowed_model`, `subscription_state`, `payment_event`, `payments_outbox`, `credit_ledger`, `tenant_balance`, `credit_deduction`, `notification_recipient`, `notification_log`, `ai_model`, `ai_model_cost_history`, `agent`, `agent_bot`, `training`, `dialog_state`, `message_log`, `agent_event`, `trigger`, `trigger_action`, `trigger_execution`, `usage_daily_real`, `reconciliation_adjustment`, `workspace_sync_finding`, `backoffice_user`, `audit_log`.
