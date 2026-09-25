@@ -1,0 +1,48 @@
+name: Deploy
+
+# staging: automático após cada release bem-sucedido em main.
+# production: manual (workflow_dispatch) com a tag (SHA) já validada em staging; a aprovação
+# é exigida pelas regras de proteção do GitHub Environment "production".
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente
+        type: choice
+        options: [staging, production]
+        default: production
+      image_tag:
+        description: Tag da imagem (SHA do commit)
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    concurrency:
+      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.event.workflow_run.head_sha }}
+      - uses: ./.github/actions/deploy-droplet
+        with:
+          image-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.event.workflow_run.head_sha }}
+          ssh-host: ${{ vars.DEPLOY_HOST }}
+          ssh-user: ${{ vars.DEPLOY_USER }}
+          deploy-dir: ${{ vars.DEPLOY_DIR }}
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh-known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          env-file: ${{ secrets.ENV_FILE }}
+          ghcr-user: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GHCR_PULL_TOKEN }}

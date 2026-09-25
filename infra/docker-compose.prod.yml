@@ -1,0 +1,114 @@
+# Produção e staging (um Droplet cada). Variáveis vêm do .env gerado pelo deploy.yml.
+#   IMAGE_TAG=<sha> docker compose -f docker-compose.prod.yml --env-file .env up -d
+name: gptmaker
+
+x-backend: &backend
+  image: ghcr.io/${GHCR_OWNER}/gptmaker-backend:${IMAGE_TAG}
+  restart: unless-stopped
+  env_file: .env
+  depends_on:
+    postgres: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  logging: &logging
+    driver: json-file
+    options: { max-size: 20m, max-file: '5' }
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      BITRIX_FRAME_ANCESTORS: ${BITRIX_FRAME_ANCESTORS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [frontend, backend-api]
+    logging: *logging
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/gptmaker-frontend:${IMAGE_TAG}
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  backend-api:
+    <<: *backend
+    environment:
+      APP_ROLE: api
+      PORT: 3001
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/health/live']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend-worker:
+    <<: *backend
+    command: ['node', 'dist/main.worker.js']
+    environment:
+      APP_ROLE: worker
+      WORKER_HTTP_PORT: 9464
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9464/health/live']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Dados no DigitalOcean Volume montado em DATA_DIR.
+    volumes: ['${DATA_DIR:-/mnt/gptmaker-data}/postgres:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - '${DATA_DIR:-/mnt/gptmaker-data}/rabbitmq:/var/lib/rabbitmq'
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['${DATA_DIR:-/mnt/gptmaker-data}/redis:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:

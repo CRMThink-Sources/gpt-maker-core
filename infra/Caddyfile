@@ -1,0 +1,29 @@
+{
+	email {$ACME_EMAIL}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Frontend: carregado no iframe do Bitrix24; só os domínios do Bitrix podem embutir.
+{$APP_DOMAIN} {
+	import security_headers
+	header Content-Security-Policy "frame-ancestors 'self' {$BITRIX_FRAME_ANCESTORS}"
+	encode zstd gzip
+	reverse_proxy frontend:3000
+}
+
+# Backend: API do frontend e webhooks (Bitrix, GPTMaker, crmthink-platform).
+{$API_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	# Métricas só na rede interna (Prometheus); nunca expostas.
+	respond /metrics 404
+	reverse_proxy backend-api:3001
+}

@@ -1,0 +1,62 @@
+name: Deploy no Droplet
+description: Copia a stack, grava o .env e executa infra/deploy/deploy.sh no Droplet via SSH.
+
+inputs:
+  image-tag: { description: Tag das imagens (SHA), required: true }
+  ssh-host: { description: Host do Droplet, required: true }
+  ssh-user: { description: Usuário SSH, required: true }
+  deploy-dir: { description: Diretório da stack no Droplet, required: true }
+  ssh-private-key: { description: Chave privada SSH, required: true }
+  ssh-known-hosts: { description: Linha(s) do known_hosts do Droplet, required: true }
+  env-file: { description: Conteúdo do .env do ambiente, required: true }
+  ghcr-user: { description: Usuário do ghcr.io, required: true }
+  ghcr-token: { description: Token com read:packages, required: true }
+
+runs:
+  using: composite
+  steps:
+    - name: Configurar SSH
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-private-key }}
+        KNOWN_HOSTS: ${{ inputs.ssh-known-hosts }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+    - name: Montar pacote da stack
+      shell: bash
+      env:
+        ENV_FILE: ${{ inputs.env-file }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+      run: |
+        mkdir -p bundle/rabbitmq
+        cp infra/docker-compose.prod.yml infra/Caddyfile infra/deploy/deploy.sh bundle/
+        cp infra/rabbitmq/enabled_plugins bundle/rabbitmq/
+        {
+          printf '%s\n' "$ENV_FILE"
+          echo "GHCR_OWNER=${GITHUB_REPOSITORY_OWNER,,}"
+        } > bundle/.env
+        chmod 600 bundle/.env
+
+    - name: Copiar e executar deploy
+      shell: bash
+      env:
+        TARGET: ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        GHCR_USER: ${{ inputs.ghcr-user }}
+        GHCR_TOKEN: ${{ inputs.ghcr-token }}
+      run: |
+        SSH="ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+        $SSH "$TARGET" "mkdir -p '$DEPLOY_DIR'"
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -r bundle/. "$TARGET:$DEPLOY_DIR/"
+        printf '%s' "$GHCR_TOKEN" | $SSH "$TARGET" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+        $SSH "$TARGET" "cd '$DEPLOY_DIR' && chmod +x deploy.sh && ./deploy.sh '$IMAGE_TAG'"
+
+    - name: Limpar credenciais
+      if: always()
+      shell: bash
+      run: rm -rf ~/.ssh/deploy_key bundle

@@ -1,0 +1,13 @@
+node_modules
+dist
+.next
+coverage
+package-lock.json
+openspec
+openspec-crmthink-platform
+backend/drizzle
+frontend/AGENTS.md
+frontend/CLAUDE.md
+frontend/next-env.d.ts
+.claude
+.cursor
