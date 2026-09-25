@@ -1,0 +1,188 @@
+## Context
+
+- Projeto novo (greenfield). Não há código nem specs existentes.
+- Temos conta PARTNER no GPTMaker: um único token de API, **um único workspace para todos os clientes**, criação de agentes e créditos ilimitados, cobrança ao fim do período pelo consumo total.
+- A API GPTMaker v2 (contrato real e divergências de nomes de rotas em `docs/gptmaker-api.md`; ex.: `/agent/{id}` no singular, `/chat/{id}/start-human`) (`https://api.gptmaker.ai/v2`, Bearer token) expõe: workspace (`/workspace`, `/workspace/{id}/credits` com `status` `TRIAL|ACTIVE|PAST_DUE|CANCELED`, `/workspace/{id}/agents`), agentes (`/agents/{id}`, `/active`, `/inactive`, `/settings` com `prefferModel` e demais configurações), treinamentos (`/agents/{id}/trainings`, `/trainings/{id}`), webhooks do agente (`onNewMessage`, `onLackKnowLedge`, `onTransfer`, `onFirstInteraction`, `onStartInteraction`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`), conversa (`/agents/{id}/conversation` com `contextId`, `prompt`, mídia, `callbackUrl`), controle humano (`/chats/{id}/human-start|human-stop`) e consumo (`/agents/{id}/credits-spent`, diário por modelo).
+- A resposta de `/conversation` **não** informa créditos consumidos; o consumo real só é obtido de forma agregada (dia × agente × modelo).
+- Bitrix24 dos clientes: instalação, OAuth, `ONAPPINSTALL`/`ONAPPUNINSTALL` e sessão do iframe tratados pelo `crmthink-platform` (módulo `installations`); o app usa tokens da plataforma para chatbot via `imbot.v2.Bot.register` (`imbot.register` deprecado), `imbot.message.add`, Linhas Abertas (`imopenlines.bot.session.*`), CRM (`crm.*`).
+- Bitrix24 da empresa (portal CRMThink): SPAs Produtos (1134), Planos (1138), Instalações (1060), Assinaturas (1142) e Itens de assinatura (1146), compartilhados com o ThinkZap. São a fonte da verdade das assinaturas.
+- Pagamentos: `crmthink-platform` compartilhado (repositório próprio; spec copiada em `openspec-crmthink-platform/`), que encapsula Stripe e SPAs para todas as aplicações. **Já implementado** (Node 20 + TypeScript, Express, Prisma/MySQL, BullMQ): instalação, cofre de tokens, sessão do iframe, planos, ciclo de vida da assinatura, itens, compras avulsas, estornos, webhooks Stripe, entrega de eventos e sincronização com SPAs. Pendentes do lado da plataforma: deploy (staging/produção) e onboarding do GPTMaker (campos nos SPAs, produtos/planos, apps Bitrix, registro de `crmthink.gptmaker`, teste ponta a ponta). Contrato publicado em OpenAPI 3.1 (`docs/api/openapi.json`, `GET /openapi.json`, `GET /docs`) com eventos de saída na seção `webhooks`; a plataforma fornece guia/biblioteca TypeScript de validação do JWT (JWKS) e da assinatura HMAC. Este app nunca fala com o Stripe (exceto Stripe.js no frontend para o Checkout embutido) nem com os SPAs.
+- O módulo `gptmaker` existente no `hub-core` é descartado; nada é reaproveitado dele.
+- Hospedagem: Droplet DigitalOcean; CI/CD: GitHub Actions.
+- Decisões de negócio: canal = chatbot Bitrix (imbot); débito por créditos reais (1 crédito cliente = 1 crédito GPTMaker, margem no preço do plano); modelos e custos em tabela gerenciada; RabbitMQ + Redis.
+
+## Goals / Non-Goals
+
+**Goals:**
+- App multi-tenant instalável em qualquer portal Bitrix24.
+- Cliente cria, configura (incl. modelo), treina, inativa/reativa e remove agentes, refletidos no GPTMaker.
+- Gestão segura do workspace único compartilhado.
+- Atendimento automático nas Linhas Abertas via chatbot, com transferência para humano.
+- Gatilhos que transformam eventos do agente em ações no CRM.
+- Planos pré-pagos com ledger auditável, débito por resposta e reconciliação diária.
+- Assinaturas via `crmthink-platform` (Stripe e modalidade manual), com trial de 14 dias e 500 créditos.
+- Deploy reprodutível em Droplet com CI/CD GitHub Actions.
+
+**Non-Goals:**
+- Qualquer integração direta com Stripe ou SPAs dentro do app — responsabilidade do `crmthink-platform`.
+- Emissão de nota fiscal.
+- Canais nativos do GPTMaker (WhatsApp/Instagram direto no GPTMaker).
+- Intenções, regras de transferência, ações de inatividade, MCP e campos customizados do GPTMaker na v1.
+- Alta disponibilidade multi-nó (v1 roda em um Droplet; ver riscos).
+- Publicação no Bitrix24 Marketplace na v1.
+
+## Decisions
+
+### D1. Monorepo com backend modular monolítico + worker
+`backend/` NestJS 11 (Node 24 LTS, TypeScript strict) em módulos Nest por domínio: `tenancy` (instalador, tenant, sessão), `bitrix` (cliente com tokens da plataforma), `gptmaker` (cliente + workspace), `models`, `agents`, `training`, `channel`, `triggers`, `billing`, `payments` (cliente do `crmthink-platform` e receptor de eventos), `reconciliation`, `backoffice`, `shared`. Mesmo pacote/imagem com dois entrypoints selecionados por `APP_ROLE`: `api` (HTTP, webhooks) e `worker` (consumidores RabbitMQ, jobs). `frontend/` NextJS com `/app` (embutido no Bitrix) e `/admin` (backoffice). `packages/contracts/` com schemas zod e tipos compartilhados entre backend e frontend (npm workspaces).
+- Stack backend: Drizzle ORM + drizzle-kit (migrações SQL), zod (`nestjs-zod`) para validação, `@golevelup/nestjs-rabbitmq` (amqplib), `ioredis`, `@nestjs/schedule` (jobs com lock Redis), `cockatiel` (retry/circuit breaker/timeout) + `bottleneck` (rate limit), `nestjs-pino`, `prom-client`, `@nestjs/terminus`, `jose` (JWT/JWKS), Vitest + Testcontainers for Node.
+- *Alternativa*: microsserviços. Rejeitado: time pequeno, domínio instável, um único Droplet.
+- *Alternativa*: Spring Boot (Java 21), desenho anterior. Substituído por TypeScript: uma linguagem em todo o monorepo (frontend e backend), tipos/contratos compartilhados e time mais produtivo na stack.
+- Fronteiras reforçadas por `dependency-cruiser` (módulo só importa a API pública de outro módulo).
+
+### D2. Workspace único gerenciado pela plataforma
+Todos os agentes no workspace partner (`GPTMAKER_WORKSPACE_ID` por env). O isolamento é inteiramente nosso:
+- Registro local `agent(tenant_id, gptmaker_agent_id)` é a fonte da verdade de posse; todo repositório filtra por `tenant_id`; IDs do GPTMaker nunca aceitos do cliente sem checagem.
+- Nome no GPTMaker: `[<tenantCode>] <nome>` (tenantCode curto e estável gerado na instalação), para operadores identificarem agentes no painel do GPTMaker e para recuperar vínculos.
+- `contextId` = `{tenantId}:{dialogId}`.
+- Job `workspace-sync` (a cada hora): `GET /workspace/{id}/agents` vs registro ⇒ órfãos, ausentes (`OUT_OF_SYNC`), status divergente (reaplica o local).
+- Job `workspace-health` (a cada 15 min): `GET /workspace/{id}/credits`; `status != ACTIVE` ⇒ alerta crítico.
+- Limite de 5 agentes não removidos por tenant, igual para todos os planos (configurável no backoffice); agentes não são cobrados individualmente.
+- Recursos globais (contatos, chats, canais, custom-fields, interações) não expostos.
+
+### D3. Instalação, tokens e sessão via crmthink-platform
+- URL de instalação do app no Bitrix ⇒ página da plataforma `/install/crmthink.gptmaker`. A plataforma verifica a instalação no Bitrix, guarda tokens e `application_token`, escreve o SPA 1060 e chama de forma síncrona `POST /platform/installer` do app (HMAC, timeout 60s). O instalador cria/reativa `tenant` (chave `installation_id`, `member_id`), gera `tenant_code`, registra handlers (`event.bind`) e, em reinstalação, os chatbots dos agentes ativos. Idempotente: a plataforma reexecuta em caso de falha.
+- Trial: criado pela plataforma após o instalador; chega como `subscription.trial_started`.
+- Tokens: `PlatformTokenProvider` busca `GET /v1/installations/{id}/token`, cache Redis até `expiresAt - 5min`; em `expired_token` chama `/token/refresh` com o token vencido (single-flight na plataforma) e repete a chamada uma vez. O app nunca renova nem persiste tokens.
+- `application_token`: lido de `GET /v1/installations/{id}` (cache Redis 1h, invalidado em `installation.reinstalled`), comparado em tempo constante em todo evento do Bitrix.
+- Desinstalação e erros de autorização: eventos `installation.removed`, `installation.auth_error`, `installation.auth_restored` no mesmo endpoint `/platform/events` usado pelo billing.
+- Sessão do iframe: frontend chama `BX24.getAuth()` → `POST /v1/sessions` da plataforma → JWT RS256 de 15 min (aud `crmthink.gptmaker`); backend valida com JWKS da plataforma (cache, rotação por `kid`). Renovação transparente com nova auth do BX24. `BX24.js` para resize. Customer Portal abre em nova janela; Checkout é embutido.
+- *Alternativa*: OAuth e instalação no próprio app (desenho anterior). Rejeitada: duplicaria o que é comum a todas as aplicações CRMThink e repetiria as falhas encontradas no `hub-core`.
+
+### D4. Cliente GPTMaker encapsulado
+`GptMakerClient` (`fetch`/undici, respostas validadas com zod) + `cockatiel`/`bottleneck`: rate limiter global (token único), retry com backoff para 5xx/timeout, circuit breaker. Token em variável de ambiente/secret, nunca em banco.
+
+### D5. Fluxo de mensagens assíncrono via RabbitMQ
+```
+Bitrix evento msg ─▶ API /bitrix/events ─(valida app token, dedupe Redis SETNX)─▶ exchange channel.inbound (consistent-hash por dialogId)
+   worker ─▶ agente ativo? atendimento humano? saldo > 0? (Redis)
+      ├─ não ─▶ transfere para operador / ignora; evento BLOCKED_NO_CREDIT quando saldo
+      └─ POST /agents/{id}/conversation ─▶ imbot.message.add ─▶ publica usage.response {agentId, modelCode, messageId}
+billing consome usage.response ─▶ DEBIT idempotente (unique message_id) com custo do modelo
+```
+- Ordem por diálogo via consistent hash exchange (N filas, 1 consumidor cada).
+- Retry com filas TTL escalonadas (10s, 1m, 5m) + DLQ; esgotado ⇒ transfere para humano, sem débito.
+- v1 síncrona com timeout (60s); `callbackUrl` como otimização futura.
+
+### D6. Catálogo de modelos e débito
+Tabela `ai_model(id, code, display_name, description, credits_per_response, active, is_default, deleted_at)` + `ai_model_cost_history`. `code` = enum `prefferModel` do GPTMaker (validado contra lista conhecida, mas editável para novos modelos). `plan_allowed_model(plan_id, model_id)`.
+- Débito: `DEBIT = ai_model.credits_per_response` do modelo do agente no momento do processamento; lançamento guarda `model_code` e `unit_cost`.
+- Remoção: soft delete; bloqueada se houver agentes ativos, salvo com substituto (migra agentes chamando `PUT /agents/{id}/settings`).
+- 1:1 com créditos GPTMaker ⇒ não existe multiplicador de margem; margem = preço do plano − custo GPTMaker dos créditos.
+- *Alternativa*: custo + multiplicador global. Rejeitado: o usuário quer o custo cadastrado direto no modelo; margem já é controlada pelo preço.
+
+### D7. Reconciliação diária
+Job: `credits-spent` por agente/dia/modelo ⇒ `usage_daily_real`; compara com `SUM(DEBIT)` do agente no dia; diferença além da tolerância ⇒ `ADJUSTMENT` com chave `(agent_id, day)` guardando o total já ajustado (reexecução idempotente). Calcula média real por resposta por modelo para sugerir revisão de `credits_per_response`.
+
+### D8. Ledger append-only no PostgreSQL; saldo em cache Redis
+`credit_ledger(id, tenant_id, wallet TRIAL|PLAN|EXTRA, type, amount, model_code, unit_cost, subscription_period_id, ref_type, ref_id, idempotency_key UNIQUE, created_at, created_by)`. Saldo materializado em `tenant_balance(tenant_id, trial_balance, trial_ends_at, plan_balance, extra_balance, expires_at)` na mesma transação (`SELECT ... FOR UPDATE`), espelhado em Redis (total). Checagem "total > 0" antes do GPTMaker; saldo pode ficar levemente negativo (aceito e documentado). Alertas 80%/100% na transação que cruza o limiar.
+
+**Carteiras** (regra de negócio: créditos do trial expiram no fim do trial, mesmo com plano contratado; créditos do plano e adicionais expiram juntos ao fim do ciclo; a separação existe para expiração independente, extrato/exibição e para que `TRIAL`/`EXTRA` nunca fiquem negativas):
+- `TRIAL`: recebe `GRANT` de 500 no `subscription.trial_started`; job do app lança `EXPIRE` do saldo positivo em `trial_ends_at` (guardado em `tenant_balance`), independente do status da assinatura; virada de ciclo não mexe nela.
+- `PLAN`: recebe `GRANT` a cada ciclo; ao virar o ciclo, `EXPIRE` do saldo positivo restante; saldo negativo é abatido do novo `GRANT`.
+- `EXTRA`: recebe `TOPUP` (pacotes comprados via `crmthink-platform` e concessões do backoffice); ao virar o ciclo, `EXPIRE` do saldo positivo restante junto com `PLAN`; nunca fica negativa.
+- Débito consome `TRIAL` → `PLAN` → `EXTRA` (o que expira antes sai primeiro; preserva ao máximo os créditos pagos à parte); um débito que atravessa carteiras gera um lançamento por carteira com o mesmo `ref_id` (idempotency keys `msg:{id}:TRIAL|PLAN|EXTRA`).
+- `ADJUSTMENT` negativo da reconciliação segue a mesma ordem; `ADJUSTMENT` positivo vai para `PLAN` do ciclo corrente.
+- **Saldo zerado**: total ≤ 0 ⇒ mensagem não vai ao GPTMaker; bot envia mensagem `SYSTEM = Y` no diálogo avisando que não será processada por falta de créditos; sem débito; evento `BLOCKED_NO_CREDIT`. Em seguida o diálogo é transferido para a fila de operadores da Linha Aberta.
+- **Estorno** (`charge.refunded` / `charge.dispute.created`): créditos restantes da cobrança = `min(quantidade, saldo da carteira)` no ciclo corrente (pacote ⇒ `EXTRA`, assinatura ⇒ `PLAN`), ou zero se o ciclo já virou; restantes saem com `REFUND`; gastos (quantidade − restantes − expirados) viram registro em `credit_deduction(id, tenant_id, amount, remaining, ref_charge_id UNIQUE, created_at)`. No `GRANT` do próximo ciclo, o serviço de ciclo lança `ADJUSTMENT` negativo em `PLAN` até o valor do `GRANT` e mantém o excedente para os ciclos seguintes. Sem assinatura ativa, a dedução fica pendente até o primeiro `GRANT` de nova assinatura.
+- *Alternativa*: carteira única com lotes de expiração. Rejeitada: carteiras separadas dão leitura direta de trial, plano e adicional e facilitam mudar regras de expiração no futuro.
+
+### D9. Integração com o crmthink-platform (módulo billing)
+Contrato v1 implementado no `crmthink-platform` e publicado em OpenAPI 3.1. Este app é o primeiro consumidor (appCode `crmthink.gptmaker`). A plataforma não aplica carência, corte, limites nem créditos: tudo isso é política deste app.
+- **Saída (app → serviço)**: `PaymentsClient` com tipos gerados do `openapi.json` da plataforma (`openapi-typescript` + `openapi-fetch`) e `cockatiel`, chave de API em env (`Authorization: Bearer`). Rotas: `GET /v1/plans`, `POST /v1/checkout-sessions` (`subscribe`/`purchase`), `POST /v1/billing-portal-sessions`, `POST /v1/subscriptions/{id}/change-plan`, `GET /v1/installations/{id}/subscription`, `POST|PATCH|DELETE /v1/subscriptions/{id}/items` por agente (`billable=false`, `externalRef` = id do agente; outbox local `payments_outbox` para reprocessar falhas). Instalação e trial não são chamados pelo app: a plataforma cria o trial sozinha (`trial_on_install`). Erros tratados pelo código estável do envelope `{ error: { code } }` (ex.: `SUBSCRIPTION_ALREADY_EXISTS`, `NO_ACTIVE_SUBSCRIPTION`, `PLAN_TYPE_MISMATCH`, `MANUAL_SUBSCRIPTION`, `NO_GATEWAY_SUBSCRIPTION`). CI regenera os tipos e falha se o contrato mudar sem atualização.
+- **Entrada (serviço → app)**: `POST /platform/events`; valida `X-Platform-Signature` (HMAC-SHA256, 5 min), grava `payment_event(event_id PK, type, payload, received_at, processed_at, status)` e publica em `payments.events` (RabbitMQ). Worker aplica efeitos em transação com o ledger.
+- **Projeção local**: `subscription_state(tenant_id PK, subscription_id, status, modality, plan_id, period_start, period_end, version, grace_until, cancel_at)`. Evento com `version` menor que a aplicada é ignorado (exceto financeiros). Job a cada 6h compara com `GET /v1/installations/{id}/subscription`.
+- **Efeitos**:
+| Evento | Efeito no app |
+|---|---|
+| `trial_started` | `GRANT` 500 em `TRIAL`, `trial_ends_at` = `data.trialEndsAt` |
+| `activated` / `renewed` | virada de ciclo (não toca `TRIAL`): `EXPIRE` PLAN+EXTRA, deduções pendentes, `GRANT` do plano; limpa carência; reativa agentes `SUBSCRIPTION_EXPIRED` |
+| `plan_changed` | imediato: `GRANT` proporcional da diferença + novos limites; próximo ciclo: guarda plano futuro |
+| `past_due` | `grace_until` = +3 dias; aviso `PAYMENT_FAILED` |
+| `recovered` | limpa carência |
+| `cancel_scheduled` | só exibição |
+| `ended` (`reason` = `trial_expired`, `cancelled` ou `deleted`) | `EXPIRE` TRIAL+PLAN+EXTRA; inativa agentes `SUBSCRIPTION_EXPIRED` |
+| `period_ending` | aviso `PERIOD_ENDING` (só `manual`) |
+| `purchase.paid` | `TOPUP` em `EXTRA` (quantidade do pacote em `plan_entitlement`) |
+| `charge.refunded` / `charge.disputed` | regra de estorno (`REFUND` + `credit_deduction`) |
+- Idempotência dos efeitos: chaves do ledger por `(subscription_id, period_start)`, `purchaseId`, `chargeId`; `GRANT` do trial por `(subscription_id, trial)`.
+- **Carência**: job a cada 15 min inativa agentes quando `grace_until` vence com status `past_due`.
+- **Direitos dos planos**: `plan_entitlement(plan_spa_id PK, credits_per_cycle, credits_per_package, training_limits, active)` + `plan_allowed_model(plan_spa_id, model_id)`; preço/intervalo vêm do serviço (cache Redis 5 min).
+- **Checkout embutido**: frontend carrega Stripe.js com a publishable key (env do frontend) e monta o Embedded Checkout com o `clientSecret`; ativação só por evento. Customer Portal abre em nova janela.
+- **Avisos**: `notification_recipient(tenant_id, bitrix_user_id)` configurado em tela própria do app; envio via `im.notify.system.add` (escopo `im`) um por destinatário; lista vazia ou só usuários inativos ⇒ administradores do portal. Tipos: `CREDIT_80`, `CREDIT_100`, `CREDIT_ZERO`, `PAYMENT_FAILED`, `PERIOD_ENDING`, `MODEL_DOWNGRADED`. Idempotência em `notification_log`.
+- *Alternativa*: integrar Stripe e SPAs diretamente no app (desenho anterior). Rejeitada: duplicaria o que o ThinkZap já faz e impediria padronizar pagamentos entre as aplicações.
+
+### D12. Webhooks do GPTMaker e gatilhos
+Na criação do agente, configura todos os webhooks para `https://api.<dominio>/gptmaker/webhooks/{event}?t={token}` (token aleatório por agente, armazenado com hash). Handler valida, grava `agent_event`, publica em `triggers.events`. Worker avalia gatilhos e executa ações via cliente Bitrix do tenant, registrando `trigger_execution`. `onTransfer` também aciona o módulo `channel` (transferência + `human-start`). Ações v1: lead, negócio, comentário de timeline, tarefa, business process, webhook de saída HMAC. Templates de campo `{{contact.name}}`. Payload exato a confirmar (open question).
+
+### D13. Cliente Bitrix por tenant
+`BitrixClient` com token do `PlatformTokenProvider` (D3), rate limiter por portal (~2 req/s), `batch` quando possível. Sem refresh local, sem tokens em banco.
+
+### D14. Armazenamento de documentos
+DigitalOcean Spaces (S3-compatível; MinIO em dev) com caminhos aleatórios e URL pré-assinada de longa duração para o GPTMaker baixar via `documentUrl`. Objeto removido junto com o treinamento.
+
+### D15. Persistência
+PostgreSQL 16 + Drizzle ORM (migrações versionadas por drizzle-kit; `SELECT ... FOR UPDATE` e SQL explícito onde o ledger exige). Tabelas: `tenant` (`installation_id`, `member_id`, `tenant_code`, status), `app_user_permission`, `plan_entitlement`, `plan_allowed_model`, `subscription_state`, `payment_event`, `payments_outbox`, `credit_ledger`, `tenant_balance`, `credit_deduction`, `notification_recipient`, `notification_log`, `ai_model`, `ai_model_cost_history`, `agent`, `agent_bot`, `training`, `dialog_state`, `message_log`, `agent_event`, `trigger`, `trigger_action`, `trigger_execution`, `usage_daily_real`, `reconciliation_adjustment`, `workspace_sync_finding`, `backoffice_user`, `audit_log`.
+
+### D16. Cache (Redis)
+Saldo, agente/bot por `botId`, dedupe de eventos (TTL 24h), locks, rate limiting, flags de atendimento humano. Invalidação explícita nas escritas.
+
+### D17. Backoffice
+`/admin` no NextJS, autenticação própria (senha + TOTP ou SSO Google Workspace), perfis `ADMIN`/`SUPPORT`, `audit_log` em todas as ações. Telas: direitos dos planos e pacotes, modelos, tenants, assinaturas (projeção local, eventos do serviço, link SPA), workspace (health, órfãos), reconciliação, DLQ.
+
+### D18. Deploy em Droplet DigitalOcean
+- Droplet Ubuntu LTS (dimensionar inicialmente 4 vCPU / 8 GB) com Docker + Docker Compose.
+- `infra/docker-compose.prod.yml`: `caddy` (reverse proxy, TLS automático Let's Encrypt), `frontend`, `backend-api`, `backend-worker`, `postgres`, `rabbitmq`, `redis`. Volumes persistentes em DO Volume (block storage) para Postgres/RabbitMQ.
+- Domínios: `app.<dominio>` (frontend), `api.<dominio>` (backend/webhooks). Caddy adiciona `Content-Security-Policy: frame-ancestors` para domínios Bitrix.
+- DigitalOcean Cloud Firewall: apenas 80/443 públicos; 22 restrito (IPs do time / runners via chave). Postgres/RabbitMQ/Redis sem porta pública.
+- Backups: snapshot semanal do Droplet + `pg_dump` diário enviado ao Spaces com retenção de 30 dias; teste de restore documentado.
+- Segredos: arquivo `.env` no Droplet (permissão 600) gerado pelo pipeline a partir de GitHub Actions Secrets/Environments.
+- *Alternativa*: DO Managed PostgreSQL / App Platform. Não escolhido para manter tudo no Droplet; migração para Managed PostgreSQL fica como evolução se o volume crescer.
+
+### D19. CI/CD com GitHub Actions
+- `ci.yml` (PR e push): lint, testes unitários backend/frontend, typecheck, testes (Vitest), testes de integração com Testcontainers for Node (Postgres, RabbitMQ, Redis) + WireMock (GPTMaker, Bitrix, `crmthink-platform`) + fixtures de eventos assinados.
+- `release.yml` (push em `main`): build de imagens Docker multi-stage (backend Node, frontend `standalone`), push no GitHub Container Registry (`ghcr.io`) com tag do SHA.
+- `deploy.yml`: environment `staging` automático e `production` com aprovação manual (GitHub Environments); via SSH no Droplet: grava `.env`, `docker compose pull && docker compose up -d`, health check pós-deploy e rollback para a tag anterior se falhar. Migrações Drizzle rodam no start do `backend-api` (antes de aceitar tráfego).
+- Staging: **Droplet separado** (menor, ex.: 2 vCPU / 4 GB), mesmo `docker-compose.prod.yml` com `.env` próprio, portal Bitrix de teste e `crmthink-platform` de staging (Stripe em test mode).
+
+### D20. Observabilidade
+Logs JSON via pino (`traceId`, `tenantId`, `agentId`, `dialogId` propagados com `AsyncLocalStorage`) com rotação; `prom-client` + Prometheus + Grafana (containers no Droplet ou Grafana Cloud free); OpenTelemetry (`@opentelemetry/sdk-node`) API → fila → worker; alertas (e-mail/Bitrix da empresa) para DLQ, workspace `!= ACTIVE`, falha de reconciliação, eventos do `crmthink-platform` falhando/atrasados, projeção divergente, disco.
+
+## Risks / Trade-offs
+
+- [Custo por resposta estimado diverge do real] → reconciliação diária com `ADJUSTMENT`; sugestão de custo por modelo; tolerância configurável.
+- [Saldo levemente negativo por concorrência/ajustes] → checagem pré-chamada; bloqueio ao cruzar zero; política comercial documentada.
+- [Workspace compartilhado: vazamento entre tenants] → filtro obrigatório, `contextId` prefixado, testes de isolamento, recursos globais não expostos.
+- [Alguém altera agentes direto no painel GPTMaker] → `workspace-sync` detecta e corrige; acesso ao painel restrito a operadores.
+- [Token partner único/crítico] → secret fora do código, rotação documentada, rate limiter global, circuit breaker.
+- [Dependência do `crmthink-platform` (implementado; deploy e onboarding pendentes)] → eventos persistidos e reenviados pelo serviço por 24h; projeção local mantém o app funcionando se o serviço cair; reconciliação a cada 6h; alertas de atraso.
+- [Eventos fora de ordem ou duplicados] → dedupe por `eventId`, versão da assinatura, idempotência do ledger por período/compra/cobrança.
+- [Erro humano no SPA (modalidade manual) concede créditos indevidos] → validações no serviço, `payment_event` e `audit_log` no app, alerta para renovações manuais fora do padrão.
+- [Droplet único é ponto único de falha] → backups diários + snapshots, restore testado, monitoramento externo (uptime), RabbitMQ/Postgres com volumes persistentes; caminho de evolução: Managed PostgreSQL e segundo Droplet para workers.
+- [Webhooks do GPTMaker sem assinatura oficial] → token aleatório por agente, HTTPS, rotação reconfigurando webhooks.
+- [Rate limits Bitrix/GPTMaker] → rate limiters, filas absorvem picos, `batch`.
+- [Latência do `/conversation` síncrono] → timeout, consumidores dimensionados, métrica de lag; migrar para `callbackUrl` se preciso.
+
+## Migration Plan
+
+Projeto novo, sem migração de dados. Rollout:
+0. Pré-requisito: `crmthink-platform` em staging com o app `crmthink.gptmaker` cadastrado (client_id/secret do app Bitrix, instalador, webhook, trial na instalação), produtos "GPTMaker" (assinatura) e "Créditos GPTMaker" (compra única, um plano por pacote) nos SPAs 1134/1138.
+1. Provisionar Droplet(s), DNS e Spaces.
+2. Staging com portal Bitrix de teste, `crmthink-platform` de staging (Stripe test mode) e agentes de teste no workspace.
+3. Piloto com 1–3 clientes (trial e assinaturas `manual` via SPA), acompanhando reconciliação.
+4. Ativar Stripe live no serviço e abertura geral.
+Rollback: deploy da tag anterior via `deploy.yml`; desativar novas instalações; inativar agentes via backoffice; ledger permanece íntegro.
+
+## Open Questions
+
+- Payload exato dos webhooks do GPTMaker (`onTransfer`, `onNewMessage`, etc.) — pendente; necessário para mapear diálogo Bitrix ↔ chat GPTMaker e para os templates de gatilhos.
