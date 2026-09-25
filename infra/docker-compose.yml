@@ -12,6 +12,9 @@ x-backend-env: &backend-env
   DATABASE_URL: postgres://gptmaker:gptmaker@postgres:5432/gptmaker
   REDIS_URL: redis://redis:6379
   RABBITMQ_URL: amqp://gptmaker:gptmaker@rabbitmq:5672
+  GPTMAKER_API_URL: ${GPTMAKER_API_URL:-https://api.gptmaker.ai/v2}
+  GPTMAKER_API_TOKEN: ${GPTMAKER_API_TOKEN:-trocar}
+  GPTMAKER_WORKSPACE_ID: ${GPTMAKER_WORKSPACE_ID:-trocar}
   DATA_ENCRYPTION_KEY: ZGV2LWtleS1kZXYta2V5LWRldi1rZXktZGV2LWtleSE=
 
 services:

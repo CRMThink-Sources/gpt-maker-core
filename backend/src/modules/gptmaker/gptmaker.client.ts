@@ -1,0 +1,357 @@
+import { Logger } from '@nestjs/common';
+import type { z } from 'zod';
+import { GptMakerError, kindFromStatus, parseRetryAfter } from './gptmaker.errors';
+import { GptMakerResilience } from './gptmaker.resilience';
+import {
+  assistantSchema,
+  agentSettingsSchema,
+  conversationRequestSchema,
+  conversationResponseSchema,
+  createTrainingSchema,
+  creditsSpentSchema,
+  errorBodySchema,
+  GptMakerAgent,
+  GptMakerAgentSettings,
+  GptMakerConversationRequest,
+  GptMakerConversationResponse,
+  GptMakerCreateTraining,
+  GptMakerCreditsSpent,
+  GptMakerNewAgent,
+  GptMakerTraining,
+  GptMakerTrainingType,
+  GptMakerUpdateAgentSettings,
+  GptMakerUpdateTextTraining,
+  GptMakerWebhooks,
+  GptMakerWorkspace,
+  GptMakerWorkspaceCredits,
+  newAssistantSchema,
+  successSchema,
+  trainingSchema,
+  updateAgentSettingsSchema,
+  updateTextTrainingSchema,
+  webhooksSchema,
+  workspaceCreditsSchema,
+  workspaceSchema,
+} from './gptmaker.schemas';
+
+export interface GptMakerClientOptions {
+  /** Base com a versão, ex.: `https://api.gptmaker.ai/v2`. */
+  baseUrl: string;
+  token: string;
+  workspaceId: string;
+  timeoutMs: number;
+  conversationTimeoutMs: number;
+}
+
+export interface PageQuery {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+}
+
+interface Request<S extends z.ZodType> {
+  operation: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  path: string;
+  query?: Record<string, string | number | undefined>;
+  body?: unknown;
+  response: S;
+  timeoutMs?: number;
+}
+
+const IDEMPOTENT_METHODS = new Set(['GET', 'PUT', 'DELETE']);
+
+/**
+ * Cliente da API GPTMaker v2 (contrato em docs/gptmaker-api.md). Um token de partner e um
+ * workspace para todos os tenants; isolamento entre tenants é responsabilidade de quem chama.
+ */
+export class GptMakerClient {
+  private readonly logger = new Logger(GptMakerClient.name);
+
+  constructor(
+    private readonly options: GptMakerClientOptions,
+    private readonly resilience: GptMakerResilience,
+    private readonly fetchFn: typeof fetch = fetch,
+  ) {}
+
+  get workspaceId(): string {
+    return this.options.workspaceId;
+  }
+
+  get circuitOpen(): boolean {
+    return this.resilience.circuitOpen;
+  }
+
+  // ---- Workspace
+
+  listWorkspaces(): Promise<GptMakerWorkspace[]> {
+    return this.request({
+      operation: 'workspace.list',
+      method: 'GET',
+      path: '/workspaces',
+      response: workspaceSchema.array(),
+    });
+  }
+
+  getWorkspaceCredits(): Promise<GptMakerWorkspaceCredits> {
+    return this.request({
+      operation: 'workspace.credits',
+      method: 'GET',
+      path: `/workspace/${this.ws()}/credits`,
+      response: workspaceCreditsSchema,
+    });
+  }
+
+  listWorkspaceAgents(page: PageQuery = {}): Promise<GptMakerAgent[]> {
+    return this.request({
+      operation: 'workspace.agents',
+      method: 'GET',
+      path: `/workspace/${this.ws()}/agents`,
+      query: { page: page.page, pageSize: page.pageSize, query: page.query },
+      response: assistantSchema.array(),
+    });
+  }
+
+  // ---- Agente
+
+  async createAgent(input: GptMakerNewAgent): Promise<GptMakerAgent> {
+    return this.request({
+      operation: 'agent.create',
+      method: 'POST',
+      path: `/workspace/${this.ws()}/agents`,
+      body: newAssistantSchema.parse(input),
+      response: assistantSchema,
+    });
+  }
+
+  getAgent(agentId: string): Promise<GptMakerAgent> {
+    return this.request({
+      operation: 'agent.get',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}`,
+      response: assistantSchema,
+    });
+  }
+
+  async updateAgent(agentId: string, input: GptMakerNewAgent): Promise<GptMakerAgent> {
+    return this.request({
+      operation: 'agent.update',
+      method: 'PUT',
+      path: `/agent/${enc(agentId)}`,
+      body: newAssistantSchema.parse(input),
+      response: assistantSchema,
+    });
+  }
+
+  async deleteAgent(agentId: string): Promise<void> {
+    await this.success('agent.delete', 'DELETE', `/agent/${enc(agentId)}`);
+  }
+
+  async activateAgent(agentId: string): Promise<void> {
+    await this.success('agent.activate', 'PUT', `/agent/${enc(agentId)}/active`);
+  }
+
+  async inactivateAgent(agentId: string): Promise<void> {
+    await this.success('agent.inactivate', 'PUT', `/agent/${enc(agentId)}/inactive`);
+  }
+
+  // ---- Settings
+
+  getAgentSettings(agentId: string): Promise<GptMakerAgentSettings> {
+    return this.request({
+      operation: 'agent.settings.get',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/settings`,
+      response: agentSettingsSchema,
+    });
+  }
+
+  async updateAgentSettings(agentId: string, settings: GptMakerUpdateAgentSettings): Promise<void> {
+    await this.success(
+      'agent.settings.update',
+      'PUT',
+      `/agent/${enc(agentId)}/settings`,
+      updateAgentSettingsSchema.parse(settings),
+    );
+  }
+
+  // ---- Treinamentos
+
+  listTrainings(
+    agentId: string,
+    type: GptMakerTrainingType,
+    page: PageQuery = {},
+  ): Promise<GptMakerTraining[]> {
+    return this.request({
+      operation: 'training.list',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/trainings`,
+      query: { type, page: page.page, pageSize: page.pageSize, query: page.query },
+      response: trainingSchema.array(),
+    });
+  }
+
+  /** A API não devolve o id do treinamento criado; é preciso listar para obtê-lo. */
+  async createTraining(agentId: string, input: GptMakerCreateTraining): Promise<void> {
+    await this.success(
+      'training.create',
+      'POST',
+      `/agent/${enc(agentId)}/trainings`,
+      createTrainingSchema.parse(input),
+    );
+  }
+
+  /** Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. */
+  async updateTextTraining(trainingId: string, input: GptMakerUpdateTextTraining): Promise<void> {
+    await this.success('training.update', 'PUT', `/training/${enc(trainingId)}`, {
+      type: 'TEXT',
+      ...updateTextTrainingSchema.parse(input),
+    });
+  }
+
+  async deleteTraining(trainingId: string): Promise<void> {
+    await this.success('training.delete', 'DELETE', `/training/${enc(trainingId)}`);
+  }
+
+  // ---- Webhooks
+
+  getWebhooks(agentId: string): Promise<Partial<Record<string, string | null>>> {
+    return this.request({
+      operation: 'agent.webhooks.get',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/webhooks`,
+      response: webhooksSchema,
+    });
+  }
+
+  async updateWebhooks(agentId: string, webhooks: GptMakerWebhooks): Promise<void> {
+    await this.success('agent.webhooks.update', 'PUT', `/agent/${enc(agentId)}/webhooks`, webhooks);
+  }
+
+  // ---- Conversa e atendimento humano
+
+  /** Não idempotente: não é retentado em timeout/5xx para não duplicar a resposta ao cliente final. */
+  async sendMessage(
+    agentId: string,
+    input: GptMakerConversationRequest,
+  ): Promise<GptMakerConversationResponse> {
+    return this.request({
+      operation: 'agent.conversation',
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/conversation`,
+      body: conversationRequestSchema.parse(input),
+      response: conversationResponseSchema,
+      timeoutMs: this.options.conversationTimeoutMs,
+    });
+  }
+
+  async startHuman(chatId: string): Promise<void> {
+    await this.success('chat.start-human', 'PUT', `/chat/${enc(chatId)}/start-human`);
+  }
+
+  async stopHuman(chatId: string): Promise<void> {
+    await this.success('chat.stop-human', 'PUT', `/chat/${enc(chatId)}/stop-human`);
+  }
+
+  // ---- Consumo
+
+  getCreditsSpent(
+    agentId: string,
+    period: { year?: number; month?: number; day?: number } = {},
+  ): Promise<GptMakerCreditsSpent> {
+    return this.request({
+      operation: 'agent.credits-spent',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/credits-spent`,
+      query: period,
+      response: creditsSpentSchema,
+    });
+  }
+
+  // ---- Transporte
+
+  private ws(): string {
+    return enc(this.options.workspaceId);
+  }
+
+  /** Rotas que respondem `{ success }`; `success: false` com HTTP 200 também é falha. */
+  private async success(
+    operation: string,
+    method: Request<z.ZodType>['method'],
+    path: string,
+    body?: unknown,
+  ): Promise<void> {
+    const result = await this.request({ operation, method, path, body, response: successSchema });
+    if (!result.success) {
+      throw new GptMakerError('UNKNOWN', operation, 'provedor respondeu success=false', {
+        status: 200,
+        body: result,
+      });
+    }
+  }
+
+  private request<S extends z.ZodType>(req: Request<S>): Promise<z.infer<S>> {
+    const url = new URL(`${this.options.baseUrl.replace(/\/+$/, '')}${req.path}`);
+    for (const [key, value] of Object.entries(req.query ?? {})) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+
+    return this.resilience.execute(
+      {
+        operation: req.operation,
+        idempotent: IDEMPOTENT_METHODS.has(req.method),
+        timeoutMs: req.timeoutMs ?? this.options.timeoutMs,
+      },
+      async (signal) => {
+        const started = Date.now();
+        const response = await this.fetchFn(url, {
+          method: req.method,
+          headers: {
+            Authorization: `Bearer ${this.options.token}`,
+            Accept: 'application/json',
+            ...(req.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          },
+          body: req.body === undefined ? undefined : JSON.stringify(req.body),
+          signal,
+        });
+        const payload = await readBody(response);
+        this.logger.debug(
+          `${req.operation} ${req.method} ${url.pathname} -> ${response.status} em ${Date.now() - started}ms`,
+        );
+
+        if (!response.ok) {
+          const message =
+            errorBodySchema.safeParse(payload).data?.error ?? `HTTP ${response.status}`;
+          throw new GptMakerError(kindFromStatus(response.status), req.operation, message, {
+            status: response.status,
+            body: payload,
+            retryAfterMs: parseRetryAfter(response.headers.get('retry-after')),
+          });
+        }
+
+        const parsed = req.response.safeParse(payload);
+        if (!parsed.success) {
+          throw new GptMakerError('INVALID_RESPONSE', req.operation, 'resposta fora do contrato', {
+            status: response.status,
+            body: parsed.error.issues,
+          });
+        }
+        return parsed.data as z.infer<S>;
+      },
+    );
+  }
+}
+
+function enc(value: string): string {
+  return encodeURIComponent(value);
+}
+
+async function readBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}

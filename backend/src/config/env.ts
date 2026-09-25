@@ -18,6 +18,20 @@ export const envSchema = z.object({
   DATA_ENCRYPTION_KEY: z.string().min(1),
   /** Aplica migrações no start da API (desligar só em testes ou execução manual). */
   RUN_MIGRATIONS: booleanFromString.default(true),
+
+  // GPTMaker (conta partner, workspace único compartilhado — design D2 e D4)
+  GPTMAKER_API_URL: z.url().default('https://api.gptmaker.ai/v2'),
+  /** Token do partner; nunca vai para o banco nem para o frontend. */
+  GPTMAKER_API_TOKEN: z.string().min(1),
+  GPTMAKER_WORKSPACE_ID: z.string().min(1),
+  /** Limite global de chamadas por segundo (token único, somado entre api e worker). */
+  GPTMAKER_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(5),
+  GPTMAKER_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** `/conversation` é síncrono na v1 e pode demorar (design D5). */
+  GPTMAKER_CONVERSATION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+
+  /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
+  TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;

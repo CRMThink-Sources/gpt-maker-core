@@ -2,7 +2,7 @@
 
 - Projeto novo (greenfield). Não há código nem specs existentes.
 - Temos conta PARTNER no GPTMaker: um único token de API, **um único workspace para todos os clientes**, criação de agentes e créditos ilimitados, cobrança ao fim do período pelo consumo total.
-- A API GPTMaker v2 (contrato real e divergências de nomes de rotas em `docs/gptmaker-api.md`; ex.: `/agent/{id}` no singular, `/chat/{id}/start-human`) (`https://api.gptmaker.ai/v2`, Bearer token) expõe: workspace (`/workspace`, `/workspace/{id}/credits` com `status` `TRIAL|ACTIVE|PAST_DUE|CANCELED`, `/workspace/{id}/agents`), agentes (`/agents/{id}`, `/active`, `/inactive`, `/settings` com `prefferModel` e demais configurações), treinamentos (`/agents/{id}/trainings`, `/trainings/{id}`), webhooks do agente (`onNewMessage`, `onLackKnowLedge`, `onTransfer`, `onFirstInteraction`, `onStartInteraction`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`), conversa (`/agents/{id}/conversation` com `contextId`, `prompt`, mídia, `callbackUrl`), controle humano (`/chats/{id}/human-start|human-stop`) e consumo (`/agents/{id}/credits-spent`, diário por modelo).
+- A API GPTMaker v2 (`https://api.gptmaker.ai/v2`, Bearer token; contrato levantado do OpenAPI oficial em `docs/gptmaker-api.md`) expõe: workspace (`GET /workspaces`, `GET /workspace/{id}/credits` com `status` `TRIAL|ACTIVE|PAST_DUE|CANCELED`, `GET|POST /workspace/{id}/agents` com `page`/`pageSize`), agente (`GET|PUT|DELETE /agent/{id}`, `PUT /agent/{id}/active|inactive`, `GET|PUT /agent/{id}/settings` com `prefferModel`), treinamentos (`GET|POST /agent/{id}/trainings`, `PUT|DELETE /training/{id}`; criação não devolve id; só TEXT é editável), webhooks do agente (`GET|PUT /agent/{id}/webhooks`: `onNewMessage`, `onLackKnowLedge`, `onTransfer`, `onFirstInteraction`, `onStartInteraction`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`), conversa (`POST /agent/{id}/conversation` com `contextId`, `prompt`, mídia, `callbackUrl`), controle humano (`PUT /chat/{id}/start-human|stop-human`) e consumo (`GET /agent/{id}/credits-spent`, diário por modelo). Créditos são sempre inteiros. O agente expõe `status` (`ACTIVE` | `DISABLED`, observados na API real; fora do OpenAPI); erros documentados são só 400 (genérico) e 403 (token); rate limit não documentado.
 - A resposta de `/conversation` **não** informa créditos consumidos; o consumo real só é obtido de forma agregada (dia × agente × modelo).
 - Bitrix24 dos clientes: instalação, OAuth, `ONAPPINSTALL`/`ONAPPUNINSTALL` e sessão do iframe tratados pelo `crmthink-platform` (módulo `installations`); o app usa tokens da plataforma para chatbot via `imbot.v2.Bot.register` (`imbot.register` deprecado), `imbot.message.add`, Linhas Abertas (`imopenlines.bot.session.*`), CRM (`crm.*`).
 - Bitrix24 da empresa (portal CRMThink): SPAs Produtos (1134), Planos (1138), Instalações (1060), Assinaturas (1142) e Itens de assinatura (1146), compartilhados com o ThinkZap. São a fonte da verdade das assinaturas.
@@ -35,7 +35,7 @@
 
 ### D1. Monorepo com backend modular monolítico + worker
 `backend/` NestJS 11 (Node 24 LTS, TypeScript strict) em módulos Nest por domínio: `tenancy` (instalador, tenant, sessão), `bitrix` (cliente com tokens da plataforma), `gptmaker` (cliente + workspace), `models`, `agents`, `training`, `channel`, `triggers`, `billing`, `payments` (cliente do `crmthink-platform` e receptor de eventos), `reconciliation`, `backoffice`, `shared`. Mesmo pacote/imagem com dois entrypoints selecionados por `APP_ROLE`: `api` (HTTP, webhooks) e `worker` (consumidores RabbitMQ, jobs). `frontend/` NextJS com `/app` (embutido no Bitrix) e `/admin` (backoffice). `packages/contracts/` com schemas zod e tipos compartilhados entre backend e frontend (npm workspaces).
-- Stack backend: Drizzle ORM + drizzle-kit (migrações SQL), zod (`nestjs-zod`) para validação, `@golevelup/nestjs-rabbitmq` (amqplib), `ioredis`, `@nestjs/schedule` (jobs com lock Redis), `cockatiel` (retry/circuit breaker/timeout) + `bottleneck` (rate limit), `nestjs-pino`, `prom-client`, `@nestjs/terminus`, `jose` (JWT/JWKS), Vitest + Testcontainers for Node.
+- Stack backend: Drizzle ORM + drizzle-kit (migrações SQL), zod (`nestjs-zod`) para validação, `@golevelup/nestjs-rabbitmq` (amqplib), `ioredis`, `@nestjs/schedule` (jobs com lock Redis), `cockatiel` (retry/circuit breaker/timeout) + rate limiter próprio no Redis (compartilhado entre api e worker), `nestjs-pino`, `prom-client`, `@nestjs/terminus`, `jose` (JWT/JWKS), Vitest + Testcontainers for Node.
 - *Alternativa*: microsserviços. Rejeitado: time pequeno, domínio instável, um único Droplet.
 - *Alternativa*: Spring Boot (Java 21), desenho anterior. Substituído por TypeScript: uma linguagem em todo o monorepo (frontend e backend), tipos/contratos compartilhados e time mais produtivo na stack.
 - Fronteiras reforçadas por `dependency-cruiser` (módulo só importa a API pública de outro módulo).
@@ -45,8 +45,8 @@ Todos os agentes no workspace partner (`GPTMAKER_WORKSPACE_ID` por env). O isola
 - Registro local `agent(tenant_id, gptmaker_agent_id)` é a fonte da verdade de posse; todo repositório filtra por `tenant_id`; IDs do GPTMaker nunca aceitos do cliente sem checagem.
 - Nome no GPTMaker: `[<tenantCode>] <nome>` (tenantCode curto e estável gerado na instalação), para operadores identificarem agentes no painel do GPTMaker e para recuperar vínculos.
 - `contextId` = `{tenantId}:{dialogId}`.
-- Job `workspace-sync` (a cada hora): `GET /workspace/{id}/agents` vs registro ⇒ órfãos, ausentes (`OUT_OF_SYNC`), status divergente (reaplica o local).
-- Job `workspace-health` (a cada 15 min): `GET /workspace/{id}/credits`; `status != ACTIVE` ⇒ alerta crítico.
+- Job `workspace-sync` (a cada hora): `GET /workspace/{id}/agents` vs registro ⇒ órfãos (com tenant sugerido pelo prefixo do nome) e ausentes. Paginação sem base documentada: leitura tolerante (começa em 0, deduplica, para em página vazia ou sem agentes novos). Ausente só vira `OUT_OF_SYNC` após `GET /agent/{id}` responder 404 (400 genérico fica indeterminado). Status divergente: compara o `status` da listagem com o local (`ACTIVE` ↔ `ACTIVE`, `DISABLED` ↔ `INACTIVE`; campo ausente ou valor desconhecido não compara, só loga), reaplica o local via `PUT /agent/{id}/active|inactive` (relendo o status local antes) e grava `STATUS_MISMATCH` já resolvido; falha ao reaplicar fica aberta com alerta e fecha quando a divergência some.
+- Validação no boot (`GET /workspaces` contém o `GPTMAKER_WORKSPACE_ID`) e job `workspace-health` (a cada 15 min): `GET /workspace/{id}/credits`; `status != ACTIVE` ⇒ alerta crítico. Estado guardado no Redis e exposto em `GET /health` (componente `gptmaker`); `GET /health/ready` (usado no deploy) não inclui provedores externos.
 - Limite de 5 agentes não removidos por tenant, igual para todos os planos (configurável no backoffice); agentes não são cobrados individualmente.
 - Recursos globais (contatos, chats, canais, custom-fields, interações) não expostos.
 
@@ -60,7 +60,7 @@ Todos os agentes no workspace partner (`GPTMAKER_WORKSPACE_ID` por env). O isola
 - *Alternativa*: OAuth e instalação no próprio app (desenho anterior). Rejeitada: duplicaria o que é comum a todas as aplicações CRMThink e repetiria as falhas encontradas no `hub-core`.
 
 ### D4. Cliente GPTMaker encapsulado
-`GptMakerClient` (`fetch`/undici, respostas validadas com zod) + `cockatiel`/`bottleneck`: rate limiter global (token único), retry com backoff para 5xx/timeout, circuit breaker. Token em variável de ambiente/secret, nunca em banco.
+`GptMakerClient` (`fetch`/undici, respostas validadas com zod) + `cockatiel` + rate limiter no Redis: limite global (token único, somado entre processos), retry com backoff para 5xx/timeout, circuit breaker. Token em variável de ambiente/secret, nunca em banco.
 
 ### D5. Fluxo de mensagens assíncrono via RabbitMQ
 ```
@@ -85,7 +85,7 @@ Tabela `ai_model(id, code, display_name, description, credits_per_response, acti
 Job: `credits-spent` por agente/dia/modelo ⇒ `usage_daily_real`; compara com `SUM(DEBIT)` do agente no dia; diferença além da tolerância ⇒ `ADJUSTMENT` com chave `(agent_id, day)` guardando o total já ajustado (reexecução idempotente). Calcula média real por resposta por modelo para sugerir revisão de `credits_per_response`.
 
 ### D8. Ledger append-only no PostgreSQL; saldo em cache Redis
-`credit_ledger(id, tenant_id, wallet TRIAL|PLAN|EXTRA, type, amount, model_code, unit_cost, subscription_period_id, ref_type, ref_id, idempotency_key UNIQUE, created_at, created_by)`. Saldo materializado em `tenant_balance(tenant_id, trial_balance, trial_ends_at, plan_balance, extra_balance, expires_at)` na mesma transação (`SELECT ... FOR UPDATE`), espelhado em Redis (total). Checagem "total > 0" antes do GPTMaker; saldo pode ficar levemente negativo (aceito e documentado). Alertas 80%/100% na transação que cruza o limiar.
+`credit_ledger(id, tenant_id, wallet TRIAL|PLAN|EXTRA, type, amount, model_code, unit_cost, subscription_period_id, ref_type, ref_id, idempotency_key UNIQUE, created_at, created_by)`. Saldo materializado em `tenant_balance(tenant_id, trial_balance, trial_ends_at, plan_balance, extra_balance, expires_at)` na mesma transação (`SELECT ... FOR UPDATE`), espelhado em Redis (total). Créditos são sempre inteiros (a API do GPTMaker só trabalha com inteiros). Checagem "total > 0" antes do GPTMaker; saldo pode ficar levemente negativo (aceito e documentado). Alertas 80%/100% na transação que cruza o limiar.
 
 **Carteiras** (regra de negócio: créditos do trial expiram no fim do trial, mesmo com plano contratado; créditos do plano e adicionais expiram juntos ao fim do ciclo; a separação existe para expiração independente, extrato/exibição e para que `TRIAL`/`EXTRA` nunca fiquem negativas):
 - `TRIAL`: recebe `GRANT` de 500 no `subscription.trial_started`; job do app lança `EXPIRE` do saldo positivo em `trial_ends_at` (guardado em `tenant_balance`), independente do status da assinatura; virada de ciclo não mexe nela.
@@ -185,4 +185,5 @@ Rollback: deploy da tag anterior via `deploy.yml`; desativar novas instalações
 
 ## Open Questions
 
-- Payload exato dos webhooks do GPTMaker (`onTransfer`, `onNewMessage`, etc.) — pendente; necessário para mapear diálogo Bitrix ↔ chat GPTMaker e para os templates de gatilhos.
+- Payload exato dos webhooks do GPTMaker (`onTransfer`, `onNewMessage`, etc.) e dos `callbackUrl` de conversa e treinamento — não documentado; capturar em staging (tarefa 10.1). Necessário para mapear diálogo Bitrix ↔ chat GPTMaker e para os templates de gatilhos.
+- Validar em staging: rate limit real do GPTMaker, base da paginação de `/workspace/{id}/agents` e resposta de `GET /agent/{id}` para agente removido (404 ou 400).

@@ -35,14 +35,14 @@
 
 ## 4. Cliente GPTMaker e workspace (gptmaker-workspace)
 
-- [ ] 4.1 Implementar `GptMakerClient` (`fetch`/undici, Bearer) com schemas zod de workspace, agente, settings (`prefferModel`), treinamentos, webhooks, conversa, human-start/stop e credits-spent (~12h)
-- [ ] 4.2 Resiliência com `cockatiel`: rate limiter global (bottleneck), retry com backoff, circuit breaker, timeout; mapeamento de erros de domínio (~6h)
-- [ ] 4.3 Testes de contrato com WireMock (Testcontainers) para cada endpoint (~8h)
-- [ ] 4.4 Validação do `GPTMAKER_WORKSPACE_ID` na inicialização e health indicator (~2h)
-- [ ] 4.5 Convenção de nomes `[<tenantCode>] <nome>` (aplicar ao criar/renomear; remover na exibição) (~2h)
-- [ ] 4.6 Job `workspace-sync`: detectar órfãos, ausentes (`OUT_OF_SYNC`) e status divergente; gravar `workspace_sync_finding` (~8h)
-- [ ] 4.7 Job `workspace-health`: consultar `/workspace/{id}/credits` e alertar se `status != ACTIVE` (~3h)
-- [ ] 4.8 Limite de 5 agentes não removidos por tenant (`TENANT_AGENT_LIMIT`, configurável) (~2h)
+- [x] 4.1 Implementar `GptMakerClient` (`fetch`/undici, Bearer) com schemas zod de workspace, agente, settings (`prefferModel`), treinamentos, webhooks, conversa, human-start/stop e credits-spent (~12h)
+- [x] 4.2 Resiliência com `cockatiel`: rate limiter global (Redis, compartilhado entre processos), retry com backoff, circuit breaker, timeout; mapeamento de erros de domínio (~6h)
+- [x] 4.3 Testes de contrato com WireMock (Testcontainers) para cada endpoint (~8h)
+- [x] 4.4 Validação do `GPTMAKER_WORKSPACE_ID` na inicialização e health indicator (~2h)
+- [x] 4.5 Convenção de nomes `[<tenantCode>] <nome>` (aplicar ao criar/renomear; remover na exibição) (~2h)
+- [x] 4.6 Job `workspace-sync`: detectar órfãos, ausentes (`OUT_OF_SYNC`) e status divergente; gravar `workspace_sync_finding` (~8h)
+- [x] 4.7 Job `workspace-health`: consultar `/workspace/{id}/credits` e alertar se `status != ACTIVE` (~3h)
+- [x] 4.8 Limite de 5 agentes não removidos por tenant (`TENANT_AGENT_LIMIT`, configurável) (~2h)
 
 ## 5. Catálogo de modelos (ai-model-catalog)
 

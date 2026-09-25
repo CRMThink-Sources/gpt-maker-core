@@ -10,19 +10,31 @@ import { ApiModule } from '../../src/api.module';
 import { loadEnv } from '../../src/config/env';
 import { contextMiddleware } from '../../src/shared/context/context.middleware';
 import { initMetrics } from '../../src/shared/metrics/metrics';
+import { WireMock } from '../support/wiremock';
 
 describe('api: health e métricas', () => {
   let postgres: StartedPostgreSqlContainer;
   let redis: StartedRedisContainer;
   let rabbit: StartedRabbitMQContainer;
+  let wiremock: WireMock;
   let app: INestApplication;
 
   beforeAll(async () => {
-    [postgres, redis, rabbit] = await Promise.all([
+    [postgres, redis, rabbit, wiremock] = await Promise.all([
       new PostgreSqlContainer('postgres:16-alpine').start(),
       new RedisContainer('redis:7-alpine').start(),
       new RabbitMQContainer('rabbitmq:4-alpine').start(),
+      WireMock.start(),
     ]);
+    // Workspace GPTMaker saudável, verificado em segundo plano no boot da API.
+    await wiremock.stub({
+      request: { method: 'GET', urlPath: '/v2/workspaces' },
+      response: { status: 200, jsonBody: [{ id: 'ws-1', name: 'Partner' }] },
+    });
+    await wiremock.stub({
+      request: { method: 'GET', urlPath: '/v2/workspace/ws-1/credits' },
+      response: { status: 200, jsonBody: { credits: 500, status: 'ACTIVE' } },
+    });
     const env = loadEnv({
       NODE_ENV: 'test',
       LOG_LEVEL: 'warn',
@@ -30,6 +42,9 @@ describe('api: health e métricas', () => {
       REDIS_URL: redis.getConnectionUrl(),
       RABBITMQ_URL: rabbit.getAmqpUrl(),
       DATA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+      GPTMAKER_API_URL: `${wiremock.baseUrl}/v2`,
+      GPTMAKER_API_TOKEN: 'test-token',
+      GPTMAKER_WORKSPACE_ID: 'ws-1',
     });
     initMetrics(env.APP_ROLE);
     const moduleRef = await Test.createTestingModule({
@@ -42,7 +57,7 @@ describe('api: health e métricas', () => {
 
   afterAll(async () => {
     await app?.close();
-    await Promise.all([postgres?.stop(), redis?.stop(), rabbit?.stop()]);
+    await Promise.all([postgres?.stop(), redis?.stop(), rabbit?.stop(), wiremock?.stop()]);
   });
 
   it('GET /health/live', async () => {
@@ -61,6 +76,20 @@ describe('api: health e métricas', () => {
       postgres: { status: 'up' },
       redis: { status: 'up' },
       rabbitmq: { status: 'up' },
+    });
+  });
+
+  it('GET /health inclui o workspace GPTMaker', async () => {
+    await expect
+      .poll(async () => (await request(app.getHttpServer()).get('/health')).status, {
+        timeout: 20_000,
+      })
+      .toBe(200);
+    const res = await request(app.getHttpServer()).get('/health');
+    expect(res.body.info.gptmaker).toMatchObject({
+      status: 'up',
+      subscriptionStatus: 'ACTIVE',
+      credits: 500,
     });
   });
 

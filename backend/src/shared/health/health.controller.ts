@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { HealthCheck, HealthCheckService, HealthIndicatorResult } from '@nestjs/terminus';
+import { HealthRegistry } from './health-registry';
 import { InfraHealthIndicators } from './health.indicators';
 
 @Controller('health')
@@ -7,6 +8,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly indicators: InfraHealthIndicators,
+    private readonly registry: HealthRegistry,
   ) {}
 
   /** Processo vivo; usado pelo healthcheck do container. */
@@ -15,7 +17,10 @@ export class HealthController {
     return { status: 'ok' };
   }
 
-  /** Dependências acessíveis; usado no deploy antes de liberar tráfego. */
+  /**
+   * Infraestrutura própria acessível; usado no deploy antes de liberar tráfego. Não inclui
+   * provedores externos: uma queda do GPTMaker não deve reverter um deploy.
+   */
   @Get('ready')
   @HealthCheck()
   ready() {
@@ -23,6 +28,18 @@ export class HealthController {
       () => this.indicators.postgres(),
       () => this.indicators.redisPing(),
       () => this.indicators.rabbitmq(),
+    ]);
+  }
+
+  /** Visão completa: infraestrutura + componentes externos (GPTMaker, ...), para monitoramento. */
+  @Get()
+  @HealthCheck()
+  full() {
+    return this.health.check([
+      () => this.indicators.postgres(),
+      () => this.indicators.redisPing(),
+      () => this.indicators.rabbitmq(),
+      async () => (await this.registry.checkAll()) as HealthIndicatorResult,
     ]);
   }
 }

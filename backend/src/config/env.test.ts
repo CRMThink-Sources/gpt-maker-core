@@ -6,6 +6,8 @@ const base = {
   REDIS_URL: 'redis://localhost:6379',
   RABBITMQ_URL: 'amqp://u:p@localhost:5672',
   DATA_ENCRYPTION_KEY: 'a2V5',
+  GPTMAKER_API_TOKEN: 'token',
+  GPTMAKER_WORKSPACE_ID: 'ws',
 };
 
 describe('loadEnv', () => {
