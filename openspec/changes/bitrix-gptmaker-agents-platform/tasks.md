@@ -46,11 +46,11 @@
 
 ## 5. Catálogo de modelos (ai-model-catalog)
 
-- [ ] 5.1 CRUD de `ai_model` com código único, modelo padrão único e validação do código `prefferModel` (~6h)
-- [ ] 5.2 Histórico de alteração de custo (`ai_model_cost_history`) com autor (~3h)
-- [ ] 5.3 Desativação e remoção (soft delete) com bloqueio se em uso ou migração para substituto (atualizando settings no GPTMaker) (~6h)
-- [ ] 5.4 Vínculo de modelos permitidos por plano (`plan_spa_id`) (~3h)
-- [ ] 5.5 Seed inicial com modelos e custos (valores a confirmar) (~1h)
+- [x] 5.1 CRUD de `ai_model` com código único, modelo padrão único e validação do código `prefferModel` (~6h) — serviço de domínio; rotas HTTP com a autenticação do backoffice (15.1/15.3)
+- [x] 5.2 Histórico de alteração de custo (`ai_model_cost_history`) com autor (~3h)
+- [x] 5.3 Desativação e remoção (soft delete) com bloqueio se em uso ou migração para substituto (atualizando settings no GPTMaker) (~6h)
+- [x] 5.4 Vínculo de modelos permitidos por plano (`plan_spa_id`) (~3h)
+- [x] 5.5 Seed inicial com modelos e custos (valores a confirmar) (~1h) — custos da tabela de cobrança do GPTMaker, semeados no boot da API só com catálogo vazio
 
 ## 6. Instalação, tokens e sessão via crmthink-platform (bitrix-app-installation)
 

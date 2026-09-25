@@ -261,3 +261,45 @@ export const creditsSpentSchema = z
 export type GptMakerCreditsSpent = z.infer<typeof creditsSpentSchema>;
 
 export const errorBodySchema = z.object({ error: z.string() }).loose();
+
+// ---- Modelos
+
+/**
+ * Valores de `prefferModel` conhecidos (docs/gptmaker-api.md §3). A lista do provedor muda com
+ * frequência: o catálogo aceita código fora dela mediante confirmação do operador.
+ */
+export const GPTMAKER_KNOWN_MODELS: readonly string[] = [
+  'GPT_5_6_SOL',
+  'GPT_5_6_TERRA',
+  'GPT_5_6_LUNA',
+  'GPT_5_5',
+  'GPT_5_4',
+  'GPT_5_4_MINI',
+  'GPT_5_2',
+  'GPT_5_1',
+  'GPT_5',
+  'GPT_5_MINI',
+  'GPT_4_1',
+  'GPT_4_1_MINI',
+  'OPEN_AI_O4_MINI',
+  'OPEN_AI_O3',
+  'OPEN_AI_O3_MINI',
+  'OPEN_AI_O1',
+  'GPT_4_O',
+  'GPT_4_O_MINI',
+  'GPT_4',
+  'CLAUDE_5_SONNET',
+  'CLAUDE_4_6_SONNET',
+  'CLAUDE_4_5_SONNET',
+  'CLAUDE_4_5_HAIKU',
+  'CLAUDE_3_7_SONNET',
+  'CLAUDE_3_5_SONNET',
+  'CLAUDE_3_5_HAIKU',
+  'DEEPINFRA_LLAMA3_3',
+  'QWEN_2_5_MAX',
+  'DEEPSEEK_V4_PRO',
+  'DEEPSEEK_V4_FLASH',
+  'DEEPSEEK_CHAT',
+  'SABIA_3_1',
+  'SABIA_3',
+];

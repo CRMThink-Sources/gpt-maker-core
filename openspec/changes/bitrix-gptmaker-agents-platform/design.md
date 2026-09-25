@@ -76,6 +76,7 @@ billing consome usage.response ─▶ DEBIT idempotente (unique message_id) com 
 
 ### D6. Catálogo de modelos e débito
 Tabela `ai_model(id, code, display_name, description, credits_per_response, active, is_default, deleted_at)` + `ai_model_cost_history`. `code` = enum `prefferModel` do GPTMaker (validado contra lista conhecida, mas editável para novos modelos). `plan_allowed_model(plan_id, model_id)`.
+- Regras do catálogo: código fora da lista conhecida exige confirmação do operador; padrão único e sempre ativo (não pode ser inativado nem removido sem outro padrão); "em uso" = agentes não removidos. Remoção com substituto inativa o modelo, migra agente a agente (`PUT /agent/{id}/settings` com as settings locais + `prefferModel`; `OUT_OF_SYNC` só local) e faz soft delete limpando `plan_allowed_model`; falha em um agente mantém o modelo e a nova tentativa continua. Seed inicial (tabela de cobrança do GPTMaker, descontinuados inativos, padrão `GPT_5_MINI`) no boot da API, só com catálogo vazio.
 - Débito: `DEBIT = ai_model.credits_per_response` do modelo do agente no momento do processamento; lançamento guarda `model_code` e `unit_cost`.
 - Remoção: soft delete; bloqueada se houver agentes ativos, salvo com substituto (migra agentes chamando `PUT /agents/{id}/settings`).
 - 1:1 com créditos GPTMaker ⇒ não existe multiplicador de margem; margem = preço do plano − custo GPTMaker dos créditos.
