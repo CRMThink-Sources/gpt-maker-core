@@ -23,7 +23,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run build -w @gptmaker/contracts
+      - run: npm run build -w @gptmaker/contracts -w @gptmaker/platform-sdk
+      - name: Tipos do contrato do crmthink-platform em dia com o OpenAPI
+        run: |
+          npm run generate -w @gptmaker/platform-sdk
+          test -z "$(git status --porcelain packages/platform-sdk/src/api.gen.ts)" || {
+            echo "::error::docs/crmthink-platform-openapi.json mudou sem regenerar os tipos: rode 'npm run generate -w @gptmaker/platform-sdk' e commite"
+            git diff --stat packages/platform-sdk/src/api.gen.ts
+            exit 1
+          }
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
@@ -50,7 +58,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run build -w @gptmaker/contracts
+      - run: npm run build -w @gptmaker/contracts -w @gptmaker/platform-sdk
       # Postgres, RabbitMQ e Redis via Testcontainers; WireMock e fixtures assinadas entram por seção.
       - run: npm run test:integration -w backend
 

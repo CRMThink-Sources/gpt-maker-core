@@ -45,6 +45,9 @@ describe('api: health e métricas', () => {
       GPTMAKER_API_URL: `${wiremock.baseUrl}/v2`,
       GPTMAKER_API_TOKEN: 'test-token',
       GPTMAKER_WORKSPACE_ID: 'ws-1',
+      PLATFORM_URL: 'http://127.0.0.1:1',
+      PLATFORM_API_KEY: 'test-key',
+      PLATFORM_WEBHOOK_SECRETS: 'test-secret',
     });
     initMetrics(env.APP_ROLE);
     const moduleRef = await Test.createTestingModule({

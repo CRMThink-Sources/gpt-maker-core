@@ -3,12 +3,13 @@ import { DatabaseModule } from './database/database.module';
 import { HealthRegistry } from './health/health-registry';
 import { LoggingModule } from './logging/logging.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { PlatformModule } from './platform/platform.module';
 import { RedisModule } from './redis/redis.module';
 
 /** Infraestrutura comum aos dois papéis (api e worker). */
 @Global()
 @Module({
-  imports: [LoggingModule, DatabaseModule, RedisModule, MessagingModule],
+  imports: [LoggingModule, DatabaseModule, RedisModule, MessagingModule, PlatformModule],
   providers: [HealthRegistry],
   exports: [HealthRegistry],
 })

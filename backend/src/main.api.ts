@@ -17,6 +17,14 @@ async function bootstrap(): Promise<void> {
   // rawBody: webhooks assinados (crmthink-platform) validam HMAC sobre o corpo original.
   const app = await NestFactory.create(ApiModule.forRoot(env), { bufferLogs: true, rawBody: true });
   app.use(contextMiddleware);
+  // Frontend (app.) chama a API (api.) com o JWT da sessão no header; sem cookies.
+  app.enableCors({
+    origin: env.FRONTEND_ORIGINS,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    exposedHeaders: ['x-trace-id'],
+    maxAge: 600,
+  });
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   await app.listen(env.PORT);

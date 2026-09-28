@@ -4,17 +4,19 @@ FROM node:24-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/platform-sdk/package.json packages/platform-sdk/
 COPY backend/package.json backend/
 
 FROM base AS build
-RUN npm ci -w @gptmaker/contracts -w backend --no-audit --no-fund
+RUN npm ci -w @gptmaker/contracts -w @gptmaker/platform-sdk -w backend --no-audit --no-fund
 COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
+COPY packages/platform-sdk packages/platform-sdk
 COPY backend backend
-RUN npm run build -w @gptmaker/contracts && npm run build -w backend
+RUN npm run build -w @gptmaker/contracts -w @gptmaker/platform-sdk && npm run build -w backend
 
 FROM base AS prod-deps
-RUN npm ci -w @gptmaker/contracts -w backend --omit=dev --no-audit --no-fund
+RUN npm ci -w @gptmaker/contracts -w @gptmaker/platform-sdk -w backend --omit=dev --no-audit --no-fund
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
@@ -23,6 +25,8 @@ COPY --from=prod-deps /app/node_modules node_modules
 COPY --from=prod-deps /app/package.json ./
 COPY --from=build /app/packages/contracts/package.json packages/contracts/
 COPY --from=build /app/packages/contracts/dist packages/contracts/dist
+COPY --from=build /app/packages/platform-sdk/package.json packages/platform-sdk/
+COPY --from=build /app/packages/platform-sdk/dist packages/platform-sdk/dist
 COPY --from=build /app/backend/package.json backend/
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/drizzle backend/drizzle

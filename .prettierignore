@@ -11,3 +11,6 @@ frontend/CLAUDE.md
 frontend/next-env.d.ts
 .claude
 .cursor
+packages/platform-sdk/src/vendor
+packages/platform-sdk/src/api.gen.ts
+docs/crmthink-platform-openapi.json

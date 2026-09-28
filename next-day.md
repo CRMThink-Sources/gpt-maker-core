@@ -1,0 +1,1 @@
+A próxima é a seção 6, de instalação e sessão via crmthink-platform. A 6.1 é passar ao time da plataforma os dados do app (escopos e URLs) e receber de volta a chave de API e o segredo HMAC. Então 6.2 a 6.7 dependem do contrato da plataforma: vou precisar do openapi.json e da biblioteca de HMAC/JWT deles, ou de onde encontrá-los.

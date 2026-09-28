@@ -55,13 +55,13 @@
 ## 6. Instalação, tokens e sessão via crmthink-platform (bitrix-app-installation)
 
 - [ ] 6.1 Passar ao time da plataforma os dados do app para o onboarding (tarefas 17.3/17.4 do `crmthink-platform`): escopos (`imbot`, `imopenlines`, `crm`, `task`, `bizproc`, `user`, `im`), URL do instalador, URL de eventos, origem do frontend para `SESSION_CORS_ORIGINS`; receber chave de API e segredo HMAC (~2h)
-- [ ] 6.2 `PlatformTokenProvider` (`GET /v1/installations/{id}/token` com cache Redis até `expiresAt - 5min`, `POST .../token/refresh` com token vencido, tratamento de 410/409) e `BitrixClient` por tenant com rate limiter por portal e `batch` (~6h)
-- [ ] 6.3 Endpoint `/platform/installer` (`{installationId, memberId, domain, appCode, isReinstall}`): validação HMAC com a biblioteca da plataforma, criar/reativar tenant por `installation_id`, gerar `tenant_code`, registrar handlers; `isReinstall` re-registra chatbots; idempotente, até 60s (~6h)
-- [ ] 6.4 Validação de `application_token` em todo evento do Bitrix com cache de `GET /v1/installations/{id}` (~4h)
-- [ ] 6.5 Eventos `installation.removed` (UNINSTALLED, inativar agentes), `installation.auth_error`/`auth_restored` (pausar/retomar processamento, aviso de reautorização) (~6h)
-- [ ] 6.6 Frontend: troca de `BX24.getAuth()` por JWT em `POST /v1/sessions` da plataforma e renovação transparente (~6h)
-- [ ] 6.7 Backend: guard NestJS validando JWT por JWKS da plataforma (guia/biblioteca TypeScript da plataforma + `jose`; iss, aud `crmthink.gptmaker`, exp) e contexto de tenant/usuário a partir das claims (`installationId`, `sub`, `isAdmin`) (~3h)
-- [ ] 6.8 Controle de permissão (admin do portal ou usuário autorizado) e tela de concessão (~6h)
+- [x] 6.2 `PlatformTokenProvider` (`GET /v1/installations/{id}/token` com cache Redis até `expiresAt - 5min`, `POST .../token/refresh` com token vencido, tratamento de 410/409) e `BitrixClient` por tenant com rate limiter por portal e `batch` (~6h) — cliente `openapi-fetch` com tipos do contrato (`packages/platform-sdk`); token cifrado no Redis
+- [x] 6.3 Endpoint `/platform/installer` (`{installationId, memberId, domain, appCode, isReinstall}`): validação HMAC com a biblioteca da plataforma, criar/reativar tenant por `installation_id`, gerar `tenant_code`, registrar handlers; `isReinstall` re-registra chatbots; idempotente, até 60s (~6h) — sem `event.bind` nesta versão: eventos do chatbot chegam pelo `webhookUrl` do `imbot.v2.Bot.register` (9.1) e `OnSessionFinish` só dispara para conectores do app; o instalador confere o acesso com `app.info` e chama os ouvintes do ciclo de vida (re-registro de chatbots entra com 9.1)
+- [x] 6.4 Validação de `application_token` em todo evento do Bitrix com cache de `GET /v1/installations/{id}` (~4h) — `BitrixEventGuard` pronto para os endpoints da 9.2
+- [x] 6.5 Eventos `installation.removed` (UNINSTALLED, inativar agentes), `installation.auth_error`/`auth_restored` (pausar/retomar processamento, aviso de reautorização) (~6h) — `/platform/events` grava `payment_event` e publica em `payments.events`; worker aplica `installation.*` (eventos de cobrança ficam gravados para a seção 12); reinstalação reativa agentes inativados por `UNINSTALLED`
+- [x] 6.6 Frontend: troca de `BX24.getAuth()` por JWT em `POST /v1/sessions` da plataforma e renovação transparente (~6h)
+- [x] 6.7 Backend: guard NestJS validando JWT por JWKS da plataforma (guia/biblioteca TypeScript da plataforma + `jose`; iss, aud `crmthink.gptmaker`, exp) e contexto de tenant/usuário a partir das claims (`installationId`, `sub`, `isAdmin`) (~3h)
+- [x] 6.8 Controle de permissão (admin do portal ou usuário autorizado) e tela de concessão (~6h) — admin concede via `BX24.selectUsers`; nomes lidos do portal
 
 ## 7. Gestão de agentes (agent-management)
 

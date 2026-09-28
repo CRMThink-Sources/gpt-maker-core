@@ -32,6 +32,43 @@ export const envSchema = z.object({
 
   /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
   TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),
+
+  /** Origens do frontend autorizadas por CORS a chamar a API, separadas por vírgula. */
+  FRONTEND_ORIGINS: z
+    .string()
+    .default('http://localhost:3000')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ),
+
+  // crmthink-platform: instalação, tokens do Bitrix, sessão do iframe e cobrança (design D3/D9)
+  PLATFORM_URL: z.url(),
+  /** Chave de API do app (`credentials.apiKey` do cadastro). */
+  PLATFORM_API_KEY: z.string().min(1),
+  /**
+   * Segredos vigentes dos webhooks (`credentials.webhookSecret`), separados por vírgula: durante a
+   * rotação ficam o novo e o antigo por até 24h.
+   */
+  PLATFORM_WEBHOOK_SECRETS: z
+    .string()
+    .min(1)
+    .transform((value) =>
+      value
+        .split(',')
+        .map((secret) => secret.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.string()).min(1)),
+  /** `iss` esperado no JWT da sessão; padrão da plataforma é a própria `PLATFORM_URL`. */
+  PLATFORM_JWT_ISSUER: z.url().optional(),
+  PLATFORM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
+  BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),
+  BITRIX_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -34,6 +34,9 @@ services:
   frontend:
     image: ghcr.io/${GHCR_OWNER}/gptmaker-frontend:${IMAGE_TAG}
     restart: unless-stopped
+    environment:
+      PUBLIC_PLATFORM_URL: ${PUBLIC_PLATFORM_URL}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 15s
