@@ -54,7 +54,7 @@
 
 ## 6. Instalação, tokens e sessão via crmthink-platform (bitrix-app-installation)
 
-- [ ] 6.1 Passar ao time da plataforma os dados do app para o onboarding (tarefas 17.3/17.4 do `crmthink-platform`): escopos (`imbot`, `imopenlines`, `crm`, `task`, `bizproc`, `user`, `im`), URL do instalador, URL de eventos, origem do frontend para `SESSION_CORS_ORIGINS`; receber chave de API e segredo HMAC (~2h)
+- [x] 6.1 Passar ao time da plataforma os dados do app para o onboarding (tarefas 17.3/17.4 do `crmthink-platform`): escopos (`imbot`, `imopenlines`, `crm`, `task`, `bizproc`, `user`, `im`), URL do instalador, URL de eventos, origem do frontend para `SESSION_CORS_ORIGINS`; receber chave de API e segredo HMAC (~2h) — app `crmthink.gptmaker` cadastrado no staging da plataforma; instalação e sessão testadas via túnel cloudflared
 - [x] 6.2 `PlatformTokenProvider` (`GET /v1/installations/{id}/token` com cache Redis até `expiresAt - 5min`, `POST .../token/refresh` com token vencido, tratamento de 410/409) e `BitrixClient` por tenant com rate limiter por portal e `batch` (~6h) — cliente sobre o `PlatformClient` do SDK publicado (`@crmthink-sources/platform-sdk`); token cifrado no Redis
 - [x] 6.3 Endpoint `/platform/installer` (`{installationId, memberId, domain, appCode, isReinstall}`): validação HMAC com a biblioteca da plataforma, criar/reativar tenant por `installation_id`, gerar `tenant_code`, registrar handlers; `isReinstall` re-registra chatbots; idempotente, até 60s (~6h) — sem `event.bind` nesta versão: eventos do chatbot chegam pelo `webhookUrl` do `imbot.v2.Bot.register` (9.1) e `OnSessionFinish` só dispara para conectores do app; o instalador confere o acesso com `app.info` e chama os ouvintes do ciclo de vida (re-registro de chatbots entra com 9.1)
 - [x] 6.4 Validação de `application_token` em todo evento do Bitrix com cache de `GET /v1/installations/{id}` (~4h) — `BitrixEventGuard` pronto para os endpoints da 9.2
@@ -65,8 +65,8 @@
 
 ## 7. Gestão de agentes (agent-management)
 
-- [ ] 7.1 Repositório de agentes filtrado por `tenantId` e testes de isolamento entre tenants (~4h)
-- [ ] 7.2 Criar agente: validação, limite de 5 agentes, modelo permitido, criação no GPTMaker, `prefferModel` nas settings, webhooks, persistência (~10h)
+- [x] 7.1 Repositório de agentes filtrado por `tenantId` e testes de isolamento entre tenants (~4h) — `AgentRepository` (módulo `agents`): todo método exige o `tenantId`, esconde `DELETED`, id malformado vira inexistente; `getById` responde 404 `AGENT_NOT_FOUND`
+- [x] 7.2 Criar agente: validação, limite de 5 agentes, modelo permitido, criação no GPTMaker, `prefferModel` nas settings, webhooks, persistência (~10h) — `AgentService.create` + `POST /app/agents` (e `GET` lista/detalhe): lock Redis por tenant, modelo padrão ou liberado no plano da `subscription_state` (sem plano ⇒ só o padrão), webhooks em `API_PUBLIC_URL/gptmaker/webhooks/{event}?t=` com hash do token; falha após criar remove o agente no GPTMaker
 - [ ] 7.3 Editar agente e settings (incl. troca de modelo) refletindo no GPTMaker com invalidação de cache (~6h)
 - [ ] 7.4 Inativar/reativar (`/inactive`, `/active`) (~3h)
 - [ ] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h)

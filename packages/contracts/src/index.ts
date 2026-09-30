@@ -1,3 +1,4 @@
+export * from './agents';
 export * from './errors';
 export * from './health';
 export * from './models';

@@ -43,6 +43,14 @@ export const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter(Boolean),
     ),
+  /**
+   * URL pública desta API (ex.: `https://api.<dominio>`), base dos webhooks e callbacks que o
+   * GPTMaker chama. Em dev, o endereço do túnel para receber os eventos.
+   */
+  API_PUBLIC_URL: z
+    .url()
+    .default('http://localhost:3001')
+    .transform((value) => value.replace(/\/+$/, '')),
 
   // crmthink-platform: instalação, tokens do Bitrix, sessão do iframe e cobrança (design D3/D9)
   PLATFORM_URL: z.url(),

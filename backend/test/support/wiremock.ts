@@ -46,6 +46,17 @@ export class WireMock {
     return ((await res.json()) as { count: number }).count;
   }
 
+  /** Corpos (JSON) das requisições recebidas em `method urlPath`, na ordem de chegada. */
+  async bodies(method: string, urlPath: string): Promise<unknown[]> {
+    const res = await fetch(`${this.baseUrl}/__admin/requests/find`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method, urlPath }),
+    });
+    const { requests } = (await res.json()) as { requests: Array<{ body: string }> };
+    return requests.map((request) => JSON.parse(request.body) as unknown);
+  }
+
   async reset(): Promise<void> {
     await fetch(`${this.baseUrl}/__admin/reset`, { method: 'POST' });
   }
