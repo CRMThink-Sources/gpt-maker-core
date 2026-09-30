@@ -67,7 +67,7 @@
 
 - [x] 7.1 Repositório de agentes filtrado por `tenantId` e testes de isolamento entre tenants (~4h) — `AgentRepository` (módulo `agents`): todo método exige o `tenantId`, esconde `DELETED`, id malformado vira inexistente; `getById` responde 404 `AGENT_NOT_FOUND`
 - [x] 7.2 Criar agente: validação, limite de 5 agentes, modelo permitido, criação no GPTMaker, `prefferModel` nas settings, webhooks, persistência (~10h) — `AgentService.create` + `POST /app/agents` (e `GET` lista/detalhe): lock Redis por tenant, modelo padrão ou liberado no plano da `subscription_state` (sem plano ⇒ só o padrão), webhooks em `API_PUBLIC_URL/gptmaker/webhooks/{event}?t=` com hash do token; falha após criar remove o agente no GPTMaker
-- [ ] 7.3 Editar agente e settings (incl. troca de modelo) refletindo no GPTMaker com invalidação de cache (~6h)
+- [x] 7.3 Editar agente e settings (incl. troca de modelo) refletindo no GPTMaker com invalidação de cache (~6h) — `AgentService.update` + `PATCH /app/agents/:id`: lock por agente, GPTMaker antes do registro local (perfil completo com prefixo; settings mescladas + `prefferModel`), falha nas settings desfaz o perfil; troca de modelo passa pela regra do plano; ainda não há cache de agente para invalidar (entra com o cache por `botId`, seção 9)
 - [ ] 7.4 Inativar/reativar (`/inactive`, `/active`) (~3h)
 - [ ] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h)
 - [ ] 7.8 Espelhar agente como item de assinatura (`billable=false`) no `crmthink-platform` via `payments_outbox` (~4h)

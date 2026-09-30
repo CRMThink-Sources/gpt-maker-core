@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { type AgentView, createAgentSchema } from '@gptmaker/contracts';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { type AgentView, createAgentSchema, updateAgentSchema } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { AgentService } from './agent.service';
 
 class CreateAgentDto extends createZodDto(createAgentSchema) {}
+class UpdateAgentDto extends createZodDto(updateAgentSchema) {}
 
 /** Agentes do tenant da sessão; agente de outro tenant responde 404 (spec agent-management). */
 @Controller('app/agents')
@@ -27,5 +28,15 @@ export class AgentsController {
   @AppAuth('manage')
   create(@CurrentSession() session: AppSession, @Body() body: CreateAgentDto): Promise<AgentView> {
     return this.agents.create(session, body);
+  }
+
+  @Patch(':id')
+  @AppAuth('manage')
+  update(
+    @CurrentSession() session: AppSession,
+    @Param('id') id: string,
+    @Body() body: UpdateAgentDto,
+  ): Promise<AgentView> {
+    return this.agents.update(session, id, body);
   }
 }

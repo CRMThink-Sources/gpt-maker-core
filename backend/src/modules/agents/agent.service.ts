@@ -1,6 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
-import { type AgentView, createAgentSchema, type CreateAgentInput } from '@gptmaker/contracts';
+import {
+  type AgentView,
+  createAgentSchema,
+  type CreateAgentInput,
+  updateAgentSchema,
+  type UpdateAgentInput,
+} from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
@@ -14,6 +20,7 @@ import { REDIS } from '../../shared/redis/redis.module';
 import {
   GptMakerClient,
   GptMakerError,
+  type GptMakerNewAgent,
   type GptMakerWebhooks,
   TenantAgentLimitService,
   toGptMakerName,
@@ -30,6 +37,21 @@ export interface AgentOwner {
 
 // Cobre a criação no GPTMaker e as duas configurações seguintes, com retentativas.
 const CREATE_LOCK_TTL_MS = 120_000;
+// Duas chamadas ao GPTMaker (dados e settings) e o eventual desfazer.
+const AGENT_LOCK_TTL_MS = 90_000;
+
+/** Dados do agente espelhados em `PUT /agent/{id}` no GPTMaker. */
+const PROFILE_FIELDS = [
+  'name',
+  'avatarUrl',
+  'behavior',
+  'type',
+  'communicationType',
+  'jobName',
+  'jobSite',
+  'jobDescription',
+] as const;
+type Profile = Pick<Agent, (typeof PROFILE_FIELDS)[number]>;
 
 /**
  * Gestão de agentes do tenant (spec agent-management) sobre o workspace GPTMaker compartilhado.
@@ -88,22 +110,111 @@ export class AgentService {
     return outcome.result;
   }
 
+  /**
+   * Edita dados, modelo e settings. O GPTMaker é atualizado antes do registro local; se a
+   * segunda chamada falhar, a primeira é desfeita, e o registro local fica como estava.
+   */
+  async update(owner: AgentOwner, id: string, raw: UpdateAgentInput): Promise<AgentView> {
+    const input = updateAgentSchema.parse(raw);
+    return this.withAgentLock(owner.tenantId, id, async () => {
+      const current = await this.agents.getById(owner.tenantId, id);
+      if (current.status === 'OUT_OF_SYNC') throw outOfSync();
+
+      const modelChanged = input.modelId !== undefined && input.modelId !== current.modelId;
+      // Troca de modelo passa pela regra do plano; manter o atual não (plano pode ter mudado).
+      const model = modelChanged
+        ? await this.resolveModel(owner.tenantId, input.modelId)
+        : (await this.modelsById()).get(current.modelId)!;
+
+      const profile: Profile = {
+        name: input.name ?? current.name,
+        avatarUrl: keep(input.avatarUrl, current.avatarUrl),
+        behavior: keep(input.behavior, current.behavior),
+        type: input.type ?? current.type,
+        communicationType: input.communicationType ?? current.communicationType,
+        jobName: keep(input.jobName, current.jobName),
+        jobSite: keep(input.jobSite, current.jobSite),
+        jobDescription: keep(input.jobDescription, current.jobDescription),
+      };
+      const settings = { ...current.settings, ...input.settings };
+      const profileChanged = PROFILE_FIELDS.some((field) => profile[field] !== current[field]);
+      const settingsChanged =
+        modelChanged ||
+        Object.entries(input.settings ?? {}).some(
+          ([key, value]) => current.settings[key] !== value,
+        );
+
+      if (profileChanged) {
+        await this.callGptMaker(() =>
+          this.gptmaker.updateAgent(current.gptmakerAgentId, remoteProfile(owner, profile)),
+        );
+      }
+      if (settingsChanged) {
+        try {
+          // Semântica do PUT (merge ou substituição) não documentada: envia as settings locais junto.
+          await this.callGptMaker(() =>
+            this.gptmaker.updateAgentSettings(current.gptmakerAgentId, {
+              ...settings,
+              prefferModel: model.code,
+            }),
+          );
+        } catch (error) {
+          if (profileChanged) await this.revertProfile(owner, current);
+          throw error;
+        }
+      }
+
+      const updated = await this.agents.update(owner.tenantId, id, {
+        ...profile,
+        modelId: model.id,
+        settings,
+      });
+      return toView(updated!, model);
+    });
+  }
+
+  /** Serializa alterações do mesmo agente; a segunda recebe 409 em vez de esperar. */
+  private async withAgentLock<T>(tenantId: string, id: string, fn: () => Promise<T>): Promise<T> {
+    const outcome = await this.lock.runExclusive(`agent:${tenantId}:${id}`, AGENT_LOCK_TTL_MS, fn);
+    if (!outcome.ran) {
+      throw new DomainError(
+        'AGENT_BUSY',
+        'O agente está sendo alterado; aguarde e tente de novo',
+        HttpStatus.CONFLICT,
+      );
+    }
+    return outcome.result;
+  }
+
+  private async revertProfile(owner: AgentOwner, previous: Agent): Promise<void> {
+    try {
+      await this.gptmaker.updateAgent(previous.gptmakerAgentId, remoteProfile(owner, previous));
+    } catch (error) {
+      this.logger.error(
+        { agentId: previous.id, err: error },
+        'dados do agente ficaram divergentes no GPTMaker após falha na edição',
+      );
+    }
+  }
+
   private async createRemoteAndLocal(
     owner: AgentOwner,
     input: ReturnType<typeof createAgentSchema.parse>,
     model: AiModel,
   ): Promise<Agent> {
     const remote = await this.callGptMaker(() =>
-      this.gptmaker.createAgent({
-        name: toGptMakerName(owner.tenantCode, input.name),
-        avatar: input.avatarUrl,
-        behavior: input.behavior,
-        type: input.type,
-        communicationType: input.communicationType,
-        jobName: input.jobName,
-        jobSite: input.jobSite,
-        jobDescription: input.jobDescription,
-      }),
+      this.gptmaker.createAgent(
+        remoteProfile(owner, {
+          name: input.name,
+          avatarUrl: input.avatarUrl ?? null,
+          behavior: input.behavior ?? null,
+          type: input.type,
+          communicationType: input.communicationType,
+          jobName: input.jobName ?? null,
+          jobSite: input.jobSite ?? null,
+          jobDescription: input.jobDescription ?? null,
+        }),
+      ),
     );
 
     // O token em claro só vai para o GPTMaker, na URL dos webhooks; aqui fica o hash.
@@ -203,6 +314,14 @@ export class AgentService {
         { traceId, operation: error.operation, kind: error.kind, err: error },
         'falha no GPTMaker',
       );
+      if (error.kind === 'VALIDATION') {
+        throw new DomainError(
+          'GPTMAKER_REJECTED',
+          'O GPTMaker recusou os dados do agente; nada foi alterado. Revise os campos',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          { traceId, reason: error.message },
+        );
+      }
       throw new DomainError(
         'GPTMAKER_UNAVAILABLE',
         'Não foi possível concluir no GPTMaker agora; nada foi alterado. Tente de novo em instantes',
@@ -222,6 +341,35 @@ export class AgentService {
 export function hashWebhookToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+/** `undefined` mantém o valor atual; `null` limpa. */
+function keep<T>(value: T | null | undefined, current: T | null): T | null {
+  return value === undefined ? current : value;
+}
+
+/**
+ * Corpo de `POST|PUT /agent` no GPTMaker: nome com o prefixo do tenant. Texto limpo vai como
+ * string vazia, pois omitir o campo não o apaga num PUT de semântica não documentada.
+ */
+function remoteProfile(owner: AgentOwner, profile: Profile): GptMakerNewAgent {
+  return {
+    name: toGptMakerName(owner.tenantCode, profile.name),
+    avatar: profile.avatarUrl ?? undefined,
+    behavior: profile.behavior ?? '',
+    type: profile.type,
+    communicationType: profile.communicationType,
+    jobName: profile.jobName ?? '',
+    jobSite: profile.jobSite ?? undefined,
+    jobDescription: profile.jobDescription ?? '',
+  };
+}
+
+const outOfSync = () =>
+  new DomainError(
+    'AGENT_OUT_OF_SYNC',
+    'O agente não foi encontrado no GPTMaker; fale com o suporte',
+    HttpStatus.CONFLICT,
+  );
 
 const modelNotAllowed = () =>
   new DomainError(
@@ -247,6 +395,7 @@ function toView(row: Agent, model: AiModel): AgentView {
       displayName: model.displayName,
       creditsPerResponse: model.creditsPerResponse,
     },
+    settings: row.settings,
     status: row.status as AgentView['status'],
     inactiveReason: row.inactiveReason,
     createdAt: row.createdAt.toISOString(),

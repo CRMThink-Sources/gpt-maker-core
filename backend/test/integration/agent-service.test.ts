@@ -26,7 +26,7 @@ const WS = 'ws-test';
 const API = 'https://api.gptmaker.test';
 const REMOTE_ID = 'gm-agent-1';
 
-describe('criação de agente', () => {
+describe('serviço de agentes', () => {
   let postgres: StartedPostgreSqlContainer;
   let redisContainer: StartedRedisContainer;
   let wiremock: WireMock;
@@ -183,6 +183,7 @@ describe('criação de agente', () => {
       type: 'SUPPORT',
       communicationType: 'NORMAL',
       jobName: 'Loja Exemplo',
+      jobDescription: '',
     });
     expect(await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/settings`)).toEqual([
       { prefferModel: 'GPT_5_MINI' },
@@ -350,5 +351,185 @@ describe('criação de agente', () => {
     expect(await service.get(owner.tenantId, view.id)).toMatchObject({ id: view.id });
     const error = await errorOf(service.get(other.tenantId, view.id));
     expect(error).toMatchObject({ code: 'AGENT_NOT_FOUND', status: 404 });
+  });
+
+  describe('edição', () => {
+    const PROFILE_PATH = `/v2/agent/${REMOTE_ID}`;
+    const SETTINGS_PATH = `/v2/agent/${REMOTE_ID}/settings`;
+    let existing: Awaited<ReturnType<AgentRepository['insert']>>;
+
+    async function stubEdit(overrides: { profile?: number; settings?: number } = {}) {
+      for (const [path, status, okBody] of [
+        [PROFILE_PATH, overrides.profile ?? 200, { id: REMOTE_ID }],
+        [SETTINGS_PATH, overrides.settings ?? 200, { success: true }],
+      ] as const) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: path },
+          response:
+            status === 200
+              ? { status, jsonBody: okBody }
+              : { status, jsonBody: { error: 'recusado' } },
+        });
+      }
+    }
+
+    const remoteCalls = async () => ({
+      profile: await wiremock.count('PUT', PROFILE_PATH),
+      settings: await wiremock.count('PUT', SETTINGS_PATH),
+    });
+
+    const stored = async () => (await db.select().from(agent).where(eq(agent.id, existing.id)))[0]!;
+
+    beforeEach(async () => {
+      existing = await repository.insert(owner.tenantId, {
+        gptmakerAgentId: REMOTE_ID,
+        name: 'Atendente',
+        behavior: 'Seja cordial',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        jobName: 'Loja Exemplo',
+        modelId: defaultModel.id,
+        settings: { timezone: 'America/Sao_Paulo', enabledEmoji: true },
+        webhookTokenHash: randomUUID(),
+      });
+    });
+
+    it('dados: envia o perfil completo com o prefixo e não mexe nas settings', async () => {
+      await stubEdit();
+
+      const view = await service.update(owner, existing.id, {
+        name: 'Vendedor',
+        behavior: null,
+        type: 'SALE',
+      });
+
+      expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
+        {
+          name: `[${owner.tenantCode}] Vendedor`,
+          behavior: '',
+          type: 'SALE',
+          communicationType: 'NORMAL',
+          jobName: 'Loja Exemplo',
+          jobDescription: '',
+        },
+      ]);
+      expect((await remoteCalls()).settings).toBe(0);
+      expect(view).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+    });
+
+    it('settings: mescla com as atuais e reenvia o prefferModel do modelo atual', async () => {
+      await stubEdit();
+
+      const view = await service.update(owner, existing.id, {
+        settings: { enabledEmoji: false, maxDailyMessages: 100 },
+      });
+
+      expect(await wiremock.bodies('PUT', SETTINGS_PATH)).toEqual([
+        {
+          timezone: 'America/Sao_Paulo',
+          enabledEmoji: false,
+          maxDailyMessages: 100,
+          prefferModel: 'GPT_5_MINI',
+        },
+      ]);
+      expect((await remoteCalls()).profile).toBe(0);
+      expect(view.settings).toEqual({
+        timezone: 'America/Sao_Paulo',
+        enabledEmoji: false,
+        maxDailyMessages: 100,
+      });
+    });
+
+    it('troca de modelo liberado no plano: novo prefferModel e registro local', async () => {
+      await stubEdit();
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+
+      const view = await service.update(owner, existing.id, { modelId: premiumModel.id });
+
+      expect(await wiremock.bodies('PUT', SETTINGS_PATH)).toEqual([
+        { timezone: 'America/Sao_Paulo', enabledEmoji: true, prefferModel: 'GPT_5' },
+      ]);
+      expect(view.model.code).toBe('GPT_5');
+      expect((await stored()).modelId).toBe(premiumModel.id);
+    });
+
+    it('troca para modelo fora do plano: MODEL_NOT_ALLOWED sem chamar o GPTMaker', async () => {
+      await stubEdit();
+      const error = await errorOf(service.update(owner, existing.id, { modelId: premiumModel.id }));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('manter o modelo atual não passa pela regra do plano', async () => {
+      await stubEdit();
+      await db.update(agent).set({ modelId: premiumModel.id }).where(eq(agent.id, existing.id));
+
+      const view = await service.update(owner, existing.id, {
+        modelId: premiumModel.id,
+        name: 'Outro nome',
+      });
+      expect(view.model.code).toBe('GPT_5');
+      expect((await remoteCalls()).settings).toBe(0);
+    });
+
+    it('valores iguais aos atuais: nenhuma chamada ao GPTMaker', async () => {
+      await stubEdit();
+      await service.update(owner, existing.id, {
+        name: 'Atendente',
+        settings: { enabledEmoji: true },
+      });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('falha nas settings depois dos dados: desfaz os dados e mantém o registro local', async () => {
+      await stubEdit({ settings: 500 });
+
+      const error = await errorOf(
+        service.update(owner, existing.id, { name: 'Novo', settings: { enabledEmoji: false } }),
+      );
+
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      const profiles = (await wiremock.bodies('PUT', PROFILE_PATH)) as Array<{ name: string }>;
+      expect(profiles.map((body) => body.name)).toEqual([
+        `[${owner.tenantCode}] Novo`,
+        `[${owner.tenantCode}] Atendente`,
+      ]);
+      expect(await stored()).toMatchObject({
+        name: 'Atendente',
+        settings: { timezone: 'America/Sao_Paulo', enabledEmoji: true },
+      });
+    });
+
+    it('GPTMaker recusa os dados: GPTMAKER_REJECTED e nada alterado', async () => {
+      await stubEdit({ profile: 400 });
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'GPTMAKER_REJECTED', status: 422 });
+      expect((await stored()).name).toBe('Atendente');
+    });
+
+    it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubEdit();
+      const other = await newTenant();
+      const error = await errorOf(service.update(other, existing.id, { name: 'Invadido' }));
+      expect(error).toMatchObject({ code: 'AGENT_NOT_FOUND', status: 404 });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('agente fora de sincronia: AGENT_OUT_OF_SYNC', async () => {
+      await db.update(agent).set({ status: 'OUT_OF_SYNC' }).where(eq(agent.id, existing.id));
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'AGENT_OUT_OF_SYNC', status: 409 });
+    });
+
+    it('outra alteração em andamento no agente: AGENT_BUSY', async () => {
+      await redis.set(`lock:agent:${owner.tenantId}:${existing.id}`, 'outro', 'PX', 10_000);
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'AGENT_BUSY', status: 409 });
+    });
+
+    it('edição vazia é recusada pela validação', async () => {
+      await expect(service.update(owner, existing.id, {})).rejects.toThrow(/ao menos um campo/);
+    });
   });
 });
