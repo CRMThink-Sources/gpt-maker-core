@@ -7,12 +7,9 @@ const nextConfig: NextConfig = {
   // Monorepo: rastreia a partir da raiz para incluir packages/contracts.
   outputFileTracingRoot: path.join(__dirname, '..'),
   poweredByHeader: false,
-  allowedDevOrigins: [
-    'http://localhost:3000',
-    'https://spend-translation-bottles-ruling.trycloudflare.com',
-    'https://gptmaker-staging.crmthink.com.br',
-    'spend-translation-bottles-ruling.trycloudflare.com',
-  ],
+  // Só para o `next dev` aberto por túnel (hostname, sem esquema nem porta). O quick tunnel do
+  // cloudflared muda de endereço a cada reinício, daí o curinga.
+  allowedDevOrigins: ['*.trycloudflare.com', 'gptmaker-staging.crmthink.com.br'],
 };
 
 export default nextConfig;

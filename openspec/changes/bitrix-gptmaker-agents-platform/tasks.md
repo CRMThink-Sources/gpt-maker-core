@@ -77,7 +77,7 @@
 ## 8. Treinamentos (agent-training)
 
 - [x] 8.1 Integração com Spaces/SeaweedFS (`@aws-sdk/client-s3`): caminhos aleatórios e URL pré-assinada longa (~4h) — `ObjectStorage` (`shared/storage`): chave `trainings/<tenantId>/<aleatório>.<ext>` sem o nome do arquivo, bucket privado, URL pré-assinada de até 7 dias (limite do SigV4) assinada com `STORAGE_PUBLIC_ENDPOINT` quando o host visto pelo GPTMaker difere do interno, nome original no `Content-Disposition`; variáveis `STORAGE_*` obrigatórias
-- [ ] 8.2 Endpoints de criação TEXT, WEBSITE (subpáginas, intervalo), VIDEO e DOCUMENT (validação tamanho/MIME) (~10h)
+- [x] 8.2 Endpoints de criação TEXT, WEBSITE (subpáginas, intervalo), VIDEO e DOCUMENT (validação tamanho/MIME) (~10h) — `POST /app/agents/:agentId/trainings` (JSON: texto até 50 mil caracteres, site com subpáginas e intervalo sem `THIRTY_SECONDS`, vídeo) e `/document` (multipart `file`, até 20 MB; pdf, docx, doc, xlsx, pptx, txt, md, csv pela extensão, conferida pelos bytes iniciais; texto só UTF-8). Registro local `PROCESSING` antes do GPTMaker e `callbackUrl` com token (hash local); falha no GPTMaker descarta registro e objeto. O id criado (a API não devolve) é achado listando o tipo: novo sem registro local que casa com o conteúdo, com lock por agente; sem certeza, fica nulo para a 8.5. `GET` lista os não removidos. Formatos e tamanho aceitos pelo GPTMaker a confirmar em staging
 - [ ] 8.3 Endpoint de `callbackUrl` com token para status (`PROCESSING`/`DONE`/`FAILED`) (~4h)
 - [ ] 8.4 Listar, editar (TEXT) e remover; apagar objeto do storage ao remover documento (~5h)
 - [ ] 8.5 Sincronização com `GET /agents/{id}/trainings` (GPTMaker como fonte da verdade) (~5h)
