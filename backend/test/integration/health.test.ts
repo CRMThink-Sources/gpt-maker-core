@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ApiModule } from '../../src/api.module';
 import { loadEnv } from '../../src/config/env';
 import { contextMiddleware } from '../../src/shared/context/context.middleware';
+import { runMigrations } from '../../src/shared/database/migrate';
 import { initMetrics } from '../../src/shared/metrics/metrics';
 import { WireMock } from '../support/wiremock';
 
@@ -50,6 +51,7 @@ describe('api: health e métricas', () => {
       PLATFORM_WEBHOOK_SECRETS: 'test-secret',
     });
     initMetrics(env.APP_ROLE);
+    await runMigrations(env.DATABASE_URL);
     const moduleRef = await Test.createTestingModule({
       imports: [ApiModule.forRoot(env)],
     }).compile();
