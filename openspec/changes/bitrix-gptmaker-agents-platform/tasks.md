@@ -71,7 +71,7 @@
 - [x] 7.4 Inativar/reativar (`/inactive`, `/active`) (~3h) — `POST /app/agents/:id/inactivate|activate`: idempotentes, GPTMaker antes do registro local; inativação manual grava `MANUAL`; reativação só de `MANUAL` (`AGENT_INACTIVE_BY_SYSTEM` para assinatura/suspensão/desinstalação) e recusada com tenant `SUSPENDED`
 - [x] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h) — `AgentService.remove` + `DELETE /app/agents/:id` (204): lock por agente, GPTMaker antes do registro local; 404 no GPTMaker (inclusive `OUT_OF_SYNC` ou retentativa) só marca `DELETED`; libera a vaga no limite. Ainda não há chatbot registrado: desregistrar fica na 9.1, e o worker (9.4) só encaminha mensagens de agente `ACTIVE`
 - [x] 7.8 Espelhar agente como item de assinatura (`billable=false`) no `crmthink-platform` via `payments_outbox` (~4h) — `AgentItemMirror`: criar, editar nome, inativar, reativar, remover, desinstalar e reinstalar agendam `agent-item.sync` na mesma transação da mudança local; o sync leva o estado atual ao serviço (`createItem` idempotente por `externalRef` = id do agente, `updateItem` de título/status `active`|`cancelled`, `removeItem` achado por `listItems`). Assinatura da projeção local ou, sem ela, de `GET /v1/installations/{id}/subscription`; `NO_SUBSCRIPTION`/`SUBSCRIPTION_ENDED` encerram a linha sem espelhar
-- [ ] 7.6 Inativação/reativação automática por assinatura expirada/regularizada e suspensão do tenant (~5h) — agendar `agent-item.sync` a cada agente alterado, como o `AgentLifecycleListener`
+- [x] 7.6 Inativação/reativação automática por assinatura expirada/regularizada e suspensão do tenant (~5h) — `AgentAccessPolicy` decide o bloqueio (`UNINSTALLED` > `TENANT_SUSPENDED` > `SUBSCRIPTION_EXPIRED`: assinatura `cancelled`/`trial_expired` ou `past_due` com carência vencida; sem projeção, nada bloqueia). O `AgentLifecycleListener` reconcilia no novo gancho `onAccessChanged` e na desinstalação/reinstalação: inativa os ativos com o motivo, troca o motivo de quem já está inativo pelo sistema, reativa só inativações do sistema; `MANUAL` nunca muda; cada transição agenda `agent-item.sync`. Reativação manual recusada com assinatura encerrada (`SUBSCRIPTION_INACTIVE`). Quem dispara o gancho: 12.3, 12.5 e 15.4
 - [ ] 7.7 UI NextJS: lista de agentes, formulário (com seletor de modelo e custo por resposta), ações e estados de erro (~16h)
 
 ## 8. Treinamentos (agent-training)
@@ -126,9 +126,9 @@
 
 - [ ] 12.1 `PaymentsClient` sobre o `PlatformClient` do SDK publicado (`@crmthink-sources/platform-sdk`, tipos gerados do contrato pela plataforma) + `cockatiel`, chave de API em env, mapeamento dos códigos de erro; contrato novo chega por versão do pacote (~4h)
 - [ ] 12.2 Endpoint `/platform/events`: validação `X-Platform-Signature` com a biblioteca da plataforma (raw body, 5 min), persistência em `payment_event`, dedupe por `eventId`, publicação em `payments.events`; fixtures a partir da seção `webhooks` do OpenAPI (~4h)
-- [ ] 12.3 Worker de eventos: projeção `subscription_state` com controle de versão e efeitos por tipo (tabela do design D9) (~12h) — assinatura nova (inclusive depois de encerrada): agendar `agent-item.sync` para os agentes não removidos do tenant, pois o sync sem assinatura é descartado
+- [ ] 12.3 Worker de eventos: projeção `subscription_state` com controle de versão e efeitos por tipo (tabela do design D9) (~12h) — assinatura nova (inclusive depois de encerrada): agendar `agent-item.sync` para os agentes não removidos do tenant, pois o sync sem assinatura é descartado; após gravar a projeção, emitir `onAccessChanged` do `TenantLifecycle` (7.6)
 - [ ] 12.4 Trial: tratamento de `subscription.trial_started` e tela de ativação em andamento até o evento (~5h)
-- [ ] 12.5 Carência: `grace_until` em `past_due`, job de inativação a cada 15 min, limpeza em `recovered`/`renewed` (~5h)
+- [ ] 12.5 Carência: `grace_until` em `past_due`, job de inativação a cada 15 min, limpeza em `recovered`/`renewed` (~5h) — o job só emite `onAccessChanged` para os tenants com carência vencida; a regra está na `AgentAccessPolicy` (7.6)
 - [ ] 12.6 Troca de plano: chamada ao serviço, `GRANT` proporcional no upgrade, plano futuro no downgrade e troca para modelo padrão (~10h)
 - [ ] 12.7 Avisos `PAYMENT_FAILED`, `PERIOD_ENDING` e `MODEL_DOWNGRADED` aos destinatários (~4h)
 - [ ] 12.8 Estornos: `charge.refunded`/`charge.disputed` → `REFUND` + `credit_deduction` (~8h)
@@ -155,7 +155,7 @@
 - [ ] 15.1 Autenticação de operadores (senha + TOTP ou SSO) e perfis `ADMIN`/`SUPPORT` (~12h)
 - [ ] 15.2 Tela de direitos dos planos e pacotes (créditos, modelos permitidos, limites de treinamento) (~8h)
 - [ ] 15.3 Tela do catálogo de modelos (CRUD, histórico de custo, sugestão da reconciliação) (~6h)
-- [ ] 15.4 Gestão de tenants: listagem, suspensão/reativação, concessão de créditos com justificativa (~10h)
+- [ ] 15.4 Gestão de tenants: listagem, suspensão/reativação, concessão de créditos com justificativa (~10h) — suspender/reativar grava o status e emite `onAccessChanged` (7.6)
 - [ ] 15.5 Visão de assinaturas: projeção local, eventos recebidos e link para o SPA (~6h)
 - [ ] 15.6 Tela do workspace: status/créditos, órfãos (remover/vincular), `OUT_OF_SYNC` (~8h)
 - [ ] 15.7 Relatório do partner e visão de DLQ/erros por tenant (~10h)

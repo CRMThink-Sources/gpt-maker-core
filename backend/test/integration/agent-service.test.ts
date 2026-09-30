@@ -8,6 +8,7 @@ import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
+import { AgentAccessPolicy } from '../../src/modules/agents/agent-access.policy';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
 import { AgentService, hashWebhookToken } from '../../src/modules/agents/agent.service';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
@@ -156,6 +157,7 @@ describe('serviço de agentes', () => {
       new ModelCatalogService(db, client),
       client,
       new PaymentsOutbox(db),
+      new AgentAccessPolicy(db),
       db,
       redis,
       env,
@@ -665,6 +667,27 @@ describe('serviço de agentes', () => {
         service.activate({ ...owner, tenantStatus: 'SUSPENDED' }, row.id),
       );
       expect(error).toMatchObject({ code: 'TENANT_SUSPENDED', status: 409 });
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it.each([
+      ['cancelada', { status: 'cancelled' as const }],
+      [
+        'em atraso com a carência vencida',
+        { status: 'past_due' as const, graceUntil: new Date(0) },
+      ],
+    ])('assinatura %s não reativa nem o manual', async (_, state) => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+      await db.insert(subscriptionState).values({
+        tenantId: owner.tenantId,
+        subscriptionId: 'sub-1',
+        modality: 'stripe',
+        version: 1,
+        ...state,
+      });
+      const error = await errorOf(service.activate(session(), row.id));
+      expect(error).toMatchObject({ code: 'SUBSCRIPTION_INACTIVE', status: 409 });
       expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
     });
 

@@ -29,6 +29,7 @@ import {
 import { type AiModel, ModelCatalogService } from '../models';
 import { OUTBOX_OPERATIONS, PaymentsOutbox } from '../payments';
 import type { TenantStatus } from '../tenancy';
+import { AgentAccessPolicy } from './agent-access.policy';
 import { type Agent, AgentRepository, type Executor } from './agent.repository';
 
 /** Dono da operação: tenant da sessão do iframe. */
@@ -70,6 +71,7 @@ export class AgentService {
     private readonly models: ModelCatalogService,
     private readonly gptmaker: GptMakerClient,
     private readonly outbox: PaymentsOutbox,
+    private readonly access: AgentAccessPolicy,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
     @Inject(ENV) private readonly env: Env,
@@ -204,8 +206,9 @@ export class AgentService {
 
   /**
    * Reativa um agente inativado pelo próprio tenant. Inativações do sistema (assinatura expirada,
-   * suspensão, desinstalação) só são desfeitas pelo evento que as causou; tenant suspenso não
-   * reativa. O limite de agentes conta os inativos, então reativar nunca o ultrapassa.
+   * suspensão, desinstalação) só são desfeitas pelo evento que as causou; com tenant suspenso ou
+   * assinatura encerrada, nem o manual volta. O limite de agentes conta os inativos, então
+   * reativar nunca o ultrapassa.
    */
   async activate(
     owner: AgentOwner & { tenantStatus: TenantStatus },
@@ -215,19 +218,27 @@ export class AgentService {
       const current = await this.agents.getById(owner.tenantId, id);
       if (current.status === 'OUT_OF_SYNC') throw outOfSync();
       if (current.status === 'ACTIVE') return this.view(current);
-      if (owner.tenantStatus === 'SUSPENDED') {
-        throw new DomainError(
-          'TENANT_SUSPENDED',
-          'A conta está suspensa; regularize a assinatura para reativar agentes',
-          HttpStatus.CONFLICT,
-        );
-      }
       if (current.inactiveReason !== 'MANUAL') {
         throw new DomainError(
           'AGENT_INACTIVE_BY_SYSTEM',
           'O agente foi inativado pelo sistema e volta sozinho quando a causa for resolvida',
           HttpStatus.CONFLICT,
           { reason: current.inactiveReason },
+        );
+      }
+      const block = await this.access.blockingReason(owner.tenantId, owner.tenantStatus);
+      if (block === 'TENANT_SUSPENDED') {
+        throw new DomainError(
+          'TENANT_SUSPENDED',
+          'A conta está suspensa; fale com o suporte para reativar agentes',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (block) {
+        throw new DomainError(
+          'SUBSCRIPTION_INACTIVE',
+          'A assinatura não está ativa; regularize o pagamento para reativar agentes',
+          HttpStatus.CONFLICT,
         );
       }
 
