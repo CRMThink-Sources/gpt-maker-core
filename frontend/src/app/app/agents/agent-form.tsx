@@ -1,38 +1,17 @@
 'use client';
 
 import type { AgentSettings, AgentView, AvailableModel } from '@gptmaker/contracts';
+import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { AGENT_TYPES, COMMUNICATION_TYPES, credits } from '@/lib/agents';
-
-/** Valores do formulário como o usuário os digitou; as páginas montam o corpo da API. */
-export interface AgentFormValues {
-  name: string;
-  avatarUrl: string;
-  behavior: string;
-  type: AgentView['type'];
-  communicationType: AgentView['communicationType'];
-  jobName: string;
-  jobSite: string;
-  jobDescription: string;
-  modelId: string;
-  /** Só as settings que o usuário mexeu ou que o agente já tem; as demais não são enviadas. */
-  settings: AgentSettings;
-}
-
-export function initialValues(agent: AgentView | undefined, models: AvailableModel[]) {
-  return {
-    name: agent?.name ?? '',
-    avatarUrl: agent?.avatarUrl ?? '',
-    behavior: agent?.behavior ?? '',
-    type: agent?.type ?? 'SUPPORT',
-    communicationType: agent?.communicationType ?? 'NORMAL',
-    jobName: agent?.jobName ?? '',
-    jobSite: agent?.jobSite ?? '',
-    jobDescription: agent?.jobDescription ?? '',
-    modelId: agent?.model.id ?? models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? '',
-    settings: { ...agent?.settings },
-  } satisfies AgentFormValues;
-}
+import { buttonClass, Card } from '@/components/ui';
+import {
+  type AgentFormValues,
+  CompanyFields,
+  Field,
+  IdentityFields,
+  inputClass,
+  ModelFields,
+} from './agent-fields';
 
 const GROUPING: Record<NonNullable<AgentSettings['messageGroupingTime']>, string> = {
   NO_GROUP: 'Não agrupar',
@@ -73,36 +52,79 @@ const TOGGLES: Array<[Toggle, string]> = [
   ['knowledgeByFunction', 'Consultar o treinamento só quando precisar'],
 ];
 
-const input =
-  'mt-1 w-full rounded border border-zinc-300 bg-transparent px-2 py-1.5 text-sm disabled:opacity-70';
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/** Seção de configurações: título e explicação à esquerda, campos num card à direita. */
+function Section({
+  title,
+  description,
+  disabled,
+  children,
+}: {
+  title: string;
+  description: string;
+  disabled: boolean;
+  children: ReactNode;
+}) {
   return (
-    <label className="block text-sm">
-      <span className="font-medium">{label}</span>
-      {children}
-      {hint && <span className="mt-1 block text-xs text-zinc-500">{hint}</span>}
-    </label>
+    <div className="grid gap-4 lg:grid-cols-3 lg:gap-8">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{description}</p>
+      </div>
+      <Card className="lg:col-span-2">
+        <fieldset disabled={disabled} className="space-y-5 p-5">
+          {children}
+        </fieldset>
+      </Card>
+    </div>
   );
 }
 
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <span className="text-zinc-700">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+          checked ? 'bg-brand-600' : 'bg-zinc-200'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-4.5' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+/** Edição do agente em página inteira: todas as seções visíveis, uma barra de salvar fixa. */
 export function AgentForm({
   initial,
   models,
   currentModel,
-  withSettings,
   readOnly,
-  submitLabel,
+  cancelHref,
   onSubmit,
 }: {
   initial: AgentFormValues;
   models: AvailableModel[];
-  /** Modelo atual do agente, mostrado mesmo se o plano não o oferece mais. */
-  currentModel?: AgentView['model'];
-  /** Settings só existem depois de criado (a criação usa os padrões do GPTMaker). */
-  withSettings: boolean;
+  currentModel: AgentView['model'];
   readOnly: boolean;
-  submitLabel: string;
+  cancelHref: string;
   onSubmit: (values: AgentFormValues) => Promise<void>;
 }) {
   const [values, setValues] = useState<AgentFormValues>(initial);
@@ -112,13 +134,6 @@ export function AgentForm({
     setValues((current) => ({ ...current, [key]: value }));
   const setSetting = <K extends keyof AgentSettings>(key: K, value: AgentSettings[K]) =>
     setValues((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
-
-  const options: Array<Pick<AvailableModel, 'id' | 'displayName' | 'creditsPerResponse'>> = [
-    ...models,
-  ];
-  const outOfPlan = currentModel && !models.some((model) => model.id === currentModel.id);
-  if (outOfPlan) options.unshift(currentModel);
-  const selected = models.find((model) => model.id === values.modelId);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -130,44 +145,122 @@ export function AgentForm({
     }
   }
 
+  const disabled = readOnly || saving;
   const { settings } = values;
 
   return (
-    <form onSubmit={submit} className="mt-4 space-y-6">
-      <fieldset disabled={readOnly || saving} className="space-y-4">
-        <legend className="text-lg font-semibold">Identidade</legend>
-        <Field label="Nome" hint="É o nome que o cliente vê no chat.">
-          <input
-            className={input}
-            required
-            maxLength={100}
-            value={values.name}
-            onChange={(e) => set('name', e.target.value)}
-          />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Tipo de agente">
+    <form onSubmit={submit} className="space-y-8">
+      <Section
+        title="Identidade"
+        description="Como o agente se apresenta aos clientes no chat."
+        disabled={disabled}
+      >
+        <IdentityFields values={values} set={set} />
+      </Section>
+
+      <Section
+        title="Empresa"
+        description="Contexto que o agente usa para falar em nome do seu negócio."
+        disabled={disabled}
+      >
+        <CompanyFields values={values} set={set} />
+      </Section>
+
+      <Section
+        title="Modelo de IA"
+        description="Cada resposta do agente consome créditos conforme o modelo."
+        disabled={disabled}
+      >
+        <ModelFields values={values} set={set} models={models} currentModel={currentModel} />
+      </Section>
+
+      <Section
+        title="Atendimento"
+        description="Regras da conversa. Campos sem escolha seguem o padrão do GPTMaker."
+        disabled={disabled}
+      >
+        <div className="space-y-4">
+          {TOGGLES.map(([key, label]) => (
+            <Switch
+              key={key}
+              label={label}
+              checked={settings[key] ?? false}
+              onChange={(value) => setSetting(key, value)}
+            />
+          ))}
+        </div>
+        <div className="grid gap-5 border-t border-zinc-100 pt-5 sm:grid-cols-2">
+          <Field label="Juntar mensagens seguidas do cliente">
             <select
-              className={input}
-              value={values.type}
-              onChange={(e) => set('type', e.target.value as AgentFormValues['type'])}
-            >
-              {Object.entries(AGENT_TYPES).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Tom de conversa">
-            <select
-              className={input}
-              value={values.communicationType}
+              className={inputClass}
+              value={settings.messageGroupingTime ?? ''}
               onChange={(e) =>
-                set('communicationType', e.target.value as AgentFormValues['communicationType'])
+                setSetting(
+                  'messageGroupingTime',
+                  e.target.value as NonNullable<AgentSettings['messageGroupingTime']>,
+                )
               }
             >
-              {Object.entries(COMMUNICATION_TYPES).map(([value, label]) => (
+              {!settings.messageGroupingTime && <option value="">Padrão do GPTMaker</option>}
+              {Object.entries(GROUPING).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Fuso horário">
+            <input
+              className={inputClass}
+              placeholder="America/Sao_Paulo"
+              maxLength={64}
+              value={settings.timezone ?? ''}
+              onChange={(e) => setSetting('timezone', e.target.value || undefined)}
+            />
+          </Field>
+          <Field label="Limite de mensagens por contato no dia">
+            <select
+              className={inputClass}
+              value={
+                settings.maxDailyMessages === undefined
+                  ? ''
+                  : String(settings.maxDailyMessages ?? 'none')
+              }
+              onChange={(e) =>
+                setSetting(
+                  'maxDailyMessages',
+                  e.target.value === 'none'
+                    ? null
+                    : (Number(e.target.value) as (typeof DAILY_LIMITS)[number]),
+                )
+              }
+            >
+              {settings.maxDailyMessages === undefined && (
+                <option value="">Padrão do GPTMaker</option>
+              )}
+              <option value="none">Sem limite</option>
+              {DAILY_LIMITS.map((limit) => (
+                <option key={limit} value={limit}>
+                  {limit} mensagens
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Ao atingir o limite">
+            <select
+              className={inputClass}
+              value={settings.maxDailyMessagesLimitAction ?? ''}
+              onChange={(e) =>
+                setSetting(
+                  'maxDailyMessagesLimitAction',
+                  e.target.value as NonNullable<AgentSettings['maxDailyMessagesLimitAction']>,
+                )
+              }
+            >
+              {!settings.maxDailyMessagesLimitAction && (
+                <option value="">Padrão do GPTMaker</option>
+              )}
+              {Object.entries(LIMIT_ACTIONS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -175,202 +268,28 @@ export function AgentForm({
             </select>
           </Field>
         </div>
-        <Field label="Foto (endereço da imagem)" hint="Opcional. Um link https para a imagem.">
-          <input
-            className={input}
-            type="url"
-            maxLength={2000}
-            value={values.avatarUrl}
-            onChange={(e) => set('avatarUrl', e.target.value)}
-          />
-        </Field>
         <Field
-          label="Comportamento"
-          hint="Como o agente deve agir: o que pode e não pode fazer, como se apresentar."
+          label="Quando o agente não souber responder"
+          hint="Ex.: “Vou verificar com a equipe e já retorno.”"
         >
           <textarea
-            className={`${input} min-h-28`}
-            maxLength={10_000}
-            value={values.behavior}
-            onChange={(e) => set('behavior', e.target.value)}
+            className={`${inputClass} min-h-20`}
+            maxLength={2000}
+            value={settings.onLackKnowLedge ?? ''}
+            onChange={(e) => setSetting('onLackKnowLedge', e.target.value)}
           />
         </Field>
-      </fieldset>
-
-      <fieldset disabled={readOnly || saving} className="space-y-4">
-        <legend className="text-lg font-semibold">Empresa</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Nome da empresa">
-            <input
-              className={input}
-              maxLength={200}
-              value={values.jobName}
-              onChange={(e) => set('jobName', e.target.value)}
-            />
-          </Field>
-          <Field label="Site">
-            <input
-              className={input}
-              type="url"
-              maxLength={2000}
-              value={values.jobSite}
-              onChange={(e) => set('jobSite', e.target.value)}
-            />
-          </Field>
-        </div>
-        <Field label="Sobre a empresa" hint="O que a empresa faz, para quem, e o que oferece.">
-          <textarea
-            className={`${input} min-h-20`}
-            maxLength={5000}
-            value={values.jobDescription}
-            onChange={(e) => set('jobDescription', e.target.value)}
-          />
-        </Field>
-      </fieldset>
-
-      <fieldset disabled={readOnly || saving} className="space-y-2">
-        <legend className="text-lg font-semibold">Modelo de IA</legend>
-        {options.length === 0 ? (
-          <p className="text-sm text-red-700">Nenhum modelo disponível no momento.</p>
-        ) : (
-          <Field
-            label="Modelo"
-            hint="Cada resposta do agente consome créditos conforme o modelo escolhido."
-          >
-            <select
-              className={input}
-              required
-              value={values.modelId}
-              onChange={(e) => set('modelId', e.target.value)}
-            >
-              {options.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.displayName} — {credits(model.creditsPerResponse)}
-                  {outOfPlan && model.id === currentModel.id ? ' (atual, fora do plano)' : ''}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        {selected?.description && <p className="text-xs text-zinc-600">{selected.description}</p>}
-      </fieldset>
-
-      {withSettings && (
-        <fieldset disabled={readOnly || saving} className="space-y-4">
-          <legend className="text-lg font-semibold">Atendimento</legend>
-          <div className="space-y-2">
-            {TOGGLES.map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings[key] ?? false}
-                  onChange={(e) => setSetting(key, e.target.checked)}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Juntar mensagens seguidas do cliente">
-              <select
-                className={input}
-                value={settings.messageGroupingTime ?? ''}
-                onChange={(e) =>
-                  setSetting(
-                    'messageGroupingTime',
-                    e.target.value as NonNullable<AgentSettings['messageGroupingTime']>,
-                  )
-                }
-              >
-                {!settings.messageGroupingTime && <option value="">Padrão do GPTMaker</option>}
-                {Object.entries(GROUPING).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Fuso horário">
-              <input
-                className={input}
-                placeholder="America/Sao_Paulo"
-                maxLength={64}
-                value={settings.timezone ?? ''}
-                onChange={(e) => setSetting('timezone', e.target.value || undefined)}
-              />
-            </Field>
-            <Field label="Limite de mensagens por contato no dia">
-              <select
-                className={input}
-                value={
-                  settings.maxDailyMessages === undefined
-                    ? ''
-                    : String(settings.maxDailyMessages ?? 'none')
-                }
-                onChange={(e) =>
-                  setSetting(
-                    'maxDailyMessages',
-                    e.target.value === 'none'
-                      ? null
-                      : (Number(e.target.value) as (typeof DAILY_LIMITS)[number]),
-                  )
-                }
-              >
-                {settings.maxDailyMessages === undefined && (
-                  <option value="">Padrão do GPTMaker</option>
-                )}
-                <option value="none">Sem limite</option>
-                {DAILY_LIMITS.map((limit) => (
-                  <option key={limit} value={limit}>
-                    {limit} mensagens
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Ao atingir o limite">
-              <select
-                className={input}
-                value={settings.maxDailyMessagesLimitAction ?? ''}
-                onChange={(e) =>
-                  setSetting(
-                    'maxDailyMessagesLimitAction',
-                    e.target.value as NonNullable<AgentSettings['maxDailyMessagesLimitAction']>,
-                  )
-                }
-              >
-                {!settings.maxDailyMessagesLimitAction && (
-                  <option value="">Padrão do GPTMaker</option>
-                )}
-                {Object.entries(LIMIT_ACTIONS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field
-            label="Quando o agente não souber responder"
-            hint="Ex.: “Vou verificar com a equipe e já retorno.”"
-          >
-            <textarea
-              className={`${input} min-h-16`}
-              maxLength={2000}
-              value={settings.onLackKnowLedge ?? ''}
-              onChange={(e) => setSetting('onLackKnowLedge', e.target.value)}
-            />
-          </Field>
-        </fieldset>
-      )}
+      </Section>
 
       {!readOnly && (
-        <button
-          type="submit"
-          disabled={saving || options.length === 0}
-          className="rounded bg-violet-700 px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          {saving ? 'Salvando…' : submitLabel}
-        </button>
+        <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-zinc-200 bg-white/90 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
+          <Link href={cancelHref} className={buttonClass('secondary')}>
+            Cancelar
+          </Link>
+          <button type="submit" disabled={saving} className={buttonClass('primary')}>
+            {saving ? 'Salvando…' : 'Salvar alterações'}
+          </button>
+        </div>
       )}
     </form>
   );

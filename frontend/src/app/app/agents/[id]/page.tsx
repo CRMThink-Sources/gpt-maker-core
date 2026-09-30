@@ -1,13 +1,13 @@
 'use client';
 
 import type { AgentView, AvailableModel, UpdateAgentInput } from '@gptmaker/contracts';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, use, useEffect, useState } from 'react';
-import { agentStatus, errorMessage } from '@/lib/agents';
+import { Alert, Avatar, Badge, Loading, PageHeader } from '@/components/ui';
+import { AGENT_TYPES, agentStatus, errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
-import { AgentForm, type AgentFormValues, initialValues } from '../agent-form';
-import { StatusBadge } from '../status-badge';
+import { type AgentFormValues, initialValues } from '../agent-fields';
+import { AgentForm } from '../agent-form';
 
 const TEXTS = ['avatarUrl', 'behavior', 'jobName', 'jobSite', 'jobDescription'] as const;
 
@@ -39,9 +39,9 @@ function Notice() {
   const created = useSearchParams().get('created');
   if (!created) return null;
   return (
-    <p className="mt-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-900">
-      Agente criado. Ajuste o atendimento abaixo, se quiser.
-    </p>
+    <Alert tone="success" className="mb-6">
+      Agente criado e já ativo. Ajuste o atendimento abaixo, se quiser.
+    </Alert>
   );
 }
 
@@ -96,63 +96,67 @@ export default function AgentPage({ params }: PageProps<'/app/agents/[id]'>) {
     } catch (e) {
       setError(errorMessage(e, 'Não foi possível salvar. Tente de novo.'));
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   const readOnly = !session.canManage || agent?.status === 'OUT_OF_SYNC';
 
   return (
-    <section className="max-w-2xl">
-      <Link href="/app" className="text-sm text-violet-700 underline">
-        Voltar
-      </Link>
-
+    <>
       {loadError ? (
-        <p role="alert" className="mt-4 text-sm text-red-700">
-          {loadError}
-        </p>
+        <>
+          <PageHeader title="Agente" back={{ href: '/app', label: 'Agentes' }} />
+          <Alert tone="error">{loadError}</Alert>
+        </>
       ) : !agent ? (
-        <p className="mt-4 text-sm text-zinc-500">Carregando…</p>
+        <Loading />
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold">{agent.name}</h1>
-            <StatusBadge {...agentStatus(agent)} />
-          </div>
+          <PageHeader
+            back={{ href: '/app', label: 'Agentes' }}
+            title={
+              <span className="flex items-center gap-3">
+                <Avatar name={agent.name} src={agent.avatarUrl} />
+                {agent.name}
+              </span>
+            }
+            aside={<Badge tone={agentStatus(agent).tone}>{agentStatus(agent).label}</Badge>}
+            description={`${AGENT_TYPES[agent.type]} · criado em ${new Date(agent.createdAt).toLocaleDateString('pt-BR')}`}
+          />
           <Suspense>
             <Notice />
           </Suspense>
           {agent.status === 'OUT_OF_SYNC' && (
-            <p className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <Alert tone="warning" className="mb-6">
               O agente não foi encontrado no GPTMaker e não pode ser editado. Fale com o suporte.
-            </p>
+            </Alert>
           )}
           {!session.canManage && (
-            <p className="mt-4 text-sm text-zinc-600">
+            <Alert tone="warning" className="mb-6">
               Você pode consultar este agente. Para alterá-lo, peça acesso a um administrador.
-            </p>
+            </Alert>
           )}
           {error && (
-            <p role="alert" className="mt-4 text-sm text-red-700">
+            <Alert tone="error" className="mb-6">
               {error}
-            </p>
+            </Alert>
           )}
           {saved && (
-            <p role="status" className="mt-4 text-sm text-green-800">
+            <Alert tone="success" className="mb-6">
               {saved}
-            </p>
+            </Alert>
           )}
           <AgentForm
             key={version}
             initial={initialValues(agent, models)}
             models={models}
             currentModel={agent.model}
-            withSettings
             readOnly={readOnly}
-            submitLabel="Salvar alterações"
+            cancelHref="/app"
             onSubmit={save}
           />
         </>
       )}
-    </section>
+    </>
   );
 }
