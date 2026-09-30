@@ -41,8 +41,12 @@ export class WorkspaceHealthService implements OnApplicationBootstrap {
         ...(stale ? { reason: 'última verificação desatualizada' } : {}),
       };
     });
-    // Em segundo plano: o boot não espera o GPTMaker responder.
-    void runWithContext({ traceId: newTraceId() }, () => this.validateWorkspace());
+    // Em segundo plano: o boot não espera o GPTMaker responder. Se o Redis cair (ou a app fechar)
+    // antes do fim, o erro vira log em vez de rejeição não tratada.
+    void runWithContext({ traceId: newTraceId() }, () => this.validateWorkspace()).catch(
+      (error: unknown) =>
+        this.logger.warn({ err: error }, 'falha ao registrar a validação do workspace no boot'),
+    );
   }
 
   /** Confirma que o workspace configurado existe e é acessível com o token do partner. */
