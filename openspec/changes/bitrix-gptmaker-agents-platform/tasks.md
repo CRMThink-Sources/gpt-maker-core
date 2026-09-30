@@ -69,7 +69,7 @@
 - [x] 7.2 Criar agente: validação, limite de 5 agentes, modelo permitido, criação no GPTMaker, `prefferModel` nas settings, webhooks, persistência (~10h) — `AgentService.create` + `POST /app/agents` (e `GET` lista/detalhe): lock Redis por tenant, modelo padrão ou liberado no plano da `subscription_state` (sem plano ⇒ só o padrão), webhooks em `API_PUBLIC_URL/gptmaker/webhooks/{event}?t=` com hash do token; falha após criar remove o agente no GPTMaker
 - [x] 7.3 Editar agente e settings (incl. troca de modelo) refletindo no GPTMaker com invalidação de cache (~6h) — `AgentService.update` + `PATCH /app/agents/:id`: lock por agente, GPTMaker antes do registro local (perfil completo com prefixo; settings mescladas + `prefferModel`), falha nas settings desfaz o perfil; troca de modelo passa pela regra do plano; ainda não há cache de agente para invalidar (entra com o cache por `botId`, seção 9)
 - [x] 7.4 Inativar/reativar (`/inactive`, `/active`) (~3h) — `POST /app/agents/:id/inactivate|activate`: idempotentes, GPTMaker antes do registro local; inativação manual grava `MANUAL`; reativação só de `MANUAL` (`AGENT_INACTIVE_BY_SYSTEM` para assinatura/suspensão/desinstalação) e recusada com tenant `SUSPENDED`
-- [ ] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h)
+- [x] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h) — `AgentService.remove` + `DELETE /app/agents/:id` (204): lock por agente, GPTMaker antes do registro local; 404 no GPTMaker (inclusive `OUT_OF_SYNC` ou retentativa) só marca `DELETED`; libera a vaga no limite. Ainda não há chatbot registrado: desregistrar fica na 9.1, e o worker (9.4) só encaminha mensagens de agente `ACTIVE`
 - [ ] 7.8 Espelhar agente como item de assinatura (`billable=false`) no `crmthink-platform` via `payments_outbox` (~4h)
 - [ ] 7.6 Inativação/reativação automática por assinatura expirada/regularizada e suspensão do tenant (~5h)
 - [ ] 7.7 UI NextJS: lista de agentes, formulário (com seletor de modelo e custo por resposta), ações e estados de erro (~16h)
@@ -86,7 +86,7 @@
 
 ## 9. Canal chatbot Bitrix (bitrix-chatbot-channel)
 
-- [ ] 9.1 Registrar/atualizar/desregistrar chatbot por agente via `imbot.v2.Bot.register` e persistir `botId` (~6h)
+- [ ] 9.1 Registrar/atualizar/desregistrar chatbot por agente via `imbot.v2.Bot.register` e persistir `botId` (~6h) — incluir o desregistro em `AgentService.remove` (7.5)
 - [ ] 9.2 Endpoint de eventos de mensagem: validar `application_token`, dedupe Redis, publicar no consistent-hash por `dialogId` (~6h)
 - [ ] 9.3 Topologia RabbitMQ: filas particionadas, retry com TTL escalonado, DLQ (~8h)
 - [ ] 9.4 Worker: checar agente ativo, atendimento humano e saldo (Redis com fallback Postgres) (~5h)

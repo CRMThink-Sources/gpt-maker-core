@@ -231,6 +231,25 @@ export class AgentService {
     });
   }
 
+  /**
+   * Remove no GPTMaker e marca o registro local `DELETED` (soft delete, preserva o histórico de
+   * consumo e libera a vaga no limite de agentes). Agente que já não existe no GPTMaker, inclusive
+   * `OUT_OF_SYNC` ou removido lá numa tentativa anterior que falhou no banco, é só marcado aqui.
+   */
+  async remove(owner: AgentOwner, id: string): Promise<void> {
+    await this.withAgentLock(owner.tenantId, id, async () => {
+      const current = await this.agents.getById(owner.tenantId, id);
+      await this.callGptMaker(async () => {
+        try {
+          await this.gptmaker.deleteAgent(current.gptmakerAgentId);
+        } catch (error) {
+          if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
+        }
+      });
+      await this.agents.markDeleted(owner.tenantId, id);
+    });
+  }
+
   private async view(row: Agent): Promise<AgentView> {
     return toView(row, (await this.modelsById()).get(row.modelId)!);
   }

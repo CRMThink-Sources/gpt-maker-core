@@ -667,4 +667,113 @@ describe('serviço de agentes', () => {
       expect((await stored(row.id)).status).toBe('ACTIVE');
     });
   });
+
+  describe('remoção', () => {
+    const DELETE_PATH = `/v2/agent/${REMOTE_ID}`;
+
+    async function stubDelete(status = 200) {
+      await wiremock.stub({
+        request: { method: 'DELETE', urlPath: DELETE_PATH },
+        response:
+          status === 200
+            ? { status, jsonBody: { success: true } }
+            : { status, jsonBody: { error: 'falhou' } },
+      });
+    }
+
+    const agentWith = (
+      status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_SYNC' = 'ACTIVE',
+      gptmakerAgentId = REMOTE_ID,
+    ) =>
+      repository.insert(owner.tenantId, {
+        gptmakerAgentId,
+        name: 'Atendente',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        status,
+        inactiveReason: status === 'INACTIVE' ? 'MANUAL' : null,
+        webhookTokenHash: randomUUID(),
+      });
+
+    const stored = async (id: string) =>
+      (await db.select().from(agent).where(eq(agent.id, id)))[0]!;
+
+    it('remove no GPTMaker e marca DELETED, sumindo da listagem', async () => {
+      await stubDelete();
+      const row = await agentWith('INACTIVE');
+
+      await service.remove(owner, row.id);
+
+      expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
+      expect(await stored(row.id)).toMatchObject({ status: 'DELETED', inactiveReason: null });
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+      expect(await service.list(owner.tenantId)).toEqual([]);
+      await expect(service.get(owner.tenantId, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+    });
+
+    it('libera a vaga no limite de agentes', async () => {
+      await stubDelete();
+      const rows = [];
+      for (let i = 0; i < 5; i++) {
+        rows.push(
+          await repository.insert(owner.tenantId, {
+            gptmakerAgentId: `gm-${i}`,
+            name: `Agente ${i}`,
+            type: 'SUPPORT',
+            communicationType: 'NORMAL',
+            modelId: defaultModel.id,
+            webhookTokenHash: randomUUID(),
+          }),
+        );
+      }
+      await wiremock.stub({
+        request: { method: 'DELETE', urlPath: '/v2/agent/gm-0' },
+        response: { status: 200, jsonBody: { success: true } },
+      });
+      await service.remove(owner, rows[0]!.id);
+
+      await stubGptMaker();
+      await expect(service.create(owner, form())).resolves.toMatchObject({ status: 'ACTIVE' });
+    });
+
+    it.each(['OUT_OF_SYNC', 'ACTIVE'] as const)(
+      'agente que já não existe no GPTMaker (%s): só marca DELETED',
+      async (status) => {
+        await stubDelete(404);
+        const row = await agentWith(status);
+
+        await service.remove(owner, row.id);
+
+        expect((await stored(row.id)).status).toBe('DELETED');
+      },
+    );
+
+    it('falha no GPTMaker: erro recuperável e registro local intacto', async () => {
+      await stubDelete(500);
+      const row = await agentWith();
+      const error = await errorOf(service.remove(owner, row.id));
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+    });
+
+    it('agente já removido ou de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubDelete();
+      const row = await agentWith();
+      await service.remove(owner, row.id);
+
+      await expect(service.remove(owner, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      const other = await agentWith('ACTIVE', `gm-${randomUUID()}`);
+      await expect(service.remove(await newTenant(), other.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
+      expect(await wiremock.count('DELETE', `/v2/agent/${other.gptmakerAgentId}`)).toBe(0);
+      expect((await stored(other.id)).status).toBe('ACTIVE');
+    });
+  });
 });
