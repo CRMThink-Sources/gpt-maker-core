@@ -28,18 +28,28 @@ describe('PlatformApiClient', () => {
       json(200, token),
     );
     await expect(client(fetchFn as typeof fetch).getToken(1001)).resolves.toEqual(token);
-    const request = fetchFn.mock.calls[0]![0] as Request;
-    expect(request.url).toBe('https://platform.test/v1/installations/1001/token');
-    expect(request.headers.get('authorization')).toBe('Bearer key-1');
+    const [url, init] = fetchFn.mock.calls[0]!;
+    expect(url).toBe('https://platform.test/v1/installations/1001/token');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer key-1');
+  });
+
+  it('não serve token do cache em memória do SDK: o cache é o Redis', async () => {
+    const fetchFn = vi.fn(async () => json(200, token));
+    const platform = client(fetchFn as typeof fetch);
+    await platform.getToken(1001);
+    await platform.getToken(1001);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
   it('POST .../token/refresh com o token recusado', async () => {
-    const fetchFn = vi.fn(async (_input: string | URL | Request) => json(200, token));
+    const fetchFn = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      json(200, token),
+    );
     await client(fetchFn as typeof fetch).refreshToken(1001, 'stale');
-    const request = fetchFn.mock.calls[0]![0] as Request;
-    expect(request.method).toBe('POST');
-    expect(request.url).toBe('https://platform.test/v1/installations/1001/token/refresh');
-    expect(await request.json()).toEqual({ staleAccessToken: 'stale' });
+    const [url, init] = fetchFn.mock.calls[0]!;
+    expect(init?.method).toBe('POST');
+    expect(url).toBe('https://platform.test/v1/installations/1001/token/refresh');
+    expect(JSON.parse(String(init?.body))).toEqual({ staleAccessToken: 'stale' });
   });
 
   it.each([

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { PlatformEvent } from '@gptmaker/platform-sdk';
+import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
 import { and, eq, inArray, like, lt, sql } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { paymentEvent } from '../../shared/database/schema/index';

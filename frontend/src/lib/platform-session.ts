@@ -1,6 +1,9 @@
-import type { ApiError } from '@gptmaker/contracts';
-import { APP_CODE, type PlatformErrorBody, type PlatformSession } from '@gptmaker/platform-sdk/api';
+// Só tipos do SDK: a entrada dele usa `node:crypto` e não entra no bundle do navegador.
+import type { components, PlatformErrorBody } from '@crmthink-sources/platform-sdk';
+import { APP_CODE, type ApiError } from '@gptmaker/contracts';
 import { bx24Auth } from './bx24';
+
+type PlatformSession = components['schemas']['Session'];
 
 export interface ClientConfig {
   /** Base do crmthink-platform (`POST /v1/sessions`). */

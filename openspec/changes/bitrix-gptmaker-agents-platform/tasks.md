@@ -55,7 +55,7 @@
 ## 6. Instalação, tokens e sessão via crmthink-platform (bitrix-app-installation)
 
 - [ ] 6.1 Passar ao time da plataforma os dados do app para o onboarding (tarefas 17.3/17.4 do `crmthink-platform`): escopos (`imbot`, `imopenlines`, `crm`, `task`, `bizproc`, `user`, `im`), URL do instalador, URL de eventos, origem do frontend para `SESSION_CORS_ORIGINS`; receber chave de API e segredo HMAC (~2h)
-- [x] 6.2 `PlatformTokenProvider` (`GET /v1/installations/{id}/token` com cache Redis até `expiresAt - 5min`, `POST .../token/refresh` com token vencido, tratamento de 410/409) e `BitrixClient` por tenant com rate limiter por portal e `batch` (~6h) — cliente `openapi-fetch` com tipos do contrato (`packages/platform-sdk`); token cifrado no Redis
+- [x] 6.2 `PlatformTokenProvider` (`GET /v1/installations/{id}/token` com cache Redis até `expiresAt - 5min`, `POST .../token/refresh` com token vencido, tratamento de 410/409) e `BitrixClient` por tenant com rate limiter por portal e `batch` (~6h) — cliente sobre o `PlatformClient` do SDK publicado (`@crmthink-sources/platform-sdk`); token cifrado no Redis
 - [x] 6.3 Endpoint `/platform/installer` (`{installationId, memberId, domain, appCode, isReinstall}`): validação HMAC com a biblioteca da plataforma, criar/reativar tenant por `installation_id`, gerar `tenant_code`, registrar handlers; `isReinstall` re-registra chatbots; idempotente, até 60s (~6h) — sem `event.bind` nesta versão: eventos do chatbot chegam pelo `webhookUrl` do `imbot.v2.Bot.register` (9.1) e `OnSessionFinish` só dispara para conectores do app; o instalador confere o acesso com `app.info` e chama os ouvintes do ciclo de vida (re-registro de chatbots entra com 9.1)
 - [x] 6.4 Validação de `application_token` em todo evento do Bitrix com cache de `GET /v1/installations/{id}` (~4h) — `BitrixEventGuard` pronto para os endpoints da 9.2
 - [x] 6.5 Eventos `installation.removed` (UNINSTALLED, inativar agentes), `installation.auth_error`/`auth_restored` (pausar/retomar processamento, aviso de reautorização) (~6h) — `/platform/events` grava `payment_event` e publica em `payments.events`; worker aplica `installation.*` (eventos de cobrança ficam gravados para a seção 12); reinstalação reativa agentes inativados por `UNINSTALLED`
@@ -124,7 +124,7 @@
 
 ## 12. Integração com o billing do crmthink-platform (payments-integration)
 
-- [ ] 12.1 `PaymentsClient` com tipos gerados do `openapi.json` da plataforma (`openapi-typescript` + `openapi-fetch`) + `cockatiel`, chave de API em env, mapeamento dos códigos de erro e passo de CI que detecta mudança de contrato (~4h)
+- [ ] 12.1 `PaymentsClient` sobre o `PlatformClient` do SDK publicado (`@crmthink-sources/platform-sdk`, tipos gerados do contrato pela plataforma) + `cockatiel`, chave de API em env, mapeamento dos códigos de erro; contrato novo chega por versão do pacote (~4h)
 - [ ] 12.2 Endpoint `/platform/events`: validação `X-Platform-Signature` com a biblioteca da plataforma (raw body, 5 min), persistência em `payment_event`, dedupe por `eventId`, publicação em `payments.events`; fixtures a partir da seção `webhooks` do OpenAPI (~4h)
 - [ ] 12.3 Worker de eventos: projeção `subscription_state` com controle de versão e efeitos por tipo (tabela do design D9) (~12h)
 - [ ] 12.4 Trial: tratamento de `subscription.trial_started` e tela de ativação em andamento até o evento (~5h)

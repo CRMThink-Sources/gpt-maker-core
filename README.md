@@ -18,7 +18,7 @@ Módulos do backend ficam em `backend/src/modules/<módulo>/`; outro módulo só
 
 ## Desenvolvimento
 
-Requisitos: Node 24 (`.nvmrc`), Docker.
+Requisitos: Node 24 (`.nvmrc`), Docker e `GITHUB_TOKEN` no ambiente (token pessoal com `read:packages`): o SDK do crmthink-platform (`@crmthink-sources/platform-sdk`) vem do GitHub Packages da organização (`.npmrc`). O build das imagens recebe o mesmo token como secret `github_token`.
 
 ```bash
 npm ci
@@ -52,7 +52,7 @@ npm run test:integration -w backend      # Testcontainers (precisa de Docker)
 
 ## CI/CD
 
-- `ci.yml`: lint, formatação, tipos, fronteiras de módulos, testes unitários e de integração, build; em PR também o build das imagens.
+- `ci.yml`: lint, formatação, tipos, fronteiras de módulos, testes unitários e de integração, build; em PR também o build das imagens. O `GITHUB_TOKEN` do workflow lê o SDK da plataforma (`packages: read`); o pacote precisa liberar este repositório em _Manage Actions access_.
 - `release.yml`: push em `main` publica `ghcr.io/<owner>/gptmaker-backend` e `gptmaker-frontend` com a tag do SHA.
 - `deploy.yml`: staging automático após o release; produção manual (`workflow_dispatch` com a tag) com aprovação no GitHub Environment `production`. O script `infra/deploy/deploy.sh` faz health check e rollback para a tag anterior.
 

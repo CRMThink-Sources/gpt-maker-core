@@ -95,7 +95,7 @@ services:
 
   backend-api:
     profiles: [app]
-    build: { context: .., dockerfile: backend/Dockerfile }
+    build: { context: .., dockerfile: backend/Dockerfile, secrets: [github_token] }
     environment:
       <<: *backend-env
       APP_ROLE: api
@@ -113,7 +113,7 @@ services:
 
   backend-worker:
     profiles: [app]
-    build: { context: .., dockerfile: backend/Dockerfile }
+    build: { context: .., dockerfile: backend/Dockerfile, secrets: [github_token] }
     command: ['node', 'dist/main.worker.js']
     environment:
       <<: *backend-env
@@ -129,7 +129,7 @@ services:
 
   frontend:
     profiles: [app]
-    build: { context: .., dockerfile: frontend/Dockerfile }
+    build: { context: .., dockerfile: frontend/Dockerfile, secrets: [github_token] }
     ports: ['3000:3000']
     environment:
       PUBLIC_PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
@@ -146,3 +146,8 @@ volumes:
   rabbitmq-data:
   redis-data:
   storage-data:
+
+secrets:
+  # npm ci no build baixa @crmthink-sources/platform-sdk do GitHub Packages (read:packages)
+  github_token:
+    environment: GITHUB_TOKEN

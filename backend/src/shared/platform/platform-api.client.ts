@@ -1,11 +1,11 @@
 import {
+  type Installation,
+  PlatformClient,
   PlatformError,
-  type paths,
-  type PlatformInstallation,
-  type PlatformTokenResponse,
-} from '@gptmaker/platform-sdk';
+  PlatformRequestError,
+  type PlatformToken,
+} from '@crmthink-sources/platform-sdk';
 import { ExponentialBackoff, handleWhen, retry } from 'cockatiel';
-import createClient, { type Client } from 'openapi-fetch';
 import { Histogram } from 'prom-client';
 import { metricsRegistry } from '../metrics/metrics';
 
@@ -34,60 +34,50 @@ const duration = new Histogram({
   registers: [metricsRegistry],
 });
 
-type ApiResult<T> = { data?: T; error?: unknown; response: Response };
-
 /**
- * Cliente da API do crmthink-platform com tipos gerados do OpenAPI
- * (docs/crmthink-platform-openapi.json). Erros saem como `PlatformError` com o código estável
- * do envelope `{ error: { code } }`; decida pelo código, nunca pela mensagem.
+ * Cliente da API do crmthink-platform sobre o `PlatformClient` do SDK oficial
+ * (`@crmthink-sources/platform-sdk`), com retentativa em falha transitória e métrica por
+ * operação. Erros saem como `PlatformError` com o código estável do envelope `{ error: { code } }`;
+ * decida pelo código, nunca pela mensagem.
  */
 export class PlatformApiClient {
-  private readonly client: Client<paths>;
+  private readonly client: PlatformClient;
 
   constructor(
     private readonly options: PlatformApiOptions,
     fetchFn: typeof fetch = (input, init) => fetch(input, init),
   ) {
-    this.client = createClient<paths>({
-      baseUrl: options.baseUrl.replace(/\/+$/, ''),
-      headers: { Authorization: `Bearer ${options.apiKey}` },
+    this.client = new PlatformClient({
+      platformUrl: options.baseUrl,
+      apiKey: options.apiKey,
+      timeoutMs: options.timeoutMs,
       fetch: fetchFn,
     });
   }
 
-  getInstallation(installationId: number): Promise<PlatformInstallation> {
-    return this.call('installation.get', (signal) =>
-      this.client.GET('/v1/installations/{id}', {
-        params: { path: { id: installationId } },
-        signal,
-      }),
-    );
+  getInstallation(installationId: number): Promise<Installation> {
+    return this.call('installation.get', () => this.client.getInstallation(installationId));
   }
 
-  getToken(installationId: number): Promise<PlatformTokenResponse> {
-    return this.call('token.get', (signal) =>
-      this.client.GET('/v1/installations/{id}/token', {
-        params: { path: { id: installationId } },
-        signal,
-      }),
-    );
+  /**
+   * Sempre vai à plataforma: o cache do token é o Redis do `PlatformTokenProvider`, compartilhado
+   * entre api e worker; o cache em memória do SDK não pode servir token já esquecido.
+   */
+  getToken(installationId: number): Promise<PlatformToken> {
+    return this.call('token.get', () => {
+      this.client.forgetInstallationToken(installationId);
+      return this.client.getInstallationToken(installationId);
+    });
   }
 
   /** Single-flight na plataforma: vários processos pedindo juntos geram uma renovação só. */
-  refreshToken(installationId: number, staleAccessToken: string): Promise<PlatformTokenResponse> {
-    return this.call('token.refresh', (signal) =>
-      this.client.POST('/v1/installations/{id}/token/refresh', {
-        params: { path: { id: installationId } },
-        body: { staleAccessToken },
-        signal,
-      }),
+  refreshToken(installationId: number, staleAccessToken: string): Promise<PlatformToken> {
+    return this.call('token.refresh', () =>
+      this.client.refreshInstallationToken(installationId, staleAccessToken),
     );
   }
 
-  private async call<T>(
-    operation: string,
-    send: (signal: AbortSignal) => Promise<ApiResult<T>>,
-  ): Promise<T> {
+  private async call<T>(operation: string, send: () => Promise<T>): Promise<T> {
     const policy = retry(
       handleWhen((error) => isPlatformUnavailable(error)),
       {
@@ -97,7 +87,7 @@ export class PlatformApiClient {
     );
     const end = duration.startTimer({ operation });
     try {
-      const data = await policy.execute(() => this.attempt(operation, send));
+      const data = await policy.execute(() => attempt(operation, send));
       end({ outcome: 'ok' });
       return data;
     } catch (error) {
@@ -105,35 +95,31 @@ export class PlatformApiClient {
       throw error;
     }
   }
+}
 
-  private async attempt<T>(
-    operation: string,
-    send: (signal: AbortSignal) => Promise<ApiResult<T>>,
-  ): Promise<T> {
-    let result: ApiResult<T>;
-    try {
-      result = await send(AbortSignal.timeout(this.options.timeoutMs));
-    } catch (error) {
+/** Sem resposta, 5xx e 429 viram `PLATFORM_UNAVAILABLE` (retentável); o resto segue do SDK. */
+async function attempt<T>(operation: string, send: () => Promise<T>): Promise<T> {
+  try {
+    return await send();
+  } catch (error) {
+    if (error instanceof PlatformRequestError) {
+      throw new PlatformError(0, PLATFORM_UNAVAILABLE, `${operation}: ${error.message}`);
+    }
+    if (error instanceof PlatformError && (error.status >= 500 || error.status === 429)) {
       throw new PlatformError(
-        0,
+        error.status,
         PLATFORM_UNAVAILABLE,
-        `${operation}: ${(error as Error)?.message ?? 'falha de rede'}`,
+        `${operation}: HTTP ${error.status}`,
       );
     }
-    const { data, error, response } = result;
-    if (response.ok && data !== undefined) return data;
-    if (response.status >= 500 || response.status === 429) {
+    if (error instanceof PlatformError) {
       throw new PlatformError(
-        response.status,
-        PLATFORM_UNAVAILABLE,
-        `${operation}: HTTP ${response.status}`,
+        error.status,
+        error.code,
+        `${operation}: ${error.message}`,
+        error.details,
       );
     }
-    const body = (error ?? {}) as { error?: { code?: string; message?: string } };
-    throw new PlatformError(
-      response.status,
-      body.error?.code ?? `HTTP_${response.status}`,
-      `${operation}: ${body.error?.message ?? `HTTP ${response.status}`}`,
-    );
+    throw error;
   }
 }

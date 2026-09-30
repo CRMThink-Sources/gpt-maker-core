@@ -15,9 +15,6 @@ export default tseslint.config(
       'backend/drizzle/**',
       '**/*.config.*js',
       'backend/.dependency-cruiser.cjs',
-      // Copiados/gerados do crmthink-platform (npm run sync -w @gptmaker/platform-sdk).
-      'packages/platform-sdk/src/vendor/**',
-      'packages/platform-sdk/src/api.gen.ts',
     ],
   },
   eslint.configs.recommended,
