@@ -49,6 +49,9 @@ describe('api: health e métricas', () => {
       PLATFORM_URL: 'http://127.0.0.1:1',
       PLATFORM_API_KEY: 'test-key',
       PLATFORM_WEBHOOK_SECRETS: 'test-secret',
+      STORAGE_ENDPOINT: 'http://127.0.0.1:1',
+      STORAGE_ACCESS_KEY: 'test',
+      STORAGE_SECRET_KEY: 'test',
     });
     initMetrics(env.APP_ROLE);
     await runMigrations(env.DATABASE_URL);

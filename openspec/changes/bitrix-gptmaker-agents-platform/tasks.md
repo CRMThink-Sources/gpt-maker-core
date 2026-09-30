@@ -76,7 +76,7 @@
 
 ## 8. Treinamentos (agent-training)
 
-- [ ] 8.1 Integração com Spaces/SeaweedFS (`@aws-sdk/client-s3`): caminhos aleatórios e URL pré-assinada longa (~4h)
+- [x] 8.1 Integração com Spaces/SeaweedFS (`@aws-sdk/client-s3`): caminhos aleatórios e URL pré-assinada longa (~4h) — `ObjectStorage` (`shared/storage`): chave `trainings/<tenantId>/<aleatório>.<ext>` sem o nome do arquivo, bucket privado, URL pré-assinada de até 7 dias (limite do SigV4) assinada com `STORAGE_PUBLIC_ENDPOINT` quando o host visto pelo GPTMaker difere do interno, nome original no `Content-Disposition`; variáveis `STORAGE_*` obrigatórias
 - [ ] 8.2 Endpoints de criação TEXT, WEBSITE (subpáginas, intervalo), VIDEO e DOCUMENT (validação tamanho/MIME) (~10h)
 - [ ] 8.3 Endpoint de `callbackUrl` com token para status (`PROCESSING`/`DONE`/`FAILED`) (~4h)
 - [ ] 8.4 Listar, editar (TEXT) e remover; apagar objeto do storage ao remover documento (~5h)

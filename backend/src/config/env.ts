@@ -74,6 +74,23 @@ export const envSchema = z.object({
   PLATFORM_JWT_ISSUER: z.url().optional(),
   PLATFORM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  // Armazenamento de documentos de treinamento: DigitalOcean Spaces (SeaweedFS em dev), design D14
+  /** Endpoint S3 usado pela API (ex.: `https://nyc3.digitaloceanspaces.com`, `http://storage:8333`). */
+  STORAGE_ENDPOINT: z.url(),
+  /**
+   * Endpoint das URLs pré-assinadas, que o GPTMaker baixa; a assinatura inclui o host. Em dev com
+   * túnel, o endereço público do SeaweedFS. Sem valor, o mesmo do `STORAGE_ENDPOINT`.
+   */
+  STORAGE_PUBLIC_ENDPOINT: z.url().optional(),
+  STORAGE_REGION: z.string().min(1).default('us-east-1'),
+  STORAGE_BUCKET: z.string().min(1).default('gptmaker-trainings'),
+  STORAGE_ACCESS_KEY: z.string().min(1),
+  STORAGE_SECRET_KEY: z.string().min(1),
+  /** `true` para SeaweedFS (bucket no caminho); Spaces aceita o bucket no subdomínio. */
+  STORAGE_FORCE_PATH_STYLE: booleanFromString.default(false),
+  /** Validade das URLs pré-assinadas; o máximo do SigV4 é 7 dias. */
+  STORAGE_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(604_800).default(604_800),
+
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),
   BITRIX_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
