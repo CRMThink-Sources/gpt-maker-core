@@ -319,6 +319,79 @@ describe('treinamentos dos agentes', () => {
     });
   });
 
+  describe('callback do GPTMaker', () => {
+    /** Treinamento em processamento com o token de callback informado. */
+    async function processing(token: string, values: Partial<typeof training.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(training)
+        .values({
+          tenantId,
+          agentId,
+          type: 'TEXT',
+          content: 'x',
+          callbackTokenHash: hashCallbackToken(token),
+          ...values,
+        })
+        .returning();
+      return row!;
+    }
+    const stored = async (id: string) =>
+      (await db.select().from(training).where(eq(training.id, id)))[0]!;
+
+    it('o token do callbackUrl enviado na criação marca o treinamento como concluído', async () => {
+      await stubCreate();
+      await stubList('TEXT', []);
+      const view = await service.create(tenantId, agentId, { type: 'TEXT', text: 'Oi' });
+      const token = new URL((await created())[0]!.callbackUrl!).searchParams.get('t')!;
+
+      await service.applyCallback(token, { status: 'DONE' });
+
+      expect(await stored(view.id)).toMatchObject({ status: 'DONE', error: null });
+      expect((await service.list(tenantId, agentId))[0]).toMatchObject({ status: 'DONE' });
+    });
+
+    it('falha guarda o motivo; conclusão depois (reprocessado) limpa', async () => {
+      const row = await processing('tk');
+
+      await service.applyCallback('tk', { status: 'FAILED', error: 'site fora do ar' });
+      expect(await stored(row.id)).toMatchObject({ status: 'FAILED', error: 'site fora do ar' });
+
+      await service.applyCallback('tk', { success: true });
+      expect(await stored(row.id)).toMatchObject({ status: 'DONE', error: null });
+    });
+
+    it('corpo não reconhecido não muda o status', async () => {
+      const row = await processing('tk');
+      await service.applyCallback('tk', { foo: 'bar' });
+      expect((await stored(row.id)).status).toBe('PROCESSING');
+    });
+
+    it('completa o id do GPTMaker quando faltava, sem roubar o de outro registro', async () => {
+      const missing = await processing('tk-a');
+      await service.applyCallback('tk-a', { status: 'DONE', trainingId: 'tr-9' });
+      expect((await stored(missing.id)).gptmakerTrainingId).toBe('tr-9');
+
+      const other = await processing('tk-b');
+      await service.applyCallback('tk-b', { status: 'DONE', trainingId: 'tr-9' });
+      expect((await stored(other.id)).gptmakerTrainingId).toBeNull();
+
+      const known = await processing('tk-c', { gptmakerTrainingId: 'tr-1' });
+      await service.applyCallback('tk-c', { status: 'DONE', trainingId: 'tr-2' });
+      expect((await stored(known.id)).gptmakerTrainingId).toBe('tr-1');
+    });
+
+    it('token desconhecido ou de treinamento removido: 404', async () => {
+      await processing('tk-removido', { deletedAt: new Date() });
+      await expect(service.applyCallback('inexistente', { status: 'DONE' })).rejects.toMatchObject({
+        code: 'TRAINING_CALLBACK_INVALID',
+        status: 404,
+      });
+      await expect(service.applyCallback('tk-removido', { status: 'DONE' })).rejects.toMatchObject({
+        code: 'TRAINING_CALLBACK_INVALID',
+      });
+    });
+  });
+
   it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
     await stubCreate();
     const other = await newTenantAgent('OUT_OF_SYNC');

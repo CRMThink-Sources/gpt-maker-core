@@ -9,7 +9,7 @@ import {
   type TrainingInterval,
   type TrainingView,
 } from '@gptmaker/contracts';
-import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
@@ -28,6 +28,7 @@ import {
   type GptMakerTraining,
   type GptMakerTrainingType,
 } from '../gptmaker';
+import { interpretCallback } from './training-callback';
 
 export type Training = typeof training.$inferSelect;
 
@@ -170,6 +171,51 @@ export class TrainingService {
       await this.discardObject(key);
       throw error;
     }
+  }
+
+  /**
+   * `callbackUrl` do GPTMaker (spec agent-training): o token identifica o treinamento. Status
+   * reconhecido atualiza o registro (`FAILED` guarda o motivo, para o usuário reenviar); corpo
+   * não reconhecido só vai para o log. Repetir o callback dá o mesmo resultado.
+   */
+  async applyCallback(token: string, payload: unknown): Promise<void> {
+    const [row] = await this.db
+      .select()
+      .from(training)
+      .where(
+        and(eq(training.callbackTokenHash, hashCallbackToken(token)), isNull(training.deletedAt)),
+      );
+    if (!row) {
+      throw new DomainError(
+        'TRAINING_CALLBACK_INVALID',
+        'Callback de treinamento desconhecido',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const outcome = interpretCallback(payload);
+    // Formato não documentado: o corpo fica no log até ser confirmado em staging (tarefa 10.1).
+    this.logger.log(
+      { trainingId: row.id, outcome: outcome.status, payload: truncatedJson(payload) },
+      'callback de treinamento recebido',
+    );
+
+    const patch: Partial<typeof training.$inferInsert> = {};
+    if (outcome.status === 'DONE') Object.assign(patch, { status: 'DONE', error: null });
+    if (outcome.status === 'FAILED') {
+      Object.assign(patch, { status: 'FAILED', error: outcome.error });
+    }
+    if (!row.gptmakerTrainingId && outcome.gptmakerTrainingId) {
+      const [taken] = await this.db
+        .select({ id: training.id })
+        .from(training)
+        .where(
+          and(eq(training.gptmakerTrainingId, outcome.gptmakerTrainingId), ne(training.id, row.id)),
+        );
+      if (!taken) patch.gptmakerTrainingId = outcome.gptmakerTrainingId;
+    }
+    if (Object.keys(patch).length === 0) return;
+    await this.db.update(training).set(patch).where(eq(training.id, row.id));
   }
 
   /** Agente do tenant (404 se de outro) e sincronizado com o GPTMaker. */
@@ -332,6 +378,12 @@ export class TrainingService {
 
 export function hashCallbackToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/** Corpo do callback para o log, cortado para não inflar a linha. */
+function truncatedJson(payload: unknown): string {
+  const json = JSON.stringify(payload ?? null) ?? 'null';
+  return json.length > 2000 ? `${json.slice(0, 2000)}…` : json;
 }
 
 function sameUrl(a: string | null | undefined, b: string): boolean {

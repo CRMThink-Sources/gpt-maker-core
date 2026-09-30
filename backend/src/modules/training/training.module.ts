@@ -3,12 +3,13 @@ import { AgentsModule } from '../agents';
 import { GptMakerModule } from '../gptmaker';
 import { TenancyModule } from '../tenancy';
 import { DocumentUploadInterceptor } from './document-upload.interceptor';
+import { TrainingCallbackController } from './training-callback.controller';
 import { TrainingService } from './training.service';
 import { TrainingsController } from './trainings.controller';
 
 @Module({
   imports: [TenancyModule, AgentsModule, GptMakerModule],
-  controllers: [TrainingsController],
+  controllers: [TrainingsController, TrainingCallbackController],
   providers: [TrainingService, DocumentUploadInterceptor],
   exports: [TrainingService],
 })
