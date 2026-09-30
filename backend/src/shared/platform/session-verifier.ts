@@ -1,4 +1,4 @@
-import { createSessionVerifier, type SessionClaims } from '@gptmaker/platform-sdk';
+import { createSessionVerifier, type SessionClaims } from '@crmthink-sources/platform-sdk';
 
 export type { SessionClaims };
 

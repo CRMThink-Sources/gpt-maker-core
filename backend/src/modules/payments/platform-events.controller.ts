@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
-import { APP_CODE, type PlatformEvent } from '@gptmaker/platform-sdk';
+import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
+import { APP_CODE } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { TenantService } from '../tenancy';

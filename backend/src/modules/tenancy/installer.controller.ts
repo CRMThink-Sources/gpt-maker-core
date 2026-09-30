@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { APP_CODE } from '@gptmaker/platform-sdk';
+import { APP_CODE } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { enrichContext } from '../../shared/context/request-context';

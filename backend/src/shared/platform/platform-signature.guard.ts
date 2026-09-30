@@ -6,7 +6,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { SIGNATURE_HEADER, verifyPlatformSignature } from '@gptmaker/platform-sdk';
+import { SIGNATURE_HEADER, verifyPlatformSignature } from '@crmthink-sources/platform-sdk';
 import type { Request } from 'express';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';

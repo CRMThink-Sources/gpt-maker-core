@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { PlatformEvent } from '@gptmaker/platform-sdk';
+import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
 import { PlatformTokenProvider } from '../bitrix';
 import { enrichContext } from '../../shared/context/request-context';
 import { BitrixEventVerifier } from './bitrix-event.verifier';

@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { APP_CODE } from '@gptmaker/platform-sdk';
+import { APP_CODE } from '@gptmaker/contracts';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { PlatformApiClient } from './platform-api.client';
