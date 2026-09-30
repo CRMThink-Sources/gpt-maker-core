@@ -532,4 +532,139 @@ describe('serviço de agentes', () => {
       await expect(service.update(owner, existing.id, {})).rejects.toThrow(/ao menos um campo/);
     });
   });
+
+  describe('inativação e reativação', () => {
+    const INACTIVE_PATH = `/v2/agent/${REMOTE_ID}/inactive`;
+    const ACTIVE_PATH = `/v2/agent/${REMOTE_ID}/active`;
+    const session = () => ({ ...owner, tenantStatus: 'ACTIVE' as const });
+
+    async function stubToggle(status = 200) {
+      for (const path of [INACTIVE_PATH, ACTIVE_PATH]) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: path },
+          response:
+            status === 200
+              ? { status, jsonBody: { success: true } }
+              : { status, jsonBody: { error: 'falhou' } },
+        });
+      }
+    }
+
+    async function agentWith(
+      status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_SYNC',
+      inactiveReason:
+        'MANUAL' | 'SUBSCRIPTION_EXPIRED' | 'TENANT_SUSPENDED' | 'UNINSTALLED' | null = null,
+    ) {
+      return repository.insert(owner.tenantId, {
+        gptmakerAgentId: REMOTE_ID,
+        name: 'Atendente',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        status,
+        inactiveReason,
+        webhookTokenHash: randomUUID(),
+      });
+    }
+
+    const stored = async (id: string) =>
+      (await db.select().from(agent).where(eq(agent.id, id)))[0]!;
+
+    it('inativa no GPTMaker e localmente com motivo MANUAL', async () => {
+      await stubToggle();
+      const row = await agentWith('ACTIVE');
+
+      const view = await service.inactivate(owner, row.id);
+
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(1);
+      expect(view).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
+      expect(await stored(row.id)).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
+    });
+
+    it('reativa agente inativado manualmente', async () => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+
+      const view = await service.activate(session(), row.id);
+
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(1);
+      expect(view).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
+      expect(await stored(row.id)).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
+    });
+
+    it('é idempotente: inativar inativo e reativar ativo não chamam o GPTMaker', async () => {
+      await stubToggle();
+      const inactive = await agentWith('INACTIVE', 'SUBSCRIPTION_EXPIRED');
+      const active = await repository.insert(owner.tenantId, {
+        gptmakerAgentId: `gm-${randomUUID()}`,
+        name: 'Outro',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        webhookTokenHash: randomUUID(),
+      });
+
+      expect(await service.inactivate(owner, inactive.id)).toMatchObject({
+        status: 'INACTIVE',
+        inactiveReason: 'SUBSCRIPTION_EXPIRED',
+      });
+      expect(await service.activate(session(), active.id)).toMatchObject({ status: 'ACTIVE' });
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(0);
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it.each(['SUBSCRIPTION_EXPIRED', 'TENANT_SUSPENDED', 'UNINSTALLED'] as const)(
+      'não reativa inativação do sistema (%s)',
+      async (reason) => {
+        await stubToggle();
+        const row = await agentWith('INACTIVE', reason);
+        const error = await errorOf(service.activate(session(), row.id));
+        expect(error).toMatchObject({
+          code: 'AGENT_INACTIVE_BY_SYSTEM',
+          status: 409,
+          details: { reason },
+        });
+        expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+      },
+    );
+
+    it('tenant suspenso não reativa', async () => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+      const error = await errorOf(
+        service.activate({ ...owner, tenantStatus: 'SUSPENDED' }, row.id),
+      );
+      expect(error).toMatchObject({ code: 'TENANT_SUSPENDED', status: 409 });
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it('falha no GPTMaker mantém o status local', async () => {
+      await stubToggle(500);
+      const row = await agentWith('ACTIVE');
+      const error = await errorOf(service.inactivate(owner, row.id));
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+    });
+
+    it('agente fora de sincronia: AGENT_OUT_OF_SYNC', async () => {
+      const row = await agentWith('OUT_OF_SYNC');
+      await expect(service.inactivate(owner, row.id)).rejects.toMatchObject({
+        code: 'AGENT_OUT_OF_SYNC',
+      });
+      await expect(service.activate(session(), row.id)).rejects.toMatchObject({
+        code: 'AGENT_OUT_OF_SYNC',
+      });
+    });
+
+    it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubToggle();
+      const row = await agentWith('ACTIVE');
+      const other = await newTenant();
+      await expect(service.inactivate(other, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(0);
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+    });
+  });
 });

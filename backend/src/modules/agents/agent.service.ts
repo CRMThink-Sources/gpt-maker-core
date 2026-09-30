@@ -27,6 +27,7 @@ import {
   WEBHOOK_EVENTS,
 } from '../gptmaker';
 import { type AiModel, ModelCatalogService } from '../models';
+import type { TenantStatus } from '../tenancy';
 import { type Agent, AgentRepository } from './agent.repository';
 
 /** Dono da operação: tenant da sessão do iframe. */
@@ -171,6 +172,67 @@ export class AgentService {
       });
       return toView(updated!, model);
     });
+  }
+
+  /**
+   * Inativa no GPTMaker e localmente (motivo `MANUAL`): o chatbot deixa de encaminhar mensagens
+   * e o agente não consome créditos. Agente já inativo, por qualquer motivo, fica como está.
+   */
+  async inactivate(owner: AgentOwner, id: string): Promise<AgentView> {
+    return this.withAgentLock(owner.tenantId, id, async () => {
+      const current = await this.agents.getById(owner.tenantId, id);
+      if (current.status === 'OUT_OF_SYNC') throw outOfSync();
+      if (current.status === 'INACTIVE') return this.view(current);
+
+      await this.callGptMaker(() => this.gptmaker.inactivateAgent(current.gptmakerAgentId));
+      const updated = await this.agents.update(owner.tenantId, id, {
+        status: 'INACTIVE',
+        inactiveReason: 'MANUAL',
+      });
+      return this.view(updated!);
+    });
+  }
+
+  /**
+   * Reativa um agente inativado pelo próprio tenant. Inativações do sistema (assinatura expirada,
+   * suspensão, desinstalação) só são desfeitas pelo evento que as causou; tenant suspenso não
+   * reativa. O limite de agentes conta os inativos, então reativar nunca o ultrapassa.
+   */
+  async activate(
+    owner: AgentOwner & { tenantStatus: TenantStatus },
+    id: string,
+  ): Promise<AgentView> {
+    return this.withAgentLock(owner.tenantId, id, async () => {
+      const current = await this.agents.getById(owner.tenantId, id);
+      if (current.status === 'OUT_OF_SYNC') throw outOfSync();
+      if (current.status === 'ACTIVE') return this.view(current);
+      if (owner.tenantStatus === 'SUSPENDED') {
+        throw new DomainError(
+          'TENANT_SUSPENDED',
+          'A conta está suspensa; regularize a assinatura para reativar agentes',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (current.inactiveReason !== 'MANUAL') {
+        throw new DomainError(
+          'AGENT_INACTIVE_BY_SYSTEM',
+          'O agente foi inativado pelo sistema e volta sozinho quando a causa for resolvida',
+          HttpStatus.CONFLICT,
+          { reason: current.inactiveReason },
+        );
+      }
+
+      await this.callGptMaker(() => this.gptmaker.activateAgent(current.gptmakerAgentId));
+      const updated = await this.agents.update(owner.tenantId, id, {
+        status: 'ACTIVE',
+        inactiveReason: null,
+      });
+      return this.view(updated!);
+    });
+  }
+
+  private async view(row: Agent): Promise<AgentView> {
+    return toView(row, (await this.modelsById()).get(row.modelId)!);
   }
 
   /** Serializa alterações do mesmo agente; a segunda recebe 409 em vez de esperar. */
