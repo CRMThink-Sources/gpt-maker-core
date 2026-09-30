@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { GptMakerClient, GptMakerError } from '../gptmaker';
+import { OUTBOX_OPERATIONS, PaymentsOutbox } from '../payments';
 import { type Tenant, TenantLifecycle, type TenantLifecycleListener } from '../tenancy';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agent } from '../../shared/database/schema/index';
@@ -8,7 +9,8 @@ import { agent } from '../../shared/database/schema/index';
 /**
  * Desinstalação inativa no GPTMaker todos os agentes ativos do tenant (motivo `UNINSTALLED`);
  * reinstalação reativa só os que a desinstalação inativou, preservando inativações manuais e
- * por assinatura. Idempotente: cada agente é atualizado no banco logo após o GPTMaker confirmar.
+ * por assinatura. Idempotente: cada agente é atualizado no banco logo após o GPTMaker confirmar,
+ * junto com o espelho do item de assinatura.
  */
 @Injectable()
 export class AgentLifecycleListener implements TenantLifecycleListener, OnModuleInit {
@@ -18,6 +20,7 @@ export class AgentLifecycleListener implements TenantLifecycleListener, OnModule
   constructor(
     private readonly lifecycle: TenantLifecycle,
     private readonly gptmaker: GptMakerClient,
+    private readonly outbox: PaymentsOutbox,
     @Inject(DB) private readonly db: Database,
   ) {}
 
@@ -29,10 +32,13 @@ export class AgentLifecycleListener implements TenantLifecycleListener, OnModule
     const active = await this.agents(tenant.id, 'ACTIVE');
     for (const row of active) {
       await this.remote(() => this.gptmaker.inactivateAgent(row.gptmakerAgentId));
-      await this.db
-        .update(agent)
-        .set({ status: 'INACTIVE', inactiveReason: 'UNINSTALLED' })
-        .where(and(eq(agent.id, row.id), eq(agent.status, 'ACTIVE')));
+      await this.db.transaction(async (tx) => {
+        await tx
+          .update(agent)
+          .set({ status: 'INACTIVE', inactiveReason: 'UNINSTALLED' })
+          .where(and(eq(agent.id, row.id), eq(agent.status, 'ACTIVE')));
+        await this.outbox.enqueue(tenant.id, OUTBOX_OPERATIONS.agentItemSync, row.id, tx);
+      });
     }
     if (active.length)
       this.logger.log({ count: active.length }, 'agentes inativados na desinstalação');
@@ -45,10 +51,13 @@ export class AgentLifecycleListener implements TenantLifecycleListener, OnModule
     );
     for (const row of inactive) {
       await this.remote(() => this.gptmaker.activateAgent(row.gptmakerAgentId));
-      await this.db
-        .update(agent)
-        .set({ status: 'ACTIVE', inactiveReason: null })
-        .where(and(eq(agent.id, row.id), eq(agent.inactiveReason, 'UNINSTALLED')));
+      await this.db.transaction(async (tx) => {
+        await tx
+          .update(agent)
+          .set({ status: 'ACTIVE', inactiveReason: null })
+          .where(and(eq(agent.id, row.id), eq(agent.inactiveReason, 'UNINSTALLED')));
+        await this.outbox.enqueue(tenant.id, OUTBOX_OPERATIONS.agentItemSync, row.id, tx);
+      });
     }
     if (inactive.length)
       this.logger.log({ count: inactive.length }, 'agentes reativados na reinstalação');

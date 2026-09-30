@@ -19,7 +19,7 @@ export type AgentPatch = Partial<
 >;
 
 /** Executor aceito: conexão normal ou transação aberta pelo chamador. */
-type Executor = Pick<Database, 'select' | 'insert' | 'update'>;
+export type Executor = Pick<Database, 'select' | 'insert' | 'update'>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

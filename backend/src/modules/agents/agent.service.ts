@@ -27,8 +27,9 @@ import {
   WEBHOOK_EVENTS,
 } from '../gptmaker';
 import { type AiModel, ModelCatalogService } from '../models';
+import { OUTBOX_OPERATIONS, PaymentsOutbox } from '../payments';
 import type { TenantStatus } from '../tenancy';
-import { type Agent, AgentRepository } from './agent.repository';
+import { type Agent, AgentRepository, type Executor } from './agent.repository';
 
 /** Dono da operação: tenant da sessão do iframe. */
 export interface AgentOwner {
@@ -68,6 +69,7 @@ export class AgentService {
     private readonly limits: TenantAgentLimitService,
     private readonly models: ModelCatalogService,
     private readonly gptmaker: GptMakerClient,
+    private readonly outbox: PaymentsOutbox,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
     @Inject(ENV) private readonly env: Env,
@@ -165,12 +167,15 @@ export class AgentService {
         }
       }
 
-      const updated = await this.agents.update(owner.tenantId, id, {
-        ...profile,
-        modelId: model.id,
-        settings,
-      });
-      return toView(updated!, model);
+      const patch = { ...profile, modelId: model.id, settings };
+      // O item de assinatura só leva o título: outras edições não mudam o espelho.
+      const updated =
+        profile.name !== current.name
+          ? await this.mirrored(owner.tenantId, (tx) =>
+              this.agents.update(owner.tenantId, id, patch, tx),
+            )
+          : (await this.agents.update(owner.tenantId, id, patch))!;
+      return toView(updated, model);
     });
   }
 
@@ -185,11 +190,15 @@ export class AgentService {
       if (current.status === 'INACTIVE') return this.view(current);
 
       await this.callGptMaker(() => this.gptmaker.inactivateAgent(current.gptmakerAgentId));
-      const updated = await this.agents.update(owner.tenantId, id, {
-        status: 'INACTIVE',
-        inactiveReason: 'MANUAL',
-      });
-      return this.view(updated!);
+      const updated = await this.mirrored(owner.tenantId, (tx) =>
+        this.agents.update(
+          owner.tenantId,
+          id,
+          { status: 'INACTIVE', inactiveReason: 'MANUAL' },
+          tx,
+        ),
+      );
+      return this.view(updated);
     });
   }
 
@@ -223,11 +232,10 @@ export class AgentService {
       }
 
       await this.callGptMaker(() => this.gptmaker.activateAgent(current.gptmakerAgentId));
-      const updated = await this.agents.update(owner.tenantId, id, {
-        status: 'ACTIVE',
-        inactiveReason: null,
-      });
-      return this.view(updated!);
+      const updated = await this.mirrored(owner.tenantId, (tx) =>
+        this.agents.update(owner.tenantId, id, { status: 'ACTIVE', inactiveReason: null }, tx),
+      );
+      return this.view(updated);
     });
   }
 
@@ -246,7 +254,22 @@ export class AgentService {
           if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
         }
       });
-      await this.agents.markDeleted(owner.tenantId, id);
+      await this.mirrored(owner.tenantId, (tx) => this.agents.markDeleted(owner.tenantId, id, tx));
+    });
+  }
+
+  /**
+   * Grava a mudança local e agenda, na mesma transação, o espelho do agente como item de
+   * assinatura (spec payments-integration): falha na plataforma não bloqueia o agente.
+   */
+  private mirrored(
+    tenantId: string,
+    write: (tx: Executor) => Promise<Agent | undefined>,
+  ): Promise<Agent> {
+    return this.db.transaction(async (tx) => {
+      const row = (await write(tx))!;
+      await this.outbox.enqueue(tenantId, OUTBOX_OPERATIONS.agentItemSync, row.id, tx);
+      return row;
     });
   }
 
@@ -307,20 +330,26 @@ export class AgentService {
       await this.callGptMaker(() =>
         this.gptmaker.updateWebhooks(remote.id, this.webhookUrls(webhookToken)),
       );
-      return await this.agents.insert(owner.tenantId, {
-        gptmakerAgentId: remote.id,
-        name: input.name,
-        avatarUrl: input.avatarUrl ?? null,
-        behavior: input.behavior ?? null,
-        type: input.type,
-        communicationType: input.communicationType,
-        jobName: input.jobName ?? null,
-        jobSite: input.jobSite ?? null,
-        jobDescription: input.jobDescription ?? null,
-        modelId: model.id,
-        status: 'ACTIVE',
-        webhookTokenHash: hashWebhookToken(webhookToken),
-      });
+      return await this.mirrored(owner.tenantId, (tx) =>
+        this.agents.insert(
+          owner.tenantId,
+          {
+            gptmakerAgentId: remote.id,
+            name: input.name,
+            avatarUrl: input.avatarUrl ?? null,
+            behavior: input.behavior ?? null,
+            type: input.type,
+            communicationType: input.communicationType,
+            jobName: input.jobName ?? null,
+            jobSite: input.jobSite ?? null,
+            jobDescription: input.jobDescription ?? null,
+            modelId: model.id,
+            status: 'ACTIVE',
+            webhookTokenHash: hashWebhookToken(webhookToken),
+          },
+          tx,
+        ),
+      );
     } catch (error) {
       await this.discardRemote(remote.id);
       throw error;

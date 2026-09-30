@@ -70,8 +70,8 @@
 - [x] 7.3 Editar agente e settings (incl. troca de modelo) refletindo no GPTMaker com invalidação de cache (~6h) — `AgentService.update` + `PATCH /app/agents/:id`: lock por agente, GPTMaker antes do registro local (perfil completo com prefixo; settings mescladas + `prefferModel`), falha nas settings desfaz o perfil; troca de modelo passa pela regra do plano; ainda não há cache de agente para invalidar (entra com o cache por `botId`, seção 9)
 - [x] 7.4 Inativar/reativar (`/inactive`, `/active`) (~3h) — `POST /app/agents/:id/inactivate|activate`: idempotentes, GPTMaker antes do registro local; inativação manual grava `MANUAL`; reativação só de `MANUAL` (`AGENT_INACTIVE_BY_SYSTEM` para assinatura/suspensão/desinstalação) e recusada com tenant `SUSPENDED`
 - [x] 7.5 Remover agente (DELETE no GPTMaker + soft delete + desregistrar chatbot) (~4h) — `AgentService.remove` + `DELETE /app/agents/:id` (204): lock por agente, GPTMaker antes do registro local; 404 no GPTMaker (inclusive `OUT_OF_SYNC` ou retentativa) só marca `DELETED`; libera a vaga no limite. Ainda não há chatbot registrado: desregistrar fica na 9.1, e o worker (9.4) só encaminha mensagens de agente `ACTIVE`
-- [ ] 7.8 Espelhar agente como item de assinatura (`billable=false`) no `crmthink-platform` via `payments_outbox` (~4h)
-- [ ] 7.6 Inativação/reativação automática por assinatura expirada/regularizada e suspensão do tenant (~5h)
+- [x] 7.8 Espelhar agente como item de assinatura (`billable=false`) no `crmthink-platform` via `payments_outbox` (~4h) — `AgentItemMirror`: criar, editar nome, inativar, reativar, remover, desinstalar e reinstalar agendam `agent-item.sync` na mesma transação da mudança local; o sync leva o estado atual ao serviço (`createItem` idempotente por `externalRef` = id do agente, `updateItem` de título/status `active`|`cancelled`, `removeItem` achado por `listItems`). Assinatura da projeção local ou, sem ela, de `GET /v1/installations/{id}/subscription`; `NO_SUBSCRIPTION`/`SUBSCRIPTION_ENDED` encerram a linha sem espelhar
+- [ ] 7.6 Inativação/reativação automática por assinatura expirada/regularizada e suspensão do tenant (~5h) — agendar `agent-item.sync` a cada agente alterado, como o `AgentLifecycleListener`
 - [ ] 7.7 UI NextJS: lista de agentes, formulário (com seletor de modelo e custo por resposta), ações e estados de erro (~16h)
 
 ## 8. Treinamentos (agent-training)
@@ -126,13 +126,13 @@
 
 - [ ] 12.1 `PaymentsClient` sobre o `PlatformClient` do SDK publicado (`@crmthink-sources/platform-sdk`, tipos gerados do contrato pela plataforma) + `cockatiel`, chave de API em env, mapeamento dos códigos de erro; contrato novo chega por versão do pacote (~4h)
 - [ ] 12.2 Endpoint `/platform/events`: validação `X-Platform-Signature` com a biblioteca da plataforma (raw body, 5 min), persistência em `payment_event`, dedupe por `eventId`, publicação em `payments.events`; fixtures a partir da seção `webhooks` do OpenAPI (~4h)
-- [ ] 12.3 Worker de eventos: projeção `subscription_state` com controle de versão e efeitos por tipo (tabela do design D9) (~12h)
+- [ ] 12.3 Worker de eventos: projeção `subscription_state` com controle de versão e efeitos por tipo (tabela do design D9) (~12h) — assinatura nova (inclusive depois de encerrada): agendar `agent-item.sync` para os agentes não removidos do tenant, pois o sync sem assinatura é descartado
 - [ ] 12.4 Trial: tratamento de `subscription.trial_started` e tela de ativação em andamento até o evento (~5h)
 - [ ] 12.5 Carência: `grace_until` em `past_due`, job de inativação a cada 15 min, limpeza em `recovered`/`renewed` (~5h)
 - [ ] 12.6 Troca de plano: chamada ao serviço, `GRANT` proporcional no upgrade, plano futuro no downgrade e troca para modelo padrão (~10h)
 - [ ] 12.7 Avisos `PAYMENT_FAILED`, `PERIOD_ENDING` e `MODEL_DOWNGRADED` aos destinatários (~4h)
 - [ ] 12.8 Estornos: `charge.refunded`/`charge.disputed` → `REFUND` + `credit_deduction` (~8h)
-- [ ] 12.9 Outbox `payments_outbox` para chamadas de saída não críticas (itens de assinatura) com retentativa (~5h)
+- [x] 12.9 Outbox `payments_outbox` para chamadas de saída não críticas (itens de assinatura) com retentativa (~5h) — `PaymentsOutbox` + job do worker a cada minuto (lock Redis): uma linha por transação com `FOR UPDATE SKIP LOCKED`, espera exponencial de 1 min até 1 h, `FAILED` com alerta após 20 tentativas; pendências do mesmo agregado se fundem. Feita junto com a 7.8
 - [ ] 12.10 Job de consistência a cada 6h com `GET /v1/installations/{id}/subscription` (~4h)
 - [ ] 12.11 UI NextJS: planos (serviço + `plan_entitlement`), Checkout embutido (Stripe.js + `clientSecret`), estado "processando" até o evento, pacotes com aviso de validade, status da assinatura/trial, "Gerenciar pagamento" (portal em nova janela) (~20h)
 - [ ] 12.12 Teste ponta a ponta em staging com o `crmthink-platform` (Stripe test mode), junto com a tarefa 17.5 da plataforma: trial, contratação, renovação, falha de pagamento, pacote, estorno, cancelamento (~6h)

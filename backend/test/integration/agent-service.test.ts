@@ -15,13 +15,22 @@ import { GptMakerResilience } from '../../src/modules/gptmaker/gptmaker.resilien
 import { WEBHOOK_EVENTS } from '../../src/modules/gptmaker/gptmaker.schemas';
 import { TenantAgentLimitService } from '../../src/modules/gptmaker/tenant-agent-limit.service';
 import { ModelCatalogService } from '../../src/modules/models/model-catalog.service';
+import { PaymentsOutbox } from '../../src/modules/payments/payments-outbox';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runWithContext } from '../../src/shared/context/request-context';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { WireMock } from '../support/wiremock';
 
-const { agent, aiModel, planAllowedModel, planEntitlement, subscriptionState, tenant } = schema;
+const {
+  agent,
+  aiModel,
+  paymentsOutbox,
+  planAllowedModel,
+  planEntitlement,
+  subscriptionState,
+  tenant,
+} = schema;
 const WS = 'ws-test';
 const API = 'https://api.gptmaker.test';
 const REMOTE_ID = 'gm-agent-1';
@@ -40,6 +49,12 @@ describe('serviço de agentes', () => {
   let owner: { tenantId: string; tenantCode: string };
 
   const errorOf = (promise: Promise<unknown>) => promise.catch((error: unknown) => error);
+  /** Linhas do outbox que espelham o agente como item de assinatura. */
+  const mirrorsOf = (agentId: string) =>
+    db
+      .select({ operation: paymentsOutbox.operation, status: paymentsOutbox.status })
+      .from(paymentsOutbox)
+      .where(eq(paymentsOutbox.aggregateRef, agentId));
   const form = (extra: Partial<CreateAgentInput> = {}): CreateAgentInput => ({
     name: 'Atendente',
     behavior: 'Seja cordial',
@@ -140,6 +155,7 @@ describe('serviço de agentes', () => {
       new TenantAgentLimitService(db, env),
       new ModelCatalogService(db, client),
       client,
+      new PaymentsOutbox(db),
       db,
       redis,
       env,
@@ -157,6 +173,7 @@ describe('serviço de agentes', () => {
   beforeEach(async () => {
     await wiremock.reset();
     await redis.flushall();
+    await db.delete(paymentsOutbox);
     await db.delete(agent);
     await db.delete(subscriptionState);
     await db.delete(planAllowedModel);
@@ -217,6 +234,7 @@ describe('serviço de agentes', () => {
       model: { code: 'GPT_5_MINI', creditsPerResponse: 1 },
     });
     expect(view).not.toHaveProperty('gptmakerAgentId');
+    expect(await mirrorsOf(view.id)).toEqual([{ operation: 'agent-item.sync', status: 'PENDING' }]);
   });
 
   it('usa o modelo escolhido quando o plano do tenant o libera', async () => {
@@ -322,6 +340,7 @@ describe('serviço de agentes', () => {
       details: { traceId: 'trace-123' },
     });
     expect(await db.select().from(agent)).toHaveLength(0);
+    expect(await db.select().from(paymentsOutbox)).toHaveLength(0);
   });
 
   it.each(['settings', 'webhooks'] as const)(
@@ -416,6 +435,10 @@ describe('serviço de agentes', () => {
       expect((await remoteCalls()).settings).toBe(0);
       expect(view).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
       expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      // Nome mudou: o título do item de assinatura acompanha.
+      expect(await mirrorsOf(existing.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
     });
 
     it('settings: mescla com as atuais e reenvia o prefferModel do modelo atual', async () => {
@@ -439,6 +462,7 @@ describe('serviço de agentes', () => {
         enabledEmoji: false,
         maxDailyMessages: 100,
       });
+      expect(await mirrorsOf(existing.id)).toEqual([]);
     });
 
     it('troca de modelo liberado no plano: novo prefferModel e registro local', async () => {
@@ -579,6 +603,9 @@ describe('serviço de agentes', () => {
       expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(1);
       expect(view).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
       expect(await stored(row.id)).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
     });
 
     it('reativa agente inativado manualmente', async () => {
@@ -590,6 +617,9 @@ describe('serviço de agentes', () => {
       expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(1);
       expect(view).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
       expect(await stored(row.id)).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
     });
 
     it('é idempotente: inativar inativo e reativar ativo não chamam o GPTMaker', async () => {
@@ -644,6 +674,7 @@ describe('serviço de agentes', () => {
       const error = await errorOf(service.inactivate(owner, row.id));
       expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
       expect((await stored(row.id)).status).toBe('ACTIVE');
+      expect(await mirrorsOf(row.id)).toEqual([]);
     });
 
     it('agente fora de sincronia: AGENT_OUT_OF_SYNC', async () => {
@@ -709,6 +740,9 @@ describe('serviço de agentes', () => {
       expect(await stored(row.id)).toMatchObject({ status: 'DELETED', inactiveReason: null });
       expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
       expect(await service.list(owner.tenantId)).toEqual([]);
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
       await expect(service.get(owner.tenantId, row.id)).rejects.toMatchObject({
         code: 'AGENT_NOT_FOUND',
       });
