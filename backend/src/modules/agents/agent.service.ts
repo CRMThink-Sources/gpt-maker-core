@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type AgentView,
+  type AvailableModel,
   createAgentSchema,
   type CreateAgentInput,
   updateAgentSchema,
@@ -87,6 +88,31 @@ export class AgentService {
   async get(tenantId: string, id: string): Promise<AgentView> {
     const [row, models] = await Promise.all([this.agents.getById(tenantId, id), this.modelsById()]);
     return toView(row, models.get(row.modelId)!);
+  }
+
+  /**
+   * Modelos que o tenant pode escolher, do mais barato ao mais caro: o padrão do catálogo e os
+   * liberados no plano (mesma regra da criação e da troca de modelo).
+   */
+  async availableModels(tenantId: string): Promise<AvailableModel[]> {
+    const [models, planId] = await Promise.all([this.models.list(), this.planOf(tenantId)]);
+    const allowed = planId ? await this.models.listAllowedForPlan(planId) : [];
+    const byId = new Map<string, AvailableModel>(allowed.map((model) => [model.id, model]));
+    const fallback = models.find((model) => model.isDefault && model.active);
+    if (fallback && !byId.has(fallback.id)) {
+      byId.set(fallback.id, {
+        id: fallback.id,
+        code: fallback.code,
+        displayName: fallback.displayName,
+        description: fallback.description,
+        creditsPerResponse: fallback.creditsPerResponse,
+        isDefault: true,
+      });
+    }
+    return [...byId.values()].sort(
+      (a, b) =>
+        a.creditsPerResponse - b.creditsPerResponse || a.displayName.localeCompare(b.displayName),
+    );
   }
 
   /**

@@ -9,7 +9,12 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { type AgentView, createAgentSchema, updateAgentSchema } from '@gptmaker/contracts';
+import {
+  type AgentView,
+  type AvailableModel,
+  createAgentSchema,
+  updateAgentSchema,
+} from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { AgentService } from './agent.service';
@@ -69,5 +74,17 @@ export class AgentsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentSession() session: AppSession, @Param('id') id: string): Promise<void> {
     return this.agents.remove(session, id);
+  }
+}
+
+/** Modelos oferecidos no formulário do agente, com o custo por resposta (spec ai-model-catalog). */
+@Controller('app/models')
+export class AppModelsController {
+  constructor(private readonly agents: AgentService) {}
+
+  @Get()
+  @AppAuth()
+  async list(@CurrentSession() session: AppSession): Promise<{ models: AvailableModel[] }> {
+    return { models: await this.agents.availableModels(session.tenantId) };
   }
 }

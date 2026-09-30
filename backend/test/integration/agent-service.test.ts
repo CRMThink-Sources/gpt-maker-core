@@ -362,6 +362,28 @@ describe('serviço de agentes', () => {
     expect(await redis.exists(`lock:agent-create:${owner.tenantId}`)).toBe(0);
   });
 
+  describe('modelos disponíveis', () => {
+    it('sem plano: só o modelo padrão', async () => {
+      expect((await service.availableModels(owner.tenantId)).map((m) => m.code)).toEqual([
+        'GPT_5_MINI',
+      ]);
+    });
+
+    it('com plano: padrão e liberados, do mais barato ao mais caro, sem os inativos', async () => {
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+      const models = await service.availableModels(owner.tenantId);
+      expect(models).toMatchObject([
+        { code: 'GPT_5_MINI', creditsPerResponse: 1, isDefault: true },
+        { code: 'GPT_5', creditsPerResponse: 5, isDefault: false },
+      ]);
+
+      await db.update(aiModel).set({ active: false }).where(eq(aiModel.id, premiumModel.id));
+      expect((await service.availableModels(owner.tenantId)).map((m) => m.code)).toEqual([
+        'GPT_5_MINI',
+      ]);
+    });
+  });
+
   it('lista e busca só agentes do tenant; outro tenant recebe 404', async () => {
     await stubGptMaker();
     const view = await service.create(owner, form());

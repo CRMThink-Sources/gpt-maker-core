@@ -81,6 +81,16 @@ export const updateAgentSchema = z
   });
 export type UpdateAgentInput = z.input<typeof updateAgentSchema>;
 
+/** Modelo que o tenant pode escolher para o agente (`GET /app/models`). */
+export interface AvailableModel {
+  id: string;
+  code: string;
+  displayName: string;
+  description: string | null;
+  creditsPerResponse: number;
+  isDefault: boolean;
+}
+
 /** Agente como o frontend o vê: nome sem o prefixo do tenant e sem ids do GPTMaker. */
 export interface AgentView {
   id: string;

@@ -7,11 +7,11 @@ import { AgentAccessPolicy } from './agent-access.policy';
 import { AgentLifecycleListener } from './agent-lifecycle.listener';
 import { AgentRepository } from './agent.repository';
 import { AgentService } from './agent.service';
-import { AgentsController } from './agents.controller';
+import { AgentsController, AppModelsController } from './agents.controller';
 
 @Module({
   imports: [TenancyModule, GptMakerModule, ModelsModule, PaymentsModule],
-  controllers: [AgentsController],
+  controllers: [AgentsController, AppModelsController],
   providers: [AgentAccessPolicy, AgentLifecycleListener, AgentRepository, AgentService],
   exports: [AgentRepository, AgentService],
 })

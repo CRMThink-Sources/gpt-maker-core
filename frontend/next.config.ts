@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
     'http://localhost:3000',
     'https://spend-translation-bottles-ruling.trycloudflare.com',
     'https://gptmaker-staging.crmthink.com.br',
-    'spend-translation-bottles-ruling.trycloudflare.com'
-  ]
+    'spend-translation-bottles-ruling.trycloudflare.com',
+  ],
 };
 
 export default nextConfig;
