@@ -17,7 +17,7 @@ import * as schema from '../../src/shared/database/schema/index';
 import type { ObjectStorage, PutObjectInput } from '../../src/shared/storage/object-storage';
 import { WireMock } from '../support/wiremock';
 
-const { agent, aiModel, tenant, training } = schema;
+const { agent, aiModel, planEntitlement, subscriptionState, tenant, training } = schema;
 const WS = 'ws-test';
 const API = 'https://api.gptmaker.test';
 const REMOTE_AGENT = 'gm-agent-1';
@@ -50,6 +50,21 @@ describe('treinamentos dos agentes', () => {
   let redis: Redis;
   let storage: FakeStorage;
   let service: TrainingService;
+  let client: GptMakerClient;
+  const ENV = {
+    API_PUBLIC_URL: API,
+    TRAINING_DEFAULT_MAX_TRAININGS: 10,
+    TRAINING_DEFAULT_MAX_STORAGE_MB: 50,
+  } as Env;
+  const serviceWith = (env: Partial<Env> = {}) =>
+    new TrainingService(
+      new AgentRepository(db),
+      client,
+      storage as unknown as ObjectStorage,
+      db,
+      redis,
+      { ...ENV, ...env } as Env,
+    );
   let modelId: string;
   let tenantId: string;
   let agentId: string;
@@ -120,7 +135,7 @@ describe('treinamentos dos agentes', () => {
     pool = new Pool({ connectionString: postgres.getConnectionUri() });
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
-    const client = new GptMakerClient(
+    client = new GptMakerClient(
       {
         baseUrl: `${wiremock.baseUrl}/v2`,
         token: 't',
@@ -136,14 +151,7 @@ describe('treinamentos dos agentes', () => {
       }),
     );
     storage = new FakeStorage();
-    service = new TrainingService(
-      new AgentRepository(db),
-      client,
-      storage as unknown as ObjectStorage,
-      db,
-      redis,
-      { API_PUBLIC_URL: API } as Env,
-    );
+    service = serviceWith();
     const [model] = await db
       .insert(aiModel)
       .values({ code: 'GPT_5_MINI', displayName: 'GPT-5 Mini', creditsPerResponse: 1 })
@@ -157,6 +165,8 @@ describe('treinamentos dos agentes', () => {
     storage.objects.clear();
     await db.delete(training);
     await db.delete(agent);
+    await db.delete(subscriptionState);
+    await db.delete(planEntitlement);
     ({ tenantId, agentId } = await newTenantAgent());
   });
 
@@ -571,6 +581,104 @@ describe('treinamentos dos agentes', () => {
       await service.remove(tenantId, agentId, row.id);
       await expect(service.remove(tenantId, agentId, row.id)).rejects.toMatchObject({
         code: 'TRAINING_NOT_FOUND',
+      });
+    });
+  });
+
+  describe('limites do plano', () => {
+    async function onPlan(maxTrainings: number | null, maxDocumentStorageMb: number | null) {
+      const planSpaId = `plan-${randomUUID()}`;
+      await db.insert(planEntitlement).values({
+        planSpaId,
+        planType: 'subscription',
+        creditsPerCycle: 1000,
+        maxTrainings,
+        maxDocumentStorageMb,
+      });
+      await db.insert(subscriptionState).values({
+        tenantId,
+        subscriptionId: `sub-${randomUUID()}`,
+        status: 'active',
+        modality: 'stripe',
+        planId: planSpaId,
+        version: 1,
+      });
+    }
+
+    const existing = (values: Partial<typeof training.$inferInsert> = {}) =>
+      db.insert(training).values({ tenantId, agentId, type: 'TEXT', content: 'x', ...values });
+
+    it('soma os agentes do tenant, sem os removidos, e recusa acima do limite', async () => {
+      await onPlan(2, null);
+      // Outro agente do mesmo tenant (id próprio no GPTMaker).
+      const second = await newTenantAgent('OUT_OF_SYNC');
+      await db.update(agent).set({ tenantId }).where(eq(agent.id, second.agentId));
+      await existing();
+      await existing({ agentId: second.agentId });
+      await existing({ deletedAt: new Date() });
+      await stubCreate();
+
+      const error = await errorOf(service.create(tenantId, agentId, { type: 'TEXT', text: 'y' }));
+
+      expect(error).toMatchObject({
+        code: 'PLAN_TRAINING_LIMIT',
+        status: 422,
+        details: { kind: 'trainings', used: 2, limit: 2 },
+      });
+      expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
+    });
+
+    it('documento acima do espaço do plano: recusa antes do storage', async () => {
+      await onPlan(null, 1);
+      await existing({ type: 'DOCUMENT', content: null, documentSizeBytes: 1024 * 1024 - 10 });
+      await stubCreate();
+
+      await expect(
+        service.createDocument(tenantId, agentId, { originalName: 'a.pdf', buffer: PDF }),
+      ).rejects.toMatchObject({ code: 'PLAN_TRAINING_LIMIT', details: { kind: 'documentBytes' } });
+      expect(storage.objects.size).toBe(0);
+      // Texto não ocupa espaço de documento.
+      await stubList('TEXT', []);
+      await expect(
+        service.create(tenantId, agentId, { type: 'TEXT', text: 'ok' }),
+      ).resolves.toBeDefined();
+    });
+
+    it('limite nulo no plano é sem limite', async () => {
+      await onPlan(null, null);
+      for (let i = 0; i < 12; i++) await existing();
+      await stubCreate();
+      await stubList('TEXT', []);
+      await expect(
+        service.create(tenantId, agentId, { type: 'TEXT', text: 'mais um' }),
+      ).resolves.toBeDefined();
+    });
+
+    it('sem plano: valem os padrões do ambiente', async () => {
+      await existing();
+      await stubCreate();
+      await expect(
+        serviceWith({ TRAINING_DEFAULT_MAX_TRAININGS: 1 }).create(tenantId, agentId, {
+          type: 'TEXT',
+          text: 'y',
+        }),
+      ).rejects.toMatchObject({ code: 'PLAN_TRAINING_LIMIT', details: { limit: 1 } });
+    });
+
+    it('uso: quantidade e bytes de documentos do tenant', async () => {
+      await onPlan(20, 100);
+      await existing();
+      await existing({ type: 'DOCUMENT', content: null, documentSizeBytes: 3000 });
+      await existing({
+        type: 'DOCUMENT',
+        content: null,
+        documentSizeBytes: 9999,
+        deletedAt: new Date(),
+      });
+
+      expect(await service.usage(tenantId)).toEqual({
+        trainings: { used: 2, limit: 20 },
+        documentBytes: { used: 3000, limit: 100 * 1024 * 1024 },
       });
     });
   });

@@ -59,6 +59,13 @@ export const TRAINING_DOCUMENT_TYPES = {
 /** Tamanho máximo de um documento de treinamento. */
 export const TRAINING_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
+/** Uso dos limites de treinamento do plano, somando todos os agentes do tenant. */
+export interface TrainingUsage {
+  /** `limit` nulo: sem limite no plano. */
+  trainings: { used: number; limit: number | null };
+  documentBytes: { used: number; limit: number | null };
+}
+
 export interface TrainingView {
   id: string;
   type: z.infer<typeof trainingTypeSchema>;

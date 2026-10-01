@@ -14,6 +14,7 @@ import {
 import {
   type CreateTrainingInput,
   createTrainingSchema,
+  type TrainingUsage,
   type TrainingView,
   updateTrainingSchema,
 } from '@gptmaker/contracts';
@@ -35,8 +36,12 @@ export class TrainingsController {
   async list(
     @CurrentSession() session: AppSession,
     @Param('agentId') agentId: string,
-  ): Promise<{ trainings: TrainingView[] }> {
-    return { trainings: await this.trainings.list(session.tenantId, agentId) };
+  ): Promise<{ trainings: TrainingView[]; usage: TrainingUsage }> {
+    const [trainings, usage] = await Promise.all([
+      this.trainings.list(session.tenantId, agentId),
+      this.trainings.usage(session.tenantId),
+    ]);
+    return { trainings, usage };
   }
 
   /** Texto, site ou vídeo (JSON). */

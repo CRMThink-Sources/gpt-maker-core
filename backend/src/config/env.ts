@@ -33,6 +33,13 @@ export const envSchema = z.object({
   /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
   TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),
 
+  /**
+   * Limites de treinamento do tenant sem plano na projeção local (ex.: trial antes do evento da
+   * plataforma). Com plano, valem `max_trainings` e `max_document_storage_mb` do `plan_entitlement`.
+   */
+  TRAINING_DEFAULT_MAX_TRAININGS: z.coerce.number().int().positive().default(10),
+  TRAINING_DEFAULT_MAX_STORAGE_MB: z.coerce.number().int().positive().default(50),
+
   /** Origens do frontend autorizadas por CORS a chamar a API, separadas por vírgula. */
   FRONTEND_ORIGINS: z
     .string()

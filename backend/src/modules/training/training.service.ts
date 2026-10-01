@@ -7,17 +7,18 @@ import {
   TRAINING_DOCUMENT_MAX_BYTES,
   TRAINING_DOCUMENT_TYPES,
   type TrainingInterval,
+  type TrainingUsage,
   type TrainingView,
   type UpdateTrainingInput,
   updateTrainingSchema,
 } from '@gptmaker/contracts';
-import { and, asc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull, ne, sum } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { currentContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
-import { training } from '../../shared/database/schema/index';
+import { planEntitlement, subscriptionState, training } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
@@ -44,6 +45,8 @@ export interface UploadedDocument {
 // Criação, listagem para achar o id e o eventual desfazer, com retentativas do GPTMaker.
 const LOCK_TTL_MS = 120_000;
 const LOCK_WAIT_MS = 30_000;
+const MB = 1024 * 1024;
+const toMb = (bytes: number) => Math.round(bytes / MB);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -81,6 +84,24 @@ export class TrainingService {
       )
       .orderBy(asc(training.createdAt), asc(training.id));
     return rows.map(toView);
+  }
+
+  /**
+   * Limites do plano (spec agent-training) e o uso atual, somando os agentes do tenant. Sem plano
+   * na projeção local, valem os padrões do ambiente; coluna nula no plano é sem limite.
+   */
+  async usage(tenantId: string): Promise<TrainingUsage> {
+    const [limits, [used]] = await Promise.all([
+      this.limitsOf(tenantId),
+      this.db
+        .select({ trainings: count(), documentBytes: sum(training.documentSizeBytes) })
+        .from(training)
+        .where(and(eq(training.tenantId, tenantId), isNull(training.deletedAt))),
+    ]);
+    return {
+      trainings: { used: used?.trainings ?? 0, limit: limits.maxTrainings },
+      documentBytes: { used: Number(used?.documentBytes ?? 0), limit: limits.maxDocumentBytes },
+    };
   }
 
   /** Texto, site ou vídeo. */
@@ -138,6 +159,8 @@ export class TrainingService {
     const owner = await this.trainableAgent(tenantId, agentId);
     const name = documentName(file.originalName);
     const mimetype = validateDocument(name, file.buffer);
+    // Antes do upload, para não gravar no storage o que será recusado; reconfere no lock.
+    await this.assertWithinLimits(tenantId, file.buffer.length);
     const key = this.storage.newTrainingKey(tenantId, name);
     await this.storage.put({
       key,
@@ -329,6 +352,58 @@ export class TrainingService {
     await this.db.update(training).set(patch).where(eq(training.id, row.id));
   }
 
+  /**
+   * Recusa com `PLAN_TRAINING_LIMIT` antes de qualquer chamada ao GPTMaker. Conferido no lock do
+   * agente: dois agentes do mesmo tenant ao mesmo tempo podem passar um treinamento do limite.
+   */
+  private async assertWithinLimits(tenantId: string, documentBytes: number): Promise<void> {
+    const usage = await this.usage(tenantId);
+    const { trainings, documentBytes: storage } = usage;
+    if (trainings.limit !== null && trainings.used + 1 > trainings.limit) {
+      throw new DomainError(
+        'PLAN_TRAINING_LIMIT',
+        `Seu plano permite até ${trainings.limit} treinamentos. Remova algum ou mude de plano`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        { kind: 'trainings', ...trainings },
+      );
+    }
+    if (
+      documentBytes > 0 &&
+      storage.limit !== null &&
+      storage.used + documentBytes > storage.limit
+    ) {
+      throw new DomainError(
+        'PLAN_TRAINING_LIMIT',
+        `Seu plano permite até ${toMb(storage.limit)} MB em documentos. Remova algum ou mude de plano`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        { kind: 'documentBytes', ...storage },
+      );
+    }
+  }
+
+  private async limitsOf(
+    tenantId: string,
+  ): Promise<{ maxTrainings: number | null; maxDocumentBytes: number | null }> {
+    const [plan] = await this.db
+      .select({
+        maxTrainings: planEntitlement.maxTrainings,
+        maxDocumentStorageMb: planEntitlement.maxDocumentStorageMb,
+      })
+      .from(subscriptionState)
+      .innerJoin(planEntitlement, eq(planEntitlement.planSpaId, subscriptionState.planId))
+      .where(eq(subscriptionState.tenantId, tenantId));
+    if (!plan) {
+      return {
+        maxTrainings: this.env.TRAINING_DEFAULT_MAX_TRAININGS,
+        maxDocumentBytes: this.env.TRAINING_DEFAULT_MAX_STORAGE_MB * MB,
+      };
+    }
+    return {
+      maxTrainings: plan.maxTrainings,
+      maxDocumentBytes: plan.maxDocumentStorageMb === null ? null : plan.maxDocumentStorageMb * MB,
+    };
+  }
+
   /** Agente do tenant (404 se de outro) e sincronizado com o GPTMaker. */
   private async trainableAgent(tenantId: string, agentId: string): Promise<Agent> {
     const owner = await this.agents.getById(tenantId, agentId);
@@ -355,6 +430,7 @@ export class TrainingService {
     matches: (candidate: GptMakerTraining) => boolean,
   ): Promise<TrainingView> {
     return this.withAgentLock(owner.id, async () => {
+      await this.assertWithinLimits(owner.tenantId, local.documentSizeBytes ?? 0);
       const [row] = await this.db
         .insert(training)
         .values({ ...local, tenantId: owner.tenantId, agentId: owner.id, status: 'PROCESSING' })
