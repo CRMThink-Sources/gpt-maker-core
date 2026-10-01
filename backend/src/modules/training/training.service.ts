@@ -31,8 +31,9 @@ import {
   type GptMakerTrainingType,
 } from '../gptmaker';
 import { interpretCallback } from './training-callback';
+import { listRemoteTrainings, matcherFor, sameUrl, type Training } from './training-remote';
 
-export type Training = typeof training.$inferSelect;
+export type { Training };
 
 /** Arquivo recebido no upload (já em memória, dentro do limite de tamanho). */
 export interface UploadedDocument {
@@ -43,8 +44,6 @@ export interface UploadedDocument {
 // Criação, listagem para achar o id e o eventual desfazer, com retentativas do GPTMaker.
 const LOCK_TTL_MS = 120_000;
 const LOCK_WAIT_MS = 30_000;
-const LIST_PAGE_SIZE = 100;
-const LIST_MAX_PAGES = 20;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -399,30 +398,13 @@ export class TrainingService {
       .where(and(eq(training.agentId, owner.id), isNotNull(training.gptmakerTrainingId)));
     const known = new Set(knownRows.map((entry) => entry.id));
 
-    const fresh = (await this.listRemote(owner.gptmakerAgentId, type)).filter(
+    const fresh = (await listRemoteTrainings(this.gptmaker, owner.gptmakerAgentId, type)).filter(
       (candidate) => !known.has(candidate.id),
     );
     const matched = fresh.filter(matches);
     // Conteúdo repetido (dois textos iguais) dá no mesmo: qualquer um deles serve.
     if (matched.length > 0) return matched[0]!.id;
     return fresh.length === 1 ? fresh[0]!.id : null;
-  }
-
-  private async listRemote(
-    gptmakerAgentId: string,
-    type: GptMakerTrainingType,
-  ): Promise<GptMakerTraining[]> {
-    const all: GptMakerTraining[] = [];
-    // Base da paginação não documentada: começa em 1 e para na primeira página incompleta.
-    for (let page = 1; page <= LIST_MAX_PAGES; page++) {
-      const batch = await this.gptmaker.listTrainings(gptmakerAgentId, type, {
-        page,
-        pageSize: LIST_PAGE_SIZE,
-      });
-      all.push(...batch);
-      if (batch.length < LIST_PAGE_SIZE) break;
-    }
-    return all;
   }
 
   /** Espera a vez em vez de recusar: vários uploads seguidos do mesmo agente são comuns. */
@@ -492,29 +474,10 @@ export function hashCallbackToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Como reconhecer o treinamento local na listagem do GPTMaker. */
-function matcherFor(row: Training): (candidate: GptMakerTraining) => boolean {
-  switch (row.type) {
-    case 'TEXT':
-      return (candidate) => candidate.text?.trim() === row.content;
-    case 'WEBSITE':
-      return (candidate) => row.url !== null && sameUrl(candidate.website, row.url);
-    case 'VIDEO':
-      return (candidate) => row.url !== null && sameUrl(candidate.video, row.url);
-    case 'DOCUMENT':
-      return (candidate) => candidate.documentName === row.documentName;
-  }
-}
-
 /** Corpo do callback para o log, cortado para não inflar a linha. */
 function truncatedJson(payload: unknown): string {
   const json = JSON.stringify(payload ?? null) ?? 'null';
   return json.length > 2000 ? `${json.slice(0, 2000)}…` : json;
-}
-
-function sameUrl(a: string | null | undefined, b: string): boolean {
-  const normalize = (value: string) => value.trim().replace(/\/+$/, '').toLowerCase();
-  return a !== null && a !== undefined && normalize(a) === normalize(b);
 }
 
 /** Nome sem caminho e sem caracteres de controle; o multer entrega em latin1. */

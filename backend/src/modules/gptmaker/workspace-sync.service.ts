@@ -10,6 +10,7 @@ import { metricsRegistry } from '../../shared/metrics/metrics';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { tenantCodeFromGptMakerName } from './agent-naming';
+import { collectAllPages } from './collect-pages';
 import { GptMakerClient } from './gptmaker.client';
 import { GptMakerError } from './gptmaker.errors';
 import { GPTMAKER_AGENT_STATUS, type GptMakerAgent } from './gptmaker.schemas';
@@ -42,28 +43,13 @@ export interface SyncSummary {
 
 type LocalAgent = { id: string; tenantId: string; gptmakerAgentId: string; status: string };
 
-/**
- * Lê todas as páginas de agentes do workspace. A API não documenta se `page` começa em 0 ou 1
- * nem o máximo de `pageSize`, então: começa em 0, deduplica por id e para na primeira página
- * vazia ou após duas páginas seguidas sem agente novo (cobre as duas bases e APIs que repetem a
- * última página).
- */
-export async function collectAllAgents(
+/** Todos os agentes do workspace (paginação tolerante, ver `collectAllPages`). */
+export function collectAllAgents(
   fetchPage: (page: number, pageSize: number) => Promise<GptMakerAgent[]>,
   pageSize = PAGE_SIZE,
   maxPages = MAX_PAGES,
 ): Promise<GptMakerAgent[]> {
-  const byId = new Map<string, GptMakerAgent>();
-  let pagesWithoutNew = 0;
-  for (let page = 0; page < maxPages; page++) {
-    const items = await fetchPage(page, pageSize);
-    if (items.length === 0) return [...byId.values()];
-    const before = byId.size;
-    for (const item of items) byId.set(item.id, item);
-    pagesWithoutNew = byId.size === before ? pagesWithoutNew + 1 : 0;
-    if (pagesWithoutNew >= 2) return [...byId.values()];
-  }
-  throw new Error(`listagem do workspace passou de ${maxPages} páginas`);
+  return collectAllPages(fetchPage, pageSize, maxPages);
 }
 
 /**
