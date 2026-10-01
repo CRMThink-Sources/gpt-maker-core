@@ -31,7 +31,7 @@ npm run dev:worker -w backend   # métricas em http://localhost:9464/metrics
 npm run dev -w frontend         # http://localhost:3000
 ```
 
-O backend lê as variáveis do ambiente do processo (ver `backend/.env.example`); carregue o `.env` no shell ou na IDE. Para subir tudo em containers: `docker compose -f infra/docker-compose.yml --profile app up -d --build`.
+O backend lê as variáveis do ambiente do processo (ver `backend/.env.example`); os scripts `dev:api` e `dev:worker` já carregam o `backend/.env` via `--env-file`. Para subir tudo em containers: `docker compose -f infra/docker-compose.yml --profile app up -d --build`.
 
 Consoles locais: RabbitMQ http://localhost:15672 (gptmaker/gptmaker). Storage S3 (SeaweedFS, substitui o Spaces em dev): http://localhost:8333, chave `gptmaker`/`gptmaker123`, bucket `gptmaker-trainings`.
 

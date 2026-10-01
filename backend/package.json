@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev:api": "nest start --watch -b swc --entryFile main.api",
-    "dev:worker": "nest start --watch -b swc --entryFile main.worker",
+    "dev:api": "nest start --watch -b swc --entryFile main.api --env-file .env",
+    "dev:worker": "nest start --watch -b swc --entryFile main.worker --env-file .env",
     "start:api": "node dist/main.api.js",
     "start:worker": "node dist/main.worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
