@@ -83,7 +83,8 @@ export function newAction(type: TriggerActionType): TriggerActionInput {
         type,
         config: {
           categoryId: 0,
-          stageId: 'NEW',
+          // Escolhida na tela: o código da etapa muda de funil para funil.
+          stageId: '',
           fields: { TITLE: 'Negócio de {{contact.name | "cliente"}}' },
         },
       };

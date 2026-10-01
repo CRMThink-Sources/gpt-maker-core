@@ -133,3 +133,113 @@ export function useCrmFields(entity: CrmEntity | undefined): {
   if (!entity || !insideBitrix()) return { fields: null, failed: true };
   return state.entity === entity ? state : { fields: null, failed: false };
 }
+
+export interface DealPipeline {
+  id: number;
+  name: string;
+}
+
+export interface DealStage {
+  id: string;
+  name: string;
+  /** `process`, `success` (ganho) ou `failure` (perdido). */
+  semantics: string | null;
+}
+
+const pipelinesCache: { request?: Promise<DealPipeline[]> } = {};
+const stagesCache = new Map<number, Promise<DealStage[]>>();
+
+async function loadPipelines(): Promise<DealPipeline[]> {
+  const data = await bx24Call<{
+    categories: Array<{ id: number; name: string; isDefault: string; sort: number }>;
+  }>('crm.category.list', { entityTypeId: 2 });
+  return data.categories
+    .map((category) => ({ ...category, isDefault: category.isDefault === 'Y' }))
+    .sort(
+      (a, b) =>
+        Number(b.isDefault) - Number(a.isDefault) ||
+        a.sort - b.sort ||
+        a.name.localeCompare(b.name, 'pt-BR'),
+    )
+    .map(({ id, name }) => ({ id: Number(id), name }));
+}
+
+/** Etapas do funil: `DEAL_STAGE` no funil geral (0), `DEAL_STAGE_<id>` nos demais. */
+async function loadStages(pipelineId: number): Promise<DealStage[]> {
+  const rows = await bx24Call<
+    Array<{ STATUS_ID: string; NAME: string; SEMANTICS?: string; EXTRA?: { SEMANTICS?: string } }>
+  >('crm.status.list', {
+    filter: { ENTITY_ID: pipelineId === 0 ? 'DEAL_STAGE' : `DEAL_STAGE_${pipelineId}` },
+    order: { SORT: 'ASC' },
+  });
+  return rows.map((row) => ({
+    id: row.STATUS_ID,
+    name: row.NAME,
+    semantics: row.SEMANTICS ?? row.EXTRA?.SEMANTICS ?? null,
+  }));
+}
+
+/** Uma chamada por chave e por carregamento da página; falha libera nova tentativa. */
+function cached<T>(
+  get: () => Promise<T> | undefined,
+  set: (p: Promise<T> | undefined) => void,
+  load: () => Promise<T>,
+) {
+  let request = get();
+  if (!request) {
+    request = load();
+    set(request);
+    request.catch(() => set(undefined));
+  }
+  return request;
+}
+
+function useBitrixList<T>(
+  key: string | null,
+  load: () => Promise<T>,
+): { data: T | null; failed: boolean } {
+  const [state, setState] = useState<{ key: string | null; data: T | null; failed: boolean }>({
+    key: null,
+    data: null,
+    failed: false,
+  });
+  useEffect(() => {
+    if (key === null || !insideBitrix()) return;
+    let cancelled = false;
+    load()
+      .then((data) => !cancelled && setState({ key, data, failed: false }))
+      .catch(() => !cancelled && setState({ key, data: null, failed: true }));
+    return () => {
+      cancelled = true;
+    };
+    // `load` muda a cada render; a chave identifica a lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (key === null || !insideBitrix()) return { data: null, failed: true };
+  return state.key === key
+    ? { data: state.data, failed: state.failed }
+    : { data: null, failed: false };
+}
+
+/** Funis de negócio do portal, o geral primeiro. */
+export function useDealPipelines() {
+  return useBitrixList('pipelines', () =>
+    cached(
+      () => pipelinesCache.request,
+      (request) => (pipelinesCache.request = request),
+      loadPipelines,
+    ),
+  );
+}
+
+/** Etapas de um funil, na ordem do Bitrix24. */
+export function useDealStages(pipelineId: number | null) {
+  return useBitrixList(pipelineId === null ? null : `stages:${pipelineId}`, () =>
+    cached(
+      () => stagesCache.get(pipelineId!),
+      (request) =>
+        request ? stagesCache.set(pipelineId!, request) : stagesCache.delete(pipelineId!),
+      () => loadStages(pipelineId!),
+    ),
+  );
+}

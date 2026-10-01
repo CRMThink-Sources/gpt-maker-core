@@ -20,7 +20,13 @@ import { Modal } from '@/components/modal';
 import { Alert, buttonClass, Card } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
 import { bx24SelectUsers, insideBitrix } from '@/lib/bx24';
-import { type CrmEntity, type CrmFieldOption, useCrmFields } from '@/lib/crm-fields';
+import {
+  type CrmEntity,
+  type CrmFieldOption,
+  useCrmFields,
+  useDealPipelines,
+  useDealStages,
+} from '@/lib/crm-fields';
 import { ACTION_TYPES, AGENT_EVENTS, newAction, SAMPLE_CONTEXT } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
@@ -246,6 +252,106 @@ function FieldMapEditor({
   );
 }
 
+const STAGE_SUFFIX: Record<string, string> = { success: ' (ganho)', failure: ' (perdido)' };
+
+/**
+ * Funil e etapa do negócio novo, escolhidos nas listas do portal; trocar o funil limpa a etapa
+ * (a de outro funil seria inválida). Sem as listas (fora do Bitrix, sem permissão), digitados.
+ */
+function PipelineStageFields({
+  categoryId,
+  stageId,
+  disabled,
+  onChange,
+}: {
+  categoryId: number;
+  stageId: string;
+  disabled?: boolean;
+  onChange: (next: { categoryId?: number; stageId?: string }) => void;
+}) {
+  const pipelines = useDealPipelines();
+  const stages = useDealStages(pipelines.data ? categoryId : null);
+
+  if (!pipelines.data && pipelines.failed) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Funil (CATEGORY_ID)" hint="0 é o funil geral. Vale só para negócio novo.">
+          <input
+            type="number"
+            min={0}
+            className={inputClass}
+            value={categoryId}
+            disabled={disabled}
+            onChange={(e) => onChange({ categoryId: Number(e.target.value) })}
+          />
+        </Field>
+        <Field label="Etapa (STAGE_ID)" hint="Ex.: NEW, ou C3:NEW em outro funil.">
+          <input
+            className={`${inputClass} font-mono text-xs`}
+            value={stageId}
+            disabled={disabled}
+            onChange={(e) => onChange({ stageId: e.target.value })}
+          />
+        </Field>
+      </div>
+    );
+  }
+
+  const stageMissing =
+    stages.data && stageId !== '' && !stages.data.some((stage) => stage.id === stageId);
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Funil" hint="Para negócio novo. Um negócio existente fica no funil dele.">
+        <select
+          className={inputClass}
+          value={pipelines.data ? String(categoryId) : ''}
+          disabled={disabled || !pipelines.data}
+          onChange={(e) => onChange({ categoryId: Number(e.target.value), stageId: '' })}
+        >
+          {!pipelines.data && <option value="">Carregando funis…</option>}
+          {pipelines.data?.map((pipeline) => (
+            <option key={pipeline.id} value={pipeline.id}>
+              {pipeline.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field
+        label="Etapa"
+        hint={
+          stageMissing
+            ? `A etapa ${stageId} não existe neste funil; escolha outra.`
+            : 'Negócio existente também vai para esta etapa.'
+        }
+      >
+        {!pipelines.data || !stages.failed ? (
+          <select
+            className={inputClass}
+            value={stages.data?.some((stage) => stage.id === stageId) ? stageId : ''}
+            disabled={disabled || !stages.data}
+            onChange={(e) => onChange({ stageId: e.target.value })}
+          >
+            <option value="">{stages.data ? 'Escolha a etapa…' : 'Carregando etapas…'}</option>
+            {stages.data?.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+                {stage.semantics ? (STAGE_SUFFIX[stage.semantics] ?? '') : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            className={`${inputClass} font-mono text-xs`}
+            value={stageId}
+            disabled={disabled}
+            onChange={(e) => onChange({ stageId: e.target.value })}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
+
 function ResponsiblePicker({
   value,
   onChange,
@@ -318,33 +424,12 @@ function ActionConfig({
     case 'UPSERT_DEAL':
       return (
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Funil (CATEGORY_ID)" hint="0 é o funil geral. Vale só para negócio novo.">
-              <input
-                type="number"
-                min={0}
-                className={inputClass}
-                value={action.config.categoryId}
-                disabled={disabled}
-                onChange={(e) =>
-                  onChange({
-                    ...action,
-                    config: { ...action.config, categoryId: Number(e.target.value) },
-                  })
-                }
-              />
-            </Field>
-            <Field label="Etapa (STAGE_ID)" hint="Ex.: NEW, ou C3:NEW em outro funil.">
-              <input
-                className={`${inputClass} font-mono text-xs`}
-                value={action.config.stageId}
-                disabled={disabled}
-                onChange={(e) =>
-                  onChange({ ...action, config: { ...action.config, stageId: e.target.value } })
-                }
-              />
-            </Field>
-          </div>
+          <PipelineStageFields
+            categoryId={action.config.categoryId}
+            stageId={action.config.stageId}
+            disabled={disabled}
+            onChange={(next) => onChange({ ...action, config: { ...action.config, ...next } })}
+          />
           <FieldMapEditor
             entity="deal"
             fields={action.config.fields}
