@@ -2,7 +2,13 @@ import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { Global, Module } from '@nestjs/common';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
-import { channelInboundQueue, channelRetryName, EXCHANGES, QUEUES } from './topology';
+import {
+  AMQP_CHANNELS,
+  channelInboundQueue,
+  channelRetryName,
+  EXCHANGES,
+  QUEUES,
+} from './topology';
 
 /** Topologia de `channel.inbound` (design D5): partições, esperas de retentativa e DLQ. */
 function channelTopology(env: Env) {
@@ -67,6 +73,7 @@ function channelTopology(env: Env) {
           uri: env.RABBITMQ_URL,
           exchanges: [{ name: EXCHANGES.paymentsEvents, type: 'topic' }, ...channel.exchanges],
           queues: channel.queues,
+          channels: { [AMQP_CHANNELS.channelInbound]: { prefetchCount: 1 } },
           connectionInitOptions: { wait: false },
           registerHandlers: env.APP_ROLE === 'worker',
           enableControllerDiscovery: true,

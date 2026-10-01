@@ -38,3 +38,11 @@ export const CHANNEL_HEADERS = {
   attempt: 'x-attempt',
   lastError: 'x-last-error',
 } as const;
+
+/**
+ * Canais AMQP com prefetch próprio. `channel.inbound`: uma mensagem por vez em cada partição,
+ * para processar o diálogo em ordem (as partições seguem em paralelo).
+ */
+export const AMQP_CHANNELS = {
+  channelInbound: 'channel-inbound',
+} as const;
