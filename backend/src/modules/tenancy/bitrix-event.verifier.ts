@@ -12,6 +12,11 @@ export type BitrixEventCheck =
   | { ok: true; tenant: Tenant }
   | { ok: false; reason: 'missing_auth' | 'unknown_portal' | 'inactive' | 'token_mismatch' };
 
+/** Impressão digital curta de um token para o log: identifica sem expor o valor. */
+export function tokenFingerprint(token: string | null | undefined): string | null {
+  return token ? createHash('sha256').update(token).digest('hex').slice(0, 8) : null;
+}
+
 /** Compara em tempo constante sem vazar o tamanho (digests de mesmo tamanho). */
 export function sameToken(a: string, b: string): boolean {
   const x = createHash('sha256').update(a).digest();
@@ -47,7 +52,13 @@ export class BitrixEventVerifier {
     if (tenant.status === 'UNINSTALLED') return this.reject('inactive', memberId);
 
     const expected = await this.applicationToken(Number(tenant.installationId));
-    if (!expected || !sameToken(token, expected)) return this.reject('token_mismatch', memberId);
+    if (!expected || !sameToken(token, expected)) {
+      return this.reject('token_mismatch', memberId, {
+        received: tokenFingerprint(token),
+        expected: tokenFingerprint(expected),
+        installationId: Number(tenant.installationId),
+      });
+    }
     return { ok: true, tenant };
   }
 
@@ -77,8 +88,12 @@ export class BitrixEventVerifier {
   private reject(
     reason: Exclude<BitrixEventCheck, { ok: true }>['reason'],
     memberId: string,
+    details: Record<string, unknown> = {},
   ): BitrixEventCheck {
-    this.logger.warn({ alert: 'security', reason, memberId }, 'evento do Bitrix recusado');
+    this.logger.warn(
+      { alert: 'security', reason, memberId, ...details },
+      'evento do Bitrix recusado',
+    );
     return { ok: false, reason };
   }
 }
