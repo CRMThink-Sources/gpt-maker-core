@@ -1,7 +1,9 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agent, agentBot, tenant } from '../../shared/database/schema/index';
@@ -20,7 +22,9 @@ const RECONCILE_BATCH = 200;
  * token expirado) sem bloquear a operação do agente.
  */
 @Injectable()
-export class ChatbotSync implements AgentChangeListener, TenantLifecycleListener, OnModuleInit {
+export class ChatbotSync
+  implements AgentChangeListener, TenantLifecycleListener, OnModuleInit, OnApplicationBootstrap
+{
   readonly name = 'channel';
   private readonly logger = new Logger(ChatbotSync.name);
   private readonly lock: DistributedLock;
@@ -31,6 +35,7 @@ export class ChatbotSync implements AgentChangeListener, TenantLifecycleListener
     private readonly lifecycle: TenantLifecycle,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.lock = new DistributedLock(redis);
   }
@@ -38,6 +43,14 @@ export class ChatbotSync implements AgentChangeListener, TenantLifecycleListener
   onModuleInit(): void {
     this.agentEvents.register(this);
     this.lifecycle.register(this);
+  }
+
+  /**
+   * O worker reconcilia ao subir, sem esperar a rodada de 15 min: mudança do `API_PUBLIC_URL`
+   * (túnel novo em dev, domínio em produção) chega aos webhooks dos bots no restart.
+   */
+  onApplicationBootstrap(): void {
+    if (this.env.APP_ROLE === 'worker') void this.runScheduled();
   }
 
   async onAgentChanged(change: AgentChange): Promise<void> {
@@ -79,7 +92,8 @@ export class ChatbotSync implements AgentChangeListener, TenantLifecycleListener
   }
 
   /**
-   * Agentes cujo bot diverge: sem bot, perfil mudado ou removido com bot ainda registrado. Só de
+   * Agentes cujo bot diverge: sem bot, perfil ou webhook mudado ou removido com bot ainda
+   * registrado. Só de
    * tenants com o app instalado e credencial válida.
    */
   async reconcile(): Promise<{ pending: number; synced: number; failed: number }> {
@@ -99,7 +113,7 @@ export class ChatbotSync implements AgentChangeListener, TenantLifecycleListener
     const pending = rows.filter((row) =>
       row.status === 'DELETED'
         ? row.hasBot !== null
-        : row.hasBot === null || row.profileHash !== profileHashOf(row),
+        : row.hasBot === null || row.profileHash !== profileHashOf(row, this.chatbots.webhookUrl()),
     );
     let synced = 0;
     let failed = 0;

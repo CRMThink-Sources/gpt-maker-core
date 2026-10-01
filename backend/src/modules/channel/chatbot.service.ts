@@ -21,10 +21,16 @@ export function botCodeFor(agentId: string): string {
   return `gptmaker_agent_${agentId.replaceAll('-', '')}`;
 }
 
-/** O que o perfil do bot espelha do agente; mudou ⇒ `Bot.update`. */
-export function profileHashOf(profile: { name: string; avatarUrl: string | null }): string {
+/**
+ * O que o bot espelha: nome e foto do agente e o `webhookUrl` desta API (muda com o
+ * `API_PUBLIC_URL`, ex.: túnel novo em dev); mudou ⇒ `Bot.update`.
+ */
+export function profileHashOf(
+  profile: { name: string; avatarUrl: string | null },
+  webhookUrl: string,
+): string {
   return createHash('sha256')
-    .update(JSON.stringify([profile.name, profile.avatarUrl ?? null]))
+    .update(JSON.stringify([profile.name, profile.avatarUrl ?? null, webhookUrl]))
     .digest('hex');
 }
 
@@ -88,7 +94,7 @@ export class ChatbotService {
       return 'unregistered';
     }
 
-    const hash = profileHashOf(row);
+    const hash = profileHashOf(row, this.webhookUrl());
     if (bot?.profileHash === hash) return 'unchanged';
 
     let botId = bot ? Number(bot.botId) : await this.register(installationId, row);
