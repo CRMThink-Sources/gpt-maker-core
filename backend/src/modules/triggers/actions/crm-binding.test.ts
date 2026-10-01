@@ -3,6 +3,11 @@ import { bizprocDocumentId, parseCrmBinding, primaryEntity } from './crm-binding
 
 describe('vínculo do diálogo com o CRM', () => {
   it.each([
+    // Portal real (2026-10-01, docs/bitrix-observado.md).
+    [
+      'LEAD|0|COMPANY|39964|CONTACT|9448|DEAL|27134',
+      { company: 39964, contact: 9448, deal: 27134 },
+    ],
     // Exemplo da documentação de imopenlines.dialog.get.
     ['LEAD|1209|COMPANY|0|CONTACT|0|DEAL|0', { lead: 1209 }],
     ['LEAD|0|COMPANY|7|CONTACT|31|DEAL|88', { company: 7, contact: 31, deal: 88 }],

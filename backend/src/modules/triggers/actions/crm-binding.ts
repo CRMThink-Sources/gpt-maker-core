@@ -13,8 +13,8 @@ export const CRM_PREFERENCE: readonly CrmEntityType[] = ['deal', 'lead', 'contac
 
 /**
  * `entity_data_2` do chat da Linha Aberta (`imopenlines.dialog.get`): pares
- * `LEAD|id|COMPANY|id|CONTACT|id|DEAL|id`. O formato não é documentado; vem do exemplo da
- * documentação e de portais reais.
+ * `LEAD|id|COMPANY|id|CONTACT|id|DEAL|id`. Não documentado; confirmado num portal real
+ * (`docs/bitrix-observado.md`).
  */
 export function parseCrmBinding(entityData2: unknown): CrmBinding {
   if (typeof entityData2 !== 'string') return {};
