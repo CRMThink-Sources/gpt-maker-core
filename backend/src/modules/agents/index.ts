@@ -1,5 +1,6 @@
 // API pública do módulo: outros módulos só importam daqui.
 export { AgentsModule } from './agents.module';
+export { AgentEvents, type AgentChange, type AgentChangeListener } from './agent-events';
 export {
   AgentRepository,
   type Agent,

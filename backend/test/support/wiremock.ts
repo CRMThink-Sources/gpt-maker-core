@@ -2,7 +2,14 @@ import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
 export interface StubMapping {
   request: Record<string, unknown>;
-  response: { status: number; jsonBody?: unknown; headers?: Record<string, string>; body?: string };
+  response: {
+    status: number;
+    jsonBody?: unknown;
+    headers?: Record<string, string>;
+    body?: string;
+    /** Corpo binário (ex.: imagem). */
+    base64Body?: string;
+  };
   priority?: number;
 }
 

@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentAccessPolicy } from '../../src/modules/agents/agent-access.policy';
+import { type AgentChange, AgentEvents } from '../../src/modules/agents/agent-events';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
 import { AgentService, hashWebhookToken } from '../../src/modules/agents/agent.service';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
@@ -48,6 +49,8 @@ describe('serviço de agentes', () => {
   let defaultModel: typeof aiModel.$inferSelect;
   let premiumModel: typeof aiModel.$inferSelect;
   let owner: { tenantId: string; tenantCode: string };
+  /** Mudanças avisadas aos ouvintes (ex.: chatbot). */
+  let changes: AgentChange[];
 
   const errorOf = (promise: Promise<unknown>) => promise.catch((error: unknown) => error);
   /** Linhas do outbox que espelham o agente como item de assinatura. */
@@ -151,6 +154,20 @@ describe('serviço de agentes', () => {
     );
     const env = { API_PUBLIC_URL: API, TENANT_AGENT_LIMIT: 5 } as Env;
     repository = new AgentRepository(db);
+    const events = new AgentEvents();
+    events.register({
+      name: 'teste',
+      onAgentChanged: async (change) => {
+        changes.push(change);
+      },
+    });
+    // Ouvinte que falha não derruba a operação do agente.
+    events.register({
+      name: 'quebrado',
+      onAgentChanged: async () => {
+        throw new Error('falhou');
+      },
+    });
     service = new AgentService(
       repository,
       new TenantAgentLimitService(db, env),
@@ -158,6 +175,7 @@ describe('serviço de agentes', () => {
       client,
       new PaymentsOutbox(db),
       new AgentAccessPolicy(db),
+      events,
       db,
       redis,
       env,
@@ -182,6 +200,7 @@ describe('serviço de agentes', () => {
     await db.delete(planEntitlement);
     await db.update(aiModel).set({ active: true });
     owner = await newTenant();
+    changes = [];
   });
 
   afterAll(async () => {
@@ -237,6 +256,7 @@ describe('serviço de agentes', () => {
     });
     expect(view).not.toHaveProperty('gptmakerAgentId');
     expect(await mirrorsOf(view.id)).toEqual([{ operation: 'agent-item.sync', status: 'PENDING' }]);
+    expect(changes).toEqual([{ agentId: view.id, tenantId: owner.tenantId, kind: 'created' }]);
   });
 
   it('usa o modelo escolhido quando o plano do tenant o libera', async () => {
@@ -463,6 +483,10 @@ describe('serviço de agentes', () => {
       expect(await mirrorsOf(existing.id)).toEqual([
         { operation: 'agent-item.sync', status: 'PENDING' },
       ]);
+      // E o chatbot é avisado (nome e foto do bot no Bitrix).
+      expect(changes).toEqual([
+        { agentId: existing.id, tenantId: owner.tenantId, kind: 'profile-updated' },
+      ]);
     });
 
     it('settings: mescla com as atuais e reenvia o prefferModel do modelo atual', async () => {
@@ -487,6 +511,7 @@ describe('serviço de agentes', () => {
         maxDailyMessages: 100,
       });
       expect(await mirrorsOf(existing.id)).toEqual([]);
+      expect(changes).toEqual([]);
     });
 
     it('troca de modelo liberado no plano: novo prefferModel e registro local', async () => {
@@ -788,6 +813,7 @@ describe('serviço de agentes', () => {
       expect(await mirrorsOf(row.id)).toEqual([
         { operation: 'agent-item.sync', status: 'PENDING' },
       ]);
+      expect(changes).toEqual([{ agentId: row.id, tenantId: owner.tenantId, kind: 'removed' }]);
       await expect(service.get(owner.tenantId, row.id)).rejects.toMatchObject({
         code: 'AGENT_NOT_FOUND',
       });

@@ -31,6 +31,7 @@ import { type AiModel, ModelCatalogService } from '../models';
 import { OUTBOX_OPERATIONS, PaymentsOutbox } from '../payments';
 import type { TenantStatus } from '../tenancy';
 import { AgentAccessPolicy } from './agent-access.policy';
+import { AgentEvents } from './agent-events';
 import { type Agent, AgentRepository, type Executor } from './agent.repository';
 
 /** Dono da operação: tenant da sessão do iframe. */
@@ -73,6 +74,7 @@ export class AgentService {
     private readonly gptmaker: GptMakerClient,
     private readonly outbox: PaymentsOutbox,
     private readonly access: AgentAccessPolicy,
+    private readonly events: AgentEvents,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
     @Inject(ENV) private readonly env: Env,
@@ -138,6 +140,11 @@ export class AgentService {
         HttpStatus.CONFLICT,
       );
     }
+    await this.events.emit({
+      agentId: outcome.result.id,
+      tenantId: owner.tenantId,
+      kind: 'created',
+    });
     return outcome.result;
   }
 
@@ -203,7 +210,11 @@ export class AgentService {
               this.agents.update(owner.tenantId, id, patch, tx),
             )
           : (await this.agents.update(owner.tenantId, id, patch))!;
-      return toView(updated, model);
+      const view = toView(updated, model);
+      if (profile.name !== current.name || profile.avatarUrl !== current.avatarUrl) {
+        await this.events.emit({ agentId: id, tenantId: owner.tenantId, kind: 'profile-updated' });
+      }
+      return view;
     });
   }
 
@@ -293,6 +304,7 @@ export class AgentService {
       });
       await this.mirrored(owner.tenantId, (tx) => this.agents.markDeleted(owner.tenantId, id, tx));
     });
+    await this.events.emit({ agentId: id, tenantId: owner.tenantId, kind: 'removed' });
   }
 
   /**

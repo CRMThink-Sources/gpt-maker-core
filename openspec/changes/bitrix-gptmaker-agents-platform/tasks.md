@@ -86,7 +86,7 @@
 
 ## 9. Canal chatbot Bitrix (bitrix-chatbot-channel)
 
-- [ ] 9.1 Registrar/atualizar/desregistrar chatbot por agente via `imbot.v2.Bot.register` e persistir `botId` (~6h) — incluir o desregistro em `AgentService.remove` (7.5)
+- [x] 9.1 Registrar/atualizar/desregistrar chatbot por agente via `imbot.v2.Bot.register` e persistir `botId` (~6h) — `ChatbotService` (módulo `channel`): bot `type: openline` + `isSupportOpenline`, `eventMode: webhook` em `API_PUBLIC_URL/bitrix/bots/events` (recepção na 9.2), código `gptmaker_agent_<id>`; `register` é idempotente mas não atualiza, então nome, cargo e webhook vão por `Bot.update`; foto à parte e sem bloquear (`personalPhoto` base64, campo não documentado na v2: confirmar no portal); `BOT_NOT_FOUND` ⇒ registra de novo; agente removido ⇒ `Bot.unregister`. `agent_bot.profile_hash` (migração 0002) evita chamadas sem mudança. Disparo: `AgentEvents` (criação, nome/foto, remoção; desregistro da 7.5), reinstalação (registra de novo) e desinstalação (esquece os bots); reconciliação a cada 15 min no worker para o que falhou. Inativo mantém o bot (9.4 não encaminha)
 - [ ] 9.2 Endpoint de eventos de mensagem: validar `application_token`, dedupe Redis, publicar no consistent-hash por `dialogId` (~6h)
 - [ ] 9.3 Topologia RabbitMQ: filas particionadas, retry com TTL escalonado, DLQ (~8h)
 - [ ] 9.4 Worker: checar agente ativo, atendimento humano e saldo (Redis com fallback Postgres) (~5h)

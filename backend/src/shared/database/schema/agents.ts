@@ -79,6 +79,8 @@ export const agentBot = pgTable(
       .references(() => tenant.id),
     botId: text('bot_id').notNull(),
     botCode: text('bot_code').notNull(),
+    /** Hash do nome e da foto aplicados ao bot; diferente do agente ⇒ `imbot.v2.Bot.update`. */
+    profileHash: text('profile_hash'),
     registeredAt: timestamptz('registered_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
   },
