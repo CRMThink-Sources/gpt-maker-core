@@ -10,11 +10,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import type { Env } from '../../src/config/env';
 import { balanceCacheKey, BalanceReader } from '../../src/modules/billing/balance.reader';
+import type { ConversationService } from '../../src/modules/channel/conversation.service';
 import { HumanAttendance, humanFlagKey } from '../../src/modules/channel/human-attendance';
 import { InboundConsumer } from '../../src/modules/channel/inbound.consumer';
 import { InboundGate } from '../../src/modules/channel/inbound-gate';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
+import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
@@ -158,8 +160,14 @@ describe('gate das mensagens do chatbot', () => {
 
   describe('decisão', () => {
     it('agente e portal ativos, sem humano e com saldo ⇒ encaminha', async () => {
-      const { message } = await scenario();
-      await expect(gate.check(message)).resolves.toEqual({ kind: 'forward' });
+      const { owner, bot, message } = await scenario();
+      await expect(gate.check(message)).resolves.toEqual({
+        kind: 'forward',
+        target: {
+          gptmakerAgentId: bot.gptmakerAgentId,
+          installationId: Number(owner.installationId),
+        },
+      });
     });
 
     it.each(['INACTIVE', 'DELETED', 'OUT_OF_SYNC'] as const)('agente %s ⇒ descarta', async (status) => {
@@ -208,7 +216,7 @@ describe('gate das mensagens do chatbot', () => {
 
     it('soma as três carteiras', async () => {
       const { message } = await scenario({ balance: [0, -5, 6] });
-      await expect(gate.check(message)).resolves.toEqual({ kind: 'forward' });
+      await expect(gate.check(message)).resolves.toMatchObject({ kind: 'forward' });
     });
   });
 
@@ -268,6 +276,7 @@ describe('gate das mensagens do chatbot', () => {
 
   describe('worker', () => {
     const retried: Array<{ attempt: number; error: unknown }> = [];
+    const deadLettered: Array<{ attempt: number; error: unknown }> = [];
     let publishFails = false;
     const retry = {
       retryOrDeadLetter: async (_message: InboundMessage, attempt: number, error: unknown) => {
@@ -275,10 +284,21 @@ describe('gate das mensagens do chatbot', () => {
         retried.push({ attempt, error });
         return { kind: 'retry', attempt: attempt + 1, delayMs: 10 };
       },
+      deadLetter: async (_message: InboundMessage, attempt: number, error: unknown) => {
+        deadLettered.push({ attempt, error });
+        return { kind: 'dead-letter', attempts: attempt + 1 };
+      },
     } as unknown as InboundRetry;
     const env = { APP_ROLE: 'api', CHANNEL_INBOUND_PARTITIONS: 1 } as Env;
+    const asked: InboundMessage[] = [];
+    const conversation = {
+      ask: async (message: InboundMessage) => {
+        asked.push(message);
+        return { message: 'Olá!' };
+      },
+    } as unknown as ConversationService;
     const consumerWith = (g: InboundGate) =>
-      new InboundConsumer({} as AmqpConnection, g, retry, db, env);
+      new InboundConsumer({} as AmqpConnection, g, retry, conversation, db, env);
 
     const logOf = async (message: InboundMessage) =>
       db
@@ -293,6 +313,8 @@ describe('gate das mensagens do chatbot', () => {
 
     beforeEach(() => {
       retried.length = 0;
+      deadLettered.length = 0;
+      asked.length = 0;
       publishFails = false;
     });
 
@@ -313,13 +335,14 @@ describe('gate das mensagens do chatbot', () => {
       expect(await logOf(message)).toMatchObject([{ status: 'SKIPPED_HUMAN' }]);
     });
 
-    it('liberada ou sem saldo não gravam descarte', async () => {
+    it('liberada vai ao GPTMaker; sem saldo não', async () => {
       const ok = await scenario();
       const broke = await scenario({ balance: [0, 0, 0] });
       await consumerWith(gate).process(ok.message, 0);
       await consumerWith(gate).process(broke.message, 0);
       expect(await logOf(ok.message)).toEqual([]);
       expect(await logOf(broke.message)).toEqual([]);
+      expect(asked.map((m) => m.messageId)).toEqual([ok.message.messageId]);
     });
 
     it('falha no gate vai para a retentativa com a tentativa atual', async () => {
@@ -329,6 +352,21 @@ describe('gate das mensagens do chatbot', () => {
         consumerWith(failing as unknown as InboundGate).process(message, 2),
       ).resolves.toBeUndefined();
       expect(retried).toMatchObject([{ attempt: 2, error: { message: 'banco fora' } }]);
+    });
+
+    it('erro permanente do GPTMaker vai direto para a DLQ', async () => {
+      const { message } = await scenario();
+      const rejecting = {
+        ask: async () => {
+          throw new GptMakerError('VALIDATION', 'agent.conversation', 'prompt inválido');
+        },
+      } as unknown as ConversationService;
+      await new InboundConsumer({} as AmqpConnection, gate, retry, rejecting, db, env).process(
+        message,
+        0,
+      );
+      expect(retried).toEqual([]);
+      expect(deadLettered).toMatchObject([{ attempt: 0, error: { kind: 'VALIDATION' } }]);
     });
 
     it('sem conseguir reagendar, devolve à fila', async () => {

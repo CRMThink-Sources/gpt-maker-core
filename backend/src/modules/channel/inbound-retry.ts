@@ -52,10 +52,34 @@ export class InboundRetry {
       );
       return { kind: 'retry', attempt: attempt + 1, delayMs };
     }
+    return this.deadLetter(
+      message,
+      attempt,
+      error,
+      'mensagem do chatbot esgotou as tentativas (DLQ)',
+    );
+  }
+
+  /** Direto para a DLQ: erro que não melhora com nova tentativa (ex.: GPTMaker recusou o corpo). */
+  async deadLetter(
+    message: InboundMessage,
+    attempt: number,
+    error: unknown,
+    logMessage = 'mensagem do chatbot com erro permanente (DLQ)',
+  ): Promise<RetryOutcome> {
+    const reason = error instanceof Error ? error.message : String(error);
+    const options = {
+      persistent: true,
+      messageId: messageIdOf(message),
+      headers: {
+        [CHANNEL_HEADERS.attempt]: attempt + 1,
+        [CHANNEL_HEADERS.lastError]: reason.slice(0, 500),
+      },
+    };
     await this.amqp.publish(EXCHANGES.channelDeadLetter, dialogKey(message), message, options);
     this.logger.error(
       { alert: true, messageId: options.messageId, attempts: attempt + 1, reason },
-      'mensagem do chatbot esgotou as tentativas (DLQ)',
+      logMessage,
     );
     return { kind: 'dead-letter', attempts: attempt + 1 };
   }

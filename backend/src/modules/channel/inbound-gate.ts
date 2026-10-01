@@ -6,8 +6,14 @@ import { BalanceReader } from '../billing';
 import { HumanAttendance } from './human-attendance';
 import type { InboundMessage } from './inbound-message';
 
+/** Para onde a mensagem liberada vai: agente no GPTMaker e portal do tenant. */
+export interface ForwardTarget {
+  gptmakerAgentId: string;
+  installationId: number;
+}
+
 export type GateDecision =
-  | { kind: 'forward' }
+  | { kind: 'forward'; target: ForwardTarget }
   /** Agente não está `ACTIVE` (inativo, removido, fora do GPTMaker) ou o portal não está ativo. */
   | { kind: 'skip-inactive'; reason: 'agent' | 'tenant' }
   /** Operador atendendo o diálogo: o agente não responde. */
@@ -30,7 +36,12 @@ export class InboundGate {
 
   async check(message: InboundMessage): Promise<GateDecision> {
     const [row] = await this.db
-      .select({ agentStatus: agent.status, tenantStatus: tenant.status })
+      .select({
+        agentStatus: agent.status,
+        gptmakerAgentId: agent.gptmakerAgentId,
+        tenantStatus: tenant.status,
+        installationId: tenant.installationId,
+      })
       .from(agent)
       .innerJoin(tenant, eq(tenant.id, agent.tenantId))
       .where(and(eq(agent.id, message.agentId), eq(agent.tenantId, message.tenantId)));
@@ -44,6 +55,12 @@ export class InboundGate {
 
     const balance = await this.balance.total(message.tenantId);
     if (balance <= 0) return { kind: 'no-credit', balance };
-    return { kind: 'forward' };
+    return {
+      kind: 'forward',
+      target: {
+        gptmakerAgentId: row.gptmakerAgentId,
+        installationId: Number(row.installationId),
+      },
+    };
   }
 }

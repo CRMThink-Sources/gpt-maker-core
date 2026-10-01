@@ -250,12 +250,16 @@ export class GptMakerClient {
 
   // ---- Conversa e atendimento humano
 
-  /** Não idempotente: não é retentado em timeout/5xx para não duplicar a resposta ao cliente final. */
+  /**
+   * Não idempotente: não é retentado em timeout/5xx para não duplicar a resposta ao cliente final.
+   * O GPTMaker responde 200 com `success: false` quando falha ao processar (ex.: não conseguiu
+   * baixar a mídia: `java.net.ConnectException`); isso vira erro, não resposta.
+   */
   async sendMessage(
     agentId: string,
     input: GptMakerConversationRequest,
   ): Promise<GptMakerConversationResponse> {
-    return this.request({
+    const result = await this.request({
       operation: 'agent.conversation',
       method: 'POST',
       path: `/agent/${enc(agentId)}/conversation`,
@@ -263,6 +267,16 @@ export class GptMakerClient {
       response: conversationResponseSchema,
       timeoutMs: this.options.conversationTimeoutMs,
     });
+    if ((result as { success?: unknown }).success === false) {
+      const error = (result as { error?: unknown }).error;
+      throw new GptMakerError(
+        'UNKNOWN',
+        'agent.conversation',
+        `provedor respondeu success=false${typeof error === 'string' ? `: ${error}` : ''}`,
+        { status: 200, body: result },
+      );
+    }
+    return result;
   }
 
   async startHuman(chatId: string): Promise<void> {

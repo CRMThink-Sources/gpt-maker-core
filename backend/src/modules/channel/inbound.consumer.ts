@@ -6,6 +6,7 @@ import { newTraceId, runWithContext } from '../../shared/context/request-context
 import { DB, type Database } from '../../shared/database/database.module';
 import { messageLog } from '../../shared/database/schema/index';
 import { AMQP_CHANNELS, channelInboundQueue } from '../../shared/messaging/topology';
+import { ConversationService, isPermanentConversationError } from './conversation.service';
 import { type GateDecision, InboundGate } from './inbound-gate';
 import type { InboundMessage } from './inbound-message';
 import { attemptOf, InboundRetry } from './inbound-retry';
@@ -19,8 +20,8 @@ const SKIP_STATUS = {
 /**
  * Worker das mensagens dos chatbots (design D5): um consumidor por partição de
  * `channel.inbound`, uma mensagem por vez (mesmo diálogo em ordem). Passa pelo `InboundGate`;
- * descartadas ficam no `message_log`. Falha (banco fora etc.) ⇒ retentativa escalonada e, no
- * fim, DLQ.
+ * descartadas ficam no `message_log`; liberadas vão ao GPTMaker (`ConversationService`). Falha
+ * transitória ⇒ retentativa escalonada e, no fim, DLQ; erro permanente do GPTMaker ⇒ DLQ direto.
  */
 @Injectable()
 export class InboundConsumer implements OnApplicationBootstrap {
@@ -30,6 +31,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly amqp: AmqpConnection,
     private readonly gate: InboundGate,
     private readonly retry: InboundRetry,
+    private readonly conversation: ConversationService,
     @Inject(DB) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -74,7 +76,11 @@ export class InboundConsumer implements OnApplicationBootstrap {
       await this.apply(message, decision, attempt);
     } catch (error) {
       try {
-        await this.retry.retryOrDeadLetter(message, attempt, error);
+        if (isPermanentConversationError(error)) {
+          await this.retry.deadLetter(message, attempt, error);
+        } else {
+          await this.retry.retryOrDeadLetter(message, attempt, error);
+        }
       } catch (publishError) {
         // Sem como reagendar: volta à frente da partição, sem perder a ordem do diálogo.
         this.logger.error({ err: publishError }, 'retentativa não publicada; devolvendo à fila');
@@ -109,10 +115,28 @@ export class InboundConsumer implements OnApplicationBootstrap {
         // Aviso no diálogo, transferência e `BLOCKED_NO_CREDIT`: tarefa 9.7.
         this.logger.warn({ messageId: message.messageId, balance: decision.balance }, 'sem saldo');
         return;
-      case 'forward':
-        // Chamada ao GPTMaker e resposta no Bitrix: tarefas 9.5 e 9.6.
-        this.logger.log({ messageId: message.messageId }, 'mensagem liberada para o GPTMaker');
+      case 'forward': {
+        const reply = await this.conversation.ask(message, decision.target);
+        if (!reply) {
+          this.logger.log(
+            { messageId: message.messageId },
+            'mensagem sem texto nem anexo; ignorada',
+          );
+          return;
+        }
+        // Publicação no Bitrix e `usage.response`: tarefa 9.6.
+        this.logger.log(
+          {
+            messageId: message.messageId,
+            hasText: Boolean(reply.message),
+            images: reply.images?.length ?? 0,
+            audios: reply.audios?.length ?? 0,
+            documents: reply.documents?.length ?? 0,
+          },
+          'resposta do GPTMaker recebida',
+        );
         return;
+      }
     }
   }
 }
