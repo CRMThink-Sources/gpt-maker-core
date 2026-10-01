@@ -29,6 +29,10 @@ export const QUEUES = {
   usageResponse: 'billing.usage-response',
   /** Todos os eventos de `triggers.events` para a avaliação dos gatilhos (consumidor na 10.7). */
   triggerEvaluation: 'triggers.evaluation',
+  /** `onTransfer` de `triggers.events`: transferência para humano (9.8). */
+  channelTransfer: 'channel.transfer',
+  /** Transferências que falharam (inspeção manual; falha transitória já foi retentada pelos clientes). */
+  channelTransferDeadLetter: 'channel.transfer.dlq',
 } as const;
 
 /** Routing keys de `usage.events`. */

@@ -94,6 +94,25 @@ function channelTopology(env: Env) {
               exchange: EXCHANGES.triggersEvents,
               routingKey: '#',
             },
+            {
+              name: QUEUES.channelTransferDeadLetter,
+              createQueueIfNotExists: true,
+              options: { durable: true },
+            },
+            {
+              name: QUEUES.channelTransfer,
+              createQueueIfNotExists: true,
+              // Nack sem requeue vai para a DLQ pela exchange padrão.
+              options: {
+                durable: true,
+                arguments: {
+                  'x-dead-letter-exchange': '',
+                  'x-dead-letter-routing-key': QUEUES.channelTransferDeadLetter,
+                },
+              },
+              exchange: EXCHANGES.triggersEvents,
+              routingKey: 'onTransfer',
+            },
           ],
           channels: { [AMQP_CHANNELS.channelInbound]: { prefetchCount: 1 } },
           connectionInitOptions: { wait: false },

@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 /** Evento de nova mensagem num diálogo do bot (`imbot.v2`). */
 export const MESSAGE_ADD_EVENT = 'ONIMBOTV2MESSAGEADD';
+/**
+ * Bot entrou no chat. Na Linha Aberta, cada sessão nova começa com o bot entrando (observado; a
+ * documentação não fala de Linhas Abertas): é o sinal de que o atendimento humano anterior acabou.
+ */
+export const JOIN_CHAT_EVENT = 'ONIMBOTV2JOINCHAT';
 
 /**
  * No modo webhook o Bitrix manda tudo como texto (form-urlencoded): número vira `"789"` e
@@ -49,6 +54,15 @@ export const messageAddDataSchema = z.object({
   }),
   language: text,
 });
+
+/** `ONIMBOTV2JOINCHAT`: o diálogo vem na raiz (documentação) ou no `chat`. */
+export const joinChatDataSchema = z
+  .object({
+    bot: z.object({ id }),
+    dialogId: z.string().min(1).optional(),
+    chat: z.object({ dialogId: z.string().min(1).optional() }).optional(),
+  })
+  .transform((data) => ({ botId: data.bot.id, dialogId: data.dialogId ?? data.chat?.dialogId }));
 
 /** Mensagem publicada em `channel.inbound` para o worker (9.4). */
 export interface InboundMessage {

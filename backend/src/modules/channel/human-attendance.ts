@@ -48,4 +48,42 @@ export class HumanAttendance {
     }
     return active;
   }
+
+  /**
+   * Liga ou desliga o atendimento humano do diálogo: banco primeiro (fonte da verdade), depois a
+   * flag. Falha no Redis não desfaz: a leitura sem flag vai ao banco.
+   */
+  async set(input: {
+    tenantId: string;
+    dialogId: string;
+    agentId: string;
+    gptmakerChatId: string | null;
+    active: boolean;
+    now?: Date;
+  }): Promise<void> {
+    const now = input.now ?? new Date();
+    const state = {
+      agentId: input.agentId,
+      gptmakerChatId: input.gptmakerChatId,
+      humanActive: input.active,
+      humanStartedAt: input.active ? now : null,
+    };
+    await this.db
+      .insert(dialogState)
+      .values({ tenantId: input.tenantId, dialogId: input.dialogId, ...state })
+      .onConflictDoUpdate({
+        target: [dialogState.tenantId, dialogState.dialogId],
+        set: { ...state, updatedAt: now },
+      });
+    try {
+      await this.redis.set(
+        humanFlagKey(input.tenantId, input.dialogId),
+        input.active ? '1' : '0',
+        'EX',
+        HUMAN_FLAG_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn({ err: error }, 'flag de atendimento humano não gravada no Redis');
+    }
+  }
 }

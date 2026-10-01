@@ -11,12 +11,14 @@ import { ChatMedia } from './chat-media';
 import { ChatbotService } from './chatbot.service';
 import { ConversationService } from './conversation.service';
 import { HumanAttendance } from './human-attendance';
+import { HumanHandoff } from './human-handoff';
 import { InboundConsumer } from './inbound.consumer';
 import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
 import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
 import { ReplyPublisher } from './reply-publisher';
+import { TransferConsumer } from './transfer.consumer';
 
 /** Canal chatbot do Bitrix (spec bitrix-chatbot-channel). */
 @Module({
@@ -30,11 +32,13 @@ import { ReplyPublisher } from './reply-publisher';
     ConversationService,
     DeliveryFailureHandler,
     HumanAttendance,
+    HumanHandoff,
     InboundGate,
     InboundConsumer,
     InboundRetry,
     NoCreditHandler,
     ReplyPublisher,
+    TransferConsumer,
   ],
   exports: [ChatbotService, InboundRetry],
 })
