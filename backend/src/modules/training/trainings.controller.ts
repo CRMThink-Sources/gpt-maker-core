@@ -90,6 +90,18 @@ export class TrainingsController {
     return this.trainings.updateText(session.tenantId, agentId, id, body);
   }
 
+  /** Reenvia um treinamento com falha, com o mesmo conteúdo. */
+  @Post(':id/retry')
+  @AppAuth('manage')
+  @HttpCode(HttpStatus.OK)
+  retry(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+  ): Promise<TrainingView> {
+    return this.trainings.retry(session.tenantId, agentId, id);
+  }
+
   @Delete(':id')
   @AppAuth('manage')
   @HttpCode(HttpStatus.NO_CONTENT)

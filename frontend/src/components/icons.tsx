@@ -57,3 +57,25 @@ export const AlertIcon = (p: P) => (
   />
 );
 export const CheckIcon = (p: P) => <Icon {...p} d="M5 12.5 10 17 19 7" />;
+export const TextIcon = (p: P) => <Icon {...p} d="M4 6h16M4 10h16M4 14h10M4 18h7" />;
+export const GlobeIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0c2.5-2.5 3.5-5.5 3.5-9S14.5 5.5 12 3m0 18c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3M3.5 9h17m-17 6h17"
+  />
+);
+export const VideoIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M15 10.5 20 7v10l-5-3.5M5 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"
+  />
+);
+export const FileIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5M9 13h6m-6 4h4"
+  />
+);
+export const UploadIcon = (p: P) => (
+  <Icon {...p} d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+);

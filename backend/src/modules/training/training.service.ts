@@ -266,6 +266,112 @@ export class TrainingService {
     });
   }
 
+  /**
+   * Reenvia um treinamento `FAILED` com o mesmo conteúdo, no mesmo registro (não conta de novo
+   * no limite). A tentativa anterior é removida do GPTMaker, se chegou a existir lá. Documento
+   * reenviado usa o objeto já guardado no storage, com URL pré-assinada nova.
+   */
+  async retry(tenantId: string, agentId: string, id: string): Promise<TrainingView> {
+    const owner = await this.trainableAgent(tenantId, agentId);
+    return this.withAgentLock(owner.id, async () => {
+      const row = await this.getRow(owner, id);
+      if (row.status !== 'FAILED') {
+        throw new DomainError(
+          'TRAINING_NOT_FAILED',
+          'Só treinamentos com falha podem ser reenviados',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (row.type === 'DOCUMENT' && !row.documentKey) {
+        throw new DomainError(
+          'TRAINING_NOT_RETRYABLE',
+          'O arquivo deste documento não está guardado aqui; remova e envie o documento de novo',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      if (row.gptmakerTrainingId) {
+        const previous = row.gptmakerTrainingId;
+        await this.callGptMaker(async () => {
+          try {
+            await this.gptmaker.deleteTraining(previous);
+          } catch (error) {
+            if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
+          }
+        });
+      }
+      const callback = this.newCallback();
+      const remote = await this.remotePayloadOf(row, callback.url);
+      await this.db
+        .update(training)
+        .set({
+          status: 'PROCESSING',
+          error: null,
+          gptmakerTrainingId: null,
+          callbackTokenHash: callback.hash,
+        })
+        .where(eq(training.id, row.id));
+
+      let created: { id: string | null };
+      try {
+        created = await this.callGptMaker(() =>
+          this.gptmaker.createTraining(owner.gptmakerAgentId, remote),
+        );
+      } catch (error) {
+        await this.db
+          .update(training)
+          .set({ status: 'FAILED', error: 'O reenvio não chegou ao GPTMaker. Tente de novo' })
+          .where(eq(training.id, row.id));
+        throw error;
+      }
+
+      let gptmakerTrainingId: string | null = await this.unclaimed(created.id);
+      try {
+        gptmakerTrainingId ??= await this.findCreated(owner, row.type, matcherFor(row));
+      } catch (error) {
+        this.logger.warn(
+          { trainingId: row.id, err: error },
+          'reenvio sem id local; a sync completa',
+        );
+      }
+      const [updated] = await this.db
+        .update(training)
+        .set({ gptmakerTrainingId })
+        .where(eq(training.id, row.id))
+        .returning();
+      return toView(updated!);
+    });
+  }
+
+  /** Corpo de criação no GPTMaker a partir do registro local (reenvio). */
+  private async remotePayloadOf(
+    row: Training,
+    callbackUrl: string,
+  ): Promise<GptMakerCreateTraining> {
+    switch (row.type) {
+      case 'TEXT':
+        return { type: 'TEXT', text: row.content ?? '', callbackUrl };
+      case 'WEBSITE':
+        return {
+          type: 'WEBSITE',
+          website: row.url ?? '',
+          trainingSubPages: row.trainingSubPages ? 'ACTIVE' : 'DISABLED',
+          trainingInterval: (row.trainingInterval as TrainingInterval | null) ?? 'NEVER',
+          callbackUrl,
+        };
+      case 'VIDEO':
+        return { type: 'VIDEO', video: row.url ?? '', callbackUrl };
+      case 'DOCUMENT':
+        return {
+          type: 'DOCUMENT',
+          documentUrl: await this.storage.presignedUrl(row.documentKey!),
+          documentName: row.documentName ?? 'documento',
+          documentMimetype: row.documentMimetype ?? 'application/octet-stream',
+          callbackUrl,
+        };
+    }
+  }
+
   /** Treinamento não removido do agente (já conferido como do tenant); 404 caso contrário. */
   private async getRow(owner: Agent, id: string): Promise<Training> {
     const [row] = UUID.test(id)
@@ -436,16 +542,19 @@ export class TrainingService {
         .values({ ...local, tenantId: owner.tenantId, agentId: owner.id, status: 'PROCESSING' })
         .returning();
 
+      let created: { id: string | null };
       try {
-        await this.callGptMaker(() => this.gptmaker.createTraining(owner.gptmakerAgentId, remote));
+        created = await this.callGptMaker(() =>
+          this.gptmaker.createTraining(owner.gptmakerAgentId, remote),
+        );
       } catch (error) {
         await this.db.delete(training).where(eq(training.id, row!.id));
         throw error;
       }
 
-      let gptmakerTrainingId: string | null = null;
+      let gptmakerTrainingId: string | null = await this.unclaimed(created.id);
       try {
-        gptmakerTrainingId = await this.findCreated(owner, remote.type, matches);
+        gptmakerTrainingId ??= await this.findCreated(owner, remote.type, matches);
       } catch (error) {
         this.logger.warn(
           { trainingId: row!.id, err: error },
@@ -481,6 +590,16 @@ export class TrainingService {
     // Conteúdo repetido (dois textos iguais) dá no mesmo: qualquer um deles serve.
     if (matched.length > 0) return matched[0]!.id;
     return fresh.length === 1 ? fresh[0]!.id : null;
+  }
+
+  /** Id devolvido pela criação, se nenhum outro registro local já o usa. */
+  private async unclaimed(gptmakerTrainingId: string | null): Promise<string | null> {
+    if (!gptmakerTrainingId) return null;
+    const [taken] = await this.db
+      .select({ id: training.id })
+      .from(training)
+      .where(eq(training.gptmakerTrainingId, gptmakerTrainingId));
+    return taken ? null : gptmakerTrainingId;
   }
 
   /** Espera a vez em vez de recusar: vários uploads seguidos do mesmo agente são comuns. */

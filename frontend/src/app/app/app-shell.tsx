@@ -3,15 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
-import {
-  BoltIcon,
-  BookIcon,
-  BotIcon,
-  CloseIcon,
-  MenuIcon,
-  UsersIcon,
-  WalletIcon,
-} from '@/components/icons';
+import { BoltIcon, BotIcon, CloseIcon, MenuIcon, UsersIcon, WalletIcon } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Alert, Avatar } from '@/components/ui';
 import { useAppSession } from './session-provider';
@@ -34,8 +26,7 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         href: '/app',
         match: (path) => path === '/app' || path.startsWith('/app/agents'),
       },
-      // Seções seguintes do produto (8, 10 e 12); entram no menu quando existirem.
-      { label: 'Treinamentos', icon: BookIcon },
+      // Treinamentos ficam em cada agente (aba). Seções seguintes (10 e 12) entram quando existirem.
       { label: 'Gatilhos', icon: BoltIcon },
       { label: 'Créditos e plano', icon: WalletIcon },
     ],

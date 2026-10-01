@@ -236,6 +236,31 @@ describe('treinamentos dos agentes', () => {
     expect((await rows())[0]!.gptmakerTrainingId).toBe('tr-site');
   });
 
+  it('id devolvido pela criação é usado sem listar', async () => {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: TRAININGS_PATH },
+      response: { status: 200, jsonBody: { id: 'tr-direto', type: 'TEXT', text: 'Oi' } },
+    });
+
+    await service.create(tenantId, agentId, { type: 'TEXT', text: 'Oi' });
+
+    expect((await rows())[0]!.gptmakerTrainingId).toBe('tr-direto');
+    expect(await wiremock.count('GET', TRAININGS_PATH)).toBe(0);
+  });
+
+  it('corpo sem success (como na API real) não é erro', async () => {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: TRAININGS_PATH },
+      response: { status: 200, jsonBody: {} },
+    });
+    await stubList('TEXT', [{ id: 'tr-listado', text: 'Oi' }]);
+
+    const view = await service.create(tenantId, agentId, { type: 'TEXT', text: 'Oi' });
+
+    expect(view.status).toBe('PROCESSING');
+    expect((await rows())[0]!.gptmakerTrainingId).toBe('tr-listado');
+  });
+
   it('sem como identificar o criado: registro fica sem id para a sincronização', async () => {
     await stubCreate();
     await stubList('VIDEO', [
@@ -581,6 +606,95 @@ describe('treinamentos dos agentes', () => {
       await service.remove(tenantId, agentId, row.id);
       await expect(service.remove(tenantId, agentId, row.id)).rejects.toMatchObject({
         code: 'TRAINING_NOT_FOUND',
+      });
+    });
+  });
+
+  describe('reenvio', () => {
+    async function failed(values: Partial<typeof training.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(training)
+        .values({
+          tenantId,
+          agentId,
+          type: 'TEXT',
+          content: 'Trocas em 7 dias',
+          status: 'FAILED',
+          error: 'falhou',
+          gptmakerTrainingId: 'tr-velho',
+          callbackTokenHash: 'antigo',
+          ...values,
+        })
+        .returning();
+      return row!;
+    }
+    const stored = async (id: string) =>
+      (await db.select().from(training).where(eq(training.id, id)))[0]!;
+
+    it('remove a tentativa anterior e cria de novo no mesmo registro, com token novo', async () => {
+      await wiremock.stub({
+        request: { method: 'DELETE', urlPath: '/v2/training/tr-velho' },
+        response: { status: 200, jsonBody: { success: true } },
+      });
+      await stubCreate();
+      await stubList('TEXT', [{ id: 'tr-novo', text: 'Trocas em 7 dias' }]);
+      const row = await failed();
+
+      const view = await service.retry(tenantId, agentId, row.id);
+
+      expect(await wiremock.count('DELETE', '/v2/training/tr-velho')).toBe(1);
+      const [body] = await created();
+      expect(body).toMatchObject({ type: 'TEXT', text: 'Trocas em 7 dias' });
+      const token = new URL(body!.callbackUrl!).searchParams.get('t')!;
+      expect(view).toMatchObject({ id: row.id, status: 'PROCESSING', error: null });
+      expect(await stored(row.id)).toMatchObject({
+        gptmakerTrainingId: 'tr-novo',
+        callbackTokenHash: hashCallbackToken(token),
+      });
+      expect(await rows()).toHaveLength(1);
+    });
+
+    it('documento: URL pré-assinada nova do objeto guardado', async () => {
+      await stubCreate();
+      await stubList('DOCUMENT', []);
+      const row = await failed({
+        type: 'DOCUMENT',
+        content: null,
+        gptmakerTrainingId: null,
+        documentKey: 'trainings/x/a.pdf',
+        documentName: 'a.pdf',
+        documentMimetype: 'application/pdf',
+      });
+
+      await service.retry(tenantId, agentId, row.id);
+
+      expect((await created())[0]).toMatchObject({
+        documentUrl: 'https://storage.test/trainings/x/a.pdf?X-Amz-Signature=abc',
+        documentName: 'a.pdf',
+      });
+    });
+
+    it('falha no GPTMaker: volta a FAILED', async () => {
+      await stubCreate(500);
+      const row = await failed({ gptmakerTrainingId: null });
+      await expect(service.retry(tenantId, agentId, row.id)).rejects.toMatchObject({
+        code: 'GPTMAKER_UNAVAILABLE',
+      });
+      expect((await stored(row.id)).status).toBe('FAILED');
+    });
+
+    it('só reenvia com falha; documento sem arquivo guardado não reenvia', async () => {
+      const done = await failed({ status: 'DONE' });
+      await expect(service.retry(tenantId, agentId, done.id)).rejects.toMatchObject({
+        code: 'TRAINING_NOT_FAILED',
+      });
+      const imported = await failed({
+        type: 'DOCUMENT',
+        content: null,
+        gptmakerTrainingId: 'tr-x',
+      });
+      await expect(service.retry(tenantId, agentId, imported.id)).rejects.toMatchObject({
+        code: 'TRAINING_NOT_RETRYABLE',
       });
     });
   });
