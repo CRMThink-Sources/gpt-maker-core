@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { templateErrors } from './templates';
 
 /** Eventos do agente no GPTMaker que disparam gatilhos (grafia oficial, `onLackKnowLedge`). */
 export const agentEventSchema = z.enum([
@@ -27,11 +28,15 @@ export type TriggerActionType = z.infer<typeof triggerActionTypeSchema>;
 export const TRIGGER_MAX_ACTIONS = 10;
 export const TRIGGER_MAX_PER_AGENT = 50;
 
-/**
- * Texto que pode levar campos do evento (`{{contact.name}}`), resolvidos na execução (10.5).
- * Aqui só limita tamanho.
- */
-const template = z.string().trim().min(1).max(5_000);
+/** Texto que pode levar variáveis do evento (`{{contact.name}}`, ver `templates.ts`). */
+const template = z
+  .string()
+  .trim()
+  .min(1)
+  .max(5_000)
+  .superRefine((value, ctx) => {
+    for (const message of templateErrors(value)) ctx.addIssue({ code: 'custom', message });
+  });
 /** Campos do Bitrix (ex.: `TITLE`, `NAME`, `PHONE`) ⇒ template do valor. */
 const fieldMap = z
   .record(z.string().trim().min(1).max(100), template)
