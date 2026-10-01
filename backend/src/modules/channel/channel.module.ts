@@ -14,6 +14,7 @@ import { HumanAttendance } from './human-attendance';
 import { InboundConsumer } from './inbound.consumer';
 import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
+import { NoCreditHandler } from './no-credit.handler';
 import { ReplyPublisher } from './reply-publisher';
 
 /** Canal chatbot do Bitrix (spec bitrix-chatbot-channel). */
@@ -30,6 +31,7 @@ import { ReplyPublisher } from './reply-publisher';
     InboundGate,
     InboundConsumer,
     InboundRetry,
+    NoCreditHandler,
     ReplyPublisher,
   ],
   exports: [ChatbotService, InboundRetry],

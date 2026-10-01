@@ -20,8 +20,8 @@ export type GateDecision =
   | { kind: 'skip-inactive'; reason: 'agent' | 'tenant' }
   /** Operador atendendo o diálogo: o agente não responde. */
   | { kind: 'skip-human' }
-  /** Saldo total ≤ 0: não vai ao GPTMaker (tratamento na 9.7). */
-  | { kind: 'no-credit'; balance: number };
+  /** Saldo total ≤ 0: não vai ao GPTMaker; o bot avisa e transfere (`NoCreditHandler`). */
+  | { kind: 'no-credit'; balance: number; installationId: number };
 
 /**
  * Checagens do worker antes de encaminhar ao GPTMaker (design D5), nesta ordem: agente e portal
@@ -58,7 +58,9 @@ export class InboundGate {
     }
 
     const balance = await this.balance.total(message.tenantId);
-    if (balance <= 0) return { kind: 'no-credit', balance };
+    if (balance <= 0) {
+      return { kind: 'no-credit', balance, installationId: Number(row.installationId) };
+    }
     return {
       kind: 'forward',
       target: {

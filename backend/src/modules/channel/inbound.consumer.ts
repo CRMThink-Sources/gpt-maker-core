@@ -11,6 +11,7 @@ import { ConversationService, isPermanentConversationError } from './conversatio
 import { type GateDecision, InboundGate } from './inbound-gate';
 import type { InboundMessage } from './inbound-message';
 import { attemptOf, InboundRetry } from './inbound-retry';
+import { NoCreditHandler } from './no-credit.handler';
 import { ReplyPublisher } from './reply-publisher';
 
 /** Status do `message_log` das mensagens que o gate descarta. */
@@ -49,6 +50,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly retry: InboundRetry,
     private readonly conversation: ConversationService,
     private readonly replies: ReplyPublisher,
+    private readonly noCredit: NoCreditHandler,
     @Inject(DB) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -129,8 +131,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
         this.logger.log({ messageId: message.messageId, decision }, 'mensagem não encaminhada');
         return;
       case 'no-credit':
-        // Aviso no diálogo, transferência e `BLOCKED_NO_CREDIT`: tarefa 9.7.
-        this.logger.warn({ messageId: message.messageId, balance: decision.balance }, 'sem saldo');
+        await this.noCredit.handle(message, decision.installationId, attempt);
         return;
       case 'forward': {
         const reply = await this.conversation.ask(message, decision.target);

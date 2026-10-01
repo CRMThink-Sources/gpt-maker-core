@@ -16,6 +16,7 @@ import { InboundConsumer } from '../../src/modules/channel/inbound.consumer';
 import { InboundGate } from '../../src/modules/channel/inbound-gate';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
+import type { NoCreditHandler } from '../../src/modules/channel/no-credit.handler';
 import type { ReplyPublisher } from '../../src/modules/channel/reply-publisher';
 import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
@@ -218,8 +219,12 @@ describe('gate das mensagens do chatbot', () => {
     });
 
     it('sem linha de saldo ⇒ sem crédito', async () => {
-      const { message } = await scenario({ balance: null });
-      await expect(gate.check(message)).resolves.toEqual({ kind: 'no-credit', balance: 0 });
+      const { owner, message } = await scenario({ balance: null });
+      await expect(gate.check(message)).resolves.toEqual({
+        kind: 'no-credit',
+        balance: 0,
+        installationId: Number(owner.installationId),
+      });
     });
 
     it('soma as três carteiras', async () => {
@@ -312,8 +317,15 @@ describe('gate das mensagens do chatbot', () => {
         return 'sent';
       },
     } as unknown as ReplyPublisher;
+    const blocked: InboundMessage[] = [];
+    const noCredit = {
+      handle: async (message: InboundMessage) => {
+        blocked.push(message);
+        return 'notified';
+      },
+    } as unknown as NoCreditHandler;
     const consumerWith = (g: InboundGate) =>
-      new InboundConsumer({} as AmqpConnection, g, retry, conversation, replies, db, env);
+      new InboundConsumer({} as AmqpConnection, g, retry, conversation, replies, noCredit, db, env);
 
     const logOf = async (message: InboundMessage) =>
       db
@@ -331,6 +343,7 @@ describe('gate das mensagens do chatbot', () => {
       deadLettered.length = 0;
       asked.length = 0;
       published.length = 0;
+      blocked.length = 0;
       publishFails = false;
     });
 
@@ -351,15 +364,14 @@ describe('gate das mensagens do chatbot', () => {
       expect(await logOf(message)).toMatchObject([{ status: 'SKIPPED_HUMAN' }]);
     });
 
-    it('liberada vai ao GPTMaker; sem saldo não', async () => {
+    it('liberada vai ao GPTMaker; sem saldo vai ao aviso de falta de créditos', async () => {
       const ok = await scenario();
       const broke = await scenario({ balance: [0, 0, 0] });
       await consumerWith(gate).process(ok.message, 0);
       await consumerWith(gate).process(broke.message, 0);
-      expect(await logOf(ok.message)).toEqual([]);
-      expect(await logOf(broke.message)).toEqual([]);
       expect(asked.map((m) => m.messageId)).toEqual([ok.message.messageId]);
       expect(published.map((m) => m.messageId)).toEqual([ok.message.messageId]);
+      expect(blocked.map((m) => m.messageId)).toEqual([broke.message.messageId]);
     });
 
     it('falha no gate vai para a retentativa com a tentativa atual', async () => {
@@ -384,6 +396,7 @@ describe('gate das mensagens do chatbot', () => {
         retry,
         rejecting,
         replies,
+        noCredit,
         db,
         env,
       ).process(message, 0);
