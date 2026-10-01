@@ -1,4 +1,7 @@
-/** Marca do app: balão de conversa com faísca (IA) sobre gradiente da cor da marca. */
+/**
+ * Marca do app (ThinkFlow AI): um fluxo que sai de um ponto (o contato no canal) e chega numa
+ * faísca (a IA), sobre gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
+ */
 export function LogoMark({ className = 'size-8' }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
@@ -10,11 +13,17 @@ export function LogoMark({ className = 'size-8' }: { className?: string }) {
       </defs>
       <rect width="32" height="32" rx="8" fill="url(#logo-gradient)" />
       <path
-        d="M9 10.5A2.5 2.5 0 0 1 11.5 8h9A2.5 2.5 0 0 1 23 10.5v7a2.5 2.5 0 0 1-2.5 2.5H15l-4 3.5V20h.5A2.5 2.5 0 0 1 9 17.5Z"
-        fill="white"
-        fillOpacity=".95"
+        d="M12.3 23C16.3 23 14.8 13 18.3 13"
+        fill="none"
+        stroke="white"
+        strokeWidth="2.4"
+        strokeLinecap="round"
       />
-      <path d="M16 10.8l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9Z" fill="#7c3aed" />
+      <circle cx="7.8" cy="23" r="2.3" fill="white" />
+      <path
+        d="M23 6Q23.5 9.5 27 10Q23.5 10.5 23 14Q22.5 10.5 19 10Q22.5 9.5 23 6Z"
+        fill="white"
+      />
     </svg>
   );
 }
@@ -25,7 +34,7 @@ export function Logo({ subtitle = true }: { subtitle?: boolean }) {
       <LogoMark />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-tight text-zinc-900">
-          GPTMaker
+          Think<span className="text-brand-600">Flow</span>
         </span>
         {subtitle && <span className="block text-[11px] text-zinc-500">para Bitrix24</span>}
       </span>
