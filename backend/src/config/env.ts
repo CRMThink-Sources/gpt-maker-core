@@ -98,6 +98,12 @@ export const envSchema = z.object({
   /** Validade das URLs pré-assinadas; o máximo do SigV4 é 7 dias. */
   STORAGE_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(604_800).default(604_800),
 
+  /**
+   * Partições de `channel.inbound` (uma fila e um consumidor cada; ordem por diálogo). Mudar o
+   * número redistribui os diálogos entre as filas: só com as filas vazias.
+   */
+  CHANNEL_INBOUND_PARTITIONS: z.coerce.number().int().positive().max(64).default(4),
+
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),
   BITRIX_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),

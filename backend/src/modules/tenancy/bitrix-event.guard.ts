@@ -23,7 +23,15 @@ export class BitrixEventGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<BitrixEventRequest>();
-    const auth = (req.body as { auth?: Record<string, unknown> } | undefined)?.auth;
+    const body = req.body as
+      | { auth?: Record<string, unknown>; data?: { bot?: { auth?: Record<string, unknown> } } }
+      | undefined;
+    // Eventos `imbot.v2` trazem só `domain` e `application_token` no `auth` de cima; o portal
+    // vem em `data.bot.auth.member_id`. Ele só localiza o tenant: quem autentica é o token.
+    const auth = {
+      ...body?.auth,
+      member_id: body?.auth?.member_id ?? body?.data?.bot?.auth?.member_id,
+    };
     const check = await this.verifier.verify(auth);
     if (!check.ok) throw new UnauthorizedException('Evento não autenticado');
     req.bitrixTenant = check.tenant;
