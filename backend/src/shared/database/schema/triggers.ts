@@ -93,8 +93,14 @@ export const triggerAction = pgTable(
     secret: encryptedText('secret'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** Removida do gatilho na edição; fica para o histórico (`trigger_execution`). */
+    deletedAt: timestamptz('deleted_at'),
   },
-  (t) => [uniqueIndex('trigger_action_position_uq').on(t.triggerId, t.position)],
+  (t) => [
+    uniqueIndex('trigger_action_position_uq')
+      .on(t.triggerId, t.position)
+      .where(sql`${t.deletedAt} is null`),
+  ],
 );
 
 export const triggerExecutionStatus = pgEnum('trigger_execution_status', [

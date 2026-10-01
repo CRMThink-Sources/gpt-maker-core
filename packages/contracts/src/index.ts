@@ -4,3 +4,4 @@ export * from './health';
 export * from './models';
 export * from './platform';
 export * from './trainings';
+export * from './triggers';
