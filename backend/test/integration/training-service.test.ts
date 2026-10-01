@@ -392,6 +392,189 @@ describe('treinamentos dos agentes', () => {
     });
   });
 
+  describe('edição e remoção', () => {
+    const TRAINING_PATH = (id: string) => `/v2/training/${id}`;
+
+    async function existing(values: Partial<typeof training.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(training)
+        .values({
+          tenantId,
+          agentId,
+          type: 'TEXT',
+          content: 'Trocas em 7 dias',
+          gptmakerTrainingId: 'tr-1',
+          status: 'DONE',
+          ...values,
+        })
+        .returning();
+      return row!;
+    }
+
+    async function stubTraining(method: 'PUT' | 'DELETE', id: string, status = 200) {
+      await wiremock.stub({
+        request: { method, urlPath: TRAINING_PATH(id) },
+        response:
+          status === 200
+            ? { status, jsonBody: { success: true } }
+            : { status, jsonBody: { error: 'falhou' } },
+      });
+    }
+
+    const stored = async (id: string) =>
+      (await db.select().from(training).where(eq(training.id, id)))[0]!;
+
+    it('edita o texto no GPTMaker e localmente', async () => {
+      await stubTraining('PUT', 'tr-1');
+      const row = await existing();
+
+      const view = await service.updateText(tenantId, agentId, row.id, {
+        text: ' Trocas em 30 dias ',
+      });
+
+      expect(await wiremock.bodies('PUT', TRAINING_PATH('tr-1'))).toEqual([
+        { type: 'TEXT', text: 'Trocas em 30 dias' },
+      ]);
+      expect(view.text).toBe('Trocas em 30 dias');
+      expect((await stored(row.id)).content).toBe('Trocas em 30 dias');
+    });
+
+    it('texto igual ao atual não chama o GPTMaker', async () => {
+      await stubTraining('PUT', 'tr-1');
+      const row = await existing();
+      await service.updateText(tenantId, agentId, row.id, { text: 'Trocas em 7 dias' });
+      expect(await wiremock.count('PUT', TRAINING_PATH('tr-1'))).toBe(0);
+    });
+
+    it('só texto é editável', async () => {
+      const row = await existing({ type: 'WEBSITE', content: null, url: 'https://a.com' });
+      await expect(
+        service.updateText(tenantId, agentId, row.id, { text: 'x' }),
+      ).rejects.toMatchObject({ code: 'TRAINING_NOT_EDITABLE', status: 409 });
+    });
+
+    it('sem id do GPTMaker: acha pelo conteúdo e grava; sem achar, TRAINING_NOT_READY', async () => {
+      const row = await existing({ gptmakerTrainingId: null });
+      await stubList('TEXT', []);
+      await expect(
+        service.updateText(tenantId, agentId, row.id, { text: 'novo' }),
+      ).rejects.toMatchObject({ code: 'TRAINING_NOT_READY' });
+
+      await wiremock.reset();
+      await stubList('TEXT', [{ id: 'tr-achado', text: 'Trocas em 7 dias' }]);
+      await stubTraining('PUT', 'tr-achado');
+      await service.updateText(tenantId, agentId, row.id, { text: 'novo' });
+      expect(await stored(row.id)).toMatchObject({
+        gptmakerTrainingId: 'tr-achado',
+        content: 'novo',
+      });
+    });
+
+    it('falha no GPTMaker mantém o texto local', async () => {
+      await stubTraining('PUT', 'tr-1', 500);
+      const row = await existing();
+      await expect(
+        service.updateText(tenantId, agentId, row.id, { text: 'novo' }),
+      ).rejects.toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect((await stored(row.id)).content).toBe('Trocas em 7 dias');
+    });
+
+    it('remove no GPTMaker, marca removido e apaga o documento do storage', async () => {
+      await stubTraining('DELETE', 'tr-doc');
+      const key = `trainings/${tenantId}/doc.pdf`;
+      await storage.put({
+        key,
+        body: PDF,
+        contentType: 'application/pdf',
+        contentLength: PDF.length,
+        fileName: 'a.pdf',
+      });
+      const row = await existing({
+        type: 'DOCUMENT',
+        content: null,
+        gptmakerTrainingId: 'tr-doc',
+        documentKey: key,
+        documentName: 'a.pdf',
+      });
+
+      await service.remove(tenantId, agentId, row.id);
+
+      expect(await wiremock.count('DELETE', TRAINING_PATH('tr-doc'))).toBe(1);
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+      expect(storage.objects.has(key)).toBe(false);
+      expect(await service.list(tenantId, agentId)).toEqual([]);
+    });
+
+    it('já ausente no GPTMaker: remove só aqui', async () => {
+      await stubTraining('DELETE', 'tr-1', 404);
+      const row = await existing();
+      await service.remove(tenantId, agentId, row.id);
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('sem id e sem correspondente no GPTMaker: remove só aqui', async () => {
+      await stubList('TEXT', []);
+      const row = await existing({ gptmakerTrainingId: null });
+      await service.remove(tenantId, agentId, row.id);
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('falha no GPTMaker mantém o registro e o documento', async () => {
+      await stubTraining('DELETE', 'tr-1', 500);
+      const key = `trainings/${tenantId}/fica.pdf`;
+      await storage.put({
+        key,
+        body: PDF,
+        contentType: 'application/pdf',
+        contentLength: PDF.length,
+        fileName: 'a.pdf',
+      });
+      const row = await existing({ type: 'DOCUMENT', content: null, documentKey: key });
+
+      await expect(service.remove(tenantId, agentId, row.id)).rejects.toMatchObject({
+        code: 'GPTMAKER_UNAVAILABLE',
+      });
+      expect((await stored(row.id)).deletedAt).toBeNull();
+      expect(storage.objects.has(key)).toBe(true);
+    });
+
+    it('agente fora de sincronia: remove só aqui, sem chamar o GPTMaker', async () => {
+      const other = await newTenantAgent('OUT_OF_SYNC');
+      const [row] = await db
+        .insert(training)
+        .values({
+          tenantId: other.tenantId,
+          agentId: other.agentId,
+          type: 'TEXT',
+          content: 'x',
+          gptmakerTrainingId: 'tr-orfao',
+        })
+        .returning();
+
+      await service.remove(other.tenantId, other.agentId, row!.id);
+
+      expect((await stored(row!.id)).deletedAt).toBeInstanceOf(Date);
+      expect(await wiremock.count('DELETE', TRAINING_PATH('tr-orfao'))).toBe(0);
+    });
+
+    it('treinamento de outro agente, removido ou id inválido: 404', async () => {
+      await stubTraining('DELETE', 'tr-1');
+      const row = await existing();
+      const other = await newTenantAgent('OUT_OF_SYNC');
+
+      await expect(service.remove(other.tenantId, other.agentId, row.id)).rejects.toMatchObject({
+        code: 'TRAINING_NOT_FOUND',
+      });
+      await expect(service.remove(tenantId, agentId, 'nao-e-uuid')).rejects.toMatchObject({
+        code: 'TRAINING_NOT_FOUND',
+      });
+      await service.remove(tenantId, agentId, row.id);
+      await expect(service.remove(tenantId, agentId, row.id)).rejects.toMatchObject({
+        code: 'TRAINING_NOT_FOUND',
+      });
+    });
+  });
+
   it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
     await stubCreate();
     const other = await newTenantAgent('OUT_OF_SYNC');

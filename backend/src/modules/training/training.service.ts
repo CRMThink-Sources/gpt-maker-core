@@ -8,6 +8,8 @@ import {
   TRAINING_DOCUMENT_TYPES,
   type TrainingInterval,
   type TrainingView,
+  type UpdateTrainingInput,
+  updateTrainingSchema,
 } from '@gptmaker/contracts';
 import { and, asc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import type Redis from 'ioredis';
@@ -43,6 +45,7 @@ const LOCK_TTL_MS = 120_000;
 const LOCK_WAIT_MS = 30_000;
 const LIST_PAGE_SIZE = 100;
 const LIST_MAX_PAGES = 20;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Treinamentos dos agentes do tenant (spec agent-training). O registro local nasce `PROCESSING`
@@ -171,6 +174,115 @@ export class TrainingService {
       await this.discardObject(key);
       throw error;
     }
+  }
+
+  /**
+   * Edita o texto de um treinamento `TEXT` (o GPTMaker só edita esse tipo). O GPTMaker é
+   * atualizado antes do registro local; texto igual ao atual não chama nada.
+   */
+  async updateText(
+    tenantId: string,
+    agentId: string,
+    id: string,
+    raw: UpdateTrainingInput,
+  ): Promise<TrainingView> {
+    const input = updateTrainingSchema.parse(raw);
+    const owner = await this.trainableAgent(tenantId, agentId);
+    return this.withAgentLock(owner.id, async () => {
+      const row = await this.getRow(owner, id);
+      if (row.type !== 'TEXT') {
+        throw new DomainError(
+          'TRAINING_NOT_EDITABLE',
+          'Só treinamentos de texto podem ser editados; remova este e crie outro',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (row.content === input.text) return toView(row);
+
+      const remoteId = await this.remoteIdOf(owner, row);
+      if (!remoteId) {
+        throw new DomainError(
+          'TRAINING_NOT_READY',
+          'O treinamento ainda está sendo registrado no GPTMaker; tente de novo em instantes',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.callGptMaker(() =>
+        this.gptmaker.updateTextTraining(remoteId, { text: input.text }),
+      );
+      const [updated] = await this.db
+        .update(training)
+        .set({ content: input.text, gptmakerTrainingId: remoteId })
+        .where(eq(training.id, row.id))
+        .returning();
+      return toView(updated!);
+    });
+  }
+
+  /**
+   * Remove no GPTMaker e marca o registro local como removido; o documento sai do storage. Já
+   * ausente no GPTMaker (ou agente fora de sincronia, sem treinamentos lá) só remove aqui.
+   */
+  async remove(tenantId: string, agentId: string, id: string): Promise<void> {
+    const owner = await this.agents.getById(tenantId, agentId);
+    await this.withAgentLock(owner.id, async () => {
+      const row = await this.getRow(owner, id);
+      if (owner.status !== 'OUT_OF_SYNC') {
+        const remoteId = await this.remoteIdOf(owner, row);
+        if (remoteId) {
+          await this.callGptMaker(async () => {
+            try {
+              await this.gptmaker.deleteTraining(remoteId);
+            } catch (error) {
+              if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
+            }
+          });
+        }
+      }
+      await this.db.update(training).set({ deletedAt: new Date() }).where(eq(training.id, row.id));
+      if (row.documentKey) await this.discardObject(row.documentKey);
+    });
+  }
+
+  /** Treinamento não removido do agente (já conferido como do tenant); 404 caso contrário. */
+  private async getRow(owner: Agent, id: string): Promise<Training> {
+    const [row] = UUID.test(id)
+      ? await this.db
+          .select()
+          .from(training)
+          .where(
+            and(
+              eq(training.id, id),
+              eq(training.tenantId, owner.tenantId),
+              eq(training.agentId, owner.id),
+              isNull(training.deletedAt),
+            ),
+          )
+      : [];
+    if (!row) {
+      throw new DomainError(
+        'TRAINING_NOT_FOUND',
+        'Treinamento não encontrado',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return row;
+  }
+
+  /**
+   * Id do GPTMaker; se a criação não conseguiu identificá-lo, tenta de novo pelo conteúdo e o
+   * grava. `null` se ainda não aparece na listagem do GPTMaker.
+   */
+  private async remoteIdOf(owner: Agent, row: Training): Promise<string | null> {
+    if (row.gptmakerTrainingId) return row.gptmakerTrainingId;
+    const found = await this.callGptMaker(() => this.findCreated(owner, row.type, matcherFor(row)));
+    if (found) {
+      await this.db
+        .update(training)
+        .set({ gptmakerTrainingId: found })
+        .where(eq(training.id, row.id));
+    }
+    return found;
   }
 
   /**
@@ -378,6 +490,20 @@ export class TrainingService {
 
 export function hashCallbackToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/** Como reconhecer o treinamento local na listagem do GPTMaker. */
+function matcherFor(row: Training): (candidate: GptMakerTraining) => boolean {
+  switch (row.type) {
+    case 'TEXT':
+      return (candidate) => candidate.text?.trim() === row.content;
+    case 'WEBSITE':
+      return (candidate) => row.url !== null && sameUrl(candidate.website, row.url);
+    case 'VIDEO':
+      return (candidate) => row.url !== null && sameUrl(candidate.video, row.url);
+    case 'DOCUMENT':
+      return (candidate) => candidate.documentName === row.documentName;
+  }
 }
 
 /** Corpo do callback para o log, cortado para não inflar a linha. */

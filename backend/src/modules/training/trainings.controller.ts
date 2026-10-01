@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -12,12 +15,15 @@ import {
   type CreateTrainingInput,
   createTrainingSchema,
   type TrainingView,
+  updateTrainingSchema,
 } from '@gptmaker/contracts';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { DocumentUploadInterceptor } from './document-upload.interceptor';
 import { TrainingService } from './training.service';
+
+class UpdateTrainingDto extends createZodDto(updateTrainingSchema) {}
 
 /** Treinamentos de um agente do tenant da sessão (spec agent-training). */
 @Controller('app/agents/:agentId/trainings')
@@ -65,5 +71,28 @@ export class TrainingsController {
       originalName: file.originalname,
       buffer: file.buffer,
     });
+  }
+
+  /** Só treinamentos de texto. */
+  @Patch(':id')
+  @AppAuth('manage')
+  update(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateTrainingDto,
+  ): Promise<TrainingView> {
+    return this.trainings.updateText(session.tenantId, agentId, id, body);
+  }
+
+  @Delete(':id')
+  @AppAuth('manage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.trainings.remove(session.tenantId, agentId, id);
   }
 }

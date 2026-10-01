@@ -37,6 +37,10 @@ export const createTrainingSchema = z.discriminatedUnion('type', [
 ]);
 export type CreateTrainingInput = z.input<typeof createTrainingSchema>;
 
+/** Só treinamentos de texto são editáveis; os demais são removidos e criados de novo. */
+export const updateTrainingSchema = z.object({ text: z.string().trim().min(1).max(50_000) });
+export type UpdateTrainingInput = z.input<typeof updateTrainingSchema>;
+
 /**
  * Documentos aceitos, por extensão. O GPTMaker não documenta formatos nem tamanho; a lista cobre
  * os formatos de texto comuns e deve ser confirmada em staging.
