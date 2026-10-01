@@ -11,6 +11,11 @@ export const EXCHANGES = {
   channelDeadLetter: 'channel.dlx',
   /** Consumo do agente (design D5/D8), roteado pelo tipo: `usage.response` por resposta entregue. */
   usageEvents: 'usage.events',
+  /**
+   * Webhooks do GPTMaker gravados em `agent_event` (design D12), roteados pelo nome do evento
+   * (`onTransfer`, `onNewMessage`...): gatilhos (10.7) e transferência para humano (9.8).
+   */
+  triggersEvents: 'triggers.events',
 } as const;
 
 export const QUEUES = {
@@ -22,6 +27,8 @@ export const QUEUES = {
    * exchange descartaria os eventos publicados antes do billing existir.
    */
   usageResponse: 'billing.usage-response',
+  /** Todos os eventos de `triggers.events` para a avaliação dos gatilhos (consumidor na 10.7). */
+  triggerEvaluation: 'triggers.evaluation',
 } as const;
 
 /** Routing keys de `usage.events`. */

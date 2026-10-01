@@ -101,8 +101,8 @@
 ## 10. Webhooks e gatilhos (agent-triggers)
 
 - [ ] 10.1 Confirmar payload real dos webhooks GPTMaker (capturar exemplos em staging) e documentar em `docs/` (~4h)
-- [ ] 10.2 Token por agente (hash) e configuração de webhooks via `PUT /agents/{id}/webhooks` (~4h)
-- [ ] 10.3 Endpoint `/gptmaker/webhooks/{event}`: validar token, gravar `agent_event`, publicar em `triggers.events` (~5h)
+- [x] 10.2 Token por agente (hash) e configuração de webhooks via `PUT /agents/{id}/webhooks` (~4h) — na criação do agente (7.x): token aleatório, só o SHA-256 no banco (`agent.webhook_token_hash`), os 8 eventos em `API_PUBLIC_URL/gptmaker/webhooks/{event}?t={token}` (`webhookUrlsFor`). `AgentWebhooksSync` no worker (ao subir e a cada 15 min, lotes de 100 com cursor no Redis): `GET /agent/{id}/webhooks` de cada agente que existe no GPTMaker; endereço diferente do `API_PUBLIC_URL` atual (túnel novo, domínio novo), evento faltando ou token cujo hash não é o do banco ⇒ token novo, `PUT` e o hash novo (o token em claro nunca é guardado, então corrigir sempre troca o token)
+- [x] 10.3 Endpoint `/gptmaker/webhooks/{event}`: validar token, gravar `agent_event`, publicar em `triggers.events` (~5h) — `POST /gptmaker/webhooks/:event?t=` (módulo `triggers`): evento fora dos 8 ⇒ 404; token sem agente ⇒ 401 com log de segurança; grava o corpo inteiro em `agent_event` (JSON/form como objeto; outro formato como `{ raw, contentType }`, contrato ainda não documentado), com o `dialogId` quando algum campo `*context*` traz o `contextId` do app (`tenantId:dialogId`); publica `{ agentEventId, tenantId, agentId, event, dialogId }` em `triggers.events` com o nome do evento como routing key. Fila `triggers.evaluation` (`#`) declarada para os gatilhos (10.7); a 9.8 liga a sua em `onTransfer`
 - [ ] 10.4 CRUD de gatilhos (evento → ações), ativar/desativar (~6h)
 - [ ] 10.5 Motor de templates de mapeamento de campos (~8h)
 - [ ] 10.6 Ações: lead, negócio (funil/etapa), comentário na timeline, tarefa, business process, webhook de saída HMAC (~16h)

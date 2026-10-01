@@ -8,6 +8,7 @@ import { AgentEvents } from './agent-events';
 import { AgentLifecycleListener } from './agent-lifecycle.listener';
 import { AgentRepository } from './agent.repository';
 import { AgentService } from './agent.service';
+import { AgentWebhooksSync } from './agent-webhooks.sync';
 import { AgentsController, AppModelsController } from './agents.controller';
 
 @Module({
@@ -19,6 +20,7 @@ import { AgentsController, AppModelsController } from './agents.controller';
     AgentLifecycleListener,
     AgentRepository,
     AgentService,
+    AgentWebhooksSync,
   ],
   exports: [AgentEvents, AgentRepository, AgentService],
 })

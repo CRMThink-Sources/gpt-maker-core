@@ -75,6 +75,7 @@ function channelTopology(env: Env) {
           exchanges: [
             { name: EXCHANGES.paymentsEvents, type: 'topic' },
             { name: EXCHANGES.usageEvents, type: 'topic' },
+            { name: EXCHANGES.triggersEvents, type: 'topic' },
             ...channel.exchanges,
           ],
           queues: [
@@ -85,6 +86,13 @@ function channelTopology(env: Env) {
               options: { durable: true },
               exchange: EXCHANGES.usageEvents,
               routingKey: USAGE_EVENTS.response,
+            },
+            {
+              name: QUEUES.triggerEvaluation,
+              createQueueIfNotExists: true,
+              options: { durable: true },
+              exchange: EXCHANGES.triggersEvents,
+              routingKey: '#',
             },
           ],
           channels: { [AMQP_CHANNELS.channelInbound]: { prefetchCount: 1 } },

@@ -377,7 +377,10 @@ export class AgentService {
         this.gptmaker.updateAgentSettings(remote.id, { prefferModel: model.code }),
       );
       await this.callGptMaker(() =>
-        this.gptmaker.updateWebhooks(remote.id, this.webhookUrls(webhookToken)),
+        this.gptmaker.updateWebhooks(
+          remote.id,
+          webhookUrlsFor(this.env.API_PUBLIC_URL, webhookToken),
+        ),
       );
       return await this.mirrored(owner.tenantId, (tx) =>
         this.agents.insert(
@@ -440,16 +443,6 @@ export class AgentService {
     return row?.planId ?? null;
   }
 
-  private webhookUrls(token: string): GptMakerWebhooks {
-    const base = this.env.API_PUBLIC_URL;
-    return Object.fromEntries(
-      WEBHOOK_EVENTS.map((event) => [
-        event,
-        `${base}/gptmaker/webhooks/${event}?t=${encodeURIComponent(token)}`,
-      ]),
-    );
-  }
-
   /** Desfaz a criação remota; se falhar, o `workspace-sync` acha o órfão pelo prefixo do nome. */
   private async discardRemote(gptmakerAgentId: string): Promise<void> {
     try {
@@ -499,6 +492,16 @@ export class AgentService {
 
 export function hashWebhookToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/** URLs dos 8 webhooks do agente nesta API, com o token do agente em `?t=`. */
+export function webhookUrlsFor(base: string, token: string): GptMakerWebhooks {
+  return Object.fromEntries(
+    WEBHOOK_EVENTS.map((event) => [
+      event,
+      `${base}/gptmaker/webhooks/${event}?t=${encodeURIComponent(token)}`,
+    ]),
+  );
 }
 
 /** `undefined` mantém o valor atual; `null` limpa. */
