@@ -8,10 +8,18 @@ const TENANT = '3a228374-7415-4001-8a30-fe1e64ac2755';
 describe('webhooks do GPTMaker', () => {
   it.each([
     ['contextId na raiz', { contextId: `${TENANT}:chat9498` }, 'chat9498'],
+    // Formato real do GPTMaker (capturado em 2026-10-01): prefixo no contextId, original no recipient.
+    [
+      'contextId prefixado pelo GPTMaker',
+      { contextId: `public-api-3F9F6B34D51C3001EC4CF21B1B1775F5-${TENANT}:chat9498` },
+      'chat9498',
+    ],
+    ['recipient', { recipient: `${TENANT}:chat9498` }, 'chat9498'],
     ['um nível abaixo', { chat: { contextId: `${TENANT}:chat1` } }, 'chat1'],
     ['outro nome com context', { context_id: `${TENANT}:chat2` }, 'chat2'],
     ['de outro tenant', { contextId: 'outro:chat3' }, null],
     ['sem contextId', { message: 'oi' }, null],
+    ['tenant em campo que não é de contexto', { message: `${TENANT}:chat5` }, null],
     ['payload não objeto', 'texto', null],
     ['fundo demais', { a: { b: { contextId: `${TENANT}:chat4` } } }, null],
   ])('diálogo: %s', (_name, payload, expected) => {

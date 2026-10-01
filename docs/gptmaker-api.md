@@ -375,7 +375,53 @@ Os 8 nomes do rascunho estão todos confirmados com a grafia exata acima.
 
 ### 5.4 Payload enviado pelo GPTMaker
 
-**NÃO DOCUMENTADO** para todos os 8 eventos: a documentação não descreve corpo, headers, método HTTP, assinatura/HMAC, política de retry nem timeout das chamadas de webhook. Isso vale também para os callbacks `callbackUrl`/`onFinishCallback` da conversa (§6) e `callbackUrl` de treinamento (§4.2). Será necessário capturar payloads reais (ex. webhook.site) antes de tipá-los. Schemas relacionados que podem servir de pista (não confirmados como payload de webhook): `Message`, `Chat`, `Interaction` no OpenAPI (ver Apêndice A).
+**NÃO DOCUMENTADO** na documentação oficial para os 8 eventos: corpo, headers, método HTTP, assinatura/HMAC, política de retry e timeout. Isso vale também para os callbacks `callbackUrl`/`onFinishCallback` da conversa (§6) e `callbackUrl` de treinamento (§4.2). Schemas que podem servir de pista: `Message`, `Chat`, `Interaction` no OpenAPI (ver Apêndice A).
+
+#### 5.4.1 Payloads observados (capturados em 2026-10-01, conversa pela API, `channel: "API"`)
+
+Capturados pelo endpoint `/gptmaker/webhooks/{event}` do app (gravados em `agent_event`). Chegam por `POST` com corpo JSON. Valores de ids e nomes trocados por exemplos.
+
+`onFirstInteraction` e `onStartInteraction` (mesmo corpo; os dois chegaram juntos no primeiro atendimento do diálogo):
+
+```json
+{
+  "name": "Maria",
+  "agentId": "<id do agente>",
+  "channel": "API",
+  "protocol": 1005,
+  "channelId": "<id do canal>",
+  "contextId": "public-api-<id do agente>-<tenantId>:chat9498",
+  "recipient": "<tenantId>:chat9498",
+  "interactionId": "<id do atendimento>"
+}
+```
+
+`onNewMessage` (um por mensagem, do cliente e do agente; `role` distingue):
+
+```json
+{
+  "date": "2026-10-01T17:26:53.388+00:00",
+  "role": "user",
+  "audios": [],
+  "images": [],
+  "channel": "API",
+  "message": "Boa tarde",
+  "contextId": "public-api-<id do agente>-<tenantId>:chat9498",
+  "documents": [],
+  "messageId": "<id da mensagem>",
+  "assistantId": "<id do agente>",
+  "contactName": "Maria",
+  "contactPhone": null
+}
+```
+
+Observações:
+
+- **`contextId` vem prefixado** pelo GPTMaker: `public-api-<agentId>-` + o `contextId` que o app mandou na conversa (§6). O valor original só aparece em `recipient`, e só nos eventos de atendimento (`onFirstInteraction`, `onStartInteraction`). O app tira o diálogo do Bitrix do que vem depois de `<tenantId>:`, em `contextId` ou `recipient`.
+- `onNewMessage` chega também para as respostas do agente (`role: "assistant"`), poucos segundos depois da mensagem do cliente.
+- O corpo do `onNewMessage` usa `assistantId`; o dos atendimentos, `agentId`.
+- O `contextId` prefixado é o id do chat no GPTMaker: é o `id` que `GET /workspace/{id}/chats` devolve para esse diálogo (§7). O `interactionId` identifica o atendimento.
+- **Não capturados** (não dispararam no teste): `onTransfer` (pedir humano só gerou `onNewMessage`; provavelmente exige transferência configurada no agente), `onLackKnowLedge`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`. Headers, assinatura e retries também seguem sem confirmação.
 
 ---
 
@@ -439,7 +485,7 @@ Observações:
 - Campo `email`: **NÃO DOCUMENTADO** (não existe no schema).
 - Resposta quando `callbackUrl` é informado (chamada assíncrona): corpo da resposta imediata e payload enviado ao callback **NÃO DOCUMENTADOS**.
 - Comportamento quando o chat está sob controle humano (§7), agente inativo ou sem créditos: **NÃO DOCUMENTADO**.
-- Relação `contextId` ↔ `chatId`: o schema `Interaction` descreve `chatId` como "Id do chat/contextId", sugerindo que o `contextId` enviado aqui vira o `chatId` usado em §7. Não há afirmação explícita além disso.
+- Relação `contextId` ↔ `chatId`: `chatId = public-api-<agentId>-<contextId>` (observado; ver §7).
 
 Endpoint relacionado (fora do rascunho, útil para disparos ativos): **`POST /v2/agent/{agentId}/add-message`** — adiciona mensagem ao contexto sem gerar resposta; campos `contextId` (obrigatório), `prompt`, `image`/`audio`/`video`/`document`, `role` (`"user"` ou `"assistant"`, default `"assistant"`). Fonte: https://developer.gptmaker.ai/api-reference/agents/add-context
 
@@ -462,6 +508,8 @@ Endpoint relacionado (fora do rascunho, útil para disparos ativos): **`POST /v2
 - Resposta `200`: `{ "success": boolean }`.
 
 O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, retornado por `GET /v2/workspace/{workspaceId}/chats` (https://developer.gptmaker.ai/api-reference/chats/list-chats).
+
+**`chatId` de uma conversa pela API (observado em 2026-10-01):** `public-api-<agentId>-<contextId>`, onde `<contextId>` é o valor mandado em `/conversation` (§6). A listagem de chats devolve esse `id`, com o `contextId` original em `recipient` e `type: "API"`; é o mesmo valor que chega como `contextId` nos webhooks (§5.4.1). O app calcula o `chatId` sem consultar a listagem. Ainda não testado: `start-human`/`stop-human` com esse id.
 
 ---
 
@@ -545,7 +593,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 
 ### Não documentado (precisa de validação empírica)
 
-1. Payload, headers, método, assinatura e retries de **todos** os webhooks (8 eventos do agente, `callbackUrl`/`onFinishCallback` da conversa, `callbackUrl` de treinamento).
+1. Payload, headers, método, assinatura e retries dos webhooks. Capturados `onFirstInteraction`, `onStartInteraction` e `onNewMessage` (§5.4.1); faltam `onTransfer`, `onLackKnowLedge`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`, os callbacks da conversa e o `callbackUrl` de treinamento, além de headers, assinatura e retries de todos.
 2. Resposta imediata da conversa quando `callbackUrl` é informado (modo assíncrono).
 3. Rate limits (`429`, headers, cotas).
 4. Paginação: base de `page`, padrão/máximo de `pageSize`, ausência de total.

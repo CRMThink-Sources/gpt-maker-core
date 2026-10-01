@@ -87,16 +87,18 @@ export class AgentEventIntake {
 
 /**
  * O app conversa com `contextId = tenantId:dialogId` (9.5); se o payload trouxer esse valor em
- * algum campo `*context*` (raiz ou um nível abaixo), dá o diálogo do Bitrix.
+ * algum campo `*context*` ou `recipient` (raiz ou um nível abaixo), dá o diálogo do Bitrix. O
+ * GPTMaker prefixa o `contextId` (`public-api-<agentId>-tenantId:dialogId`); o `recipient`
+ * traz o valor original. Por isso o diálogo é o que vem depois de `tenantId:`, onde estiver.
  */
 export function dialogIdFrom(payload: unknown, tenantId: string): string | null {
-  const prefix = `${tenantId}:`;
+  const marker = `${tenantId}:`;
   const visit = (value: unknown, depth: number): string | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     for (const [key, item] of Object.entries(value)) {
-      if (/context/i.test(key) && typeof item === 'string' && item.startsWith(prefix)) {
-        return item.slice(prefix.length) || null;
-      }
+      if (!/context|recipient/i.test(key) || typeof item !== 'string') continue;
+      const at = item.indexOf(marker);
+      if (at >= 0) return item.slice(at + marker.length) || null;
     }
     if (depth > 0) {
       for (const item of Object.values(value)) {
