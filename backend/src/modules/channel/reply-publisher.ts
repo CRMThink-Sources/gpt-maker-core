@@ -6,6 +6,7 @@ import { DB, type Database } from '../../shared/database/database.module';
 import { messageLog } from '../../shared/database/schema/index';
 import { EXCHANGES, USAGE_EVENTS } from '../../shared/messaging/topology';
 import { REDIS } from '../../shared/redis/redis.module';
+import type { UsageResponseEvent } from '../billing';
 import { BitrixClient } from '../bitrix';
 import type { GptMakerConversationResponse } from '../gptmaker';
 import type { ForwardTarget } from './inbound-gate';
@@ -18,22 +19,6 @@ const SENT_TTL_SECONDS = 24 * 60 * 60;
 
 export function sentMarkerKey(message: InboundMessage): string {
   return `channel:sent:${messageIdOf(message)}`;
-}
-
-/**
- * `usage.response`: uma resposta do agente entregue ao cliente (design D5). O billing (11.4)
- * lança o `DEBIT` com o custo vigente do `modelCode`, idempotente por `messageId`.
- */
-export interface UsageResponseEvent {
-  /** Mensagem do cliente respondida: `tenantId:botId:messageId` (chave da idempotência). */
-  messageId: string;
-  tenantId: string;
-  agentId: string;
-  dialogId: string;
-  modelCode: string;
-  /** Id da resposta no Bitrix. */
-  replyMessageId: number;
-  respondedAt: string;
 }
 
 export type PublishOutcome = 'sent' | 'already-sent' | 'empty';

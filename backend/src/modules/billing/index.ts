@@ -10,3 +10,4 @@ export {
   splitOutflow,
   type Wallet,
 } from './ledger.service';
+export { type UsageResponseEvent } from './usage-debit.consumer';

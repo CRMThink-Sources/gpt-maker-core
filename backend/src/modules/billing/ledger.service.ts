@@ -179,7 +179,9 @@ export class LedgerService {
   }
 
   /** `REFUND`: saída de uma carteira específica (estorno), limitada ao saldo positivo dela. */
-  async refund(input: OperationInput & { wallet: Wallet; amount: number }): Promise<OperationResult> {
+  async refund(
+    input: OperationInput & { wallet: Wallet; amount: number },
+  ): Promise<OperationResult> {
     if (!Number.isInteger(input.amount) || input.amount <= 0) throw invalidAmount();
     return this.operate(input, (balance) => {
       const current = { TRIAL: balance.trial, PLAN: balance.plan, EXTRA: balance.extra }[

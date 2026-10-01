@@ -11,11 +11,8 @@ import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
 import { BitrixError } from '../../src/modules/bitrix/bitrix.errors';
 import { isPermanentProcessingError } from '../../src/modules/channel/inbound.consumer';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
-import {
-  ReplyPublisher,
-  sentMarkerKey,
-  type UsageResponseEvent,
-} from '../../src/modules/channel/reply-publisher';
+import type { UsageResponseEvent } from '../../src/modules/billing/usage-debit.consumer';
+import { ReplyPublisher, sentMarkerKey } from '../../src/modules/channel/reply-publisher';
 import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
