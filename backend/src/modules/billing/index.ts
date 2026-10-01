@@ -11,3 +11,4 @@ export {
   type Wallet,
 } from './ledger.service';
 export { type UsageResponseEvent } from './usage-debit.consumer';
+export { CreditCycleService, TRIAL_CREDITS } from './credit-cycle.service';

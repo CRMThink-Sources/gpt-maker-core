@@ -20,6 +20,8 @@ export const EXCHANGES = {
 
 export const QUEUES = {
   installationEvents: 'payments.installation-events',
+  /** `subscription.*` e `purchase.*` de `payments.events` (12.3). */
+  subscriptionEvents: 'payments.subscription-events',
   /** DLQ de `channel.inbound`: inspeção manual, nunca reprocessada sozinha. */
   channelDeadLetter: 'channel.inbound.dlq',
   /**
