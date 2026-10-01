@@ -7,7 +7,9 @@ import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
+import { DeliveryFailureHandler } from '../../src/modules/channel/delivery-failure.handler';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
+import { sentMarkerKey } from '../../src/modules/channel/reply-publisher';
 import {
   NO_CREDIT_NOTICE,
   NoCreditHandler,
@@ -22,8 +24,9 @@ const { agent, aiModel, messageLog, tenant } = schema;
 const SEND = '/rest/imbot.v2.Chat.Message.send.json';
 const OPERATOR = '/rest/imopenlines.bot.session.operator.json';
 
-// Tenant sem saldo (spec bitrix-chatbot-channel: saldo insuficiente), WireMock no papel do portal.
-describe('mensagem de tenant sem créditos', () => {
+// Saldo insuficiente e tentativas esgotadas (spec bitrix-chatbot-channel): o diálogo vai para um
+// operador, sem débito. WireMock no papel do portal.
+describe('mensagem que o agente não responde', () => {
   let postgres: StartedPostgreSqlContainer;
   let redisContainer: StartedRedisContainer;
   let wiremock: WireMock;
@@ -31,6 +34,7 @@ describe('mensagem de tenant sem créditos', () => {
   let db: NodePgDatabase<typeof schema>;
   let redis: Redis;
   let handler: NoCreditHandler;
+  let failures: DeliveryFailureHandler;
   let tenantId: string;
   let agentId: string;
 
@@ -114,6 +118,7 @@ describe('mensagem de tenant sem créditos', () => {
       { timeoutMs: 5000, maxAttempts: 1, acquire: async () => {} },
     );
     handler = new NoCreditHandler(bitrix, db, redis);
+    failures = new DeliveryFailureHandler(bitrix, db, redis);
 
     const code = randomBytes(3).toString('hex');
     const [owner] = await db
@@ -200,5 +205,42 @@ describe('mensagem de tenant sem créditos', () => {
     const inbound = message();
     await expect(handler.handle(inbound, 77, 0)).resolves.toBe('notified');
     expect(await redis.get(noCreditMarkerKey(inbound))).toBe('transferred');
+  });
+  describe('mensagem na DLQ', () => {
+    it('registra FAILED com o motivo e transfere o diálogo ao operador', async () => {
+      await stubPortal();
+      const inbound = message('chat321');
+      await expect(failures.handle(inbound, 4, new Error('GPTMaker fora do ar'))).resolves.toBe(
+        'transferred',
+      );
+      expect(await wiremock.bodies('POST', OPERATOR)).toMatchObject([{ CHAT_ID: 321 }]);
+      expect(await wiremock.count('POST', SEND)).toBe(0);
+      expect(await logOf(inbound)).toMatchObject([
+        { status: 'FAILED', attempts: 4, error: 'GPTMaker fora do ar' },
+      ]);
+    });
+
+    it('resposta já entregue (falha depois do envio): não transfere', async () => {
+      await stubPortal();
+      const inbound = message();
+      await redis.set(sentMarkerKey(inbound), '5001');
+      await expect(failures.handle(inbound, 4, new Error('rabbit fora'))).resolves.toBe(
+        'already-answered',
+      );
+      expect(await wiremock.count('POST', OPERATOR)).toBe(0);
+    });
+
+    it('já registrada como bloqueada: mantém o registro anterior', async () => {
+      await stubPortal();
+      const inbound = message();
+      await handler.handle(inbound, 77, 0);
+      await failures.handle(inbound, 4, new Error('x'));
+      expect(await logOf(inbound)).toMatchObject([{ status: 'BLOCKED_NO_CREDIT' }]);
+    });
+
+    it('transferência recusada: só o log, sem erro (a mensagem já está na DLQ)', async () => {
+      await stubPortal({ operator: bitrixError('WRONG_CHAT') });
+      await expect(failures.handle(message(), 4, new Error('x'))).resolves.toBe('transfer-failed');
+    });
   });
 });

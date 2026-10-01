@@ -14,6 +14,7 @@ import { HumanAttendance } from './human-attendance';
 import { InboundConsumer } from './inbound.consumer';
 import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
+import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
 import { ReplyPublisher } from './reply-publisher';
 
@@ -27,6 +28,7 @@ import { ReplyPublisher } from './reply-publisher';
     BotEventsService,
     ChatMedia,
     ConversationService,
+    DeliveryFailureHandler,
     HumanAttendance,
     InboundGate,
     InboundConsumer,

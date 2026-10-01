@@ -10,7 +10,8 @@ import { BitrixError } from '../bitrix';
 import { ConversationService, isPermanentConversationError } from './conversation.service';
 import { type GateDecision, InboundGate } from './inbound-gate';
 import type { InboundMessage } from './inbound-message';
-import { attemptOf, InboundRetry } from './inbound-retry';
+import { attemptOf, InboundRetry, type RetryOutcome } from './inbound-retry';
+import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
 import { ReplyPublisher } from './reply-publisher';
 
@@ -38,7 +39,7 @@ export function isPermanentProcessingError(error: unknown): boolean {
  * `channel.inbound`, uma mensagem por vez (mesmo diálogo em ordem). Passa pelo `InboundGate`;
  * descartadas ficam no `message_log`; liberadas vão ao GPTMaker (`ConversationService`) e a
  * resposta volta ao diálogo (`ReplyPublisher`). Falha transitória ⇒ retentativa escalonada e, no
- * fim, DLQ; erro permanente ⇒ DLQ direto.
+ * fim, DLQ; erro permanente ⇒ DLQ direto. Na DLQ, o diálogo vai para um operador.
  */
 @Injectable()
 export class InboundConsumer implements OnApplicationBootstrap {
@@ -51,6 +52,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly conversation: ConversationService,
     private readonly replies: ReplyPublisher,
     private readonly noCredit: NoCreditHandler,
+    private readonly failures: DeliveryFailureHandler,
     @Inject(DB) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -94,16 +96,19 @@ export class InboundConsumer implements OnApplicationBootstrap {
       const decision = await this.gate.check(message);
       await this.apply(message, decision, attempt);
     } catch (error) {
+      let outcome: RetryOutcome;
       try {
-        if (isPermanentProcessingError(error)) {
-          await this.retry.deadLetter(message, attempt, error);
-        } else {
-          await this.retry.retryOrDeadLetter(message, attempt, error);
-        }
+        outcome = isPermanentProcessingError(error)
+          ? await this.retry.deadLetter(message, attempt, error)
+          : await this.retry.retryOrDeadLetter(message, attempt, error);
       } catch (publishError) {
         // Sem como reagendar: volta à frente da partição, sem perder a ordem do diálogo.
         this.logger.error({ err: publishError }, 'retentativa não publicada; devolvendo à fila');
         return new Nack(true);
+      }
+      // Na DLQ, o cliente não fica sem resposta: o diálogo vai para um operador (sem débito).
+      if (outcome.kind === 'dead-letter') {
+        await this.failures.handle(message, outcome.attempts, error);
       }
     }
   }

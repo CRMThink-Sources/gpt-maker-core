@@ -16,6 +16,7 @@ import { InboundConsumer } from '../../src/modules/channel/inbound.consumer';
 import { InboundGate } from '../../src/modules/channel/inbound-gate';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
+import type { DeliveryFailureHandler } from '../../src/modules/channel/delivery-failure.handler';
 import type { NoCreditHandler } from '../../src/modules/channel/no-credit.handler';
 import type { ReplyPublisher } from '../../src/modules/channel/reply-publisher';
 import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
@@ -324,8 +325,15 @@ describe('gate das mensagens do chatbot', () => {
         return 'notified';
       },
     } as unknown as NoCreditHandler;
-    const consumerWith = (g: InboundGate) =>
-      new InboundConsumer({} as AmqpConnection, g, retry, conversation, replies, noCredit, db, env);
+    const failed: Array<{ message: InboundMessage; attempts: number }> = [];
+    const failures = {
+      handle: async (message: InboundMessage, attempts: number) => {
+        failed.push({ message, attempts });
+        return 'transferred';
+      },
+    } as unknown as DeliveryFailureHandler;
+    const consumerWith = (g: InboundGate, c: ConversationService = conversation) =>
+      new InboundConsumer({} as AmqpConnection, g, retry, c, replies, noCredit, failures, db, env);
 
     const logOf = async (message: InboundMessage) =>
       db
@@ -344,6 +352,7 @@ describe('gate das mensagens do chatbot', () => {
       asked.length = 0;
       published.length = 0;
       blocked.length = 0;
+      failed.length = 0;
       publishFails = false;
     });
 
@@ -381,27 +390,21 @@ describe('gate das mensagens do chatbot', () => {
         consumerWith(failing as unknown as InboundGate).process(message, 2),
       ).resolves.toBeUndefined();
       expect(retried).toMatchObject([{ attempt: 2, error: { message: 'banco fora' } }]);
+      // Reagendada: o diálogo segue com o bot.
+      expect(failed).toEqual([]);
     });
 
-    it('erro permanente do GPTMaker vai direto para a DLQ', async () => {
+    it('erro permanente do GPTMaker vai direto para a DLQ e o diálogo para o operador', async () => {
       const { message } = await scenario();
       const rejecting = {
         ask: async () => {
           throw new GptMakerError('VALIDATION', 'agent.conversation', 'prompt inválido');
         },
       } as unknown as ConversationService;
-      await new InboundConsumer(
-        {} as AmqpConnection,
-        gate,
-        retry,
-        rejecting,
-        replies,
-        noCredit,
-        db,
-        env,
-      ).process(message, 0);
+      await consumerWith(gate, rejecting).process(message, 0);
       expect(retried).toEqual([]);
       expect(deadLettered).toMatchObject([{ attempt: 0, error: { kind: 'VALIDATION' } }]);
+      expect(failed).toMatchObject([{ message: { messageId: message.messageId }, attempts: 1 }]);
     });
 
     it('sem conseguir reagendar, devolve à fila', async () => {
