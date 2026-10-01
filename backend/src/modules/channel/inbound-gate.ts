@@ -1,15 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agent, tenant } from '../../shared/database/schema/index';
+import { agent, aiModel, tenant } from '../../shared/database/schema/index';
 import { BalanceReader } from '../billing';
 import { HumanAttendance } from './human-attendance';
 import type { InboundMessage } from './inbound-message';
 
-/** Para onde a mensagem liberada vai: agente no GPTMaker e portal do tenant. */
+/** Para onde a mensagem liberada vai: agente no GPTMaker, portal do tenant e modelo (débito). */
 export interface ForwardTarget {
   gptmakerAgentId: string;
   installationId: number;
+  /** Código do modelo do agente no momento do processamento (design D8: débito por modelo). */
+  modelCode: string;
 }
 
 export type GateDecision =
@@ -41,9 +43,11 @@ export class InboundGate {
         gptmakerAgentId: agent.gptmakerAgentId,
         tenantStatus: tenant.status,
         installationId: tenant.installationId,
+        modelCode: aiModel.code,
       })
       .from(agent)
       .innerJoin(tenant, eq(tenant.id, agent.tenantId))
+      .innerJoin(aiModel, eq(aiModel.id, agent.modelId))
       .where(and(eq(agent.id, message.agentId), eq(agent.tenantId, message.tenantId)));
     if (!row || row.agentStatus !== 'ACTIVE') return { kind: 'skip-inactive', reason: 'agent' };
     // `AUTH_ERROR` pausa o processamento (sem token não há como responder no portal).
@@ -60,6 +64,7 @@ export class InboundGate {
       target: {
         gptmakerAgentId: row.gptmakerAgentId,
         installationId: Number(row.installationId),
+        modelCode: row.modelCode,
       },
     };
   }

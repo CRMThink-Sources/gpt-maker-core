@@ -9,12 +9,24 @@ export const EXCHANGES = {
   channelInbound: 'channel.inbound',
   /** Mensagens que esgotaram as tentativas (fanout para a DLQ). */
   channelDeadLetter: 'channel.dlx',
+  /** Consumo do agente (design D5/D8), roteado pelo tipo: `usage.response` por resposta entregue. */
+  usageEvents: 'usage.events',
 } as const;
 
 export const QUEUES = {
   installationEvents: 'payments.installation-events',
   /** DLQ de `channel.inbound`: inspeção manual, nunca reprocessada sozinha. */
   channelDeadLetter: 'channel.inbound.dlq',
+  /**
+   * `usage.response` para o débito (consumidor na tarefa 11.4). Declarada já: sem fila ligada, a
+   * exchange descartaria os eventos publicados antes do billing existir.
+   */
+  usageResponse: 'billing.usage-response',
+} as const;
+
+/** Routing keys de `usage.events`. */
+export const USAGE_EVENTS = {
+  response: 'usage.response',
 } as const;
 
 /** Partição `index` de `channel.inbound` (uma fila, um consumidor por partição). */

@@ -6,10 +6,12 @@ import { newTraceId, runWithContext } from '../../shared/context/request-context
 import { DB, type Database } from '../../shared/database/database.module';
 import { messageLog } from '../../shared/database/schema/index';
 import { AMQP_CHANNELS, channelInboundQueue } from '../../shared/messaging/topology';
+import { BitrixError } from '../bitrix';
 import { ConversationService, isPermanentConversationError } from './conversation.service';
 import { type GateDecision, InboundGate } from './inbound-gate';
 import type { InboundMessage } from './inbound-message';
 import { attemptOf, InboundRetry } from './inbound-retry';
+import { ReplyPublisher } from './reply-publisher';
 
 /** Status do `message_log` das mensagens que o gate descarta. */
 const SKIP_STATUS = {
@@ -18,10 +20,24 @@ const SKIP_STATUS = {
 } as const;
 
 /**
+ * Erro que nova tentativa não resolve ⇒ DLQ direto: GPTMaker recusou (ver
+ * `isPermanentConversationError`) ou o Bitrix recusou o envio (diálogo inválido, sem permissão,
+ * app desinstalado ou sem credencial).
+ */
+export function isPermanentProcessingError(error: unknown): boolean {
+  if (isPermanentConversationError(error)) return true;
+  return (
+    error instanceof BitrixError &&
+    (error.kind === 'API_ERROR' || error.kind === 'UNINSTALLED' || error.kind === 'AUTH_ERROR')
+  );
+}
+
+/**
  * Worker das mensagens dos chatbots (design D5): um consumidor por partição de
  * `channel.inbound`, uma mensagem por vez (mesmo diálogo em ordem). Passa pelo `InboundGate`;
- * descartadas ficam no `message_log`; liberadas vão ao GPTMaker (`ConversationService`). Falha
- * transitória ⇒ retentativa escalonada e, no fim, DLQ; erro permanente do GPTMaker ⇒ DLQ direto.
+ * descartadas ficam no `message_log`; liberadas vão ao GPTMaker (`ConversationService`) e a
+ * resposta volta ao diálogo (`ReplyPublisher`). Falha transitória ⇒ retentativa escalonada e, no
+ * fim, DLQ; erro permanente ⇒ DLQ direto.
  */
 @Injectable()
 export class InboundConsumer implements OnApplicationBootstrap {
@@ -32,6 +48,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly gate: InboundGate,
     private readonly retry: InboundRetry,
     private readonly conversation: ConversationService,
+    private readonly replies: ReplyPublisher,
     @Inject(DB) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -76,7 +93,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
       await this.apply(message, decision, attempt);
     } catch (error) {
       try {
-        if (isPermanentConversationError(error)) {
+        if (isPermanentProcessingError(error)) {
           await this.retry.deadLetter(message, attempt, error);
         } else {
           await this.retry.retryOrDeadLetter(message, attempt, error);
@@ -124,17 +141,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
           );
           return;
         }
-        // Publicação no Bitrix e `usage.response`: tarefa 9.6.
-        this.logger.log(
-          {
-            messageId: message.messageId,
-            hasText: Boolean(reply.message),
-            images: reply.images?.length ?? 0,
-            audios: reply.audios?.length ?? 0,
-            documents: reply.documents?.length ?? 0,
-          },
-          'resposta do GPTMaker recebida',
-        );
+        await this.replies.publish(message, decision.target, reply, attempt);
         return;
       }
     }

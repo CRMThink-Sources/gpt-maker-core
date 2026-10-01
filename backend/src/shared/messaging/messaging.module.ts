@@ -8,6 +8,7 @@ import {
   channelRetryName,
   EXCHANGES,
   QUEUES,
+  USAGE_EVENTS,
 } from './topology';
 
 /** Topologia de `channel.inbound` (design D5): partições, esperas de retentativa e DLQ. */
@@ -71,8 +72,21 @@ function channelTopology(env: Env) {
         const channel = channelTopology(env);
         return {
           uri: env.RABBITMQ_URL,
-          exchanges: [{ name: EXCHANGES.paymentsEvents, type: 'topic' }, ...channel.exchanges],
-          queues: channel.queues,
+          exchanges: [
+            { name: EXCHANGES.paymentsEvents, type: 'topic' },
+            { name: EXCHANGES.usageEvents, type: 'topic' },
+            ...channel.exchanges,
+          ],
+          queues: [
+            ...channel.queues,
+            {
+              name: QUEUES.usageResponse,
+              createQueueIfNotExists: true,
+              options: { durable: true },
+              exchange: EXCHANGES.usageEvents,
+              routingKey: USAGE_EVENTS.response,
+            },
+          ],
           channels: { [AMQP_CHANNELS.channelInbound]: { prefetchCount: 1 } },
           connectionInitOptions: { wait: false },
           registerHandlers: env.APP_ROLE === 'worker',

@@ -28,7 +28,7 @@ describe('encaminhamento ao GPTMaker', () => {
   let media: ChatMedia;
   let service: ConversationService;
 
-  const target = { gptmakerAgentId: AGENT, installationId: 77 };
+  const target = { gptmakerAgentId: AGENT, installationId: 77, modelCode: 'GPT_5_MINI' };
 
   const message = (overrides: Partial<InboundMessage> = {}): InboundMessage => ({
     tenantId: randomUUID(),

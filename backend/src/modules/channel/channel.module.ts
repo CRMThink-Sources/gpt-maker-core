@@ -14,6 +14,7 @@ import { HumanAttendance } from './human-attendance';
 import { InboundConsumer } from './inbound.consumer';
 import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
+import { ReplyPublisher } from './reply-publisher';
 
 /** Canal chatbot do Bitrix (spec bitrix-chatbot-channel). */
 @Module({
@@ -29,6 +30,7 @@ import { InboundRetry } from './inbound-retry';
     InboundGate,
     InboundConsumer,
     InboundRetry,
+    ReplyPublisher,
   ],
   exports: [ChatbotService, InboundRetry],
 })

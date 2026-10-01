@@ -16,6 +16,7 @@ import { InboundConsumer } from '../../src/modules/channel/inbound.consumer';
 import { InboundGate } from '../../src/modules/channel/inbound-gate';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
+import type { ReplyPublisher } from '../../src/modules/channel/reply-publisher';
 import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
@@ -166,14 +167,21 @@ describe('gate das mensagens do chatbot', () => {
         target: {
           gptmakerAgentId: bot.gptmakerAgentId,
           installationId: Number(owner.installationId),
+          modelCode: 'GPT_5_MINI',
         },
       });
     });
 
-    it.each(['INACTIVE', 'DELETED', 'OUT_OF_SYNC'] as const)('agente %s ⇒ descarta', async (status) => {
-      const { message } = await scenario({ agentStatus: status });
-      await expect(gate.check(message)).resolves.toEqual({ kind: 'skip-inactive', reason: 'agent' });
-    });
+    it.each(['INACTIVE', 'DELETED', 'OUT_OF_SYNC'] as const)(
+      'agente %s ⇒ descarta',
+      async (status) => {
+        const { message } = await scenario({ agentStatus: status });
+        await expect(gate.check(message)).resolves.toEqual({
+          kind: 'skip-inactive',
+          reason: 'agent',
+        });
+      },
+    );
 
     it('agente de outro tenant ⇒ descarta', async () => {
       const { message } = await scenario();
@@ -297,8 +305,15 @@ describe('gate das mensagens do chatbot', () => {
         return { message: 'Olá!' };
       },
     } as unknown as ConversationService;
+    const published: InboundMessage[] = [];
+    const replies = {
+      publish: async (message: InboundMessage) => {
+        published.push(message);
+        return 'sent';
+      },
+    } as unknown as ReplyPublisher;
     const consumerWith = (g: InboundGate) =>
-      new InboundConsumer({} as AmqpConnection, g, retry, conversation, db, env);
+      new InboundConsumer({} as AmqpConnection, g, retry, conversation, replies, db, env);
 
     const logOf = async (message: InboundMessage) =>
       db
@@ -315,6 +330,7 @@ describe('gate das mensagens do chatbot', () => {
       retried.length = 0;
       deadLettered.length = 0;
       asked.length = 0;
+      published.length = 0;
       publishFails = false;
     });
 
@@ -343,6 +359,7 @@ describe('gate das mensagens do chatbot', () => {
       expect(await logOf(ok.message)).toEqual([]);
       expect(await logOf(broke.message)).toEqual([]);
       expect(asked.map((m) => m.messageId)).toEqual([ok.message.messageId]);
+      expect(published.map((m) => m.messageId)).toEqual([ok.message.messageId]);
     });
 
     it('falha no gate vai para a retentativa com a tentativa atual', async () => {
@@ -361,10 +378,15 @@ describe('gate das mensagens do chatbot', () => {
           throw new GptMakerError('VALIDATION', 'agent.conversation', 'prompt inválido');
         },
       } as unknown as ConversationService;
-      await new InboundConsumer({} as AmqpConnection, gate, retry, rejecting, db, env).process(
-        message,
-        0,
-      );
+      await new InboundConsumer(
+        {} as AmqpConnection,
+        gate,
+        retry,
+        rejecting,
+        replies,
+        db,
+        env,
+      ).process(message, 0);
       expect(retried).toEqual([]);
       expect(deadLettered).toMatchObject([{ attempt: 0, error: { kind: 'VALIDATION' } }]);
     });
