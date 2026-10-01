@@ -14,12 +14,13 @@ import {
   type TriggerView,
   type TriggerWriteResult,
 } from '@gptmaker/contracts';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { CloseIcon, PlusIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass, Card } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
 import { bx24SelectUsers, insideBitrix } from '@/lib/bx24';
+import { type CrmEntity, type CrmFieldOption, useCrmFields } from '@/lib/crm-fields';
 import { ACTION_TYPES, AGENT_EVENTS, newAction, SAMPLE_CONTEXT } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
@@ -102,52 +103,126 @@ function TemplateInput({
   );
 }
 
-/** Campos do CRM (código do Bitrix ⇒ valor com variáveis). */
+/** Legenda dos valores aceitos por um campo de lista; clicar preenche o valor com o código. */
+function OptionsLegend({
+  options,
+  onPick,
+  disabled,
+}: {
+  options: CrmFieldOption[];
+  onPick: (id: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="mt-1.5 text-xs text-zinc-500">
+      <span>Valores possíveis (use o código):</span>
+      <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(option.id)}
+            className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-zinc-700 hover:border-brand-300 hover:bg-brand-50"
+            title={`Preencher com ${option.id}`}
+          >
+            <span className="font-mono">{option.id}</span> · {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Campos do CRM (campo ⇒ valor com variáveis). Com `entity`, os campos do portal aparecem como
+ * sugestões pelo nome enquanto se digita (o negócio pode ter centenas), e os de lista mostram os
+ * valores aceitos. Qualquer código pode ser digitado, inclusive fora da lista.
+ */
 function FieldMapEditor({
   fields,
   onChange,
+  entity,
   locked = [],
   disabled,
 }: {
   fields: FieldMap;
   onChange: (fields: FieldMap) => void;
-  /** Campos obrigatórios: sem remover nem renomear. */
+  entity?: CrmEntity;
+  /** Campos obrigatórios: sem remover nem trocar. */
   locked?: string[];
   disabled?: boolean;
 }) {
+  const crm = useCrmFields(entity);
+  const listId = useId();
+  const byCode = new Map(crm.fields?.map((field) => [field.code, field]));
   const entries = Object.entries(fields);
   const rename = (from: string, to: string) =>
     onChange(Object.fromEntries(entries.map(([key, value]) => [key === from ? to : key, value])));
+  const setValue = (key: string, value: string) => onChange({ ...fields, [key]: value });
 
   return (
     <div className="space-y-3">
-      {entries.map(([key, value], index) => (
-        <div key={index} className="grid grid-cols-[9rem_1fr_auto] items-start gap-2">
-          <input
-            className={`${inputClass} mt-6 font-mono text-xs uppercase`}
-            value={key}
-            disabled={disabled || locked.includes(key)}
-            onChange={(e) => rename(key, e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
-            aria-label="Código do campo no Bitrix24"
-            placeholder="CAMPO"
-          />
-          <TemplateInput
-            label={key || 'Valor'}
-            value={value}
-            disabled={disabled}
-            onChange={(next) => onChange({ ...fields, [key]: next })}
-          />
-          <button
-            type="button"
-            className={`${buttonClass('ghost', 'sm')} mt-6`}
-            disabled={disabled || locked.includes(key)}
-            onClick={() => onChange(Object.fromEntries(entries.filter(([other]) => other !== key)))}
-            aria-label={`Remover o campo ${key}`}
-          >
-            <CloseIcon className="size-4" />
-          </button>
-        </div>
-      ))}
+      {crm.fields && (
+        <datalist id={listId}>
+          {crm.fields
+            .filter((field) => !(field.code in fields))
+            .map((field) => (
+              <option key={field.code} value={field.code}>
+                {field.label}
+                {field.required ? ' (obrigatório)' : ''}
+              </option>
+            ))}
+        </datalist>
+      )}
+      {entries.map(([key, value], index) => {
+        const field = byCode.get(key);
+        const lockedRow = locked.includes(key);
+        return (
+          <div key={index} className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <input
+                className={`${inputClass} mt-0 font-mono text-xs`}
+                list={crm.fields ? listId : undefined}
+                value={key}
+                disabled={disabled || lockedRow}
+                onChange={(e) => rename(key, e.target.value.trim())}
+                aria-label="Campo do CRM"
+                placeholder={crm.fields ? 'Digite o nome ou o código do campo' : 'CÓDIGO DO CAMPO'}
+              />
+              <button
+                type="button"
+                className={buttonClass('ghost', 'sm')}
+                disabled={disabled || lockedRow}
+                onClick={() =>
+                  onChange(Object.fromEntries(entries.filter(([other]) => other !== key)))
+                }
+                aria-label={`Remover o campo ${field?.label ?? key}`}
+              >
+                <CloseIcon className="size-4" />
+              </button>
+            </div>
+            {crm.fields && key !== '' && !field && (
+              <p className="mb-2 text-xs text-amber-800">
+                Campo não encontrado no CRM deste portal. Confira o código.
+              </p>
+            )}
+            <TemplateInput
+              label={field ? `${field.label} (${key})` : key || 'Valor'}
+              value={value}
+              disabled={disabled || key === ''}
+              onChange={(next) => setValue(key, next)}
+            />
+            {field?.options && field.options.length > 0 && (
+              <OptionsLegend
+                options={field.options}
+                disabled={disabled}
+                onPick={(id) => setValue(key, id)}
+              />
+            )}
+          </div>
+        );
+      })}
       <button
         type="button"
         className={buttonClass('secondary', 'sm')}
@@ -157,9 +232,16 @@ function FieldMapEditor({
         <PlusIcon className="size-3.5" />
         Campo
       </button>
-      <p className="text-xs text-zinc-500">
-        Use os códigos de campo do Bitrix24 (ex.: TITLE, NAME, PHONE, EMAIL, COMMENTS, UF_CRM_...).
-      </p>
+      {entity && !crm.fields && !crm.failed && (
+        <p className="text-xs text-zinc-500">Carregando os campos do CRM…</p>
+      )}
+      {(!entity || crm.failed) && (
+        <p className="text-xs text-zinc-500">
+          {entity
+            ? 'Não foi possível ler os campos do CRM; informe os códigos (ex.: TITLE, NAME, PHONE, UF_CRM_...).'
+            : 'Informe os nomes dos parâmetros como estão no modelo do processo.'}
+        </p>
+      )}
     </div>
   );
 }
@@ -226,6 +308,7 @@ function ActionConfig({
     case 'CREATE_LEAD':
       return (
         <FieldMapEditor
+          entity="lead"
           fields={action.config.fields}
           locked={['TITLE']}
           disabled={disabled}
@@ -263,6 +346,7 @@ function ActionConfig({
             </Field>
           </div>
           <FieldMapEditor
+            entity="deal"
             fields={action.config.fields}
             disabled={disabled}
             onChange={(fields) => onChange({ ...action, config: { ...action.config, fields } })}
