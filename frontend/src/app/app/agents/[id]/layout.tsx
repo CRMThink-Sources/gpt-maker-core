@@ -50,6 +50,11 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
       label: 'Treinamentos',
       active: pathname.startsWith(`${base}/trainings`),
     },
+    {
+      href: `${base}/triggers`,
+      label: 'Gatilhos',
+      active: pathname.startsWith(`${base}/triggers`),
+    },
   ];
   const status = agentStatus(agent!);
 
