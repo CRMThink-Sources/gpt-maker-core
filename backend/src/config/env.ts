@@ -103,6 +103,20 @@ export const envSchema = z.object({
    * número redistribui os diálogos entre as filas: só com as filas vazias.
    */
   CHANNEL_INBOUND_PARTITIONS: z.coerce.number().int().positive().max(64).default(4),
+  /**
+   * Esperas entre as tentativas de uma mensagem do chatbot, em ms, separadas por vírgula
+   * (design D5: 10 s, 1 min, 5 min). Esgotadas, a mensagem vai para a DLQ.
+   */
+  CHANNEL_RETRY_DELAYS_MS: z
+    .string()
+    .default('10000,60000,300000')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    )
+    .pipe(z.array(z.number()).min(1).max(10)),
 
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),

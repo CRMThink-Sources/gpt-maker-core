@@ -13,6 +13,7 @@ import {
   MESSAGE_ADD_EVENT,
   messageAddDataSchema,
 } from './inbound-message';
+import { messageIdOf } from './inbound-retry';
 
 /** Janela da deduplicação: reentregas do mesmo evento chegam em minutos. */
 const DEDUPE_TTL_SECONDS = 24 * 60 * 60;
@@ -89,7 +90,7 @@ export class BotEventsService {
     try {
       await this.amqp.publish(EXCHANGES.channelInbound, dialogKey(message), message, {
         persistent: true,
-        messageId: `${tenant.id}:${data.bot.id}:${data.message.id}`,
+        messageId: messageIdOf(message),
       });
     } catch (error) {
       // Sem a fila, a reentrega (se houver) precisa passar pela deduplicação de novo.

@@ -2,36 +2,76 @@ import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { Global, Module } from '@nestjs/common';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
-import { channelInboundQueue, EXCHANGES } from './topology';
+import { channelInboundQueue, channelRetryName, EXCHANGES, QUEUES } from './topology';
+
+/** Topologia de `channel.inbound` (design D5): partições, esperas de retentativa e DLQ. */
+function channelTopology(env: Env) {
+  const partitions = Array.from({ length: env.CHANNEL_INBOUND_PARTITIONS }, (_, index) => ({
+    name: channelInboundQueue(index),
+    createQueueIfNotExists: true,
+    options: { durable: true },
+    exchange: EXCHANGES.channelInbound,
+    // Peso da partição no consistent hash.
+    routingKey: '1',
+  }));
+  // Sem `x-dead-letter-routing-key`: ao vencer, volta com a routing key original (o diálogo).
+  const retries = env.CHANNEL_RETRY_DELAYS_MS.map((delayMs) => ({
+    name: channelRetryName(delayMs),
+    createQueueIfNotExists: true,
+    options: {
+      durable: true,
+      arguments: {
+        'x-message-ttl': delayMs,
+        'x-dead-letter-exchange': EXCHANGES.channelInbound,
+      },
+    },
+    exchange: channelRetryName(delayMs),
+    routingKey: '',
+  }));
+  return {
+    exchanges: [
+      { name: EXCHANGES.channelInbound, type: 'x-consistent-hash' },
+      { name: EXCHANGES.channelDeadLetter, type: 'fanout' },
+      ...env.CHANNEL_RETRY_DELAYS_MS.map((delayMs) => ({
+        name: channelRetryName(delayMs),
+        type: 'fanout',
+      })),
+    ],
+    queues: [
+      ...partitions,
+      ...retries,
+      {
+        name: QUEUES.channelDeadLetter,
+        createQueueIfNotExists: true,
+        options: { durable: true },
+        exchange: EXCHANGES.channelDeadLetter,
+        routingKey: '',
+      },
+    ],
+  };
+}
 
 /**
  * Conexão RabbitMQ compartilhada. A API só publica; handlers (`@RabbitSubscribe`) são
- * registrados apenas no papel `worker`. Exchanges e filas ficam em `topology.ts`.
+ * registrados apenas no papel `worker`. Exchanges e filas ficam em `topology.ts` e são declaradas
+ * pelos dois papéis: a API publica sem perder mensagem mesmo antes do worker subir.
  */
 @Global()
 @Module({
   imports: [
     RabbitMQModule.forRootAsync({
       inject: [ENV],
-      useFactory: (env: Env) => ({
-        uri: env.RABBITMQ_URL,
-        exchanges: [
-          { name: EXCHANGES.paymentsEvents, type: 'topic' },
-          { name: EXCHANGES.channelInbound, type: 'x-consistent-hash' },
-        ],
-        // Partições declaradas pelos dois papéis: a API publica sem perder mensagem mesmo antes
-        // do worker subir. Peso "1" por fila (routing key do consistent hash).
-        queues: Array.from({ length: env.CHANNEL_INBOUND_PARTITIONS }, (_, index) => ({
-          name: channelInboundQueue(index),
-          createQueueIfNotExists: true,
-          options: { durable: true },
-          exchange: EXCHANGES.channelInbound,
-          routingKey: '1',
-        })),
-        connectionInitOptions: { wait: false },
-        registerHandlers: env.APP_ROLE === 'worker',
-        enableControllerDiscovery: true,
-      }),
+      useFactory: (env: Env) => {
+        const channel = channelTopology(env);
+        return {
+          uri: env.RABBITMQ_URL,
+          exchanges: [{ name: EXCHANGES.paymentsEvents, type: 'topic' }, ...channel.exchanges],
+          queues: channel.queues,
+          connectionInitOptions: { wait: false },
+          registerHandlers: env.APP_ROLE === 'worker',
+          enableControllerDiscovery: true,
+        };
+      },
     }),
   ],
   exports: [RabbitMQModule],
