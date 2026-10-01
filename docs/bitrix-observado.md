@@ -39,3 +39,12 @@ Chamado com `DIALOG_ID` (`chat9498`). Resposta real (2026-10-01), só os campos 
 - `entity_data_1`: começa com `Y` (vinculado ao CRM) e a entidade principal (`DEAL|27134`); os
   segmentos seguintes não foram identificados.
 - `entity_id`: conector, linha, id do cliente no conector e usuário (aqui, uma linha de WhatsApp).
+
+## Escopos da instalação
+
+O app precisa de `imbot`, `imopenlines`, `im`, `crm`, `task`, `bizproc` e `user` (tarefa 6.1).
+Para conferir os concedidos, chame o método `scope` com o token da instalação. Em 2026-10-01, a
+instalação de teste (`2017`) tinha só `crm`, `imbot`, `imopenlines`, `im`, `user_brief` e
+`placement`. Sem `task`, o `tasks.task.add` responde `insufficient_scope`, e o mesmo vale para o
+`bizproc.workflow.start` sem `bizproc`. As ações "criar tarefa" e "business process" dos gatilhos
+dependem desses escopos. Corrigir no cadastro do app no Bitrix24 e reinstalar.
