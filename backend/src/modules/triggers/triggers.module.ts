@@ -5,6 +5,8 @@ import { TenancyModule } from '../tenancy';
 import { TriggerActionExecutor } from './actions/action-executor';
 import { AgentEventIntake } from './agent-event.intake';
 import { GptMakerWebhooksController } from './gptmaker-webhooks.controller';
+import { TriggerEvaluationConsumer } from './trigger-evaluation.consumer';
+import { TriggerRunner } from './trigger-runner';
 import { TriggerService } from './trigger.service';
 import { TriggersController } from './triggers.controller';
 
@@ -12,7 +14,13 @@ import { TriggersController } from './triggers.controller';
 @Module({
   imports: [AgentsModule, BitrixModule, TenancyModule],
   controllers: [GptMakerWebhooksController, TriggersController],
-  providers: [AgentEventIntake, TriggerActionExecutor, TriggerService],
+  providers: [
+    AgentEventIntake,
+    TriggerActionExecutor,
+    TriggerEvaluationConsumer,
+    TriggerRunner,
+    TriggerService,
+  ],
   exports: [TriggerService],
 })
 export class TriggersModule {}

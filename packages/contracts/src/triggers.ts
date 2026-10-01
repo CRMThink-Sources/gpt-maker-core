@@ -151,3 +151,23 @@ export interface TriggerWriteResult {
   trigger: TriggerView;
   newSecrets: Record<string, string>;
 }
+
+export const triggerExecutionStatusSchema = z.enum(['PENDING', 'SUCCESS', 'FAILED']);
+
+/** Uma ação executada para um evento (histórico do gatilho). */
+export interface TriggerExecutionView {
+  id: string;
+  actionId: string;
+  actionType: TriggerActionType;
+  event: AgentEventName;
+  dialogId: string | null;
+  status: z.infer<typeof triggerExecutionStatusSchema>;
+  attempts: number;
+  error: string | null;
+  /** Resultado da ação (ex.: `{ leadId }`, `{ taskId }`, `{ status }` do webhook). */
+  result: unknown;
+  createdAt: string;
+  finishedAt: string | null;
+  /** Próxima tentativa, quando pendente. */
+  nextAttemptAt: string | null;
+}

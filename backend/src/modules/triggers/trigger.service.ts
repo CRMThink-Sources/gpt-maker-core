@@ -5,6 +5,7 @@ import {
   createTriggerSchema,
   TRIGGER_MAX_PER_AGENT,
   type TriggerActionInput,
+  type TriggerExecutionView,
   type TriggerView,
   type TriggerWriteResult,
   type UpdateTriggerInput,
@@ -15,6 +16,10 @@ import { DB, type Database } from '../../shared/database/database.module';
 import { trigger, triggerAction } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { AgentRepository } from '../agents';
+import { executionsOf } from './trigger-runner';
+
+/** Tamanho máximo de uma página do histórico de execuções. */
+export const EXECUTIONS_MAX_LIMIT = 100;
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type Executor = Database | Tx;
@@ -125,6 +130,28 @@ export class TriggerService {
       const actions = await this.actionsOf([current.id], tx);
       return { trigger: toView(row!, actions.get(current.id) ?? []), newSecrets };
     });
+  }
+
+  /** Execuções do gatilho, mais recentes primeiro (spec agent-triggers: consultar histórico). */
+  async executions(
+    tenantId: string,
+    agentId: string,
+    id: string,
+    limit = 50,
+  ): Promise<TriggerExecutionView[]> {
+    await this.agents.getById(tenantId, agentId);
+    const current = await this.getRow(this.db, tenantId, agentId, id);
+    const rows = await executionsOf(
+      this.db,
+      current.id,
+      Math.min(Math.max(limit, 1), EXECUTIONS_MAX_LIMIT),
+    );
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      finishedAt: row.finishedAt?.toISOString() ?? null,
+      nextAttemptAt: row.status === 'PENDING' ? (row.nextAttemptAt?.toISOString() ?? null) : null,
+    }));
   }
 
   /** Lógico: o gatilho sai da lista e para de disparar; o histórico fica. */

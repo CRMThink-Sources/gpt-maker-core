@@ -8,10 +8,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   type CreateTriggerInput,
   createTriggerSchema,
+  type TriggerExecutionView,
   type TriggerView,
   type TriggerWriteResult,
   type UpdateTriggerInput,
@@ -56,6 +58,26 @@ export class TriggersController {
     @Body(new ZodValidationPipe(updateTriggerSchema)) body: UpdateTriggerInput,
   ): Promise<TriggerWriteResult> {
     return this.triggers.update(session.tenantId, agentId, id, body);
+  }
+
+  /** Histórico de execuções (`?limit=`, padrão 50, máximo 100). */
+  @Get(':id/executions')
+  @AppAuth()
+  async executions(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ): Promise<{ executions: TriggerExecutionView[] }> {
+    const parsed = Number(limit);
+    return {
+      executions: await this.triggers.executions(
+        session.tenantId,
+        agentId,
+        id,
+        Number.isInteger(parsed) && parsed > 0 ? parsed : undefined,
+      ),
+    };
   }
 
   @Delete(':id')

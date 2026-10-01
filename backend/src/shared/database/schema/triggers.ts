@@ -131,10 +131,18 @@ export const triggerExecution = pgTable(
     result: jsonb('result'),
     createdAt: createdAt(),
     finishedAt: timestamptz('finished_at'),
+    /**
+     * `PENDING`: quando pode rodar (retentativa com espera crescente). Também serve de reserva:
+     * quem vai executar empurra a data para frente, e outro processo não pega a mesma linha.
+     */
+    nextAttemptAt: timestamptz('next_attempt_at'),
   },
   (t) => [
     // Uma execução por ação e evento: reentrega do evento não duplica a ação.
     uniqueIndex('trigger_execution_event_action_uq').on(t.agentEventId, t.actionId),
     index('trigger_execution_trigger_idx').on(t.triggerId, t.createdAt),
+    index('trigger_execution_due_idx')
+      .on(t.nextAttemptAt)
+      .where(sql`${t.status} = 'PENDING'`),
   ],
 );
