@@ -111,9 +111,9 @@
 
 ## 11. Billing de créditos (credit-billing)
 
-- [ ] 11.1 Serviço de ledger append-only com carteiras `PLAN`/`EXTRA`, idempotência, `tenant_balance` sob `FOR UPDATE` (transação Drizzle), espelho Redis (~12h)
+- [x] 11.1 Serviço de ledger append-only com carteiras `PLAN`/`EXTRA`, idempotência, `tenant_balance` sob `FOR UPDATE` (transação Drizzle), espelho Redis (~12h) — `LedgerService` (módulo `billing`): cada operação trava a linha de `tenant_balance` (criada se faltar), grava os lançamentos e soma no saldo na mesma transação; operações do mesmo tenant ficam em fila. Idempotência pela operação: a `key` (ex.: `msg:<tenant>:<bot>:<mensagem>`) vira `<key>:<carteira>` em cada lançamento, e se já existe lançamento dela no tenant nada é lançado de novo (mesmo com o saldo mudado); chave igual em outro tenant falha no índice único. Operações: `credit` (`GRANT` em qualquer carteira, `TOPUP` só em `EXTRA`), `debit`, `adjust`, `expire` (só saldo positivo), `refund` (limitado ao saldo positivo da carteira), `setDates` (fim do trial e do ciclo) e `balance`. Depois do commit, apaga o espelho do saldo no Redis (`BalanceReader` relê do banco). Testes com os cenários da spec e débitos concorrentes conferindo saldo = soma do ledger
 - [ ] 11.2 Serviço de ciclo (acionado por `activated`/`renewed`/`ended`): `EXPIRE` do saldo positivo de `PLAN` e `EXTRA`, abatimento de saldo negativo e de `credit_deduction` pendente, e `GRANT` idempotente por (assinatura, período) (~10h)
-- [ ] 11.3 Débito em cascata `TRIAL` → `PLAN` → `EXTRA` (lançamentos separados por carteira) e regra de ajustes da reconciliação por carteira (~8h)
+- [x] 11.3 Débito em cascata `TRIAL` → `PLAN` → `EXTRA` (lançamentos separados por carteira) e regra de ajustes da reconciliação por carteira (~8h) — `splitOutflow`: consome só saldo positivo na ordem e o excedente fica negativo em `PLAN` (`TRIAL` e `EXTRA` nunca negativas, também por `CHECK`); um lançamento por carteira. `adjust`: negativo segue a mesma cascata, positivo vai para `PLAN`
 - [ ] 11.4 Consumidor de `usage.response`: `DEBIT` = custo vigente do modelo, guardando `model_code`/`unit_cost`, idempotente por mensagem (~5h)
 - [ ] 11.5 Alertas 80%/100%/zerado via `im.notify.system.add` aos destinatários de avisos (uma vez por ciclo) (~6h)
 - [ ] 11.6 Bloqueio/desbloqueio de encaminhamento conforme saldo (~3h)
