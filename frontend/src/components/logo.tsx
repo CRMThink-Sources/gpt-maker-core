@@ -20,23 +20,43 @@ export function LogoMark({ className = 'size-8' }: { className?: string }) {
         strokeLinecap="round"
       />
       <circle cx="7.8" cy="23" r="2.3" fill="white" />
-      <path
-        d="M23 6Q23.5 9.5 27 10Q23.5 10.5 23 14Q22.5 10.5 19 10Q22.5 9.5 23 6Z"
-        fill="white"
-      />
+      <path d="M23 6Q23.5 9.5 27 10Q23.5 10.5 23 14Q22.5 10.5 19 10Q22.5 9.5 23 6Z" fill="white" />
     </svg>
   );
 }
 
-export function Logo({ subtitle = true }: { subtitle?: boolean }) {
+const TONES = {
+  /** Sobre fundo claro (barra do celular, telas de carregamento). */
+  light: {
+    name: 'text-zinc-900',
+    accent: 'text-brand-600',
+    ai: 'text-zinc-400',
+    sub: 'text-zinc-500',
+  },
+  /** Sobre fundo escuro (aside). */
+  dark: { name: 'text-white', accent: 'text-brand-400', ai: 'text-zinc-500', sub: 'text-zinc-400' },
+} as const;
+
+/** Logo completo: marca e "ThinkFlow AI", como em `public/brand/thinkflow-logo.svg`. */
+export function Logo({
+  subtitle = true,
+  tone = 'light',
+}: {
+  subtitle?: boolean;
+  tone?: keyof typeof TONES;
+}) {
+  const colors = TONES[tone];
   return (
     <span className="flex items-center gap-2.5">
       <LogoMark />
       <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-tight text-zinc-900">
-          Think<span className="text-brand-600">Flow</span>
+        <span className={`block text-[15px] font-semibold tracking-tight ${colors.name}`}>
+          Think<span className={colors.accent}>Flow</span>{' '}
+          <span className={`font-medium ${colors.ai}`}>AI</span>
         </span>
-        {subtitle && <span className="block text-[11px] text-zinc-500">para Bitrix24</span>}
+        {subtitle && (
+          <span className={`block text-[11px] ${colors.sub}`}>Agentes de IA para Bitrix24</span>
+        )}
       </span>
     </span>
   );

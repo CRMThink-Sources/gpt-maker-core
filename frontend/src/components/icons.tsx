@@ -79,3 +79,21 @@ export const FileIcon = (p: P) => (
 export const UploadIcon = (p: P) => (
   <Icon {...p} d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
 );
+export const UserIcon = (p: P) => (
+  <Icon {...p} d="M16 7.5a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4.5 20a7.5 7.5 0 0 1 15 0" />
+);
+export const BuildingIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16m0-10h2a2 2 0 0 1 2 2v8M3 21h18M8 7h4m-4 4h4m-4 4h4"
+  />
+);
+export const SparkIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8l1.2 2.8L16 12l-2.8 1.2L12 16l-1.2-2.8L8 12l2.8-1.2Z"
+  />
+);
+export const ChatIcon = (p: P) => (
+  <Icon {...p} d="M8 10h8m-8 4h5m-8 6 1.5-3.5A8 8 0 1 1 9 19.6L5 20Z" />
+);
