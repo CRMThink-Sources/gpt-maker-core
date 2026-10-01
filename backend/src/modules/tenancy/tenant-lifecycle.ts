@@ -13,9 +13,11 @@ export interface TenantLifecycleListener {
   onUninstalled?(tenant: Tenant): Promise<void>;
   onAuthError?(tenant: Tenant): Promise<void>;
   onAuthRestored?(tenant: Tenant): Promise<void>;
+  /** Suspensão ou assinatura do tenant mudou (backoffice, eventos da plataforma, carência). */
+  onAccessChanged?(tenant: Tenant): Promise<void>;
 }
 
-type Hook = 'onInstalled' | 'onUninstalled' | 'onAuthError' | 'onAuthRestored';
+type Hook = 'onInstalled' | 'onUninstalled' | 'onAuthError' | 'onAuthRestored' | 'onAccessChanged';
 
 @Injectable()
 export class TenantLifecycle {

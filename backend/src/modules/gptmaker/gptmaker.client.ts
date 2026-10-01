@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { GptMakerError, kindFromStatus, parseRetryAfter } from './gptmaker.errors';
 import { GptMakerResilience } from './gptmaker.resilience';
 import {
@@ -191,14 +191,34 @@ export class GptMakerClient {
     });
   }
 
-  /** A API não devolve o id do treinamento criado; é preciso listar para obtê-lo. */
-  async createTraining(agentId: string, input: GptMakerCreateTraining): Promise<void> {
-    await this.success(
-      'training.create',
-      'POST',
-      `/agent/${enc(agentId)}/trainings`,
-      createTrainingSchema.parse(input),
+  /**
+   * A documentação promete `{ success }`, mas a API real responde outra coisa (corpo sem
+   * `success`). Aceita qualquer 2xx e só falha com `success: false` explícito; se o corpo
+   * trouxer o id do treinamento (`id`, `data.id` ou `training.id`), devolve-o, senão é
+   * preciso listar para obtê-lo.
+   */
+  async createTraining(
+    agentId: string,
+    input: GptMakerCreateTraining,
+  ): Promise<{ id: string | null }> {
+    const body = await this.request({
+      operation: 'training.create',
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/trainings`,
+      body: createTrainingSchema.parse(input),
+      response: z.unknown(),
+    });
+    const record = asRecord(body);
+    if (record?.success === false) {
+      throw new GptMakerError('UNKNOWN', 'training.create', 'provedor respondeu success=false', {
+        status: 200,
+        body,
+      });
+    }
+    const id = [record?.id, asRecord(record?.data)?.id, asRecord(record?.training)?.id].find(
+      (value): value is string => typeof value === 'string' && value !== '',
     );
+    return { id: id ?? null };
   }
 
   /** Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. */
@@ -331,15 +351,28 @@ export class GptMakerClient {
 
         const parsed = req.response.safeParse(payload);
         if (!parsed.success) {
+          // O corpo recebido vai junto: os contratos do GPTMaker divergem da documentação.
           throw new GptMakerError('INVALID_RESPONSE', req.operation, 'resposta fora do contrato', {
             status: response.status,
-            body: parsed.error.issues,
+            body: { issues: parsed.error.issues, received: truncated(payload) },
           });
         }
         return parsed.data as z.infer<S>;
       },
     );
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** Corpo para o log de erro, cortado. */
+function truncated(payload: unknown): unknown {
+  const json = JSON.stringify(payload ?? null) ?? 'null';
+  return json.length > 2000 ? `${json.slice(0, 2000)}…` : payload;
 }
 
 function enc(value: string): string {

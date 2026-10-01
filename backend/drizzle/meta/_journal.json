@@ -15,6 +15,13 @@
       "when": 1790303890098,
       "tag": "0001_credit_ledger_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790819528514,
+      "tag": "0002_agent_bot_profile_hash",
+      "breakpoints": true
     }
   ]
 }

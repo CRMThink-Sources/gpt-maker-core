@@ -1,9 +1,13 @@
 import {
+  type CreateItemRequest,
+  type CurrentSubscription,
   type Installation,
   PlatformClient,
   PlatformError,
   PlatformRequestError,
   type PlatformToken,
+  type SubscriptionItem,
+  type UpdateItemRequest,
 } from '@crmthink-sources/platform-sdk';
 import { ExponentialBackoff, handleWhen, retry } from 'cockatiel';
 import { Histogram } from 'prom-client';
@@ -75,6 +79,32 @@ export class PlatformApiClient {
     return this.call('token.refresh', () =>
       this.client.refreshInstallationToken(installationId, staleAccessToken),
     );
+  }
+
+  /** Assinatura vigente da instalação; sem assinatura responde `NO_SUBSCRIPTION`. */
+  getSubscription(installationId: number): Promise<CurrentSubscription> {
+    return this.call('subscription.get', () => this.client.getSubscription(installationId));
+  }
+
+  listItems(subscriptionId: number): Promise<SubscriptionItem[]> {
+    return this.call('item.list', async () => (await this.client.listItems(subscriptionId)).items);
+  }
+
+  /** Idempotente por `externalRef`: se o item já existe, a plataforma devolve o existente. */
+  createItem(subscriptionId: number, body: CreateItemRequest): Promise<SubscriptionItem> {
+    return this.call('item.create', () => this.client.createItem(subscriptionId, body));
+  }
+
+  updateItem(
+    subscriptionId: number,
+    itemId: number,
+    body: UpdateItemRequest,
+  ): Promise<SubscriptionItem> {
+    return this.call('item.update', () => this.client.updateItem(subscriptionId, itemId, body));
+  }
+
+  removeItem(subscriptionId: number, itemId: number): Promise<SubscriptionItem> {
+    return this.call('item.remove', () => this.client.removeItem(subscriptionId, itemId));
   }
 
   private async call<T>(operation: string, send: () => Promise<T>): Promise<T> {

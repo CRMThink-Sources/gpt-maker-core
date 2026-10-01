@@ -1,0 +1,1 @@
+ALTER TABLE "agent_bot" ADD COLUMN "profile_hash" text;

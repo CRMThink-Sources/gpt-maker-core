@@ -72,9 +72,38 @@ describe('GptMakerClient', () => {
     await expect(c.activateAgent('a1')).rejects.toMatchObject({ kind: 'UNKNOWN' });
   });
 
-  it('resposta fora do contrato vira INVALID_RESPONSE', async () => {
+  it('resposta fora do contrato vira INVALID_RESPONSE, com o corpo recebido', async () => {
     const { c } = client([{ status: 200, body: { credits: 'muitos', status: 'ACTIVE' } }]);
-    await expect(c.getWorkspaceCredits()).rejects.toMatchObject({ kind: 'INVALID_RESPONSE' });
+    await expect(c.getWorkspaceCredits()).rejects.toMatchObject({
+      kind: 'INVALID_RESPONSE',
+      body: { received: { credits: 'muitos', status: 'ACTIVE' } },
+    });
+  });
+
+  describe('criação de treinamento (resposta real diverge da documentada)', () => {
+    const text = { type: 'TEXT' as const, text: 'Oi' };
+
+    it.each([[{}], [undefined], [{ message: 'ok' }], [[]]])(
+      'qualquer 2xx sem success=false é sucesso: %j',
+      async (body) => {
+        const { c } = client([{ status: 200, body }]);
+        await expect(c.createTraining('a1', text)).resolves.toEqual({ id: null });
+      },
+    );
+
+    it.each([
+      [{ id: 'tr-1', type: 'TEXT' }],
+      [{ success: true, data: { id: 'tr-1' } }],
+      [{ training: { id: 'tr-1' } }],
+    ])('devolve o id quando o corpo traz: %j', async (body) => {
+      const { c } = client([{ status: 200, body }]);
+      await expect(c.createTraining('a1', text)).resolves.toEqual({ id: 'tr-1' });
+    });
+
+    it('success=false explícito é falha', async () => {
+      const { c } = client([{ status: 200, body: { success: false } }]);
+      await expect(c.createTraining('a1', text)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    });
   });
 
   it('lê Retry-After do 429', async () => {

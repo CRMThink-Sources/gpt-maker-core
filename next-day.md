@@ -1,23 +1,57 @@
-Resumindo onde estamos: a seção 6 (instalação, tokens e sessão) já está implementada, menos a 6.1, que depende do time da plataforma. Agora falta fechar a migração do SDK e seguir para a seção 7.
+- ci.yml: roda em PR e em push para master e develop.
+- release.yml: publica as imagens no push para master e develop, com a tag :<sha> e a tag com o nome da branch (:develop ou :master). Separei a fila por branch, para um release de staging não esperar o de produção.
+- deploy.yml: escolhe o ambiente pela branch que gerou o release.
+  - develop → staging, automático.
+  - master → production, travado pela aprovação do Environment (veja abaixo).
+  - O disparo manual continua existindo, para redeploy ou rollback de um SHA.
 
-1. Fechar a migração do SDK (hoje)
-- Liberar o acesso do CI (você, pela interface do GitHub): nas configurações do pacote platform-sdk, em Manage Actions access, adicionar o gpt-maker-core com leitura. Sem isso o CI recebe 401 no npm ci.
-- Testes de integração: ligar o Docker e rodar npm run test:integration -w backend. É o único teste que ainda não rodei.
-- Commit e PR da branch chore/published-platform-sdk. Se quiser, junto com a correção do frontend que cai em staging quando falta a PUBLIC_PLATFORM_URL.
+Uma mudança de comportamento: antes, produção só subia manualmente, informando um SHA já validado em staging. Agora sobe a cada merge em master, desde que alguém aprove. Se preferir manter produção só manual, é só tirar master do workflow_run.
 
-2. Tarefa 6.1: cadastro do app com o time da plataforma (depende de outras pessoas)
-- Enviar os escopos (imbot, imopenlines, crm, task, bizproc, user, im), a URL do instalador (/platform/installer), a URL de eventos (/platform/events) e a origem do frontend para o SESSION_CORS_ORIGINS.
-- Receber de volta a PLATFORM_API_KEY e o segredo HMAC. Eles vão para o ENV_FILE do ambiente staging.
-- Bloqueio: essas URLs só existem depois do servidor e do DNS de staging (tarefa 2.2, api-staging. e app-staging.). Vale adiantar a 2.2, ou passar as URLs já definidas antes de subir o servidor.
+O que você precisa configurar no GitHub
 
-3. Desenvolvimento: seção 7, gestão de agentes (recomendo começar por ela)
+Em Settings → Environments, crie dois ambientes: staging e production. Cada um recebe as mesmas chaves, com os valores do seu Droplet:
 
-Ela não depende da plataforma em staging e destrava as seções 8 a 10:
-- 7.1 repositório de agentes filtrado por tenantId, com testes de isolamento entre tenants;
-- 7.2 a 7.5 criar, editar, inativar e remover agentes no GPTMaker;
-- 7.8 espelhar cada agente como item de assinatura. Ficou mais simples, porque o PlatformClient já tem createItem, updateItem e removeItem;
-- 7.7 tela de agentes no frontend.
+┌──────────┬────────────────────┬─────────────────────────────────────────────────────────────┐
+│   Tipo   │        Nome        │                          Conteúdo                           │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Variable │ DEPLOY_HOST        │ IP ou host do Droplet                                       │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Variable │ DEPLOY_USER        │ usuário SSH                                                 │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Variable │ DEPLOY_DIR         │ pasta da stack, ex.: /opt/gptmaker                          │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Secret   │ DEPLOY_SSH_KEY     │ chave privada SSH                                           │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Secret   │ DEPLOY_KNOWN_HOSTS │ saída de ssh-keyscan <host>                                 │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Secret   │ GHCR_PULL_TOKEN    │ PAT com read:packages                                       │
+├──────────┼────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Secret   │ ENV_FILE           │ o .env inteiro, montado a partir de infra/.env.prod.example │
+└──────────┴────────────────────┴─────────────────────────────────────────────────────────────┘
 
-A cobrança (seção 12) também ficou mais barata com o SDK, mas o teste ponta a ponta dela (12.12) depende da plataforma em staging, então pode esperar.
+Recomendações:
+- production: ative Required reviewers e restrinja Deployment branches a master. staging: restrinja a develop.
+- ENV_FILE de staging: domínios de staging, PLATFORM_URL/PUBLIC_PLATFORM_URL apontando para https://platform-staging.crmthink.com.br, e credenciais da plataforma (API key e webhook secret) do cadastro de staging.
+- Chaves separadas: gere uma DATA_ENCRYPTION_KEY diferente para cada ambiente (openssl rand -base64 32) e guarde um backup de cada uma. Sem ela os dados cifrados ficam ilegíveis. O ideal é usar também um workspace GPTMaker separado para staging.
+- Proteção das branches: em Settings → Branches, exija que o CI passe antes do merge em develop e master.
 
-Posso fazer o commit e o PR agora e começar a 7.1 em seguida?
+Estado atual
+
+O commit "Correção de testes" que você fez já inclui o health.test.ts. Ainda falta commitar: os três workflows, o workspace-health.service.ts, o frontend/package.json e o frontend/public/.gitkeep. Prettier passou em tudo. Os workflows só vão ser testados de verdade quando rodarem no GitHub.
+
+---------------------
+
+Você não precisa mais descobrir as URLs dos portais. Tirei a variável BITRIX_FRAME_ANCESTORS do projeto e o Caddy passou a decidir a regra pelo caminho da página:
+
+- /app e subpáginas (a área carregada dentro do Bitrix24): frame-ancestors https:. Aceita ser embutida por qualquer site HTTPS, então funciona em qualquer domínio do Bitrix24 cloud (.com.br, .com, .ru, .de…), em domínio próprio e em on-premise com HTTPS.
+- Todo o resto (/admin, /): frame-ancestors 'self'. Nada de fora consegue embutir. Antes o /admin podia ser embutido pelos domínios do Bitrix, então essa parte ficou mais restrita do que era.
+
+Por que liberar /app é seguro: o frame-ancestors existe para evitar clickjacking, quando um site malicioso embute uma página em que a vítima já está logada. Aqui não há sessão por cookie. A sessão nasce da autenticação do BX24 dentro do iframe e é conferida no servidor pela plataforma. Um site qualquer que embutir /app só vê a mensagem "abra pelo Bitrix24".
+
+A limitação é que um portal on-premise servido em HTTP puro, sem TLS, não consegue embutir o app. Se precisar suportar esse caso, dá para trocar por frame-ancestors *.
+
+Arquivos alterados:
+- infra/Caddyfile: nova regra por caminho, com um comentário explicando o motivo. caddy validate retornou "Valid configuration" e o caddy fmt não sugeriu mudanças.
+- infra/.env.prod.example e infra/docker-compose.prod.yml: removida a variável. Não precisa colocar no ENV_FILE do GitHub.
+
+Isso se soma ao que ainda não foi commitado: os workflows, o workspace-health.service.ts, o frontend/package.json e o frontend/public/.gitkeep. Quer que eu faça o commit, o push e abra o PR para develop?

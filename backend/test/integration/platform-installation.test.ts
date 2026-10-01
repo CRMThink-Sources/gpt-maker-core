@@ -168,6 +168,9 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       PLATFORM_URL: wiremock.baseUrl,
       PLATFORM_API_KEY: 'api-key',
       PLATFORM_WEBHOOK_SECRETS: `novo,${SECRET}`,
+      STORAGE_ENDPOINT: 'http://127.0.0.1:1',
+      STORAGE_ACCESS_KEY: 'test',
+      STORAGE_SECRET_KEY: 'test',
     });
     initMetrics(env.APP_ROLE);
     configureFieldCipher(env.DATA_ENCRYPTION_KEY);

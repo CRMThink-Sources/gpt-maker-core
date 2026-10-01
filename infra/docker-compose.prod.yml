@@ -23,7 +23,6 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
-      BITRIX_FRAME_ANCESTORS: ${BITRIX_FRAME_ANCESTORS}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
