@@ -16,9 +16,6 @@ import { attachmentFileIds, hasUnknownAttachment } from './message-attachments';
 /** Resposta guardada até ser publicada no Bitrix (9.6), para a retentativa não perguntar de novo. */
 const REPLY_TTL_SECONDS = 24 * 60 * 60;
 
-/** Imagem sem legenda: o GPTMaker exige `prompt` na variante de imagem. */
-const IMAGE_PROMPT_FALLBACK = 'O cliente enviou uma imagem.';
-
 export function replyCacheKey(message: InboundMessage): string {
   return `channel:reply:${messageIdOf(message)}`;
 }
@@ -100,7 +97,7 @@ export class ConversationService {
 
     switch (media?.kind) {
       case 'image':
-        return { ...base, image: media.url, prompt: text || IMAGE_PROMPT_FALLBACK };
+        return { ...base, image: media.url, ...(text ? { prompt: text } : {}) };
       case 'audio':
         if (text)
           this.logger.warn('texto junto com áudio não vai ao GPTMaker (variante sem prompt)');

@@ -396,13 +396,15 @@ Os 8 nomes do rascunho estão todos confirmados com a grafia exata acima.
 
 Variantes (campos específicos e obrigatórios):
 
-| Variante (título na doc) | Campos específicos                   | `required`                     |
-| ------------------------ | ------------------------------------ | ------------------------------ |
-| Texto                    | `prompt` (string)                    | `contextId`, `prompt`          |
-| Imagem                   | `prompt`, `image` (URL)              | `contextId`, `prompt`, `image` |
-| Áudio                    | `audio` (URL) — sem `prompt`         | `contextId`, `audio`           |
-| Vídeo                    | `video` (URL), `prompt` (caption)    | `contextId`, `video`           |
-| Documento                | `document` (URL), `prompt` (caption) | `contextId`, `document`        |
+| Variante (título na doc) | Campos específicos                   | `required`                         |
+| ------------------------ | ------------------------------------ | ---------------------------------- |
+| Texto                    | `prompt` (string)                    | `contextId`, `prompt`              |
+| Imagem                   | `prompt`, `image` (URL)              | `contextId`, `prompt`, `image` (¹) |
+| Áudio                    | `audio` (URL) — sem `prompt`         | `contextId`, `audio`               |
+| Vídeo                    | `video` (URL), `prompt` (caption)    | `contextId`, `video`               |
+| Documento                | `document` (URL), `prompt` (caption) | `contextId`, `document`            |
+
+(¹) Divergência da API real (testado em 2026-10-01): imagem sem `prompt` (ou com `prompt: ""`) é aceita, `200` com `success: true`, e o agente descreve a imagem. O app manda o texto do cliente como `prompt` só quando existe.
 
 Exemplo (valores copiados dos `example` do OpenAPI, variante Texto):
 

@@ -190,13 +190,13 @@ describe('encaminhamento ao GPTMaker', () => {
     });
   });
 
-  it('imagem sem legenda ganha prompt padrão', async () => {
+  it('imagem sem legenda vai sem prompt', async () => {
     await stubReply();
     await stubFile();
     await service.ask(message({ text: '', params: { FILE_ID: ['138'] } }), target);
-    expect((await conversationBodies())[0]).toMatchObject({
-      prompt: 'O cliente enviou uma imagem.',
-    });
+    const [body] = await conversationBodies();
+    expect(body).toMatchObject({ image: expect.any(String) });
+    expect(body).not.toHaveProperty('prompt');
   });
 
   it('áudio vai sem prompt; documento leva o texto de legenda', async () => {

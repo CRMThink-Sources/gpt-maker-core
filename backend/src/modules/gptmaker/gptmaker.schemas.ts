@@ -220,7 +220,8 @@ const conversationBase = {
 
 /** Variantes do corpo de `/conversation`: texto, imagem, áudio, vídeo e documento. */
 export const conversationRequestSchema = z.union([
-  z.object({ ...conversationBase, prompt: z.string().min(1), image: z.url() }),
+  // O OpenAPI exige `prompt` na imagem, mas a API aceita sem (testado em 2026-10-01).
+  z.object({ ...conversationBase, image: z.url(), prompt: z.string().optional() }),
   z.object({ ...conversationBase, audio: z.url() }),
   z.object({ ...conversationBase, video: z.url(), prompt: z.string().optional() }),
   z.object({ ...conversationBase, document: z.url(), prompt: z.string().optional() }),
