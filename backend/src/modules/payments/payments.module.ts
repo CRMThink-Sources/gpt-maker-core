@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing';
 import { TenancyModule } from '../tenancy';
 import { AgentItemMirror } from './agent-item.mirror';
+import { CreditSummaryService } from './credit-summary.service';
+import { CreditsController } from './credits.controller';
 import { InstallationEventsConsumer } from './installation-events.consumer';
 import { PaymentsOutbox } from './payments-outbox';
 import { PaymentsOutboxWorker } from './payments-outbox.worker';
@@ -14,7 +16,7 @@ import { TrialService } from './trial.service';
 
 @Module({
   imports: [BillingModule, TenancyModule],
-  controllers: [PlatformEventsController, TrialController],
+  controllers: [PlatformEventsController, TrialController, CreditsController],
   providers: [
     PlatformEventStore,
     InstallationEventsConsumer,
@@ -24,6 +26,7 @@ import { TrialService } from './trial.service';
     SubscriptionEventsConsumer,
     SubscriptionEventsService,
     TrialService,
+    CreditSummaryService,
   ],
   exports: [PaymentsOutbox],
 })

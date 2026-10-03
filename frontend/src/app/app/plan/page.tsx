@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type CreditSummaryView,
   TRIAL_FIELD_LABELS,
   type TrialRequest,
   trialRequestSchema,
@@ -13,6 +14,7 @@ import { errorMessage } from '@/lib/agents';
 import { bx24Call } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../agents/agent-fields';
+import { BalanceSection, EntriesSection, UsageSection } from './credits-sections';
 import { useAppSession } from '../session-provider';
 
 /** Intervalo da consulta enquanto o trial é ativado (o evento da plataforma leva segundos). */
@@ -27,10 +29,6 @@ const FIELDS: Array<{ key: keyof TrialRequest; type: string; autoComplete: strin
 ];
 
 type FieldErrors = Partial<Record<keyof TrialRequest, string>>;
-
-function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString('pt-BR') : '';
-}
 
 /**
  * Campos recusados, do zod local (`path: ['phone']`) ou da plataforma repassada pela API
@@ -149,19 +147,36 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
 export default function PlanPage() {
   const { session, api } = useAppSession();
   const [status, setStatus] = useState<TrialStatusView | null>(null);
+  const [summary, setSummary] = useState<CreditSummaryView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => api<TrialStatusView>('/app/trial'), [api]);
+  const loadSummary = useCallback(() => api<CreditSummaryView>('/app/credits'), [api]);
 
   useEffect(() => {
     let cancelled = false;
-    load()
-      .then((s) => !cancelled && setStatus(s))
+    Promise.all([load(), loadSummary()])
+      .then(([s, credits]) => {
+        if (cancelled) return;
+        setStatus(s);
+        setSummary(credits);
+      })
       .catch((e: unknown) => !cancelled && setError(errorMessage(e, 'Não foi possível carregar.')));
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, loadSummary]);
+
+  // Trial confirmado: os 500 créditos já estão no saldo.
+  useEffect(() => {
+    if (status?.state !== 'trialing') return;
+    loadSummary()
+      .then(setSummary)
+      .catch(() => undefined);
+  }, [status?.state, loadSummary]);
+
+  const paid =
+    summary?.subscription?.status === 'active' || summary?.subscription?.status === 'past_due';
 
   // Ativação em andamento: consulta até o `subscription.trial_started` chegar ao backend.
   useEffect(() => {
@@ -176,9 +191,12 @@ export default function PlanPage() {
 
   return (
     <>
-      <PageHeader title="Créditos e plano" description="Teste grátis, saldo e assinatura do app." />
+      <PageHeader
+        title="Créditos e plano"
+        description="Saldo, consumo dos agentes e teste grátis do app."
+      />
       {error && <Alert tone="error">{error}</Alert>}
-      {!status && !error && <Loading />}
+      {(!status || !summary) && !error && <Loading />}
 
       {status?.state === 'available' && (
         <Card className="p-6">
@@ -213,15 +231,7 @@ export default function PlanPage() {
         </Card>
       )}
 
-      {status?.state === 'trialing' && (
-        <Alert tone="success">
-          Teste grátis ativo
-          {status.trialEndsAt ? ` até ${formatDate(status.trialEndsAt)}` : ''}. Seus agentes já
-          podem atender usando os créditos do teste.
-        </Alert>
-      )}
-
-      {status?.state === 'unavailable' && (
+      {status?.state === 'unavailable' && summary && !paid && (
         <Card className="flex items-start gap-3 p-6">
           <CheckIcon className="mt-0.5 size-5 shrink-0 text-zinc-400" />
           <p className="text-sm text-zinc-600">
@@ -229,6 +239,14 @@ export default function PlanPage() {
             breve; enquanto isso, fale com a CRMThink.
           </p>
         </Card>
+      )}
+
+      {status && summary && (
+        <div className="mt-8 space-y-8">
+          <BalanceSection summary={summary} />
+          <UsageSection cycleStart={summary.cycleStart} />
+          <EntriesSection />
+        </div>
       )}
     </>
   );
