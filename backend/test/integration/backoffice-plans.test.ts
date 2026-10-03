@@ -125,29 +125,25 @@ describe('backoffice: direitos dos planos', () => {
   });
 
   it('lista os planos da plataforma com e sem direitos, e os assinantes', async () => {
-    await db
-      .insert(planEntitlement)
-      .values({
-        planSpaId: '11',
-        planType: 'subscription',
-        creditsPerCycle: 5000,
-        updatedBy: 'manual',
-      });
+    await db.insert(planEntitlement).values({
+      planSpaId: '11',
+      planType: 'subscription',
+      creditsPerCycle: 5000,
+      updatedBy: 'manual',
+    });
     const code = randomBytes(4).toString('hex');
     const [t] = await db
       .insert(tenant)
       .values({ installationId: code, memberId: code, domain: `${code}.b24.com`, tenantCode: code })
       .returning();
-    await db
-      .insert(subscriptionState)
-      .values({
-        tenantId: t!.id,
-        subscriptionId: '1',
-        status: 'active',
-        modality: 'stripe',
-        planId: '11',
-        version: 1,
-      });
+    await db.insert(subscriptionState).values({
+      tenantId: t!.id,
+      subscriptionId: '1',
+      status: 'active',
+      modality: 'stripe',
+      planId: '11',
+      version: 1,
+    });
 
     const view = await service.list();
     expect(view.platformError).toBe(false);
