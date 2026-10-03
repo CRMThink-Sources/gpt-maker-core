@@ -1,6 +1,7 @@
 import {
   type BillingPortalRequest,
   type BillingPortalSession,
+  type ChangePlanResult,
   type CheckoutRequest,
   type CheckoutSession,
   type CreateItemRequest,
@@ -117,6 +118,16 @@ export class PlatformApiClient {
   /** Sessão do Stripe Customer Portal; `NO_GATEWAY_SUBSCRIPTION` sem cobrança Stripe ativa. */
   createBillingPortalSession(body: BillingPortalRequest): Promise<BillingPortalSession> {
     return this.call('billing-portal.create', () => this.client.createBillingPortalSession(body));
+  }
+
+  /**
+   * Troca de plano de assinatura `stripe`: upgrade imediato (cobrança proporcional), downgrade no
+   * próximo período. O efeito nos créditos chega pelo evento `subscription.plan_changed`.
+   */
+  changePlan(subscriptionId: number, planId: number): Promise<ChangePlanResult> {
+    return this.call('subscription.change-plan', () =>
+      this.client.changePlan(subscriptionId, { planId }),
+    );
   }
 
   listItems(subscriptionId: number): Promise<SubscriptionItem[]> {

@@ -35,8 +35,10 @@ export type ProjectionOutcome =
  * não tem efeito) e aplica os efeitos nos créditos. Assinatura nova agenda o espelho dos agentes
  * como itens dela; toda mudança da projeção avisa o `TenantLifecycle` (`onAccessChanged`), que
  * reativa ou inativa os agentes. `past_due` marca o fim da carência (`grace_until`, 12.5), e
- * `recovered`/`renewed`/`activated` a limpam. Troca de plano (12.6), avisos (12.7) e estornos
- * (12.8) ficam nas suas tarefas: por ora esses eventos só atualizam a projeção.
+ * `recovered`/`renewed`/`activated` a limpam. `plan_changed`: upgrade imediato concede o
+ * proporcional dos créditos; downgrade guarda o plano futuro até a renovação (12.6). Os modelos
+ * dos agentes seguem o plano pelo `onAccessChanged` (`AgentPlanModels`). Estornos (12.8) ficam
+ * na sua tarefa: por ora esses eventos só atualizam a projeção.
  */
 @Injectable()
 export class SubscriptionEventsService {
@@ -144,9 +146,39 @@ export class SubscriptionEventsService {
         await this.clearGrace(tenant.id);
         return;
       }
+      case 'subscription.plan_changed': {
+        if (!subscriptionId) return;
+        const { previousPlanId, planId, effective } = event.data;
+        if (effective === 'next_period') {
+          // Downgrade: o plano atual vale até a renovação, que traz o novo (e seus créditos).
+          await this.db
+            .update(subscriptionState)
+            .set({ planId: String(previousPlanId), nextPlanId: String(planId) })
+            .where(eq(subscriptionState.tenantId, tenant.id));
+          return;
+        }
+        await this.db
+          .update(subscriptionState)
+          .set({ planId: String(planId), nextPlanId: null })
+          .where(eq(subscriptionState.tenantId, tenant.id));
+        await this.cycles.upgradeGrant({
+          tenantId: tenant.id,
+          subscriptionId,
+          version: snapshot?.version ?? 0,
+          fromPlanId: String(previousPlanId),
+          toPlanId: String(planId),
+          remainingFraction: event.data.remainingFraction ?? 0,
+        });
+        return;
+      }
       case 'subscription.activated':
       case 'subscription.renewed': {
         await this.clearGrace(tenant.id);
+        // Plano futuro (downgrade agendado) passou a valer com o novo período.
+        await this.db
+          .update(subscriptionState)
+          .set({ nextPlanId: null })
+          .where(eq(subscriptionState.tenantId, tenant.id));
         if (
           !subscriptionId ||
           snapshot?.planId === undefined ||

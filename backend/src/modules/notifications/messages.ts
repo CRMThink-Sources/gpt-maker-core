@@ -38,4 +38,7 @@ export const MESSAGES = {
 
   periodEnding: (input: { daysLeft: number; periodEnd: Date }) =>
     `${APP}: a assinatura termina em ${input.daysLeft === 1 ? '1 dia' : `${input.daysLeft} dias`} (${date(input.periodEnd)}). Fale com a CRMThink para renovar e manter os agentes atendendo.`,
+
+  modelDowngraded: (input: { agents: string[]; model: string }) =>
+    `${APP}: o plano atual não inclui o modelo de IA ${input.agents.length === 1 ? 'do agente' : 'dos agentes'} ${input.agents.join(', ')}. ${input.agents.length === 1 ? 'Ele passou' : 'Eles passaram'} a usar o ${input.model}. Os modelos disponíveis estão na edição de cada agente.`,
 };

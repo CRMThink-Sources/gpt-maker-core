@@ -2,6 +2,7 @@
 
 import type {
   BillingPortalView,
+  ChangePlanView,
   CheckoutSessionView,
   CreditSummaryView,
   PlanInterval,
@@ -209,6 +210,97 @@ function CheckoutModal({
   );
 }
 
+/**
+ * Confirmação da troca de plano (12.6). Upgrade vale na hora, com cobrança proporcional e os
+ * créditos proporcionais pelo evento; downgrade vale na renovação.
+ */
+function ChangePlanModal({
+  current,
+  target,
+  onClose,
+  onDone,
+}: {
+  current: PlanOfferView | undefined;
+  target: PlanOfferView;
+  onClose: () => void;
+  onDone: (notice: string) => void;
+}) {
+  const { api } = useAppSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const upgrade = !current || target.credits > current.credits;
+
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api<ChangePlanView>('/app/subscription/change-plan', {
+        method: 'POST',
+        body: JSON.stringify({ planId: target.id }),
+      });
+      onDone(
+        result.effective === 'immediate'
+          ? `Plano alterado para ${target.name}. Os créditos proporcionais aparecem no saldo em instantes.`
+          : `Troca para ${target.name} agendada${
+              result.effectiveAt ? ` para ${formatDate(result.effectiveAt)}` : ' para a renovação'
+            }. Até lá, o plano atual continua valendo.`,
+      );
+    } catch (e) {
+      setError(errorMessage(e, 'Não foi possível trocar de plano. Tente de novo.'));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Mudar para ${target.name}`}
+      onRequestClose={() => !busy && onClose()}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className={buttonClass('secondary')}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirm()}
+            disabled={busy}
+            className={buttonClass('primary')}
+          >
+            {busy && <Spinner className="size-4" />}
+            Confirmar troca
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-3 text-sm text-zinc-700">
+        <p>
+          De <strong>{current?.name ?? 'plano atual'}</strong> para <strong>{target.name}</strong> (
+          {target.credits.toLocaleString('pt-BR')} créditos por ciclo, {price(target.amount)}
+          {target.interval ? `/${INTERVALS[target.interval]}` : ''}).
+        </p>
+        {upgrade ? (
+          <p>
+            A troca vale <strong>agora</strong>. O cartão é cobrado só pela diferença proporcional
+            ao que resta do ciclo, e você recebe na hora a parte proporcional dos créditos a mais.
+          </p>
+        ) : (
+          <p>
+            A troca vale na <strong>próxima renovação</strong>. Até lá, o plano atual e os créditos
+            dele continuam valendo. Se algum agente usar um modelo de IA que o novo plano não
+            inclui, ele passa a usar o modelo padrão.
+          </p>
+        )}
+        {error && <Alert tone="error">{error}</Alert>}
+      </div>
+    </Modal>
+  );
+}
+
 function OfferCard({
   offer,
   kind,
@@ -256,6 +348,8 @@ export function PlansSection({
     kind: 'subscription' | 'package';
   } | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [changing, setChanging] = useState<PlanOfferView | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -276,6 +370,10 @@ export function PlansSection({
   const currentPlan = plans?.subscriptions.find(
     (offer) => String(offer.id) === summary.subscription?.planId,
   );
+  const nextPlan = plans?.subscriptions.find(
+    (offer) => String(offer.id) === summary.subscription?.nextPlanId,
+  );
+  const manual = summary.subscription?.modality === 'manual';
 
   const settle = useCallback(() => onChanged(), [onChanged]);
 
@@ -342,6 +440,24 @@ export function PlansSection({
           {error}
         </Alert>
       )}
+      {notice && (
+        <Alert tone="success" className="mb-3">
+          {notice}
+        </Alert>
+      )}
+      {paid && summary.subscription?.nextPlanId && (
+        <Alert tone="warning" className="mb-3">
+          Troca para {nextPlan?.name ?? `o plano #${summary.subscription.nextPlanId}`} agendada
+          {summary.expiresAt ? ` para ${formatDate(summary.expiresAt)}` : ' para a renovação'}. Até
+          lá, o plano atual continua valendo.
+        </Alert>
+      )}
+      {paid && manual && (
+        <p className="mb-3 text-sm text-zinc-500">
+          Sua assinatura foi contratada com a CRMThink: para trocar de plano, fale com o time
+          comercial.
+        </p>
+      )}
       {!session.canManage && !paid && (
         <Alert tone="warning" className="mb-3">
           Somente o administrador do app pode contratar planos.
@@ -371,6 +487,37 @@ export function PlansSection({
         </div>
       )}
 
+      {plans && paid && plans.subscriptions.length > 1 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {plans.subscriptions.map((offer) => {
+            const isCurrent = String(offer.id) === summary.subscription?.planId;
+            return (
+              <OfferCard
+                key={offer.id}
+                offer={offer}
+                kind="subscription"
+                action={
+                  isCurrent ? (
+                    <p className="text-center text-sm font-medium text-brand-700">Plano atual</p>
+                  ) : session.canManage && !manual ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotice(null);
+                        setChanging(offer);
+                      }}
+                      className={`${buttonClass('secondary')} w-full`}
+                    >
+                      Mudar para este plano
+                    </button>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+        </div>
+      )}
+
       {plans && plans.packages.length > 0 && (
         <div className="mt-6">
           <h3 className="text-sm font-semibold text-zinc-900">Créditos adicionais</h3>
@@ -392,6 +539,19 @@ export function PlansSection({
             ))}
           </div>
         </div>
+      )}
+
+      {changing && (
+        <ChangePlanModal
+          current={currentPlan}
+          target={changing}
+          onClose={() => setChanging(null)}
+          onDone={(message) => {
+            setChanging(null);
+            setNotice(message);
+            onChanged();
+          }}
+        />
       )}
 
       {buying && (

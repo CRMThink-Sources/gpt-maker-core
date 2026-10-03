@@ -27,7 +27,10 @@ export interface CreditSummaryView {
   graceUntil: string | null;
   subscription: {
     status: 'trialing' | 'active' | 'past_due' | 'cancelled' | 'trial_expired';
+    modality: 'stripe' | 'manual';
     planId: string | null;
+    /** Downgrade agendado: plano que vale a partir da renovação. */
+    nextPlanId: string | null;
   } | null;
   /** Início do ciclo corrente (ou do trial) e créditos consumidos desde então. */
   cycleStart: string | null;

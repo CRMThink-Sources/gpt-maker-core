@@ -37,6 +37,18 @@ export interface CheckoutSessionView {
   purchaseId: number | null;
 }
 
+/** Troca de plano de assinatura paga com cartão (`stripe`). */
+export const changePlanRequestSchema = z.object({
+  planId: z.number().int().positive(),
+});
+
+export interface ChangePlanView {
+  /** `immediate`: upgrade já vale (créditos proporcionais pelo evento); `next_period`: na renovação. */
+  effective: 'immediate' | 'next_period';
+  /** Quando o downgrade passa a valer. */
+  effectiveAt: string | null;
+}
+
 export interface PurchaseStatusView {
   /** `true` quando o `purchase.paid` já creditou o pacote. */
   credited: boolean;

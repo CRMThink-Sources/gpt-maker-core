@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
+import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
@@ -32,6 +33,16 @@ const PLATFORM_PLANS = [
     productName: 'ThinkFlow',
     name: 'ThinkFlow 5000',
     amount: 49900,
+    interval: 'monthly',
+    type: 'subscription',
+    trial: false,
+  },
+  {
+    id: 13,
+    productId: 1,
+    productName: 'ThinkFlow',
+    name: 'ThinkFlow 10000',
+    amount: 89900,
     interval: 'monthly',
     type: 'subscription',
     trial: false,
@@ -86,12 +97,15 @@ describe('planos e checkout', () => {
     return error as DomainError;
   }
 
-  async function subscription(status: 'trialing' | 'active' | 'past_due'): Promise<void> {
+  async function subscription(
+    status: 'trialing' | 'active' | 'past_due',
+    modality: 'stripe' | 'manual' = 'stripe',
+  ): Promise<void> {
     await db.insert(subscriptionState).values({
       tenantId,
       subscriptionId: String(installationId),
       status,
-      modality: 'stripe',
+      modality,
       planId: status === 'trialing' ? '9' : '11',
       version: 1,
     });
@@ -124,6 +138,7 @@ describe('planos e checkout', () => {
     await db.insert(planEntitlement).values([
       { planSpaId: '9', planType: 'subscription', creditsPerCycle: 0 },
       { planSpaId: '11', planType: 'subscription', creditsPerCycle: 5000 },
+      { planSpaId: '13', planType: 'subscription', creditsPerCycle: 10000 },
       { planSpaId: '7', planType: 'one_time', creditsPerPackage: 1000 },
     ]);
   });
@@ -152,6 +167,7 @@ describe('planos e checkout', () => {
     expect(await plans.offers()).toEqual({
       subscriptions: [
         { id: 11, name: 'ThinkFlow 5000', amount: 49900, interval: 'monthly', credits: 5000 },
+        { id: 13, name: 'ThinkFlow 10000', amount: 89900, interval: 'monthly', credits: 10000 },
       ],
       packages: [{ id: 7, name: '1000 Créditos', amount: 12900, interval: null, credits: 1000 }],
     });
@@ -259,5 +275,80 @@ describe('planos e checkout', () => {
     };
     const error = await rejection(plans.billingPortal(tenantId, installationId));
     expect(error.code).toBe('NO_GATEWAY_SUBSCRIPTION');
+  });
+
+  describe('troca de plano', () => {
+    it('upgrade imediato: chama a plataforma com a assinatura e o plano novo', async () => {
+      await subscription('active');
+      checkoutReply = {
+        status: 200,
+        body: {
+          subscriptionId: installationId,
+          planId: 13,
+          effective: 'immediate',
+          remainingFraction: 0.5,
+        },
+      };
+      expect(await plans.changePlan(tenantId, 13)).toEqual({
+        effective: 'immediate',
+        effectiveAt: null,
+      });
+      expect(sent.at(-1)).toEqual({
+        path: `/v1/subscriptions/${installationId}/change-plan`,
+        body: { planId: 13 },
+      });
+    });
+
+    it('downgrade: vale na renovação', async () => {
+      await subscription('active');
+      await db
+        .update(subscriptionState)
+        .set({ planId: '13' })
+        .where(eq(subscriptionState.tenantId, tenantId));
+      checkoutReply = {
+        status: 200,
+        body: {
+          subscriptionId: installationId,
+          planId: 11,
+          effective: 'next_period',
+          effectiveAt: '2026-11-03T23:59:59.999Z',
+        },
+      };
+      expect(await plans.changePlan(tenantId, 11)).toEqual({
+        effective: 'next_period',
+        effectiveAt: '2026-11-03T23:59:59.999Z',
+      });
+    });
+
+    it('assinatura manual: fala com o comercial, sem chamar a plataforma', async () => {
+      await subscription('active', 'manual');
+      expect((await rejection(plans.changePlan(tenantId, 13))).code).toBe('MANUAL_SUBSCRIPTION');
+      expect(sent.some((x) => x.path.includes('change-plan'))).toBe(false);
+    });
+
+    it('trial ou sem assinatura: contratar primeiro', async () => {
+      expect((await rejection(plans.changePlan(tenantId, 13))).code).toBe(
+        'NO_GATEWAY_SUBSCRIPTION',
+      );
+      await subscription('trialing');
+      expect((await rejection(plans.changePlan(tenantId, 13))).code).toBe(
+        'NO_GATEWAY_SUBSCRIPTION',
+      );
+    });
+
+    it('mesmo plano ou plano fora da oferta', async () => {
+      await subscription('active');
+      expect((await rejection(plans.changePlan(tenantId, 11))).code).toBe('SAME_PLAN');
+      expect((await rejection(plans.changePlan(tenantId, 12))).code).toBe('PLAN_NOT_AVAILABLE');
+    });
+
+    it('recusa da plataforma traduzida', async () => {
+      await subscription('active');
+      checkoutReply = {
+        status: 422,
+        body: { error: { code: 'MANUAL_SUBSCRIPTION', message: 'x' } },
+      };
+      expect((await rejection(plans.changePlan(tenantId, 13))).code).toBe('MANUAL_SUBSCRIPTION');
+    });
   });
 });

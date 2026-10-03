@@ -113,6 +113,7 @@ describe('ciclo de vida da assinatura', () => {
     await db.insert(planEntitlement).values([
       { planSpaId: String(PLAN), planType: 'subscription', creditsPerCycle: 1000 },
       { planSpaId: String(PACKAGE), planType: 'one_time', creditsPerPackage: 500 },
+      { planSpaId: '1500', planType: 'subscription', creditsPerCycle: 3000 },
     ]);
   });
 
@@ -398,5 +399,59 @@ describe('ciclo de vida da assinatura', () => {
     await service.handle(event('subscription.activated', {}));
     await service.handle(event('subscription.activated', {}));
     expect(await balance()).toMatchObject({ plan: 1000, total: 1000 });
+  });
+
+  describe('troca de plano', () => {
+    const BIG = 1500;
+
+    it('upgrade imediato: GRANT proporcional da diferença, uma vez por decisão', async () => {
+      await service.handle(event('subscription.activated', {}));
+      const changed = event(
+        'subscription.plan_changed',
+        { planId: BIG },
+        {
+          previousPlanId: PLAN,
+          planId: BIG,
+          effective: 'immediate',
+          remainingFraction: 0.5,
+        },
+      );
+      await service.handle(changed);
+      // (3000 - 1000) × 0,5 = 1000
+      expect(await balance()).toMatchObject({ plan: 2000 });
+      expect(await projection()).toMatchObject({ planId: String(BIG), nextPlanId: null });
+
+      // Reentrega com outro eventId e a mesma versão: nada novo.
+      await service.handle({ ...changed, eventId: randomUUID() } as PlatformEvent);
+      expect((await balance()).plan).toBe(2000);
+    });
+
+    it('downgrade: plano atual até a renovação, que aplica o novo e limpa o futuro', async () => {
+      await service.handle(event('subscription.activated', { planId: BIG }));
+      expect((await balance()).plan).toBe(3000);
+      await service.handle(
+        event(
+          'subscription.plan_changed',
+          { planId: PLAN },
+          {
+            previousPlanId: BIG,
+            planId: PLAN,
+            effective: 'next_period',
+          },
+        ),
+      );
+      expect(await projection()).toMatchObject({ planId: String(BIG), nextPlanId: String(PLAN) });
+      expect((await balance()).plan).toBe(3000);
+
+      await service.handle(
+        event('subscription.renewed', {
+          planId: PLAN,
+          periodStart: '2026-11-01T00:00:00.000Z',
+          periodEnd: '2026-12-01T00:00:00.000Z',
+        }),
+      );
+      expect(await projection()).toMatchObject({ planId: String(PLAN), nextPlanId: null });
+      expect((await balance()).plan).toBe(1000);
+    });
   });
 });

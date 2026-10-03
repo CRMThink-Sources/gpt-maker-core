@@ -2,6 +2,7 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import type { Plan } from '@crmthink-sources/platform-sdk';
 import type {
   BillingPortalView,
+  ChangePlanView,
   CheckoutSessionView,
   PlanOfferView,
   PlansView,
@@ -109,6 +110,46 @@ export class PlansService {
     }
   }
 
+  /**
+   * Troca de plano (spec payments-integration, "Troca de plano e portal do cliente"; 12.6): só
+   * assinatura paga com cartão; a manual muda no SPA pelo comercial. Upgrade vale na hora
+   * (cobrança proporcional pela plataforma); downgrade na renovação. Créditos e modelos seguem o
+   * evento `subscription.plan_changed`.
+   */
+  async changePlan(tenantId: string, planId: number): Promise<ChangePlanView> {
+    const [projection] = await this.db
+      .select()
+      .from(subscriptionState)
+      .where(eq(subscriptionState.tenantId, tenantId));
+    if (!projection || (projection.status !== 'active' && projection.status !== 'past_due')) {
+      throw new DomainError(
+        'NO_GATEWAY_SUBSCRIPTION',
+        'Só é possível trocar de plano com uma assinatura paga ativa. Contrate um plano primeiro.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (projection.modality === 'manual') throw manualSubscription();
+    if (String(planId) === projection.planId && !projection.nextPlanId) {
+      throw new DomainError('SAME_PLAN', 'Este já é o seu plano.', HttpStatus.CONFLICT);
+    }
+    const offers = await this.offers();
+    if (!offers.subscriptions.some((offer) => offer.id === planId)) {
+      throw new DomainError('PLAN_NOT_AVAILABLE', 'Plano indisponível.', HttpStatus.NOT_FOUND);
+    }
+    try {
+      const result = await this.platform.changePlan(Number(projection.subscriptionId), planId);
+      this.logger.log(
+        { tenantId, from: projection.planId, to: planId, effective: result.effective },
+        'troca de plano solicitada',
+      );
+      return result.effective === 'next_period'
+        ? { effective: 'next_period', effectiveAt: result.effectiveAt }
+        : { effective: 'immediate', effectiveAt: null };
+    } catch (error) {
+      throw this.toDomainError(error, { tenantId, planId });
+    }
+  }
+
   async purchaseStatus(tenantId: string, purchaseId: number): Promise<PurchaseStatusView> {
     const [row] = await this.db
       .select({ id: creditLedger.id })
@@ -161,6 +202,10 @@ export class PlansService {
           'Pacotes de créditos exigem um plano ativo.',
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
+      case 'SAME_PLAN':
+        return new DomainError('SAME_PLAN', 'Este já é o seu plano.', HttpStatus.CONFLICT);
+      case 'MANUAL_SUBSCRIPTION':
+        return manualSubscription();
       case 'NO_GATEWAY_SUBSCRIPTION':
         return new DomainError(
           'NO_GATEWAY_SUBSCRIPTION',
@@ -194,7 +239,15 @@ export class PlansService {
 function subscriptionExists(): DomainError {
   return new DomainError(
     'SUBSCRIPTION_ALREADY_EXISTS',
-    'Este portal já tem um plano ativo. A troca de plano chega em breve.',
+    'Este portal já tem um plano ativo. Para mudar, use a troca de plano.',
+    HttpStatus.CONFLICT,
+  );
+}
+
+function manualSubscription(): DomainError {
+  return new DomainError(
+    'MANUAL_SUBSCRIPTION',
+    'Sua assinatura foi contratada com a CRMThink. Para trocar de plano, fale com o time comercial.',
     HttpStatus.CONFLICT,
   );
 }

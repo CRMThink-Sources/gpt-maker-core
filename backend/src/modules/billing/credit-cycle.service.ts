@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { and, asc, eq, gt, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
@@ -142,6 +142,50 @@ export class CreditCycleService {
       createdBy: SYSTEM,
     });
     await this.ledger.setDates(input.tenantId, { expiresAt: null, trialEndsAt: null });
+  }
+
+  /**
+   * Upgrade imediato (`plan_changed` com `immediate`): `GRANT` em `PLAN` de `remainingFraction` ×
+   * (créditos do plano novo − do anterior), arredondado para baixo e só se positivo (spec
+   * payments-integration, "Upgrade no meio do ciclo"). A chave é a versão da assinatura: cada
+   * decisão da plataforma concede uma vez, mesmo trocando de plano várias vezes no período.
+   */
+  async upgradeGrant(input: {
+    tenantId: string;
+    subscriptionId: string;
+    version: number;
+    fromPlanId: string;
+    toPlanId: string;
+    remainingFraction: number;
+  }): Promise<number> {
+    const rows = await this.db
+      .select({ planSpaId: planEntitlement.planSpaId, credits: planEntitlement.creditsPerCycle })
+      .from(planEntitlement)
+      .where(inArray(planEntitlement.planSpaId, [input.fromPlanId, input.toPlanId]));
+    const creditsOf = (planId: string) =>
+      rows.find((row) => row.planSpaId === planId)?.credits ?? 0;
+    if (!rows.some((row) => row.planSpaId === input.toPlanId)) {
+      this.logger.error(
+        { alert: true, planId: input.toPlanId, tenantId: input.tenantId },
+        'plano novo sem direitos cadastrados; upgrade sem créditos (cadastre em plan_entitlement)',
+      );
+    }
+    const fraction = Math.min(Math.max(input.remainingFraction, 0), 1);
+    const amount = Math.floor(fraction * (creditsOf(input.toPlanId) - creditsOf(input.fromPlanId)));
+    if (amount <= 0) return 0;
+    await this.ledger.credit({
+      tenantId: input.tenantId,
+      key: `plan-change:${input.subscriptionId}:v${input.version}`,
+      wallet: 'PLAN',
+      type: 'GRANT',
+      amount,
+      subscriptionId: input.subscriptionId,
+      refType: 'plan_change',
+      refId: `${input.fromPlanId}->${input.toPlanId}`,
+      reason: `upgrade proporcional (${Math.round(fraction * 100)}% do período)`,
+      createdBy: SYSTEM,
+    });
+    return amount;
   }
 
   /** `purchase.paid`: `TOPUP` em `EXTRA` com os créditos do pacote × quantidade. */

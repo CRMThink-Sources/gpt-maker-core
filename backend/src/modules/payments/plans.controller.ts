@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import {
   type BillingPortalView,
+  changePlanRequestSchema,
+  type ChangePlanView,
   checkoutRequestSchema,
   type CheckoutSessionView,
   type PlansView,
@@ -20,6 +22,7 @@ import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { PlansService } from './plans.service';
 
 class CheckoutDto extends createZodDto(checkoutRequestSchema) {}
+class ChangePlanDto extends createZodDto(changePlanRequestSchema) {}
 
 /** Planos, checkout embutido e portal de pagamento (spec payments-integration). */
 @Controller('app')
@@ -40,6 +43,16 @@ export class PlansController {
     @Body() body: CheckoutDto,
   ): Promise<CheckoutSessionView> {
     return this.plans.checkout(session.tenantId, session.installationId, body.planId);
+  }
+
+  @Post('subscription/change-plan')
+  @AppAuth('manage')
+  @HttpCode(HttpStatus.OK)
+  changePlan(
+    @CurrentSession() session: AppSession,
+    @Body() body: ChangePlanDto,
+  ): Promise<ChangePlanView> {
+    return this.plans.changePlan(session.tenantId, body.planId);
   }
 
   @Get('checkout/purchases/:purchaseId')
