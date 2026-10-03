@@ -28,7 +28,12 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
       },
       // Treinamentos ficam em cada agente (aba). Seções seguintes (10 e 12) entram quando existirem.
       { label: 'Gatilhos', icon: BoltIcon },
-      { label: 'Créditos e plano', icon: WalletIcon },
+      {
+        label: 'Créditos e plano',
+        icon: WalletIcon,
+        href: '/app/plan',
+        match: (path) => path.startsWith('/app/plan'),
+      },
     ],
   },
   {

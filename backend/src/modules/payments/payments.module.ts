@@ -9,10 +9,12 @@ import { PlatformEventStore } from './platform-event.store';
 import { PlatformEventsController } from './platform-events.controller';
 import { SubscriptionEventsConsumer } from './subscription-events.consumer';
 import { SubscriptionEventsService } from './subscription-events.service';
+import { TrialController } from './trial.controller';
+import { TrialService } from './trial.service';
 
 @Module({
   imports: [BillingModule, TenancyModule],
-  controllers: [PlatformEventsController],
+  controllers: [PlatformEventsController, TrialController],
   providers: [
     PlatformEventStore,
     InstallationEventsConsumer,
@@ -21,6 +23,7 @@ import { SubscriptionEventsService } from './subscription-events.service';
     PaymentsOutboxWorker,
     SubscriptionEventsConsumer,
     SubscriptionEventsService,
+    TrialService,
   ],
   exports: [PaymentsOutbox],
 })

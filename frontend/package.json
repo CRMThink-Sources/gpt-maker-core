@@ -16,7 +16,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@crmthink-sources/platform-sdk": "^1.0.0",
+    "@crmthink-sources/platform-sdk": "^1.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",

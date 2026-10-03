@@ -1,10 +1,10 @@
 'use client';
 
-import type { AgentView } from '@gptmaker/contracts';
+import type { AgentView, TrialStatusView } from '@gptmaker/contracts';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { BotIcon, PlusIcon } from '@/components/icons';
+import { BotIcon, PlusIcon, SparkIcon } from '@/components/icons';
 import {
   Alert,
   Avatar,
@@ -64,6 +64,18 @@ export default function AgentsPage() {
     };
   }, [fetchAgents]);
 
+  // Oferta do teste grátis (spec payments-integration); falha aqui só esconde o aviso.
+  const [trialAvailable, setTrialAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api<TrialStatusView>('/app/trial')
+      .then((s) => !cancelled && setTrialAvailable(s.state === 'available'))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
   async function run(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
     setError(null);
@@ -104,6 +116,21 @@ export default function AgentsPage() {
         description="Agentes de IA que atendem seus clientes nos canais abertos do Bitrix24."
         actions={newAgent}
       />
+
+      {trialAvailable && (
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex items-start gap-3">
+            <SparkIcon className="mt-0.5 size-5 shrink-0 text-brand-600" />
+            <p className="text-sm text-zinc-700">
+              <span className="font-medium text-zinc-900">Teste grátis por 14 dias.</span> Ganhe 500
+              créditos para seus agentes começarem a atender.
+            </p>
+          </div>
+          <Link href="/app/plan" className={buttonClass('secondary', 'sm')}>
+            Ativar teste
+          </Link>
+        </Card>
+      )}
 
       {!session.canManage && (
         <Alert tone="warning" className="mb-6">

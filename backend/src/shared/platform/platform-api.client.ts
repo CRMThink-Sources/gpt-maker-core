@@ -7,6 +7,8 @@ import {
   PlatformRequestError,
   type PlatformToken,
   type SubscriptionItem,
+  type TrialRequest,
+  type TrialRequestResult,
   type UpdateItemRequest,
 } from '@crmthink-sources/platform-sdk';
 import { ExponentialBackoff, handleWhen, retry } from 'cockatiel';
@@ -84,6 +86,14 @@ export class PlatformApiClient {
   /** Assinatura vigente da instalação; sem assinatura responde `NO_SUBSCRIPTION`. */
   getSubscription(installationId: number): Promise<CurrentSubscription> {
     return this.call('subscription.get', () => this.client.getSubscription(installationId));
+  }
+
+  /**
+   * Solicita o trial com o contato do cliente. Retentar é seguro: a plataforma serializa por
+   * instalação e responde 200 com o trial já vigente (`created = false`).
+   */
+  requestTrial(installationId: number, contact: TrialRequest): Promise<TrialRequestResult> {
+    return this.call('trial.request', () => this.client.requestTrial(installationId, contact));
   }
 
   listItems(subscriptionId: number): Promise<SubscriptionItem[]> {

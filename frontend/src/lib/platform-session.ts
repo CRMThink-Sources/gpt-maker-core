@@ -20,6 +20,8 @@ export class ApiRequestError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** `details` do envelope de erro (ex.: campos recusados em `VALIDATION_ERROR`). */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = 'ApiRequestError';
@@ -55,6 +57,7 @@ export class PlatformSessionClient {
         response.status,
         body?.error.code ?? `HTTP_${response.status}`,
         body?.error.message ?? 'Erro ao falar com o servidor',
+        body?.error.details,
       );
     }
     return (response.status === 204 ? undefined : await response.json()) as T;
