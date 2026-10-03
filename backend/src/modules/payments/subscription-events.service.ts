@@ -1,8 +1,8 @@
 import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agent, subscriptionState } from '../../shared/database/schema/index';
+import { agent, paymentEvent, subscriptionState } from '../../shared/database/schema/index';
 import { CreditCycleService } from '../billing';
 import { MESSAGES, NotificationService } from '../notifications';
 import { type Tenant, TenantLifecycle, TenantService } from '../tenancy';
@@ -10,7 +10,7 @@ import { graceDeadline } from './grace-period';
 import { OUTBOX_OPERATIONS, PaymentsOutbox } from './payments-outbox';
 
 /** Prefixos dos tipos tratados aqui (os de instalação ficam no `InstallationEventsConsumer`). */
-export const SUBSCRIPTION_EVENT_PREFIXES = ['subscription.', 'purchase.'] as const;
+export const SUBSCRIPTION_EVENT_PREFIXES = ['subscription.', 'purchase.', 'charge.'] as const;
 
 export function isSubscriptionEvent(type: string): boolean {
   return SUBSCRIPTION_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix));
@@ -37,8 +37,9 @@ export type ProjectionOutcome =
  * reativa ou inativa os agentes. `past_due` marca o fim da carência (`grace_until`, 12.5), e
  * `recovered`/`renewed`/`activated` a limpam. `plan_changed`: upgrade imediato concede o
  * proporcional dos créditos; downgrade guarda o plano futuro até a renovação (12.6). Os modelos
- * dos agentes seguem o plano pelo `onAccessChanged` (`AgentPlanModels`). Estornos (12.8) ficam
- * na sua tarefa: por ora esses eventos só atualizam a projeção.
+ * dos agentes seguem o plano pelo `onAccessChanged` (`AgentPlanModels`). `charge.refunded` e
+ * `charge.disputed` removem os créditos da cobrança ainda não gastos e deduzem o resto dos próximos
+ * ciclos (12.8).
  */
 @Injectable()
 export class SubscriptionEventsService {
@@ -205,6 +206,43 @@ export class SubscriptionEventsService {
         await this.cycles.endSubscription({ tenantId: tenant.id, subscriptionId });
         return;
       }
+      case 'charge.refunded':
+      case 'charge.disputed': {
+        // Contestação: a cobrança inteira está em risco; reembolso pode ser parcial (acumulado).
+        const fraction =
+          event.type === 'charge.disputed' || !event.data.amount
+            ? 1
+            : event.data.amountRefunded / event.data.amount;
+        const origin =
+          event.data.source === 'purchase' && event.data.purchaseId !== undefined
+            ? { purchaseId: String(event.data.purchaseId) }
+            : await this.invoiceOrigin(tenant.id, subscriptionId, event.data.invoiceId ?? null);
+        const granted = origin ? await this.cycles.chargeCredits(tenant.id, origin) : null;
+        if (!granted) {
+          this.logger.warn(
+            {
+              alert: true,
+              eventId: event.eventId,
+              chargeId: event.data.chargeId,
+              source: event.data.source,
+            },
+            'estorno de cobrança sem créditos identificados; nada a remover',
+          );
+          return;
+        }
+        const outcome = await this.cycles.refundCharge({
+          tenantId: tenant.id,
+          chargeId: event.data.chargeId,
+          wallet: granted.wallet,
+          credits: granted.credits,
+          fraction,
+        });
+        this.logger.warn(
+          { eventId: event.eventId, chargeId: event.data.chargeId, type: event.type, ...outcome },
+          'estorno aplicado aos créditos',
+        );
+        return;
+      }
       case 'purchase.paid': {
         await this.cycles.creditPurchase({
           tenantId: tenant.id,
@@ -255,6 +293,42 @@ export class SubscriptionEventsService {
       .values({ tenantId, ...values })
       .onConflictDoUpdate({ target: subscriptionState.tenantId, set: values });
     return { kind: 'applied', newSubscription: !sameSubscription };
+  }
+
+  /**
+   * Ciclo concedido por uma fatura: o da renovação que trouxe o `invoiceId`. A primeira fatura e a
+   * proporcional do upgrade não trazem o id nos eventos: valem os créditos do ciclo mais recente
+   * da assinatura, com alerta para conferência.
+   */
+  private async invoiceOrigin(
+    tenantId: string,
+    subscriptionId: string | null,
+    invoiceId: string | null,
+  ): Promise<{ subscriptionId: string; periodStart: Date | null } | null> {
+    if (invoiceId) {
+      const [renewal] = await this.db
+        .select({ payload: paymentEvent.payload })
+        .from(paymentEvent)
+        .where(
+          and(
+            eq(paymentEvent.tenantId, tenantId),
+            eq(paymentEvent.type, 'subscription.renewed'),
+            sql`${paymentEvent.payload} -> 'data' ->> 'invoiceId' = ${invoiceId}`,
+          ),
+        )
+        .orderBy(desc(paymentEvent.receivedAt))
+        .limit(1);
+      const snapshot = (renewal?.payload as { subscription?: Snapshot } | undefined)?.subscription;
+      if (snapshot?.id !== undefined && snapshot.periodStart) {
+        return { subscriptionId: String(snapshot.id), periodStart: new Date(snapshot.periodStart) };
+      }
+    }
+    if (!subscriptionId) return null;
+    this.logger.warn(
+      { alert: true, tenantId, subscriptionId, invoiceId },
+      'estorno de fatura sem renovação correspondente: usando o ciclo mais recente',
+    );
+    return { subscriptionId, periodStart: null };
   }
 
   /** Pagamento em dia: sem carência (e a marca de aviso do vencimento deixa de valer). */

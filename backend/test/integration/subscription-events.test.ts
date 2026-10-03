@@ -454,4 +454,174 @@ describe('ciclo de vida da assinatura', () => {
       expect((await balance()).plan).toBe(1000);
     });
   });
+
+  describe('estornos', () => {
+    const deductionOf = async (chargeId: string) =>
+      (await db.select().from(creditDeduction).where(eq(creditDeduction.refChargeId, chargeId)))[0];
+    const spend = (key: string, amount: number) =>
+      ledger.debit({
+        tenantId: owner.id,
+        key: `msg:${owner.id}:${key}`,
+        amount,
+        modelCode: 'M',
+        unitCost: amount,
+        createdBy: 't',
+      });
+    const buyPackage = (purchaseId: number) =>
+      service.handle(
+        event(
+          'purchase.paid',
+          {},
+          {
+            purchaseId,
+            planId: PACKAGE,
+            quantity: 1,
+            chargeId: `ch_${purchaseId}`,
+          },
+        ),
+      );
+
+    it('pacote com parte gasta: REFUND do que sobra e dedução do gasto; repetir não lança', async () => {
+      await service.handle(event('subscription.activated', {}));
+      const purchaseId = Math.floor(Math.random() * 1_000_000);
+      const chargeId = `ch_${randomUUID()}`;
+      await buyPackage(purchaseId);
+      await spend('a', 1300); // PLAN 1000 inteiro e 300 dos 500 do pacote
+      expect(await balance()).toMatchObject({ plan: 0, extra: 200 });
+
+      const refunded = event(
+        'charge.refunded',
+        {},
+        {
+          chargeId,
+          source: 'purchase',
+          purchaseId,
+          amountRefunded: 5000,
+          amount: 5000,
+        },
+      );
+      await service.handle(refunded);
+      expect(await balance()).toMatchObject({ extra: 0 });
+      expect(await deductionOf(chargeId)).toMatchObject({ amount: 300, remaining: 300 });
+
+      await service.handle({ ...refunded, eventId: randomUUID() } as PlatformEvent);
+      await service.handle(
+        event(
+          'charge.disputed',
+          {},
+          {
+            chargeId,
+            disputeId: 'dp_1',
+            source: 'purchase',
+            purchaseId,
+            amount: 5000,
+            reason: 'fraudulent',
+          },
+        ),
+      );
+      expect(await deductionOf(chargeId)).toMatchObject({ amount: 300, remaining: 300 });
+
+      // Novo ciclo: GRANT de 1000 e ADJUSTMENT de -300 ⇒ PLAN 700.
+      await service.handle(
+        event('subscription.renewed', {
+          periodStart: '2026-11-01T00:00:00.000Z',
+          periodEnd: '2026-12-01T00:00:00.000Z',
+        }),
+      );
+      expect((await balance()).plan).toBe(700);
+      expect(await deductionOf(chargeId)).toMatchObject({ remaining: 0 });
+    });
+
+    it('reembolso parcial e depois o resto: só a diferença', async () => {
+      await service.handle(event('subscription.activated', {}));
+      const purchaseId = Math.floor(Math.random() * 1_000_000);
+      const chargeId = `ch_${randomUUID()}`;
+      await buyPackage(purchaseId);
+      const refund = (amountRefunded: number) =>
+        service.handle(
+          event(
+            'charge.refunded',
+            {},
+            {
+              chargeId,
+              source: 'purchase',
+              purchaseId,
+              amountRefunded,
+              amount: 5000,
+            },
+          ),
+        );
+      await refund(2500);
+      expect((await balance()).extra).toBe(250);
+      await refund(5000);
+      expect((await balance()).extra).toBe(0);
+      expect(await deductionOf(chargeId)).toBeUndefined();
+    });
+
+    it('contestação de fatura da renovação: créditos daquele ciclo', async () => {
+      await service.handle(event('subscription.activated', {}));
+      await service.handle(
+        event(
+          'subscription.renewed',
+          { periodStart: '2026-11-01T00:00:00.000Z', periodEnd: '2026-12-01T00:00:00.000Z' },
+          { invoiceId: 'in_renew', previousPeriodEnd: '2026-11-01T00:00:00.000Z' },
+        ),
+      );
+      await spend('b', 400);
+      const chargeId = `ch_${randomUUID()}`;
+      await service.handle(
+        event(
+          'charge.disputed',
+          {},
+          {
+            chargeId,
+            disputeId: 'dp_2',
+            source: 'invoice',
+            invoiceId: 'in_renew',
+            amount: 10000,
+            reason: 'fraudulent',
+          },
+        ),
+      );
+      expect((await balance()).plan).toBe(0);
+      expect(await deductionOf(chargeId)).toMatchObject({ amount: 400 });
+    });
+
+    it('fatura não identificada: ciclo mais recente da assinatura', async () => {
+      await service.handle(event('subscription.activated', {}));
+      const chargeId = `ch_${randomUUID()}`;
+      await service.handle(
+        event(
+          'charge.refunded',
+          {},
+          {
+            chargeId,
+            source: 'invoice',
+            invoiceId: 'in_first',
+            amountRefunded: 10000,
+            amount: 10000,
+          },
+        ),
+      );
+      expect((await balance()).plan).toBe(0);
+    });
+
+    it('cobrança sem créditos identificados: nada muda', async () => {
+      await service.handle(event('subscription.activated', {}));
+      await service.handle(
+        event(
+          'charge.refunded',
+          {},
+          {
+            chargeId: `ch_${randomUUID()}`,
+            source: 'purchase',
+            purchaseId: 424242,
+            amountRefunded: 100,
+            amount: 100,
+          },
+        ),
+      );
+      expect((await balance()).plan).toBe(1000);
+    });
+  });
 });

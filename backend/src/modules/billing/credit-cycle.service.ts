@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
@@ -12,7 +12,7 @@ import {
 } from '../../shared/database/schema/index';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
-import { LedgerService } from './ledger.service';
+import { LedgerService, type Wallet } from './ledger.service';
 
 /** Créditos do trial (spec credit-billing: créditos do trial). */
 export const TRIAL_CREDITS = 500;
@@ -186,6 +186,115 @@ export class CreditCycleService {
       createdBy: SYSTEM,
     });
     return amount;
+  }
+
+  /**
+   * Créditos que uma cobrança concedeu, para o estorno: pacote ⇒ `TOPUP` da compra em `EXTRA`;
+   * fatura ⇒ `GRANT` do ciclo em `PLAN` (o do `periodStart`, ou o ciclo mais recente da
+   * assinatura quando a fatura não é identificada). `null` se a cobrança não gerou créditos.
+   */
+  async chargeCredits(
+    tenantId: string,
+    origin: { purchaseId: string } | { subscriptionId: string; periodStart: Date | null },
+  ): Promise<{ wallet: Wallet; credits: number } | null> {
+    if ('purchaseId' in origin) {
+      const [row] = await this.db
+        .select({ credits: sql<string | null>`sum(${creditLedger.amount})` })
+        .from(creditLedger)
+        .where(
+          and(
+            eq(creditLedger.tenantId, tenantId),
+            eq(creditLedger.type, 'TOPUP'),
+            eq(creditLedger.refType, 'purchase'),
+            eq(creditLedger.refId, origin.purchaseId),
+          ),
+        );
+      const credits = Number(row?.credits ?? 0);
+      return credits > 0 ? { wallet: 'EXTRA', credits } : null;
+    }
+    const [grant] = await this.db
+      .select({ amount: creditLedger.amount })
+      .from(creditLedger)
+      .where(
+        and(
+          eq(creditLedger.tenantId, tenantId),
+          eq(creditLedger.type, 'GRANT'),
+          eq(creditLedger.wallet, 'PLAN'),
+          eq(creditLedger.refType, 'subscription_period'),
+          eq(creditLedger.subscriptionId, origin.subscriptionId),
+          origin.periodStart ? eq(creditLedger.periodStart, origin.periodStart) : undefined,
+        ),
+      )
+      .orderBy(desc(creditLedger.createdAt))
+      .limit(1);
+    return grant ? { wallet: 'PLAN', credits: grant.amount } : null;
+  }
+
+  /**
+   * Estorno de cobrança (spec credit-billing, "Estorno de pagamento"; 12.8): dos créditos que a
+   * cobrança concedeu, a parte estornada (`fraction`: reembolso parcial ou 1 na contestação) sai
+   * do saldo não gasto da carteira com `REFUND`, e o que já foi gasto vira `credit_deduction`,
+   * abatida nos próximos `GRANT`s. Idempotente pela cobrança: reembolsos parciais seguidos
+   * (`fraction` acumulada) lançam só a diferença; repetir o mesmo evento não lança nada.
+   */
+  async refundCharge(input: {
+    tenantId: string;
+    chargeId: string;
+    wallet: Wallet;
+    credits: number;
+    fraction: number;
+  }): Promise<{ refunded: number; deducted: number }> {
+    const fraction = Math.min(Math.max(input.fraction, 0), 1);
+    const target = Math.floor(input.credits * fraction);
+    const [refundedRow] = await this.db
+      .select({ total: sql<string | null>`-sum(${creditLedger.amount})` })
+      .from(creditLedger)
+      .where(
+        and(
+          eq(creditLedger.tenantId, input.tenantId),
+          eq(creditLedger.type, 'REFUND'),
+          eq(creditLedger.refType, 'charge'),
+          eq(creditLedger.refId, input.chargeId),
+        ),
+      );
+    const [deduction] = await this.db
+      .select({ amount: creditDeduction.amount })
+      .from(creditDeduction)
+      .where(eq(creditDeduction.refChargeId, input.chargeId));
+    const done = Number(refundedRow?.total ?? 0) + (deduction?.amount ?? 0);
+    const delta = target - done;
+    if (delta <= 0) return { refunded: 0, deducted: 0 };
+
+    const result = await this.ledger.refund({
+      tenantId: input.tenantId,
+      key: `charge:${input.chargeId}:${target}`,
+      wallet: input.wallet,
+      amount: delta,
+      refType: 'charge',
+      refId: input.chargeId,
+      reason: 'estorno da cobrança',
+      createdBy: SYSTEM,
+    });
+    const refunded = -result.entries.reduce((sum, entry) => sum + entry.amount, 0);
+    const deducted = delta - refunded;
+    if (deducted > 0) {
+      await this.db
+        .insert(creditDeduction)
+        .values({
+          tenantId: input.tenantId,
+          amount: deducted,
+          remaining: deducted,
+          refChargeId: input.chargeId,
+        })
+        .onConflictDoUpdate({
+          target: creditDeduction.refChargeId,
+          set: {
+            amount: sql`${creditDeduction.amount} + ${deducted}`,
+            remaining: sql`${creditDeduction.remaining} + ${deducted}`,
+          },
+        });
+    }
+    return { refunded, deducted };
   }
 
   /** `purchase.paid`: `TOPUP` em `EXTRA` com os créditos do pacote × quantidade. */

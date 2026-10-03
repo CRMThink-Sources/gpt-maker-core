@@ -16,7 +16,7 @@ import {
 const SWEEP_GRACE_MS = 60_000;
 
 /**
- * Worker dos eventos `subscription.*` e `purchase.*` (12.3), no mesmo molde do de instalação:
+ * Worker dos eventos `subscription.*`, `purchase.*` e `charge.*` (12.3, 12.8), no mesmo molde do de instalação:
  * aplica com a linha de `payment_event` travada e marca `PROCESSED`; falha ⇒ `FAILED` com
  * tentativas, e a varredura a cada minuto republica pendentes e falhos (até `MAX_EVENT_ATTEMPTS`).
  */
@@ -36,7 +36,7 @@ export class SubscriptionEventsConsumer {
 
   @RabbitSubscribe({
     exchange: EXCHANGES.paymentsEvents,
-    routingKey: ['subscription.#', 'purchase.#'],
+    routingKey: ['subscription.#', 'purchase.#', 'charge.#'],
     queue: QUEUES.subscriptionEvents,
     queueOptions: { durable: true },
   })
