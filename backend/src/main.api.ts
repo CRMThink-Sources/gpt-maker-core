@@ -23,11 +23,13 @@ async function bootstrap(): Promise<void> {
   // Treinamento de texto aceita até 50 mil caracteres, acima dos 100 KB padrão.
   app.useBodyParser('json', { limit: '1mb' });
   app.use(contextMiddleware);
-  // Frontend (app.) chama a API (api.) com o JWT da sessão no header; sem cookies.
+  // Frontend (app.) chama a API (api.): a área do app com o JWT da sessão no header; o backoffice
+  // (/admin) com cookie httpOnly e o cabeçalho X-Backoffice nas escritas (CSRF), daí `credentials`.
   app.enableCors({
     origin: env.FRONTEND_ORIGINS,
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Backoffice'],
     exposedHeaders: ['x-trace-id'],
     maxAge: 600,
   });

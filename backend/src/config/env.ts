@@ -30,6 +30,16 @@ export const envSchema = z.object({
   /** `/conversation` é síncrono na v1 e pode demorar (design D5). */
   GPTMAKER_CONVERSATION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
+  // Backoffice (spec admin-backoffice, design D17): sessão de operador em cookie httpOnly
+  /** Inatividade que encerra a sessão. */
+  BACKOFFICE_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(120),
+  /** Duração máxima da sessão, mesmo em uso. */
+  BACKOFFICE_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
+  /** Cookie só por HTTPS; desligar apenas em desenvolvimento local (http://localhost). */
+  BACKOFFICE_COOKIE_SECURE: booleanFromString.default(true),
+  /** Nome que aparece no app autenticador. */
+  BACKOFFICE_TOTP_ISSUER: z.string().min(1).default('ThinkFlow AI Backoffice'),
+
   // Reconciliação diária com o consumo real do GPTMaker (spec usage-reconciliation, design D7)
   /** Fuso dos dias do `credits-spent` (não documentado pelo GPTMaker; a confirmar). */
   RECONCILIATION_TIMEZONE: z.string().min(1).default('America/Sao_Paulo'),

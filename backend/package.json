@@ -13,7 +13,8 @@
     "test:integration": "vitest run --project integration",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",

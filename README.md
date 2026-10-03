@@ -39,6 +39,17 @@ Portas do host em uso por outro projeto? Sobrescreva com `POSTGRES_PORT`, `REDIS
 
 Migrações: a API aplica as pendentes no start (`RUN_MIGRATIONS=true`). Depois de alterar `backend/src/shared/database/schema/`, gere a migração com `npm run db:generate -w backend` e commite `backend/drizzle/` (o CI falha se esquecer).
 
+## Backoffice
+
+`/admin` no frontend, para operadores da CRMThink: login com e-mail, senha e app autenticador (TOTP), perfis `ADMIN` (altera) e `SUPPORT` (consulta). O primeiro `ADMIN` é criado pela linha de comando; os demais, pela tela Operadores. A senha temporária aparece uma vez; no primeiro login a pessoa configura o autenticador e troca a senha em "Minha conta".
+
+```bash
+npm run backoffice:create-operator -w backend -- --email ana@empresa.com --name "Ana"            # desenvolvimento (após o build do watch)
+docker compose exec api node dist/cli/create-operator.js --email ana@empresa.com --name "Ana"  # servidor
+```
+
+Em `http://localhost` o cookie da sessão precisa de `BACKOFFICE_COOKIE_SECURE=false` (já no `.env.example`).
+
 ## Verificações
 
 ```bash
