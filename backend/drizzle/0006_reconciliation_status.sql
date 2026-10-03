@@ -1,0 +1,2 @@
+CREATE TYPE "public"."reconciliation_status" AS ENUM('APPLIED', 'WITHIN_TOLERANCE', 'REVIEW');--> statement-breakpoint
+ALTER TABLE "reconciliation_adjustment" ADD COLUMN "status" "reconciliation_status" DEFAULT 'APPLIED' NOT NULL;

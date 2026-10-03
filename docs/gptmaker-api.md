@@ -534,6 +534,13 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 { "total": 0, "data": [{ "credits": 0, "year": 2026, "month": 9, "day": 25, "model": "string" }] }
 ```
 
+**Observado em 2026-10-03** (workspace de teste, chamadas reais):
+
+- `year` é **obrigatório**: sem ele a API responde `Year is required` (texto puro), apesar de o OpenAPI marcar todos como opcionais. Com `year` + `month` vêm os dias do mês; com `day`, só aquele dia.
+- `data[].model` traz o **código do enum** `prefferModel` (ex.: `GPT_5_MINI`), o mesmo do catálogo de modelos do app.
+- Os totais bateram com as respostas do app no mesmo dia (6 créditos em 03/10 para 6 respostas de GPT-5 Mini). O GPTMaker também conta conversas feitas fora do app (testes no painel), que só a reconciliação corrige.
+- O **fuso** do agrupamento por dia segue a confirmar: as mensagens de teste caíram no mesmo dia em UTC e em Brasília. A reconciliação usa `RECONCILIATION_TIMEZONE` (padrão `America/Sao_Paulo`); uma mensagem entre 21:00 e 23:59 de Brasília resolve a dúvida.
+
 **Inteiros ou fracionários?** Em toda a documentação os créditos são `integer`: `Credits.credits`, `total` (int32), `data[].credits`, e a tabela de cobrança usa apenas valores inteiros por resposta (1 a 25). Não há menção a créditos fracionários. Observação para implementação: `int32` limita `total` a 2.147.483.647.
 
 ---
@@ -601,7 +608,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 6. Semântica de PUT (merge parcial ou substituição) em agente, settings e webhooks; forma de limpar um webhook.
 7. Enum completo de `status` do agente (observados `ACTIVE` e `DISABLED`; o campo não está no OpenAPI).
 8. Status de processamento de treinamentos; MIME types e tamanhos aceitos.
-9. Valor de `data[].model` em credits-spent (enum ou nome comercial), padrão dos filtros e fuso horário.
+9. Fuso horário do agrupamento por dia em credits-spent (o `model` é o código do enum e `year` é obrigatório: §8).
 10. Formato de `timezone` e do valor de `onLackKnowLedge` em settings.
 11. Comportamento da conversa com chat em modo humano, agente inativo ou workspace sem créditos (status HTTP e corpo).
 12. Mapeamento oficial enum `prefferModel` → linha da tabela de custo (feito aqui por correspondência de nome).

@@ -145,11 +145,11 @@
 
 ## 14. Reconciliação de consumo (usage-reconciliation)
 
-- [ ] 14.1 Job diário: `credits-spent` do dia anterior por agente → `usage_daily_real`, retentativa por agente (~6h)
-- [ ] 14.2 Comparar com débitos do dia e lançar `ADJUSTMENT` idempotente acima da tolerância (~8h)
+- [x] 14.1 Job diário: `credits-spent` do dia anterior por agente → `usage_daily_real`, retentativa por agente (~6h) — `ReconciliationService` (módulo `reconciliation`, worker): cron 06:20 UTC (03:20 de Brasília) para os últimos `RECONCILIATION_LOOKBACK_DAYS` dias; agentes não removidos (ou removidos no período), fora os `OUT_OF_SYNC`. `credits-spent` com `year`, `month` e `day` (o `year` é obrigatório na API real; `model` vem como código do enum: `docs/gptmaker-api.md` §8), somado por modelo e regravado em `usage_daily_real`. Falha ⇒ pendência `reconciliation:pending` (Redis) retentada a cada hora; os demais seguem
+- [x] 14.2 Comparar com débitos do dia e lançar `ADJUSTMENT` idempotente acima da tolerância (~8h) — débitos do agente no dia pelo fuso `RECONCILIATION_TIMEZONE`; `decideAdjustment`: tolerância (padrão 2) ⇒ sem ajuste (desfaz o anterior), limite de revisão (padrão 100) ⇒ `REVIEW` sem lançar, com alerta (migração 0006: `reconciliation_adjustment.status`); senão `ADJUSTMENT` (`ref_type = reconciliation`) da diferença até o total desejado, chave com o total anterior e o novo. **A confirmar**: fuso do agrupamento por dia do GPTMaker
 - [ ] 14.3 Média real de créditos por resposta por modelo e sugestão de custo no backoffice (~4h)
 - [ ] 14.4 Relatório mensal: consumo GPTMaker vs débitos vs receita (via `crmthink-platform`), por tenant/agente, consumo órfão (~10h)
-- [ ] 14.5 Testes com consumo maior, menor e reexecução (~5h)
+- [x] 14.5 Testes com consumo maior, menor e reexecução (~5h) — `test/integration/reconciliation.test.ts`: consumo maior (cobra), menor (devolve), reexecução sem duplicar, dado atrasado (só a diferença), consumo por modelo, tolerância, revisão, débito das 23:30 de Brasília no dia certo, falha com pendência e retentativa; unitários da decisão e dos dias no fuso
 
 ## 15. Backoffice (admin-backoffice)
 

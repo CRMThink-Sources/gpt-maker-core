@@ -30,6 +30,16 @@ export const envSchema = z.object({
   /** `/conversation` é síncrono na v1 e pode demorar (design D5). */
   GPTMAKER_CONVERSATION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
+  // Reconciliação diária com o consumo real do GPTMaker (spec usage-reconciliation, design D7)
+  /** Fuso dos dias do `credits-spent` (não documentado pelo GPTMaker; a confirmar). */
+  RECONCILIATION_TIMEZONE: z.string().min(1).default('America/Sao_Paulo'),
+  /** Diferença por agente e dia, em créditos, que não gera ajuste. */
+  RECONCILIATION_TOLERANCE_CREDITS: z.coerce.number().int().nonnegative().default(2),
+  /** Acima disso o ajuste não é lançado sozinho: fica para revisão, com alerta. */
+  RECONCILIATION_REVIEW_THRESHOLD_CREDITS: z.coerce.number().int().positive().default(100),
+  /** Dias para trás reprocessados a cada execução (consumo que chega atrasado). */
+  RECONCILIATION_LOOKBACK_DAYS: z.coerce.number().int().positive().max(31).default(3),
+
   /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
   TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),
 

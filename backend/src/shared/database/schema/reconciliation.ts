@@ -36,6 +36,12 @@ export const usageDailyReal = pgTable(
   ],
 );
 
+export const reconciliationStatus = pgEnum('reconciliation_status', [
+  'APPLIED',
+  'WITHIN_TOLERANCE',
+  'REVIEW',
+]);
+
 /**
  * Total já ajustado por (agente, dia): a reexecução lança só a diferença ainda não ajustada.
  * O `ADJUSTMENT` no ledger usa idempotency key com esse total.
@@ -54,6 +60,8 @@ export const reconciliationAdjustment = pgTable(
     debitedTotal: integer('debited_total').notNull(),
     /** Soma dos `ADJUSTMENT` já lançados (positivo devolve créditos, negativo cobra). */
     adjustedTotal: integer('adjusted_total').notNull().default(0),
+    /** `REVIEW`: diferença acima do limite, não lançada; aguarda um operador (backoffice). */
+    status: reconciliationStatus('status').notNull().default('APPLIED'),
     updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.day] })],
