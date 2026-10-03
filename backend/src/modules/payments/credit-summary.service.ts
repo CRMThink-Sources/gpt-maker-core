@@ -34,6 +34,7 @@ export class CreditSummaryService {
       expiresAt: iso(balance.expiresAt),
       renewsAt: paid && !projection.cancelAt ? iso(projection.periodEnd) : null,
       cancelAt: iso(projection?.cancelAt ?? null),
+      graceUntil: projection?.status === 'past_due' ? iso(projection.graceUntil ?? null) : null,
       subscription: projection ? { status: projection.status, planId: projection.planId } : null,
       cycleStart: iso(cycleStart),
       consumedInCycle: cycleStart ? await this.statement.consumedSince(tenantId, cycleStart) : 0,

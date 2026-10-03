@@ -23,6 +23,8 @@ export interface CreditSummaryView {
   renewsAt: string | null;
   /** Encerramento agendado da assinatura. */
   cancelAt: string | null;
+  /** Pagamento pendente: quando os agentes são pausados se não for regularizado. */
+  graceUntil: string | null;
   subscription: {
     status: 'trialing' | 'active' | 'past_due' | 'cancelled' | 'trial_expired';
     planId: string | null;

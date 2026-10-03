@@ -81,7 +81,7 @@ O sistema MUST expor um endpoint HTTPS (`/platform/events`) para os eventos do `
 O sistema MUST manter uma projeção local da assinatura do tenant (status, modalidade, plano, período, versão, `grace_until`) atualizada pelos eventos e aplicar os efeitos abaixo, todos idempotentes:
 - `subscription.activated` e `subscription.renewed`: virada de ciclo (ver `credit-billing`), limpar carência e reativar agentes inativados por `SUBSCRIPTION_EXPIRED`.
 - `subscription.plan_changed` com efeito `immediate`: `GRANT` proporcional da diferença de créditos (`remainingFraction` × (créditos do novo plano − créditos do plano anterior), arredondado para baixo, somente se positivo) e aplicação dos novos limites; com efeito `next_period`: novos limites e créditos a partir da próxima renovação.
-- `subscription.past_due`: `grace_until` = momento do evento + 3 dias (configurável) e aviso `PAYMENT_FAILED` aos destinatários de avisos.
+- `subscription.past_due`: `grace_until` = momento da falha (`occurredAt`) + 1 dia; se esse instante cair no sábado ou no domingo (horário de Brasília), passa para segunda no mesmo horário. Novas falhas durante a carência não estendem o prazo. Aviso `PAYMENT_FAILED` aos destinatários de avisos.
 - `subscription.recovered`: limpar `grace_until`.
 - `subscription.cancel_scheduled`: exibir ao tenant a data de encerramento; nenhum efeito sobre créditos.
 - `subscription.ended`: expirar o saldo positivo das carteiras e inativar agentes com motivo `SUBSCRIPTION_EXPIRED`.
@@ -90,6 +90,10 @@ O sistema MUST manter uma projeção local da assinatura do tenant (status, moda
 #### Scenario: Carência esgotada
 - **WHEN** `grace_until` vence e a assinatura continua `past_due`
 - **THEN** os agentes do tenant são inativados com motivo `SUBSCRIPTION_EXPIRED` e as mensagens deixam de ser encaminhadas ao GPTMaker
+
+#### Scenario: Falha às vésperas do fim de semana
+- **WHEN** o pagamento falha na sexta-feira às 10:00 (horário de Brasília)
+- **THEN** a carência vai até segunda-feira às 10:00, e os agentes só são inativados se a assinatura continuar `past_due` depois disso
 
 #### Scenario: Pagamento regularizado na carência
 - **WHEN** chega `subscription.recovered` ou `subscription.renewed` antes de `grace_until`

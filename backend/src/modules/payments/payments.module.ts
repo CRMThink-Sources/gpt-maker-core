@@ -4,6 +4,7 @@ import { TenancyModule } from '../tenancy';
 import { AgentItemMirror } from './agent-item.mirror';
 import { CreditSummaryService } from './credit-summary.service';
 import { CreditsController } from './credits.controller';
+import { GraceExpiryJob } from './grace-expiry.job';
 import { InstallationEventsConsumer } from './installation-events.consumer';
 import { PaymentsOutbox } from './payments-outbox';
 import { PaymentsOutboxWorker } from './payments-outbox.worker';
@@ -32,6 +33,7 @@ import { TrialService } from './trial.service';
     CreditSummaryService,
     PlansService,
     SubscriptionConsistencyService,
+    GraceExpiryJob,
   ],
   exports: [PaymentsOutbox],
 })

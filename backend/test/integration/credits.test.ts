@@ -244,6 +244,7 @@ describe('saldo e extrato do tenant', () => {
         expiresAt: null,
         renewsAt: null,
         cancelAt: null,
+        graceUntil: null,
         subscription: null,
         cycleStart: null,
         consumedInCycle: 0,

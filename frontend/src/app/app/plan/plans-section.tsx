@@ -44,6 +44,14 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
+
 type CheckoutState =
   | { step: 'starting' }
   | { step: 'paying' }
@@ -323,8 +331,10 @@ export function PlansSection({
 
       {status === 'past_due' && (
         <Alert tone="warning" className="mb-3">
-          O último pagamento não foi aprovado. Atualize o cartão em “Gerenciar pagamento” para não
-          interromper o atendimento dos agentes.
+          O último pagamento não foi aprovado. Atualize o cartão em “Gerenciar pagamento”
+          {summary.graceUntil
+            ? ` até ${formatDateTime(summary.graceUntil)}; depois disso, os agentes ficam pausados até a regularização.`
+            : ' para não interromper o atendimento dos agentes.'}
         </Alert>
       )}
       {error && (

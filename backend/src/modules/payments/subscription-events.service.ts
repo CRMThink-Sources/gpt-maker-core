@@ -1,10 +1,11 @@
 import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agent, subscriptionState } from '../../shared/database/schema/index';
 import { CreditCycleService } from '../billing';
 import { type Tenant, TenantLifecycle, TenantService } from '../tenancy';
+import { graceDeadline } from './grace-period';
 import { OUTBOX_OPERATIONS, PaymentsOutbox } from './payments-outbox';
 
 /** Prefixos dos tipos tratados aqui (os de instalação ficam no `InstallationEventsConsumer`). */
@@ -32,7 +33,8 @@ export type ProjectionOutcome =
  * grava a projeção `subscription_state` (evento com `version` menor que a aplicada é obsoleto e
  * não tem efeito) e aplica os efeitos nos créditos. Assinatura nova agenda o espelho dos agentes
  * como itens dela; toda mudança da projeção avisa o `TenantLifecycle` (`onAccessChanged`), que
- * reativa ou inativa os agentes. Carência (12.5), troca de plano (12.6), avisos (12.7) e estornos
+ * reativa ou inativa os agentes. `past_due` marca o fim da carência (`grace_until`, 12.5), e
+ * `recovered`/`renewed`/`activated` a limpam. Troca de plano (12.6), avisos (12.7) e estornos
  * (12.8) ficam nas suas tarefas: por ora esses eventos só atualizam a projeção.
  */
 @Injectable()
@@ -92,8 +94,27 @@ export class SubscriptionEventsService {
         });
         return;
       }
+      case 'subscription.past_due': {
+        // A primeira falha marca o prazo; novas falhas na mesma carência não o estendem.
+        await this.db
+          .update(subscriptionState)
+          .set({ graceUntil: graceDeadline(new Date(event.occurredAt)) })
+          .where(
+            and(
+              eq(subscriptionState.tenantId, tenant.id),
+              eq(subscriptionState.status, 'past_due'),
+              isNull(subscriptionState.graceUntil),
+            ),
+          );
+        return;
+      }
+      case 'subscription.recovered': {
+        await this.clearGrace(tenant.id);
+        return;
+      }
       case 'subscription.activated':
       case 'subscription.renewed': {
+        await this.clearGrace(tenant.id);
         if (
           !subscriptionId ||
           snapshot?.planId === undefined ||
@@ -170,6 +191,14 @@ export class SubscriptionEventsService {
       .values({ tenantId, ...values })
       .onConflictDoUpdate({ target: subscriptionState.tenantId, set: values });
     return { kind: 'applied', newSubscription: !sameSubscription };
+  }
+
+  /** Pagamento em dia: sem carência (e a marca de aviso do vencimento deixa de valer). */
+  private async clearGrace(tenantId: string): Promise<void> {
+    await this.db
+      .update(subscriptionState)
+      .set({ graceUntil: null })
+      .where(eq(subscriptionState.tenantId, tenantId));
   }
 
   /** Assinatura nova: os agentes não removidos viram itens dela (o espelho sem assinatura é descartado). */
