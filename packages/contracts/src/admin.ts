@@ -66,3 +66,79 @@ export const updateOperatorSchema = z.object({
   active: z.boolean().optional(),
   role: z.enum(['ADMIN', 'SUPPORT']).optional(),
 });
+
+// ---- Planos e direitos (15.2)
+
+export interface AdminPlanModel {
+  id: string;
+  code: string;
+  displayName: string;
+  creditsPerResponse: number;
+  isDefault: boolean;
+  active: boolean;
+}
+
+/**
+ * Plano do SPA 1138 (via crmthink-platform) com os direitos do app. `rights` nulo: sem direitos,
+ * o plano não aparece para venda. `onPlatform` falso: direitos de um plano que a plataforma não
+ * lista mais (inativo ou de outro ambiente).
+ */
+export interface AdminPlanView {
+  id: number;
+  name: string;
+  type: 'subscription' | 'one_time';
+  interval: 'monthly' | 'quarterly' | 'semiannual' | 'yearly' | null;
+  /** Centavos, como no CRM. */
+  amount: number;
+  trial: boolean;
+  onPlatform: boolean;
+  rights: {
+    active: boolean;
+    creditsPerCycle: number | null;
+    creditsPerPackage: number | null;
+    /** Nulo = sem limite. */
+    maxTrainings: number | null;
+    maxDocumentStorageMb: number | null;
+    allowedModelIds: string[];
+    updatedBy: string | null;
+    updatedAt: string;
+  } | null;
+  /** Assinaturas abertas (trial, ativa ou em atraso) neste plano. */
+  subscribers: number;
+}
+
+export interface AdminPlansView {
+  plans: AdminPlanView[];
+  models: AdminPlanModel[];
+}
+
+const optionalLimit = z.number().int().positive().max(1_000_000).nullable();
+
+export const updatePlanRightsSchema = z
+  .object({
+    type: z.enum(['subscription', 'one_time']),
+    active: z.boolean(),
+    creditsPerCycle: z.number().int().min(0).max(10_000_000).nullable(),
+    creditsPerPackage: z.number().int().positive().max(10_000_000).nullable(),
+    maxTrainings: optionalLimit,
+    maxDocumentStorageMb: optionalLimit,
+    allowedModelIds: z.array(z.uuid()).max(100),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type === 'subscription' && value.creditsPerCycle === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['creditsPerCycle'],
+        message: 'Informe os créditos por ciclo',
+      });
+    }
+    if (value.type === 'one_time' && value.creditsPerPackage === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['creditsPerPackage'],
+        message: 'Informe os créditos do pacote',
+      });
+    }
+  });
+
+export type UpdatePlanRightsInput = z.infer<typeof updatePlanRightsSchema>;

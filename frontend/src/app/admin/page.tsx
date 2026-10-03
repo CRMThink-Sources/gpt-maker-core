@@ -4,7 +4,6 @@ import { Card, PageHeader } from '@/components/ui';
 import { useOperator } from './admin-provider';
 
 const SECTIONS = [
-  ['Planos e direitos', 'Créditos por ciclo, modelos permitidos e limites de cada plano (15.2).'],
   ['Modelos de IA', 'Catálogo, custo por resposta e sugestão da reconciliação (15.3).'],
   ['Tenants', 'Portais, saldo, suspensão e concessão de créditos (15.4).'],
   ['Assinaturas', 'Projeção local, eventos da plataforma e link para o SPA (15.5).'],

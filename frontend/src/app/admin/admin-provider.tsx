@@ -44,6 +44,11 @@ export function useOperator(): Operator {
 const NAV = [
   { href: '/admin', label: 'Início', match: (path: string) => path === '/admin' },
   {
+    href: '/admin/plans',
+    label: 'Planos',
+    match: (path: string) => path.startsWith('/admin/plans'),
+  },
+  {
     href: '/admin/operators',
     label: 'Operadores',
     match: (path: string) => path.startsWith('/admin/operators'),
