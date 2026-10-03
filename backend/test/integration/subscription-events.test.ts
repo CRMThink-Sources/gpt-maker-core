@@ -352,14 +352,12 @@ describe('ciclo de vida da assinatura', () => {
       .insert(agent)
       .values({ ...base, gptmakerAgentId: `gm-${randomUUID()}`, webhookTokenHash: randomUUID() })
       .returning();
-    await db
-      .insert(agent)
-      .values({
-        ...base,
-        gptmakerAgentId: `gm-${randomUUID()}`,
-        webhookTokenHash: randomUUID(),
-        status: 'DELETED',
-      });
+    await db.insert(agent).values({
+      ...base,
+      gptmakerAgentId: `gm-${randomUUID()}`,
+      webhookTokenHash: randomUUID(),
+      status: 'DELETED',
+    });
 
     await service.handle(event('subscription.activated', {}));
     const queued = await db
@@ -392,5 +390,12 @@ describe('ciclo de vida da assinatura', () => {
     expect(await cycles.expireTrials(new Date('2026-10-14T00:00:00Z'))).toBe(0);
     await cycles.expireTrials(new Date(Date.parse('2026-10-15T00:00:00Z') + DAY));
     expect(await balance()).toMatchObject({ trial: 0, plan: 1000 });
+  });
+
+  it('mesmo período ativado de novo com outro eventId: não expira o que acabou de conceder', async () => {
+    // Sem saldo antes da ativação, o EXPIRE do início do ciclo não grava lançamento.
+    await service.handle(event('subscription.activated', {}));
+    await service.handle(event('subscription.activated', {}));
+    expect(await balance()).toMatchObject({ plan: 1000, total: 1000 });
   });
 });

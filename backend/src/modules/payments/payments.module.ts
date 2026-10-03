@@ -12,6 +12,7 @@ import { PlansService } from './plans.service';
 import { PlatformEventStore } from './platform-event.store';
 import { PlatformEventsController } from './platform-events.controller';
 import { SubscriptionEventsConsumer } from './subscription-events.consumer';
+import { SubscriptionConsistencyService } from './subscription-consistency.service';
 import { SubscriptionEventsService } from './subscription-events.service';
 import { TrialController } from './trial.controller';
 import { TrialService } from './trial.service';
@@ -30,6 +31,7 @@ import { TrialService } from './trial.service';
     TrialService,
     CreditSummaryService,
     PlansService,
+    SubscriptionConsistencyService,
   ],
   exports: [PaymentsOutbox],
 })

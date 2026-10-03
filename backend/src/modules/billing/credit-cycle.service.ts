@@ -80,6 +80,25 @@ export class CreditCycleService {
       refId: period,
       createdBy: SYSTEM,
     };
+    // Ciclo já aberto (o mesmo período chegou de novo com outro `eventId`, ou pela correção do
+    // job de consistência): não repete. A chave do `EXPIRE` sozinha não basta, porque expirar
+    // saldo zero não grava lançamento e a repetição expiraria os créditos recém-concedidos.
+    const [opened] = await this.db
+      .select({ id: creditLedger.id })
+      .from(creditLedger)
+      .where(
+        and(
+          eq(creditLedger.tenantId, input.tenantId),
+          eq(creditLedger.refType, 'subscription_period'),
+          eq(creditLedger.refId, period),
+        ),
+      )
+      .limit(1);
+    if (opened) {
+      await this.ledger.setDates(input.tenantId, { expiresAt: input.periodEnd });
+      return { granted: 0, deducted: 0 };
+    }
+
     await this.ledger.expire({
       ...common,
       key: `cycle:${period}:expire`,
