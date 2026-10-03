@@ -129,6 +129,14 @@ export class SubscriptionEventsService {
         }
         return;
       }
+      case 'subscription.cancel_scheduled': {
+        // Encerra no fim do período: a tela mostra a data e deixa de mostrar a renovação.
+        await this.db
+          .update(subscriptionState)
+          .set({ cancelAt: new Date(event.data.effectiveAt) })
+          .where(eq(subscriptionState.tenantId, tenant.id));
+        return;
+      }
       case 'subscription.period_ending': {
         // Só assinaturas `manual` (a plataforma emite a 3, 2 e 1 dia do fim): aviso PERIOD_ENDING.
         if (!subscriptionId) return;
@@ -175,10 +183,11 @@ export class SubscriptionEventsService {
       case 'subscription.activated':
       case 'subscription.renewed': {
         await this.clearGrace(tenant.id);
-        // Plano futuro (downgrade agendado) passou a valer com o novo período.
+        // Plano futuro (downgrade agendado) passou a valer com o novo período; renovou, então não
+        // há cancelamento agendado.
         await this.db
           .update(subscriptionState)
-          .set({ nextPlanId: null })
+          .set({ nextPlanId: null, cancelAt: null })
           .where(eq(subscriptionState.tenantId, tenant.id));
         if (
           !subscriptionId ||

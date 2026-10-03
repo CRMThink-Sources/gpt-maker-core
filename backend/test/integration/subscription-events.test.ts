@@ -624,4 +624,20 @@ describe('ciclo de vida da assinatura', () => {
       expect((await balance()).plan).toBe(1000);
     });
   });
+
+  it('cancelamento agendado: grava a data; renovação limpa', async () => {
+    await service.handle(event('subscription.activated', {}));
+    await service.handle(
+      event('subscription.cancel_scheduled', {}, { effectiveAt: '2026-11-01T00:00:00.000Z' }),
+    );
+    expect(await projection()).toMatchObject({ cancelAt: new Date('2026-11-01T00:00:00.000Z') });
+
+    await service.handle(
+      event('subscription.renewed', {
+        periodStart: '2026-11-01T00:00:00.000Z',
+        periodEnd: '2026-12-01T00:00:00.000Z',
+      }),
+    );
+    expect(await projection()).toMatchObject({ cancelAt: null });
+  });
 });

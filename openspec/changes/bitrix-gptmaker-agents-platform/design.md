@@ -111,7 +111,7 @@ Contrato v1 implementado no `crmthink-platform` e publicado em OpenAPI 3.1. Este
 | `plan_changed` | imediato: `GRANT` proporcional da diferença + novos limites; próximo ciclo: guarda plano futuro |
 | `past_due` | `grace_until` = falha + 1 dia, empurrado para segunda se cair no sábado ou domingo (Brasília); falhas seguintes não estendem; aviso `PAYMENT_FAILED` |
 | `recovered` | limpa carência (reativa agentes `SUBSCRIPTION_EXPIRED`) |
-| `cancel_scheduled` | só exibição |
+| `cancel_scheduled` | `cancel_at` = `data.effectiveAt` (a tela mostra a data e some a renovação); `renewed`/`activated` limpam; a retomada não tem evento e é sincronizada pelo job de consistência (`cancelAtPeriodEnd`) |
 | `ended` (`reason` = `trial_expired`, `cancelled` ou `deleted`) | `EXPIRE` TRIAL+PLAN+EXTRA; inativa agentes `SUBSCRIPTION_EXPIRED` |
 | `period_ending` | aviso `PERIOD_ENDING` (só `manual`) |
 | `purchase.paid` | `TOPUP` em `EXTRA` (quantidade do pacote em `plan_entitlement`) |

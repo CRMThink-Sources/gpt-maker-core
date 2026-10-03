@@ -213,6 +213,29 @@ export class SubscriptionConsistencyService {
     }
   }
 
+  /**
+   * Cancelamento agendado conforme a plataforma: `cancel_scheduled` grava a data, mas desistir do
+   * cancelamento no portal do Stripe não gera evento. Só para a mesma assinatura.
+   */
+  private async syncCancellation(
+    tenantId: string,
+    local: Projection | undefined,
+    remote: CurrentSubscription | null,
+  ): Promise<boolean> {
+    if (!local || !remote || local.subscriptionId !== String(remote.subscriptionId)) return false;
+    const cancelAt = remote.cancelAtPeriodEnd ? new Date(remote.periodEnd) : null;
+    if ((local.cancelAt?.getTime() ?? null) === (cancelAt?.getTime() ?? null)) return false;
+    await this.db
+      .update(subscriptionState)
+      .set({ cancelAt })
+      .where(eq(subscriptionState.tenantId, tenantId));
+    this.logger.warn(
+      { tenantId, subscriptionId: local.subscriptionId, cancelAt },
+      'cancelamento agendado sincronizado com a plataforma',
+    );
+    return true;
+  }
+
   async check(
     row: typeof tenant.$inferSelect,
     now = new Date(),
@@ -228,7 +251,9 @@ export class SubscriptionConsistencyService {
     });
 
     const result = reconcile(local, remote, now);
-    if (!result) return 'ok';
+    if (!result) {
+      return (await this.syncCancellation(row.id, local, remote)) ? 'corrected' : 'ok';
+    }
     if ('alert' in result) {
       this.logger.warn(
         { alert: true, tenantId: row.id, installationId, local: local?.subscriptionId },

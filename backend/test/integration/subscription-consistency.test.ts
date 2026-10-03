@@ -239,4 +239,19 @@ describe('consistência da projeção da assinatura', () => {
     const report = await consistency.checkAll();
     expect(report.checked).toBeGreaterThan(0);
   });
+
+  it('cancelamento agendado e retomada (sem evento) sincronizados com a plataforma', async () => {
+    remote = current({});
+    await consistency.check(owner);
+    remote = current({ cancelAtPeriodEnd: true });
+    expect(await consistency.check(owner)).toBe('corrected');
+    expect(await projection()).toMatchObject({
+      cancelAt: new Date('2026-11-03T23:59:59.999Z'),
+    });
+    expect(await consistency.check(owner)).toBe('ok');
+
+    remote = current({ cancelAtPeriodEnd: false });
+    expect(await consistency.check(owner)).toBe('corrected');
+    expect(await projection()).toMatchObject({ cancelAt: null });
+  });
 });
