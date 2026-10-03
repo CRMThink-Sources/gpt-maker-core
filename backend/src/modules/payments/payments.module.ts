@@ -7,6 +7,8 @@ import { CreditsController } from './credits.controller';
 import { InstallationEventsConsumer } from './installation-events.consumer';
 import { PaymentsOutbox } from './payments-outbox';
 import { PaymentsOutboxWorker } from './payments-outbox.worker';
+import { PlansController } from './plans.controller';
+import { PlansService } from './plans.service';
 import { PlatformEventStore } from './platform-event.store';
 import { PlatformEventsController } from './platform-events.controller';
 import { SubscriptionEventsConsumer } from './subscription-events.consumer';
@@ -16,7 +18,7 @@ import { TrialService } from './trial.service';
 
 @Module({
   imports: [BillingModule, TenancyModule],
-  controllers: [PlatformEventsController, TrialController, CreditsController],
+  controllers: [PlatformEventsController, TrialController, CreditsController, PlansController],
   providers: [
     PlatformEventStore,
     InstallationEventsConsumer,
@@ -27,6 +29,7 @@ import { TrialService } from './trial.service';
     SubscriptionEventsService,
     TrialService,
     CreditSummaryService,
+    PlansService,
   ],
   exports: [PaymentsOutbox],
 })

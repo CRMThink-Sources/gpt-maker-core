@@ -140,6 +140,7 @@ services:
     environment:
       PUBLIC_PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
       PUBLIC_API_BASE_URL: http://localhost:3001
+      PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 5s

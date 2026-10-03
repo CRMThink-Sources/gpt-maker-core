@@ -15,6 +15,7 @@ import { bx24Call } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../agents/agent-fields';
 import { BalanceSection, EntriesSection, UsageSection } from './credits-sections';
+import { PlansSection } from './plans-section';
 import { useAppSession } from '../session-provider';
 
 /** Intervalo da consulta enquanto o trial é ativado (o evento da plataforma leva segundos). */
@@ -178,6 +179,17 @@ export default function PlanPage() {
   const paid =
     summary?.subscription?.status === 'active' || summary?.subscription?.status === 'past_due';
 
+  // Plano contratado ou pacote creditado: saldo e movimentações novos.
+  const [version, setVersion] = useState(0);
+  const refresh = useCallback(() => {
+    loadSummary()
+      .then((credits) => {
+        setSummary(credits);
+        setVersion((v) => v + 1);
+      })
+      .catch(() => undefined);
+  }, [loadSummary]);
+
   // Ativação em andamento: consulta até o `subscription.trial_started` chegar ao backend.
   useEffect(() => {
     if (status?.state !== 'activating') return;
@@ -193,7 +205,7 @@ export default function PlanPage() {
     <>
       <PageHeader
         title="Créditos e plano"
-        description="Saldo, consumo dos agentes e teste grátis do app."
+        description="Saldo, plano, consumo dos agentes e teste grátis do app."
       />
       {error && <Alert tone="error">{error}</Alert>}
       {(!status || !summary) && !error && <Loading />}
@@ -235,8 +247,8 @@ export default function PlanPage() {
         <Card className="flex items-start gap-3 p-6">
           <CheckIcon className="mt-0.5 size-5 shrink-0 text-zinc-400" />
           <p className="text-sm text-zinc-600">
-            O teste grátis já foi utilizado neste portal. A contratação de planos pelo app chega em
-            breve; enquanto isso, fale com a CRMThink.
+            O teste grátis já foi utilizado neste portal. Escolha um plano abaixo para seus agentes
+            continuarem atendendo.
           </p>
         </Card>
       )}
@@ -244,8 +256,10 @@ export default function PlanPage() {
       {status && summary && (
         <div className="mt-8 space-y-8">
           <BalanceSection summary={summary} />
+          <PlansSection summary={summary} onChanged={refresh} />
           <UsageSection cycleStart={summary.cycleStart} />
-          <EntriesSection />
+          {/* `key`: recarrega as movimentações depois de uma compra ou contratação. */}
+          <EntriesSection key={version} />
         </div>
       )}
     </>

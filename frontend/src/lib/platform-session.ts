@@ -10,6 +10,8 @@ export interface ClientConfig {
   platformUrl: string;
   /** Base da API do app. */
   apiBaseUrl: string;
+  /** Chave publicável do Stripe (`pk_test_…`/`pk_live_…`) para o checkout embutido; sem ela, a venda fica indisponível. */
+  stripePublishableKey: string | null;
 }
 
 /** Renova antes de vencer para as chamadas não esbarrarem no `exp` (JWT de 15 min). */

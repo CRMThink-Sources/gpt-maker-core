@@ -36,6 +36,7 @@ services:
     environment:
       PUBLIC_PLATFORM_URL: ${PUBLIC_PLATFORM_URL}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
+      PUBLIC_STRIPE_PUBLISHABLE_KEY: ${PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 15s

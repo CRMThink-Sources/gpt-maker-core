@@ -16,6 +16,7 @@ export interface AppSession {
 interface SessionContextValue {
   session: AppSession;
   api: PlatformSessionClient['api'];
+  config: ClientConfig;
 }
 
 type State =
@@ -76,9 +77,13 @@ export function SessionProvider({
   const value = useMemo(
     () =>
       state.kind === 'ready'
-        ? { session: state.session, api: client.api.bind(client) as PlatformSessionClient['api'] }
+        ? {
+            session: state.session,
+            api: client.api.bind(client) as PlatformSessionClient['api'],
+            config,
+          }
         : null,
-    [state, client],
+    [state, client, config],
   );
 
   if (state.kind === 'loading') {

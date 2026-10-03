@@ -1,7 +1,12 @@
 import {
+  type BillingPortalRequest,
+  type BillingPortalSession,
+  type CheckoutRequest,
+  type CheckoutSession,
   type CreateItemRequest,
   type CurrentSubscription,
   type Installation,
+  type Plan,
   PlatformClient,
   PlatformError,
   PlatformRequestError,
@@ -94,6 +99,24 @@ export class PlatformApiClient {
    */
   requestTrial(installationId: number, contact: TrialRequest): Promise<TrialRequestResult> {
     return this.call('trial.request', () => this.client.requestTrial(installationId, contact));
+  }
+
+  /** Planos ativos dos produtos do app (assinaturas, pacotes e o plano de trial). */
+  listPlans(): Promise<Plan[]> {
+    return this.call('plan.list', async () => (await this.client.listPlans()).items);
+  }
+
+  /**
+   * Sessão do Stripe Embedded Checkout. Repetir só cria outra sessão (a não usada expira), então
+   * a retentativa em falha transitória é segura.
+   */
+  createCheckoutSession(body: CheckoutRequest): Promise<CheckoutSession> {
+    return this.call('checkout.create', () => this.client.createCheckoutSession(body));
+  }
+
+  /** Sessão do Stripe Customer Portal; `NO_GATEWAY_SUBSCRIPTION` sem cobrança Stripe ativa. */
+  createBillingPortalSession(body: BillingPortalRequest): Promise<BillingPortalSession> {
+    return this.call('billing-portal.create', () => this.client.createBillingPortalSession(body));
   }
 
   listItems(subscriptionId: number): Promise<SubscriptionItem[]> {
