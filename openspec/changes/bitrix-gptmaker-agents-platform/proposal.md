@@ -27,7 +27,7 @@ Temos uma conta PARTNER no GPTMaker com criação de agentes e créditos ilimita
 - `bitrix-chatbot-channel`: registro do chatbot no Bitrix, roteamento de mensagens Linhas Abertas ↔ GPTMaker, transferência para humano e tratamento de saldo insuficiente.
 - `agent-triggers`: configuração de gatilhos que ligam eventos de webhook do GPTMaker a ações no Bitrix24.
 - `credit-billing`: planos, saldo, ledger, débito por resposta, alertas de consumo e bloqueio por saldo.
-- `payments-integration`: consumo do módulo `billing` do `crmthink-platform` (trial, checkout embutido, troca de plano, portal, eventos de assinatura/compra/estorno, carência, itens de assinatura por agente, projeção local da assinatura).
+- `payments-integration`: consumo do módulo `billing` do `crmthink-platform` (trial liberado por formulário de cadastro, checkout embutido, troca de plano, portal, eventos de assinatura/compra/estorno, carência, itens de assinatura por agente, projeção local da assinatura).
 - `usage-reconciliation`: reconciliação diária do consumo estimado com o consumo real do GPTMaker e relatório de consumo do partner por período.
 - `admin-backoffice`: painel interno para operação (planos, tenants, créditos, modelos, workspace, relatórios, auditoria).
 

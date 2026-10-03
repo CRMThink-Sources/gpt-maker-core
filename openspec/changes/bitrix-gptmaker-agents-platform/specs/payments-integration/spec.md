@@ -11,16 +11,44 @@ O sistema MUST delegar ao módulo `billing` do `crmthink-platform` compartilhado
 - **WHEN** o `crmthink-platform` não responde a uma chamada iniciada pelo usuário (checkout, portal, consulta)
 - **THEN** o sistema exibe erro recuperável e não altera o estado local da assinatura
 
-### Requirement: Trial na instalação
-A instalação é criada pelo módulo `installations` da plataforma (ver `bitrix-app-installation`), que identifica o tenant pelo `installationId`. O app MUST estar cadastrado na plataforma com trial de 14 dias criado automaticamente na instalação (`trial_on_install`), uma única vez por instalação. O sistema MUST conceder 500 créditos ao receber `subscription.trial_started`.
+### Requirement: Trial liberado por cadastro
+A plataforma MUST NOT criar o trial na instalação (`trial_on_install` desligado no cadastro do app). O sistema MUST oferecer o trial de 14 dias somente ao tenant que nunca teve assinatura na projeção local (nenhum trial ou plano recebido da plataforma); a decisão final é da plataforma, que recusa com `TRIAL_ALREADY_USED` a instalação que já usou trial. Para ativar, um usuário com permissão de administração do app (ver `bitrix-app-installation`) MUST preencher o formulário de cadastro com nome, e-mail, telefone/WhatsApp, empresa e cargo, todos obrigatórios; o backend MUST repassar os dados à plataforma (`POST /v1/installations/{id}/trial`), que valida, grava o contato na instalação (banco e SPA 1060) e cria o trial uma única vez por instalação. O sistema MUST NOT guardar os dados do cadastro nem escrever no portal CRMThink. Os 500 créditos MUST ser concedidos somente ao receber `subscription.trial_started`, nunca pela resposta da chamada de ativação.
 
-#### Scenario: Primeira instalação inicia trial
-- **WHEN** um portal instala o app pela primeira vez
-- **THEN** a plataforma cria o trial após o instalador do app concluir e, ao receber `subscription.trial_started`, o sistema lança `GRANT` de 500 créditos na carteira `TRIAL` com expiração igual ao fim do trial
+#### Scenario: Oferta do trial
+- **WHEN** o tenant sem nenhuma assinatura na projeção local abre a tela de planos
+- **THEN** a tela oferece "Testar grátis por 14 dias" junto com os planos
+
+#### Scenario: Trial indisponível
+- **WHEN** o tenant está em trial, tem assinatura vigente ou já teve trial ou plano encerrado
+- **THEN** a tela não oferece o trial e mostra o status atual ou os planos
+
+#### Scenario: Primeira ativação
+- **WHEN** o administrador envia o formulário de cadastro válido
+- **THEN** o backend solicita o trial à plataforma com os dados do cadastro, a tela mostra ativação em andamento e, ao receber `subscription.trial_started`, o sistema lança `GRANT` de 500 créditos na carteira `TRIAL` com expiração igual ao fim do trial
+
+#### Scenario: Cadastro recusado
+- **WHEN** a plataforma recusa os dados do cadastro por validação
+- **THEN** a tela mostra os erros de cada campo, mantém o que foi preenchido e nenhum trial é criado
+
+#### Scenario: Envio repetido
+- **WHEN** o formulário é enviado duas vezes (clique duplo, retentativa ou duas abas)
+- **THEN** existe no máximo um trial e um único `GRANT` de trial; a plataforma responde 201 ao envio que criou o trial e 200 com o mesmo trial aos demais, e a tela trata os dois como ativação em andamento
+
+#### Scenario: Trial já usado
+- **WHEN** a plataforma responde `TRIAL_ALREADY_USED`
+- **THEN** a tela informa que o período de teste já foi utilizado e mostra os planos, sem conceder créditos
+
+#### Scenario: Assinatura já existente na plataforma
+- **WHEN** a plataforma responde `SUBSCRIPTION_ALREADY_EXISTS` (projeção local atrasada)
+- **THEN** a tela mostra os planos e o sistema consulta a assinatura na plataforma para atualizar a projeção
+
+#### Scenario: Usuário sem permissão
+- **WHEN** um usuário sem permissão de administração do app tenta ativar o trial
+- **THEN** o sistema responde 403 e a tela informa que somente o administrador pode ativar o teste
 
 #### Scenario: Reinstalação após trial usado
 - **WHEN** um portal que já usou o trial reinstala o app
-- **THEN** a plataforma não cria novo trial, nenhum crédito de trial é concedido e o tenant vê a tela de planos
+- **THEN** a projeção local preservada não oferece o trial, a plataforma recusaria nova solicitação com `TRIAL_ALREADY_USED` e o tenant vê a tela de planos
 
 #### Scenario: Trial expirado
 - **WHEN** chega `subscription.ended` com motivo `trial_expired`
@@ -31,7 +59,7 @@ A instalação é criada pelo módulo `installations` da plataforma (ver `bitrix
 - **THEN** o sistema inicia o ciclo do plano pago com `GRANT` dos créditos do plano em `PLAN`; a carteira `TRIAL` permanece até o fim dos 14 dias e então expira por job do app
 
 #### Scenario: Evento de trial atrasado
-- **WHEN** o tenant abre o app antes de chegar `subscription.trial_started`
+- **WHEN** o tenant abre o app depois de ativar o trial e antes de chegar `subscription.trial_started`
 - **THEN** a tela mostra ativação em andamento e o sistema consulta a assinatura na plataforma até o trial ser confirmado
 
 ### Requirement: Recepção de eventos do crmthink-platform
