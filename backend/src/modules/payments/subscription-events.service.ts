@@ -4,6 +4,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agent, subscriptionState } from '../../shared/database/schema/index';
 import { CreditCycleService } from '../billing';
+import { MESSAGES, NotificationService } from '../notifications';
 import { type Tenant, TenantLifecycle, TenantService } from '../tenancy';
 import { graceDeadline } from './grace-period';
 import { OUTBOX_OPERATIONS, PaymentsOutbox } from './payments-outbox';
@@ -46,6 +47,7 @@ export class SubscriptionEventsService {
     private readonly lifecycle: TenantLifecycle,
     private readonly cycles: CreditCycleService,
     private readonly outbox: PaymentsOutbox,
+    private readonly notifications: NotificationService,
     @Inject(DB) private readonly db: Database,
   ) {}
 
@@ -106,6 +108,36 @@ export class SubscriptionEventsService {
               isNull(subscriptionState.graceUntil),
             ),
           );
+        // Aviso PAYMENT_FAILED uma vez por carência (12.7), com o prazo e o link da fatura.
+        const [state] = await this.db
+          .select({ graceUntil: subscriptionState.graceUntil })
+          .from(subscriptionState)
+          .where(eq(subscriptionState.tenantId, tenant.id));
+        if (subscriptionId && state?.graceUntil) {
+          await this.notifications.notify({
+            tenantId: tenant.id,
+            type: 'PAYMENT_FAILED',
+            dedupeKey: `${subscriptionId}:${state.graceUntil.toISOString()}`,
+            message: MESSAGES.paymentFailed({
+              graceUntil: state.graceUntil,
+              invoiceUrl: event.data.hostedInvoiceUrl ?? null,
+            }),
+          });
+        }
+        return;
+      }
+      case 'subscription.period_ending': {
+        // Só assinaturas `manual` (a plataforma emite a 3, 2 e 1 dia do fim): aviso PERIOD_ENDING.
+        if (!subscriptionId) return;
+        await this.notifications.notify({
+          tenantId: tenant.id,
+          type: 'PERIOD_ENDING',
+          dedupeKey: `${subscriptionId}:${event.data.periodEnd}:${event.data.daysLeft}`,
+          message: MESSAGES.periodEnding({
+            daysLeft: event.data.daysLeft,
+            periodEnd: new Date(event.data.periodEnd),
+          }),
+        });
         return;
       }
       case 'subscription.recovered': {

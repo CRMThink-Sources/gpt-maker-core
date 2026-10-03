@@ -39,6 +39,12 @@ export const BookIcon = (p: P) => (
     d="M12 6.5C10.5 5.3 8.5 4.5 6 4.5c-1 0-2 .1-3 .4v13c1-.3 2-.4 3-.4 2.5 0 4.5.8 6 2m0-13c1.5-1.2 3.5-2 6-2 1 0 2 .1 3 .4v13c-1-.3-2-.4-3-.4-2.5 0-4.5.8-6 2m0-13v13"
   />
 );
+export const BellIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.66V5a2 2 0 1 0-4 0v.34A6 6 0 0 0 6 11v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"
+  />
+);
 export const BoltIcon = (p: P) => <Icon {...p} d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" />;
 export const WalletIcon = (p: P) => (
   <Icon

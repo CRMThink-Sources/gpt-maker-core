@@ -105,6 +105,7 @@ describe('consistência da projeção da assinatura', () => {
       new TenantLifecycle(),
       new CreditCycleService(ledger, db, redis),
       new PaymentsOutbox(db),
+      { notify: async () => true } as never,
       db,
     );
     const platform = new PlatformApiClient(

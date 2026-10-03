@@ -3,6 +3,7 @@ export * from './credits';
 export * from './errors';
 export * from './health';
 export * from './models';
+export * from './notifications';
 export * from './plans';
 export * from './platform';
 export * from './trainings';

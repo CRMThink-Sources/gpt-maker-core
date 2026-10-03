@@ -7,6 +7,7 @@ import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { CreditAlerts } from '../../src/modules/billing/credit-alerts';
 import { LedgerService } from '../../src/modules/billing/ledger.service';
 import {
   UsageDebitConsumer,
@@ -17,6 +18,9 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 
 const { agent, aiModel, creditLedger, tenant } = schema;
+
+/** Alertas de crédito têm teste próprio (credit-alerts). */
+const noAlerts = { afterDebit: async () => null } as unknown as CreditAlerts;
 
 // Débito por resposta entregue (spec credit-billing).
 describe('débito das respostas', () => {
@@ -53,7 +57,7 @@ describe('débito das respostas', () => {
     db = drizzle(pool, { schema });
     const redis = new Redis(redisContainer.getConnectionUrl());
     ledger = new LedgerService(db, redis);
-    consumer = new UsageDebitConsumer(ledger, db);
+    consumer = new UsageDebitConsumer(ledger, noAlerts, db);
     await db.insert(aiModel).values([
       { code: 'GPT_5_MINI', displayName: 'GPT-5 Mini', creditsPerResponse: 2 },
       { code: 'CLAUDE_4_5_HAIKU', displayName: 'Haiku', creditsPerResponse: 4 },
@@ -163,6 +167,7 @@ describe('débito das respostas', () => {
           throw new Error('banco fora');
         },
       } as unknown as LedgerService,
+      noAlerts,
       db,
     );
     const requeued = await failing.onMessage(event());

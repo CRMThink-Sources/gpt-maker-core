@@ -6,6 +6,7 @@ import { AgentsModule } from './agents';
 import { TrainingModule } from './training';
 import { ChannelModule } from './channel';
 import { TriggersModule } from './triggers';
+import { NotificationsModule } from './notifications';
 import { BillingModule } from './billing';
 import { PaymentsModule } from './payments';
 import { ReconciliationModule } from './reconciliation';
@@ -21,6 +22,7 @@ export const DOMAIN_MODULES = [
   TrainingModule,
   ChannelModule,
   TriggersModule,
+  NotificationsModule,
   BillingModule,
   PaymentsModule,
   ReconciliationModule,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing';
+import { NotificationsModule } from '../notifications';
 import { TenancyModule } from '../tenancy';
 import { AgentItemMirror } from './agent-item.mirror';
 import { CreditSummaryService } from './credit-summary.service';
@@ -19,7 +20,7 @@ import { TrialController } from './trial.controller';
 import { TrialService } from './trial.service';
 
 @Module({
-  imports: [BillingModule, TenancyModule],
+  imports: [BillingModule, NotificationsModule, TenancyModule],
   controllers: [PlatformEventsController, TrialController, CreditsController, PlansController],
   providers: [
     PlatformEventStore,

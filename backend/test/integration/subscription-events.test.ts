@@ -107,6 +107,7 @@ describe('ciclo de vida da assinatura', () => {
       lifecycle,
       cycles,
       new PaymentsOutbox(db),
+      { notify: async () => true } as never,
       db,
     );
     await db.insert(planEntitlement).values([

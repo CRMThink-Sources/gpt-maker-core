@@ -24,6 +24,12 @@ const PLAN = 11;
 /** Horário de Brasília (UTC-3) ⇒ instante. */
 const brt = (local: string) => new Date(`${local}-03:00`);
 
+interface Notified {
+  type: string;
+  dedupeKey: string;
+  message: string;
+}
+
 // Carência de pagamento (spec payments-integration: 1 dia, fim de semana empurra para segunda).
 describe('carência de pagamento', () => {
   let postgres: StartedPostgreSqlContainer;
@@ -39,6 +45,7 @@ describe('carência de pagamento', () => {
   let subscriptionId: number;
   let version: number;
   const accessChanged: string[] = [];
+  const notified: Notified[] = [];
 
   function event(type: string, status: string, occurredAt: Date): PlatformEvent {
     version += 1;
@@ -94,6 +101,7 @@ describe('carência de pagamento', () => {
       lifecycle,
       new CreditCycleService(ledger, db, redis),
       new PaymentsOutbox(db),
+      { notify: async (n: Notified) => notified.push(n) > 0 } as never,
       db,
     );
     job = new GraceExpiryJob(tenants, lifecycle, db, redis);
@@ -105,6 +113,7 @@ describe('carência de pagamento', () => {
 
   beforeEach(async () => {
     accessChanged.length = 0;
+    notified.length = 0;
     version = 0;
     installationId = Math.floor(Math.random() * 1_000_000);
     subscriptionId = Math.floor(Math.random() * 1_000_000);
@@ -134,6 +143,12 @@ describe('carência de pagamento', () => {
 
     await events.handle(event('subscription.past_due', 'past_due', brt('2026-10-10T08:00:00')));
     expect(await graceUntil()).toEqual(brt('2026-10-12T10:00:00'));
+
+    // Aviso PAYMENT_FAILED com o prazo, com a mesma chave nas duas falhas (um só envio).
+    const failed = notified.filter((n) => n.type === 'PAYMENT_FAILED');
+    expect(failed).toHaveLength(2);
+    expect(new Set(failed.map((n) => n.dedupeKey)).size).toBe(1);
+    expect(failed[0]!.message).toContain('12/10/2026, 10:00');
   });
 
   it('job: dentro da carência nada; vencida avisa uma vez e a política bloqueia', async () => {

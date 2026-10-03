@@ -122,6 +122,7 @@ describe('trial por cadastro', () => {
       new TenantLifecycle(),
       new CreditCycleService(ledger, db, redis),
       new PaymentsOutbox(db),
+      { notify: async () => true } as never,
       db,
     );
   });

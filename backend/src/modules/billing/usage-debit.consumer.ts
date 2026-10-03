@@ -6,6 +6,7 @@ import { newTraceId, runWithContext } from '../../shared/context/request-context
 import { DB, type Database } from '../../shared/database/database.module';
 import { aiModel } from '../../shared/database/schema/index';
 import { QUEUES } from '../../shared/messaging/topology';
+import { CreditAlerts } from './credit-alerts';
 import { LedgerService, type OperationResult } from './ledger.service';
 
 /** Pausa antes de devolver à fila um evento que falhou (banco fora), para não girar em falso. */
@@ -42,6 +43,7 @@ export class UsageDebitConsumer {
 
   constructor(
     private readonly ledger: LedgerService,
+    private readonly alerts: CreditAlerts,
     @Inject(DB) private readonly db: Database,
   ) {}
 
@@ -88,6 +90,8 @@ export class UsageDebitConsumer {
       { messageId: event.messageId, cost, balance: result.balance.total },
       'resposta debitada',
     );
+    // 80% e saldo zerado: uma vez por ciclo (11.5).
+    await this.alerts.afterDebit(event.tenantId, result.balance);
     return 'debited';
   }
 

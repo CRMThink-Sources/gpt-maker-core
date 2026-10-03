@@ -3,7 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
-import { BoltIcon, BotIcon, CloseIcon, MenuIcon, UsersIcon, WalletIcon } from '@/components/icons';
+import {
+  BellIcon,
+  BoltIcon,
+  BotIcon,
+  CloseIcon,
+  MenuIcon,
+  UsersIcon,
+  WalletIcon,
+} from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Alert, Avatar } from '@/components/ui';
 import { useAppSession } from './session-provider';
@@ -44,6 +52,13 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         icon: UsersIcon,
         href: '/app/permissions',
         match: (path) => path.startsWith('/app/permissions'),
+        adminOnly: true,
+      },
+      {
+        label: 'Avisos',
+        icon: BellIcon,
+        href: '/app/notifications',
+        match: (path) => path.startsWith('/app/notifications'),
         adminOnly: true,
       },
     ],

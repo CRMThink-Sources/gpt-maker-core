@@ -3,36 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PlusIcon, UsersIcon } from '@/components/icons';
 import { Alert, Avatar, buttonClass, Card, EmptyState, Loading, PageHeader } from '@/components/ui';
-import { bx24Call, bx24SelectUsers } from '@/lib/bx24';
+import { bx24SelectUsers } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
+import { userNames } from '@/lib/portal-users';
 import { useAppSession } from '../session-provider';
 
 interface GrantedUser {
   bitrixUserId: string;
   grantedBy: string;
   grantedAt: string;
-}
-
-interface BitrixUser {
-  ID: string;
-  NAME?: string;
-  LAST_NAME?: string;
-}
-
-/** Nomes vêm do próprio portal (auth do usuário no BX24); o backend guarda só os ids. */
-async function userNames(ids: string[]): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  try {
-    const users = await bx24Call<BitrixUser[]>('user.get', { ID: ids });
-    return Object.fromEntries(
-      users.map((user) => [
-        user.ID,
-        [user.NAME, user.LAST_NAME].filter(Boolean).join(' ') || `#${user.ID}`,
-      ]),
-    );
-  } catch {
-    return {};
-  }
 }
 
 /** Concessão de permissão: o admin do portal escolhe quem pode gerenciar agentes. */
