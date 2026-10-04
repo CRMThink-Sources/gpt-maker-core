@@ -252,9 +252,19 @@ export default function AdminWorkspacePage() {
             {status && (
               <dl className="mt-3 grid gap-3 sm:grid-cols-4">
                 <div>
-                  <dt className="text-xs text-zinc-500">Créditos do workspace</dt>
-                  <dd className="mt-0.5 text-2xl font-semibold tabular-nums text-zinc-900">
-                    {status.credits === null ? '—' : status.credits.toLocaleString('pt-BR')}
+                  <dt className="text-xs text-zinc-500">Cobrança do partner</dt>
+                  {/* Conta pós-paga: o GPTMaker cobra pelo uso; saldo pré-pago 0 é o esperado. */}
+                  <dd className="mt-0.5 text-sm text-zinc-900">
+                    {status.credits ? (
+                      <>
+                        Saldo pré-pago:{' '}
+                        <span className="font-semibold tabular-nums">
+                          {status.credits.toLocaleString('pt-BR')}
+                        </span>
+                      </>
+                    ) : (
+                      'Pós-paga (pelo uso)'
+                    )}
                   </dd>
                 </div>
                 <div>
