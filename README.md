@@ -48,7 +48,7 @@ npm run backoffice:create-operator -w backend -- --email ana@empresa.com --name 
 docker compose exec api node dist/cli/create-operator.js --email ana@empresa.com --name "Ana"  # servidor
 ```
 
-Em `http://localhost` o cookie da sessão precisa de `BACKOFFICE_COOKIE_SECURE=false` (já no `.env.example`).
+Em `http://localhost` o cookie da sessão precisa de `BACKOFFICE_COOKIE_SECURE=false` (já no `.env.example`). O navegador chama a API pelo repasse `/admin/api/*` do próprio frontend (cookie de primeira parte); no servidor do frontend, `API_INTERNAL_URL` aponta para a API (em desenvolvimento, `http://localhost:3001` no `frontend/.env.local`).
 
 ## Verificações
 

@@ -64,14 +64,8 @@ const NAV = [
  * Sessão do backoffice: confere `/admin/auth/me` ao abrir; sem sessão, manda para o login. As
  * páginas internas ficam dentro do menu; o login, sozinho.
  */
-export function AdminProvider({
-  apiBaseUrl,
-  children,
-}: {
-  apiBaseUrl: string;
-  children: ReactNode;
-}) {
-  const api = useMemo(() => createAdminApi(apiBaseUrl), [apiBaseUrl]);
+export function AdminProvider({ children }: { children: ReactNode }) {
+  const api = useMemo(() => createAdminApi(), []);
   const router = useRouter();
   const pathname = usePathname();
   const [operator, setOperator] = useState<Operator | null>(null);

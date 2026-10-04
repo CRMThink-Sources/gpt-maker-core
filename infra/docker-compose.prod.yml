@@ -37,6 +37,8 @@ services:
       PUBLIC_PLATFORM_URL: ${PUBLIC_PLATFORM_URL}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
       PUBLIC_STRIPE_PUBLISHABLE_KEY: ${PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      # Repasse do backoffice (/admin/api) para a API pela rede interna
+      API_INTERNAL_URL: http://backend-api:3001
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 15s

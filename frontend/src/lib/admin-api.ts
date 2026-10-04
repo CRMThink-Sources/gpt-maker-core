@@ -2,18 +2,19 @@ import { type ApiError, BACKOFFICE_HEADER } from '@gptmaker/contracts';
 import { ApiRequestError } from './platform-session';
 
 /**
- * Chamadas do backoffice à API: sessão no cookie httpOnly `gm_admin` (enviado com
- * `credentials: 'include'`) e o cabeçalho `X-Backoffice: 1` em toda escrita (CSRF).
+ * Chamadas do backoffice à API pelo repasse do próprio frontend (`/admin/x` ⇒ `/admin/api/x`,
+ * route handler): mesma origem da página, então o cookie httpOnly `gm_admin` vai sozinho. Toda
+ * escrita leva o cabeçalho `X-Backoffice: 1` (CSRF).
  */
-export function createAdminApi(apiBaseUrl: string) {
+export function createAdminApi() {
   return async function adminApi<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
     if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
     if ((init.method ?? 'GET') !== 'GET') headers.set(BACKOFFICE_HEADER, '1');
-    const response = await fetch(new URL(path, apiBaseUrl), {
+    const response = await fetch(path.replace(/^\/admin\//, '/admin/api/'), {
       ...init,
       headers,
-      credentials: 'include',
+      credentials: 'same-origin',
     });
     if (!response.ok) {
       const body = (await response.json().catch(() => undefined)) as ApiError | undefined;
