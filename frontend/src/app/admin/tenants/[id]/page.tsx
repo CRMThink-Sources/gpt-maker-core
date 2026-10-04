@@ -5,6 +5,7 @@ import {
   grantCreditsSchema,
   suspendTenantSchema,
 } from '@gptmaker/contracts';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '@/components/modal';
@@ -193,6 +194,9 @@ export default function AdminTenantPage() {
         actions={
           isAdmin && (
             <div className="flex flex-wrap gap-2">
+              <Link href={`/admin/audit?tenantId=${tenant.id}`} className={buttonClass('ghost')}>
+                Auditoria
+              </Link>
               <button
                 type="button"
                 onClick={() => {

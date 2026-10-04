@@ -385,3 +385,37 @@ export interface PartnerReportView {
   >;
   unlinked: Array<{ gptmakerAgentId: string; name: string | null; consumed: number }>;
 }
+
+// ---- Auditoria (15.8)
+
+export const auditQuerySchema = z.object({
+  tenantId: z.uuid().optional(),
+  actorId: z.string().min(1).max(100).optional(),
+  /** Prefixo da ação (ex.: `tenant.`, `model.created`). */
+  action: z.string().min(1).max(100).optional(),
+  /** Cursor da página anterior (`nextCursor`). */
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type AuditQueryInput = z.input<typeof auditQuerySchema>;
+
+export interface AdminAuditEntry {
+  id: string;
+  createdAt: string;
+  actor: { type: 'OPERATOR' | 'TENANT_USER' | 'SYSTEM'; id: string; name: string | null };
+  tenant: { id: string; domain: string } | null;
+  /** Ação nomeada (ex.: `tenant.suspended`) ou, sem registro próprio, a rota (`POST /admin/...`). */
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  before: unknown;
+  after: unknown;
+  reason: string | null;
+  traceId: string | null;
+}
+
+export interface AdminAuditPage {
+  /** Mais novas primeiro. */
+  items: AdminAuditEntry[];
+  nextCursor: string | null;
+}

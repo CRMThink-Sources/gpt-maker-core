@@ -8,6 +8,9 @@ import { TenancyModule } from '../tenancy';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
+import { AdminAuditInterceptor } from './admin-audit.interceptor';
+import { AuditController } from './audit.controller';
+import { AuditQueryService } from './audit-query.service';
 import { AuditService } from './audit.service';
 import { ModelsAdminController } from './models-admin.controller';
 import { ModelsAdminService } from './models-admin.service';
@@ -40,11 +43,14 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     ModelsAdminController,
     WorkspaceAdminController,
     ReconciliationAdminController,
+    AuditController,
   ],
   providers: [
     AdminAuthService,
     AdminAuthGuard,
     AuditService,
+    AuditQueryService,
+    AdminAuditInterceptor,
     OperatorService,
     PlanRightsService,
     TenantsAdminService,

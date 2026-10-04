@@ -8,10 +8,12 @@ import {
   SetMetadata,
   UnauthorizedException,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { BACKOFFICE_HEADER, type OperatorRole } from '@gptmaker/contracts';
 import type { Request } from 'express';
+import { AdminAuditInterceptor } from './admin-audit.interceptor';
 import { AdminAuthService } from './admin-auth.service';
 import type { Operator } from './operator.service';
 
@@ -36,7 +38,12 @@ export function sessionToken(req: Request): string | undefined {
  * não manda esse cabeçalho sem o preflight, recusado pelo CORS).
  */
 export function AdminAuth(role: OperatorRole | 'ANY' = 'ANY') {
-  return applyDecorators(SetMetadata(ROLE, role), UseGuards(AdminAuthGuard));
+  return applyDecorators(
+    SetMetadata(ROLE, role),
+    UseGuards(AdminAuthGuard),
+    // Toda escrita do backoffice fica na auditoria (15.8).
+    UseInterceptors(AdminAuditInterceptor),
+  );
 }
 
 @Injectable()

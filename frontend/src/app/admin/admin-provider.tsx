@@ -41,7 +41,12 @@ export function useOperator(): Operator {
   return operator;
 }
 
-const NAV = [
+const NAV: Array<{
+  href: string;
+  label: string;
+  match: (path: string) => boolean;
+  adminOnly?: boolean;
+}> = [
   { href: '/admin', label: 'Início', match: (path: string) => path === '/admin' },
   {
     href: '/admin/tenants',
@@ -67,6 +72,12 @@ const NAV = [
     href: '/admin/consumption',
     label: 'Consumo',
     match: (path: string) => path.startsWith('/admin/consumption'),
+  },
+  {
+    href: '/admin/audit',
+    label: 'Auditoria',
+    match: (path: string) => path.startsWith('/admin/audit'),
+    adminOnly: true,
   },
   {
     href: '/admin/operators',
@@ -154,7 +165,7 @@ function AdminShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <nav className="flex flex-1 gap-1 text-sm">
-            {NAV.map((item) => {
+            {NAV.filter((item) => !item.adminOnly || operator.role === 'ADMIN').map((item) => {
               const active = item.match(pathname);
               return (
                 <Link

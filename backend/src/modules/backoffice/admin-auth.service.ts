@@ -197,7 +197,15 @@ export class AdminAuthService {
     const hash = sha256(token);
     const raw = await this.redis.get(keys.session(hash));
     await this.redis.del(keys.session(hash));
-    if (raw) await this.redis.srem(keys.sessionsOf((JSON.parse(raw) as Session).operatorId), hash);
+    if (!raw) return;
+    const { operatorId } = JSON.parse(raw) as Session;
+    await this.redis.srem(keys.sessionsOf(operatorId), hash);
+    await this.audit.record({
+      actorId: operatorId,
+      action: 'operator.logout',
+      entityType: 'backoffice_user',
+      entityId: operatorId,
+    });
   }
 
   /** Encerra todas as sessões do operador (troca de senha, desativação, TOTP zerado). */
