@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { GptMakerError, kindFromStatus, parseRetryAfter } from './gptmaker.errors';
 import { GptMakerResilience } from './gptmaker.resilience';
 import {
+  assistantListSchema,
   assistantSchema,
   agentSettingsSchema,
   conversationRequestSchema,
@@ -108,7 +109,7 @@ export class GptMakerClient {
       method: 'GET',
       path: `/workspace/${this.ws()}/agents`,
       query: { page: page.page, pageSize: page.pageSize, query: page.query },
-      response: assistantSchema.array(),
+      response: assistantListSchema,
     });
   }
 

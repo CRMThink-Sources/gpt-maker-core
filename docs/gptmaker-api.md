@@ -88,7 +88,7 @@ Exemplo (montado a partir do schema):
 | `pageSize` | integer (int32) | Tamanho da página          |
 | `query`    | string          | Filtro pelo nome do agente |
 
-- Resposta `200`: **array** de `Assistant` (ver §2.0). **Não há envelope de paginação** (sem `total`, `hasMore` etc.). Base da página (0 ou 1), valor padrão e máximo de `pageSize`: **NÃO DOCUMENTADO**.
+- Resposta `200` documentada: **array** de `Assistant` (ver §2.0), sem envelope. **Observado na API real (2026-10-03): `{ data: Assistant[], count }`**, com `count` = total de agentes do workspace; o cliente aceita os dois formatos. Base da página (0 ou 1), valor padrão e máximo de `pageSize`: **NÃO DOCUMENTADO**.
 
 ---
 
@@ -574,7 +574,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 | ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `/workspaces`                             | `GET /v2/workspaces`                                        | ok (plural)                                                                                             |
 | `/workspace/{id}/credits`                 | `GET /v2/workspace/{workspaceId}/credits`                   | ok (singular); `status` TRIAL\|ACTIVE\|PAST_DUE\|CANCELED confirmado                                    |
-| `/workspace/{id}/agents`                  | `GET /v2/workspace/{workspaceId}/agents`                    | ok; paginação por `page`/`pageSize` + filtro `query`, sem envelope                                      |
+| `/workspace/{id}/agents`                  | `GET /v2/workspace/{workspaceId}/agents`                    | ok; paginação por `page`/`pageSize` + filtro `query`, real responde `{ data, count }`                   |
 | criar agente "no workspace"               | `POST /v2/workspace/{workspaceId}/agents`                   | —                                                                                                       |
 | obter/atualizar/remover agente            | `GET` / `PUT` / `DELETE /v2/agent/{agentId}`                | atualização é **PUT** (não PATCH)                                                                       |
 | `/agent/{id}/active`, `/inactive`         | `PUT /v2/agent/{agentId}/active` e `/inactive`              | confirmados; verbo **PUT**                                                                              |

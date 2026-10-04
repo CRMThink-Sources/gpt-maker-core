@@ -41,6 +41,18 @@ export const assistantSchema = z
   .loose();
 export type GptMakerAgent = z.infer<typeof assistantSchema>;
 
+/**
+ * A documentação promete um array puro em `GET /workspace/{id}/agents`, mas a API real responde
+ * `{ data: Assistant[], count }`. Aceita os dois formatos e devolve sempre o array.
+ */
+export const assistantListSchema = z.union([
+  assistantSchema.array(),
+  z
+    .object({ data: assistantSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
 /** Valores de `status` do agente observados na API real, mapeados para o status local. */
 export const GPTMAKER_AGENT_STATUS = { ACTIVE: 'ACTIVE', DISABLED: 'INACTIVE' } as const;
 
