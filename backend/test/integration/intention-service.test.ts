@@ -319,6 +319,39 @@ describe('serviço de intenções', () => {
     expect(updated!.headers[0]!.value).toBe(token.value);
   });
 
+  it('resposta atual do GPTMaker ({ id } ao criar, { tenant } ao editar): usa o id e não lista', async () => {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: LIST },
+      response: { status: 200, jsonBody: { id: 'int-novo', tenant: 'tn' } },
+    });
+    await wiremock.stub({
+      request: { method: 'PUT', urlPath: '/v2/intention/int-novo' },
+      response: { status: 200, jsonBody: { tenant: 'tn' } },
+    });
+
+    const created = await service.create(
+      tenantId,
+      agentId,
+      form({ fields: [{ name: 'Moeda', type: 'STRING', required: true }] }),
+    );
+    expect(created).toMatchObject({ synced: true, fields: [{ name: 'Moeda', description: '' }] });
+    expect(await wiremock.bodies('GET', LIST)).toEqual([]);
+    // Sem descrição, o nome orienta o agente.
+    expect(await wiremock.bodies('POST', LIST)).toEqual([
+      expect.objectContaining({
+        fields: [expect.objectContaining({ name: 'Moeda', description: 'Moeda' })],
+      }),
+    ]);
+
+    const updated = await service.update(
+      tenantId,
+      agentId,
+      created.id,
+      form({ fields: [], url: 'https://api.exemplo.com/cotacao' }),
+    );
+    expect(updated.fields).toEqual([]);
+  });
+
   it('agente de outro tenant responde como inexistente', async () => {
     expect(await errorOf(service.list(randomUUID(), agentId))).toBe('AGENT_NOT_FOUND');
   });

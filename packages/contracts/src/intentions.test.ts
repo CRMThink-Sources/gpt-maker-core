@@ -5,6 +5,7 @@ import {
   intentionJsonName,
   intentionPlaceholders,
 } from './intentions';
+import { createTriggerSchema } from './triggers';
 
 const base: IntentionInput = {
   name: 'Consultar pedido',
@@ -118,8 +119,7 @@ describe('intenções: validação', () => {
     ).toEqual(['actions.0.config.userId: escolha o usuário que recebe a conversa']);
   });
 
-  it('gatilho continua recusando {{fields.x}}', async () => {
-    const { createTriggerSchema } = await import('./triggers');
+  it('gatilho continua recusando {{fields.x}}', () => {
     const result = createTriggerSchema.safeParse({
       name: 'g',
       event: 'onNewMessage',

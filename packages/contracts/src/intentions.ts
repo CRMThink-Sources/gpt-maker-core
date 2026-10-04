@@ -46,7 +46,8 @@ const httpUrl = z.url({ protocol: /^https?$/ });
 
 const fieldSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome do campo').max(60),
-  description: z.string().trim().min(1, 'Explique o campo para o agente').max(500),
+  /** Opcional: sem ela, o agente se guia pelo nome. */
+  description: z.string().trim().max(500).default(''),
   type: intentionFieldTypeSchema,
   required: z.boolean(),
 });

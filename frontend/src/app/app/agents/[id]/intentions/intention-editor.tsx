@@ -63,7 +63,7 @@ export function formOf(view: IntentionView | null): Form {
       actions: [],
       name: '',
       whenToUse: '',
-      fields: [{ name: '', description: '', type: 'STRING', required: true }],
+      fields: [],
       httpMethod: 'GET',
       url: '',
       headers: [],
@@ -242,7 +242,10 @@ function Pairs({
 
 const STEPS = [
   { title: 'Intenção', description: 'Quando o agente deve usar esta intenção.' },
-  { title: 'Informações', description: 'O que o agente pergunta ao cliente antes de agir.' },
+  {
+    title: 'Informações',
+    description: 'O que o agente pergunta ao cliente antes de agir (opcional).',
+  },
   { title: 'Ação', description: 'O que acontece com as informações coletadas.' },
   { title: 'Resposta', description: 'Como o agente responde ao cliente depois da ação.' },
 ] as const;
@@ -262,8 +265,16 @@ const STEP_OF: Record<string, number> = {
   instructions: 3,
 };
 
+/** Informações deixadas em branco (sem nome nem descrição) são descartadas. */
+function withoutBlankFields(form: Form): Form {
+  return {
+    ...form,
+    fields: form.fields.filter((field) => field.name.trim() || field.description?.trim()),
+  };
+}
+
 function issuesAt(form: Form, step: number): string[] {
-  const result = intentionInputSchema.safeParse(form);
+  const result = intentionInputSchema.safeParse(withoutBlankFields(form));
   if (result.success) return [];
   return result.error.issues
     .filter((issue) => (STEP_OF[String(issue.path[0])] ?? 3) === step)
@@ -412,9 +423,9 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                   </button>
                 </div>
                 <input
-                  value={field.description}
+                  value={field.description ?? ''}
                   onChange={(e) => setField(index, { description: e.target.value })}
-                  placeholder="Como pedir ao cliente. Ex.: qual plano ou produto ele quer conhecer"
+                  placeholder="Opcional: como pedir ao cliente. Ex.: qual plano ou produto ele quer conhecer"
                   aria-label={`Descrição da informação ${index + 1}`}
                   maxLength={500}
                   className={`${inputClass} mt-2`}
@@ -749,7 +760,7 @@ export function IntentionEditor({
       const base = `/app/agents/${agentId}/intentions`;
       await api(intention ? `${base}/${intention.id}` : base, {
         method: intention ? 'PUT' : 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify(withoutBlankFields(form)),
       });
       onSaved();
     } catch (e) {

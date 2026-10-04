@@ -20,6 +20,7 @@ import {
   GptMakerIntention,
   GptMakerWriteIntention,
   intentionListSchema,
+  intentionWriteAckSchema,
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
@@ -251,20 +252,45 @@ export class GptMakerClient {
   }
 
   /** Responde só `{ success }`: o id vem da listagem. */
-  async createIntention(agentId: string, input: GptMakerWriteIntention): Promise<void> {
-    await this.success(
+  /** Id da intenção criada, quando a resposta traz (senão vem da listagem). */
+  async createIntention(agentId: string, input: GptMakerWriteIntention): Promise<string | null> {
+    const ack = await this.intentionWrite(
       'intention.create',
       'POST',
       `/agent/${enc(agentId)}/intentions`,
       writeIntentionSchema.parse(input),
     );
+    return ack.id ?? null;
   }
 
   async updateIntention(intentionId: string, input: GptMakerWriteIntention): Promise<void> {
-    await this.success('intention.update', 'PUT', `/intention/${enc(intentionId)}`, {
+    await this.intentionWrite('intention.update', 'PUT', `/intention/${enc(intentionId)}`, {
       id: intentionId,
       ...writeIntentionSchema.parse(input),
     });
+  }
+
+  /** `{ success: false }` com HTTP 200 continua sendo falha; sem `success`, vale o HTTP. */
+  private async intentionWrite(
+    operation: string,
+    method: Request<z.ZodType>['method'],
+    path: string,
+    body: unknown,
+  ): Promise<z.infer<typeof intentionWriteAckSchema>> {
+    const ack = await this.request({
+      operation,
+      method,
+      path,
+      body,
+      response: intentionWriteAckSchema,
+    });
+    if (ack.success === false) {
+      throw new GptMakerError('UNKNOWN', operation, 'provedor respondeu success=false', {
+        status: 200,
+        body: ack,
+      });
+    }
+    return ack;
   }
 
   async deleteIntention(intentionId: string): Promise<void> {

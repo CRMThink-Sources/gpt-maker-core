@@ -74,7 +74,11 @@ export function toRemote(row: Intention, publicUrl: string): GptMakerWriteIntent
       ? { instructions: row.instructions }
       : {}),
     type: 'WEBHOOK' as const,
-    fields: row.fields,
+    // Sem descrição, o nome orienta o agente sobre o que perguntar.
+    fields: row.fields.map((field) => ({
+      ...field,
+      description: field.description.trim() || field.name,
+    })),
     preprocessingMessage: 'DISABLED' as const,
     active: row.active,
   };
@@ -203,16 +207,20 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       const values = this.values(input, [], null);
       const remote = this.remote({ ...this.blank(owner), ...values, id });
       const known = await this.knownIds(owner);
-      await this.callGptMaker(() => this.gptmaker.createIntention(owner.gptmakerAgentId, remote));
+      let gptmakerIntentionId = await this.callGptMaker(() =>
+        this.gptmaker.createIntention(owner.gptmakerAgentId, remote),
+      );
 
-      let gptmakerIntentionId: string | null = null;
-      try {
-        gptmakerIntentionId = await this.findCreated(owner, input.name, known);
-      } catch (error) {
-        this.logger.warn(
-          { agentId: owner.id, err: error },
-          'intenção criada no GPTMaker sem id local; a próxima leitura localiza',
-        );
+      // Resposta sem id (formato antigo da API): localiza pela listagem.
+      if (!gptmakerIntentionId) {
+        try {
+          gptmakerIntentionId = await this.findCreated(owner, input.name, known);
+        } catch (error) {
+          this.logger.warn(
+            { agentId: owner.id, err: error },
+            'intenção criada no GPTMaker sem id local; a próxima leitura localiza',
+          );
+        }
       }
       const [row] = await this.db
         .insert(agentIntention)

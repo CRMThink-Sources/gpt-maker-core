@@ -275,6 +275,14 @@ export const writeIntentionSchema = z.object({
 });
 export type GptMakerWriteIntention = z.infer<typeof writeIntentionSchema>;
 
+/**
+ * Resposta de criar/atualizar intenção. Em 2026-10-04 a API passou a responder `{ id, tenant }`
+ * na criação e `{ tenant }` na atualização (antes `{ success }`); aceita as duas formas.
+ */
+export const intentionWriteAckSchema = z
+  .object({ id: z.string().optional(), success: z.boolean().optional() })
+  .loose();
+
 // ---- Webhooks
 
 export const WEBHOOK_EVENTS = [

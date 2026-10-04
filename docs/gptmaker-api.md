@@ -560,8 +560,8 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 
 - Fonte: https://developer.gptmaker.ai/api-reference/intentions (OpenAPI) e leitura de uma intenção criada no painel em 2026-10-04.
 - **`GET /v2/agent/{agentId}/intentions`** (`page`, `pageSize`, `query` pela descrição). Resposta real no envelope **`{ data: Intention[], count }`** (o OpenAPI diz array).
-- **`POST /v2/agent/{agentId}/intentions`**: cria; resposta `{ success }`, **sem id** (o id vem da listagem).
-- **`PUT /v2/intention/{intentionId}`**: atualiza com o objeto inteiro; resposta `{ success }`.
+- **`POST /v2/agent/{agentId}/intentions`**: cria. Desde 2026-10-04 responde **`{ id, tenant }`** (antes `{ success }`, sem id; o app ainda localiza pela listagem quando o id não vem).
+- **`PUT /v2/intention/{intentionId}`**: atualiza com o objeto inteiro; desde 2026-10-04 responde `{ tenant }` (antes `{ success }`).
 - **`DELETE /v2/intention/{intentionId}`**: remove; resposta `{ success }`.
 
 Campos observados (painel atual ⇒ API):
