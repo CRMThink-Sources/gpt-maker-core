@@ -142,3 +142,72 @@ export const updatePlanRightsSchema = z
   });
 
 export type UpdatePlanRightsInput = z.infer<typeof updatePlanRightsSchema>;
+
+// ---- Tenants (15.4)
+
+export type TenantStatusView = 'ACTIVE' | 'SUSPENDED' | 'AUTH_ERROR' | 'UNINSTALLED';
+export type SubscriptionStatusView =
+  'trialing' | 'active' | 'past_due' | 'cancelled' | 'trial_expired';
+
+export interface AdminTenantRow {
+  id: string;
+  domain: string;
+  tenantCode: string;
+  installationId: string;
+  status: TenantStatusView;
+  subscription: {
+    status: SubscriptionStatusView;
+    planId: string | null;
+    modality: 'stripe' | 'manual';
+  } | null;
+  balance: { trial: number; plan: number; extra: number; total: number };
+  agents: { active: number; total: number };
+  lastMessageAt: string | null;
+  installedAt: string;
+}
+
+export interface AdminTenantDetail extends AdminTenantRow {
+  suspendedReason: string | null;
+  uninstalledAt: string | null;
+  subscriptionDetail: {
+    subscriptionId: string;
+    periodStart: string | null;
+    periodEnd: string | null;
+    graceUntil: string | null;
+    cancelAt: string | null;
+    nextPlanId: string | null;
+  } | null;
+  trialEndsAt: string | null;
+  expiresAt: string | null;
+  agentList: Array<{
+    id: string;
+    name: string;
+    status: 'ACTIVE' | 'INACTIVE' | 'DELETED' | 'OUT_OF_SYNC';
+    inactiveReason: string | null;
+    model: string | null;
+  }>;
+  /** Movimentações sem os débitos por resposta (esses aparecem em `usage7d`). */
+  entries: Array<{
+    id: string;
+    createdAt: string;
+    type: string;
+    wallet: 'TRIAL' | 'PLAN' | 'EXTRA';
+    amount: number;
+    reason: string | null;
+    createdBy: string;
+  }>;
+  /** Respostas e créditos debitados nos últimos 7 dias. */
+  usage7d: { responses: number; credits: number };
+  notifications: Array<{ type: string; status: string; createdAt: string; sentTo: string[] }>;
+}
+
+export const suspendTenantSchema = z.object({
+  reason: z.string().trim().min(5, 'Explique o motivo (mínimo 5 caracteres)').max(500),
+});
+
+export const grantCreditsSchema = z.object({
+  amount: z.number().int().positive().max(1_000_000),
+  reason: z.string().trim().min(5, 'Explique o motivo (mínimo 5 caracteres)').max(500),
+  /** Gerado no navegador: o mesmo pedido enviado duas vezes concede uma vez. */
+  requestId: z.uuid(),
+});

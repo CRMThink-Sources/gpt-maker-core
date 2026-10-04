@@ -112,6 +112,29 @@ export class TenantService {
     return rows.length > 0;
   }
 
+  /**
+   * Suspensão pelo backoffice (spec admin-backoffice): de `ACTIVE` ou `AUTH_ERROR`; desinstalado
+   * não muda. Quem chama avisa `onAccessChanged` para os agentes serem inativados.
+   */
+  async suspend(tenantId: string, reason: string): Promise<Tenant | null> {
+    const [row] = await this.db
+      .update(tenant)
+      .set({ status: 'SUSPENDED', suspendedReason: reason })
+      .where(and(eq(tenant.id, tenantId), sql`${tenant.status} in ('ACTIVE', 'AUTH_ERROR')`))
+      .returning();
+    return row ?? null;
+  }
+
+  /** Fim da suspensão: volta a `ACTIVE` (um erro de autorização reaparece no próximo evento). */
+  async reactivate(tenantId: string): Promise<Tenant | null> {
+    const [row] = await this.db
+      .update(tenant)
+      .set({ status: 'ACTIVE', suspendedReason: null })
+      .where(and(eq(tenant.id, tenantId), eq(tenant.status, 'SUSPENDED')))
+      .returning();
+    return row ?? null;
+  }
+
   async markAuthRestored(tenantId: string): Promise<boolean> {
     const rows = await this.db
       .update(tenant)
