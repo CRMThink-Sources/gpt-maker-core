@@ -181,7 +181,10 @@
 - [x] 17.4 Endpoints `/app/agents/:id/intentions` (administrador do app) e contratos (~3h) — `GET/POST /app/agents/:agentId/intentions`, `PUT/DELETE .../:id` (escrita com permissão `manage`); `intentionInputSchema` valida `{{campo}}` na URL, parâmetros, cabeçalhos e corpo, URL http(s) e corpo JSON
 - [x] 17.5 Tela Intenções do agente: lista, formulário com campos a coletar, método/URL, cabeçalhos, parâmetros e corpo, inserção de `{campo}` (~10h) — aba Intenções do agente: lista, ativar/desativar, editor com campos a coletar, método/URL com inserção de `{{campo}}`, parâmetros, cabeçalhos (valor oculto depois de salvo), corpo e geração automática, resposta pela API ou por instrução
 - [ ] 17.6 Testes de integração e teste real com um agente (~4h)
-- [ ] 17.7 Etapa 2: intenções prontas do Bitrix24 executadas pelo app com o token do portal (desenho próprio) (~?)
+- [ ] 17.7 Etapa 2: intenção "Ação no Bitrix24" (`kind = BITRIX`): contrato e validação (`{{fields.<campo>}}` nas ações), tabela (tipo, ações, token cifrado) e `intention_execution` (~5h)
+- [ ] 17.8 Endpoint `POST /gptmaker/intentions/:id` (token, portal ativo, diálogo pelo chat, ações pelo `TriggerActionExecutor`, dedupe de 5 min, resposta para o agente) (~8h)
+- [ ] 17.9 Tela: tipo da intenção, editor de ações reaproveitado dos gatilhos com os campos da intenção, histórico de execuções; erros por portal no backoffice (~8h)
+- [ ] 17.10 Teste real: criar lead e comentário na timeline a partir de uma conversa no Bitrix; confirmar `{{chat_id}}` (~3h)
 
 ## Estimativa
 
@@ -203,7 +206,7 @@
 | 14. Reconciliação | 33 |
 | 15. Backoffice | 65 |
 | 16. Observabilidade e go-live | 65 |
-| 17. Intenções (etapa 1) | 30 |
+| 17. Intenções (etapas 1 e 2) | 54 |
 | **Subtotal** | **736** |
 | Contingência 20% (payload webhooks GPTMaker, ajustes de contrato com o `crmthink-platform`, retrabalho) | 147 |
 | **Total** | **~885** |

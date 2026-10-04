@@ -47,3 +47,26 @@ Intenções MUST pertencer a um agente do tenant da sessão e só o administrado
 #### Scenario: Agente de outro tenant
 - **WHEN** a requisição cita um agente que não é do tenant da sessão
 - **THEN** o sistema responde como agente inexistente
+
+### Requirement: Intenção com ações no Bitrix24
+O sistema MUST permitir intenções do tipo "Ação no Bitrix24": em vez de uma API do cliente, a intenção executa no portal do tenant as mesmas ações dos gatilhos (criar lead, criar ou atualizar negócio, comentário na timeline, tarefa, processo de negócio), com o token do portal guardado pela plataforma, sem o cliente informar URL nem chave. Os textos das ações MUST aceitar os campos coletados pelo agente (`{{fields.<campo>}}`) além das variáveis dos gatilhos. No GPTMaker, a intenção aponta para um endpoint do app autenticado por um token próprio da intenção; o app executa as ações na hora e devolve ao agente um resultado em texto e JSON para ele responder ao cliente.
+
+#### Scenario: Intenção cria lead durante a conversa
+- **WHEN** o agente usa uma intenção Bitrix configurada para criar lead e o GPTMaker chama o endpoint com os campos coletados
+- **THEN** o app cria o lead no portal do tenant com os campos preenchidos e responde ao GPTMaker que o lead foi criado, com o id
+
+#### Scenario: Ação que depende do diálogo
+- **WHEN** a ação precisa da entidade do CRM do atendimento (comentário na timeline, negócio do cliente) e a chamada identifica o chat
+- **THEN** o app localiza o diálogo do Bitrix pelo chat do GPTMaker e usa a entidade vinculada a ele
+
+#### Scenario: Chamada inválida ou portal indisponível
+- **WHEN** o token não confere, a intenção está desativada ou removida, ou o portal está suspenso, desinstalado ou sem credencial
+- **THEN** o app não executa nenhuma ação e responde com erro (token inválido) ou com uma mensagem para o agente explicar que não foi possível agora
+
+#### Scenario: Chamada repetida
+- **WHEN** o GPTMaker repete a mesma chamada (mesma intenção, chat e campos) em poucos minutos
+- **THEN** o app devolve o resultado da primeira execução sem executar as ações de novo
+
+#### Scenario: Histórico
+- **WHEN** o administrador abre o histórico da intenção
+- **THEN** o sistema mostra as execuções recentes com campos recebidos, resultado ou erro
