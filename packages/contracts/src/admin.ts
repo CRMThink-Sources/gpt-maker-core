@@ -298,3 +298,90 @@ export interface WorkspaceSyncView {
     findingsResolved: number;
   } | null;
 }
+
+// ---- Reconciliação: revisão de ajustes (14.2) e relatório do partner (14.4/15.7)
+
+export interface AdminReconciliationReview {
+  agentId: string;
+  agentName: string;
+  tenant: { id: string; domain: string };
+  /** AAAA-MM-DD, no fuso da reconciliação. */
+  day: string;
+  /** Consumo real no GPTMaker. */
+  real: number;
+  debited: number;
+  /** Já ajustado no ledger para o dia (positivo devolveu créditos, negativo cobrou). */
+  adjusted: number;
+  /** Ajuste que a aprovação lança: `debitado - real - ajustado`. */
+  pending: number;
+  status: 'REVIEW' | 'APPROVED' | 'DISMISSED';
+  /** Nome do operador que decidiu. */
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+}
+
+export interface AdminReconciliationReviewsView {
+  open: AdminReconciliationReview[];
+  /** Últimas decisões, mais novas primeiro. */
+  recent: AdminReconciliationReview[];
+  /** Diferença que manda para revisão, em créditos. */
+  reviewThreshold: number;
+}
+
+export const reviewDecisionSchema = z.object({
+  decision: z.enum(['approve', 'dismiss']),
+});
+export type ReviewDecisionInput = z.infer<typeof reviewDecisionSchema>;
+
+export const partnerReportQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês no formato AAAA-MM'),
+});
+
+/** Valores em centavos. Assinaturas são estimadas pelo preço do plano (os eventos não trazem valor). */
+export interface PartnerRevenue {
+  subscriptions: number;
+  packages: number;
+  refunds: number;
+  total: number;
+}
+
+export interface PartnerCredits {
+  /** Consumo real no GPTMaker (custo do partner). */
+  consumed: number;
+  /** Débitos por resposta. */
+  debited: number;
+  /** Ajustes da reconciliação (positivo devolveu, negativo cobrou). */
+  adjusted: number;
+  /** Cobrado do cliente: `debitado - ajustado`. */
+  charged: number;
+}
+
+export interface PartnerReportView {
+  month: string;
+  timeZone: string;
+  daysInPeriod: number;
+  /** Dias do período já reconciliados (consumo coletado). */
+  daysReconciled: number;
+  /** Preço do crédito para o partner (env); `null` ⇒ sem custo/margem em reais. */
+  creditCostCents: number | null;
+  /** Planos da plataforma indisponíveis: receita de assinaturas não estimada. */
+  platformError: boolean;
+  pendingReviews: number;
+  totals: PartnerCredits & {
+    /** Consumo de agentes sem vínculo com portal (já incluso em `consumed`). */
+    unlinked: number;
+    revenue: PartnerRevenue;
+    costCents: number | null;
+    marginCents: number | null;
+  };
+  tenants: Array<
+    PartnerCredits & {
+      tenant: { id: string; domain: string };
+      revenue: PartnerRevenue;
+      costCents: number | null;
+      marginCents: number | null;
+      agents: Array<PartnerCredits & { agentId: string; name: string; removed: boolean }>;
+    }
+  >;
+  unlinked: Array<{ gptmakerAgentId: string; name: string | null; consumed: number }>;
+}

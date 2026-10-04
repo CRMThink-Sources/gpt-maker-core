@@ -16,6 +16,13 @@ describe('decideAdjustment', () => {
       { desired: 0, status: 'WITHIN_TOLERANCE' },
     ],
     ['acima do limite: revisão, mantém o ajustado', 500, 10, -3, { desired: -3, status: 'REVIEW' }],
+    [
+      'já aprovado, diferença nova pequena: lança',
+      530,
+      20,
+      -500,
+      { desired: -510, status: 'APPLIED' },
+    ],
   ] as const)('%s', (_label, real, debited, adjusted, expected) => {
     expect(decideAdjustment({ real, debited, adjusted, ...limits })).toEqual(expected);
   });

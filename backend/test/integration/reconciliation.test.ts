@@ -15,7 +15,16 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 
-const { agent, aiModel, creditLedger, reconciliationAdjustment, tenant, usageDailyReal } = schema;
+const {
+  agent,
+  aiModel,
+  creditLedger,
+  reconciliationAdjustment,
+  tenant,
+  usageDailyReal,
+  usageDailyUnlinked,
+  workspaceSyncFinding,
+} = schema;
 const DAY = '2026-10-03';
 
 // Reconciliação com o consumo real do GPTMaker (spec usage-reconciliation; tarefas 14.1, 14.2, 14.5).
@@ -222,5 +231,75 @@ describe('reconciliação diária', () => {
     const retried = await service.retryPending();
     expect(retried.find((o) => o.agentId === row.id)).toMatchObject({ real: 8, posted: -8 });
     expect(await redis.smembers('reconciliation:pending')).toEqual([]);
+  });
+
+  describe('revisão pelo operador', () => {
+    const operator = randomUUID();
+
+    it('aprovar lança a diferença inteira; reexecução com os mesmos totais mantém a decisão', async () => {
+      await debit('2026-10-03T15:00:00Z', 20);
+      spent.set(row.gptmakerAgentId, [{ model: 'GPT_5_MINI', credits: 520 }]);
+      expect((await service.reconcileAgentDay(row, DAY)).status).toBe('REVIEW');
+
+      const approved = await service.resolveReview(row.id, DAY, 'approve', operator);
+      expect(approved).toMatchObject({
+        status: 'APPROVED',
+        adjustedTotal: -500,
+        reviewedBy: operator,
+      });
+      const [posted] = (await adjustments()).filter((a) => a.refType === 'reconciliation');
+      expect(posted).toMatchObject({ amount: -500, createdBy: `operator:${operator}` });
+
+      expect(await service.reconcileAgentDay(row, DAY)).toMatchObject({
+        status: 'APPROVED',
+        posted: 0,
+      });
+      // Consumo novo do dia: decide de novo, sem desfazer o que foi aprovado.
+      spent.set(row.gptmakerAgentId, [{ model: 'GPT_5_MINI', credits: 530 }]);
+      expect(await service.reconcileAgentDay(row, DAY)).toMatchObject({
+        status: 'APPLIED',
+        posted: -10,
+      });
+      expect(await record()).toMatchObject({ adjustedTotal: -510, reviewedBy: null });
+    });
+
+    it('descartar não lança nada e a reexecução mantém; decisão repetida é recusada', async () => {
+      spent.set(row.gptmakerAgentId, [{ model: 'GPT_5_MINI', credits: 500 }]);
+      await service.reconcileAgentDay(row, DAY);
+      expect(await service.resolveReview(row.id, DAY, 'dismiss', operator)).toMatchObject({
+        status: 'DISMISSED',
+        adjustedTotal: 0,
+      });
+      expect(await service.reconcileAgentDay(row, DAY)).toMatchObject({
+        status: 'DISMISSED',
+        posted: 0,
+      });
+      expect(await adjustments()).toEqual([]);
+      const again = await service
+        .resolveReview(row.id, DAY, 'approve', operator)
+        .catch((e: { code: string }) => e.code);
+      expect(again).toBe('REVIEW_NOT_FOUND');
+    });
+  });
+
+  it('agente sem vínculo: consumo gravado à parte, sem ledger; falha fica pendente', async () => {
+    const orphan = `gm-orfao-${randomUUID()}`;
+    await db.insert(workspaceSyncFinding).values({
+      kind: 'ORPHAN',
+      gptmakerAgentId: orphan,
+      details: { name: 'Teste' },
+    });
+    spent.set(orphan, new GptMakerError('UNAVAILABLE', 'agent.credits-spent', 'fora'));
+    await service.reconcileDays([DAY]);
+    expect(await redis.smembers('reconciliation:pending-unlinked')).toEqual([`${orphan}|${DAY}`]);
+
+    spent.set(orphan, [{ model: 'GPT_5_MINI', credits: 12 }]);
+    await service.retryPending();
+    const rows = await db
+      .select()
+      .from(usageDailyUnlinked)
+      .where(eq(usageDailyUnlinked.gptmakerAgentId, orphan));
+    expect(rows).toMatchObject([{ day: DAY, modelCode: 'GPT_5_MINI', credits: 12 }]);
+    expect(await redis.smembers('reconciliation:pending-unlinked')).toEqual([]);
   });
 });

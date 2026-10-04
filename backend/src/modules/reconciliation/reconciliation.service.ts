@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { and, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
@@ -11,7 +11,10 @@ import {
   creditLedger,
   reconciliationAdjustment,
   usageDailyReal,
+  usageDailyUnlinked,
+  workspaceSyncFinding,
 } from '../../shared/database/schema/index';
+import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { LedgerService } from '../billing';
@@ -21,6 +24,10 @@ type Status = (typeof reconciliationAdjustment.$inferSelect)['status'];
 
 /** Agente e dia cuja coleta falhou: o job de hora em hora tenta de novo. */
 const PENDING_KEY = 'reconciliation:pending';
+/** Idem para agentes sem vínculo (`<id no GPTMaker>|<dia>`). */
+const PENDING_UNLINKED_KEY = 'reconciliation:pending-unlinked';
+/** Decisões do operador: valem enquanto o consumo e o débito do dia não mudarem. */
+const REVIEWED: ReadonlySet<Status> = new Set(['APPROVED', 'DISMISSED']);
 const DAY_MS = 86_400_000;
 
 export interface AdjustmentDecision {
@@ -32,7 +39,7 @@ export interface AdjustmentDecision {
 /**
  * Ajuste devido para um agente e dia (spec usage-reconciliation; 1 crédito GPTMaker = 1 crédito do
  * cliente). `debited - real` positivo devolve créditos; negativo cobra. Dentro da tolerância, nada;
- * acima do limite de revisão, não lança sozinho e mantém o que já foi ajustado.
+ * se o que falta lançar passa do limite de revisão, não lança sozinho e mantém o já ajustado.
  */
 export function decideAdjustment(input: {
   real: number;
@@ -43,7 +50,10 @@ export function decideAdjustment(input: {
 }): AdjustmentDecision {
   const diff = input.debited - input.real;
   if (Math.abs(diff) <= input.tolerance) return { desired: 0, status: 'WITHIN_TOLERANCE' };
-  if (Math.abs(diff) > input.reviewThreshold) return { desired: input.adjusted, status: 'REVIEW' };
+  // O limite vale para o que falta lançar: um dia já aprovado não volta à revisão por pouco.
+  if (Math.abs(diff - input.adjusted) > input.reviewThreshold) {
+    return { desired: input.adjusted, status: 'REVIEW' };
+  }
   return { desired: diff, status: 'APPLIED' };
 }
 
@@ -137,10 +147,65 @@ export class ReconciliationService {
         if (outcome) outcomes.push(outcome);
       }
     }
+    await this.collectUnlinked(days, new Set(rows.map((row) => row.gptmakerAgentId)));
     return outcomes;
   }
 
+  /**
+   * Consumo dos agentes do workspace sem vínculo com tenant (órfãos abertos do workspace-sync):
+   * só gravado, sem ledger, para o relatório do partner. Agente já coberto pela reconciliação
+   * (removido no período) não entra de novo.
+   */
+  async collectUnlinked(days: string[], covered: ReadonlySet<string> = new Set()): Promise<void> {
+    const orphans = await this.db
+      .selectDistinct({ gptmakerAgentId: workspaceSyncFinding.gptmakerAgentId })
+      .from(workspaceSyncFinding)
+      .where(and(eq(workspaceSyncFinding.kind, 'ORPHAN'), isNull(workspaceSyncFinding.resolvedAt)));
+    for (const { gptmakerAgentId } of orphans) {
+      if (covered.has(gptmakerAgentId)) continue;
+      for (const day of days) await this.safelyUnlinked(gptmakerAgentId, day);
+    }
+  }
+
+  private async safelyUnlinked(gptmakerAgentId: string, day: string): Promise<void> {
+    const entry = `${gptmakerAgentId}|${day}`;
+    try {
+      const byModel = await this.spentOn(gptmakerAgentId, day);
+      await this.db.transaction(async (tx) => {
+        await tx
+          .delete(usageDailyUnlinked)
+          .where(
+            and(
+              eq(usageDailyUnlinked.gptmakerAgentId, gptmakerAgentId),
+              eq(usageDailyUnlinked.day, day),
+            ),
+          );
+        if (byModel.size) {
+          await tx.insert(usageDailyUnlinked).values(
+            [...byModel].map(([modelCode, credits]) => ({
+              gptmakerAgentId,
+              day,
+              modelCode,
+              credits,
+            })),
+          );
+        }
+      });
+      await this.redis.srem(PENDING_UNLINKED_KEY, entry);
+    } catch (error) {
+      await this.redis.sadd(PENDING_UNLINKED_KEY, entry);
+      this.logger.warn(
+        { err: error, gptmakerAgentId, day },
+        'coleta de consumo de agente sem vínculo falhou; pendente',
+      );
+    }
+  }
+
   async retryPending(): Promise<ReconciliationOutcome[]> {
+    for (const entry of await this.redis.smembers(PENDING_UNLINKED_KEY)) {
+      const [gptmakerAgentId, day] = entry.split('|') as [string, string];
+      await this.safelyUnlinked(gptmakerAgentId, day);
+    }
     const pending = await this.redis.smembers(PENDING_KEY);
     if (pending.length === 0) return [];
     const ids = [...new Set(pending.map((entry) => entry.split('|')[0]!))];
@@ -186,17 +251,7 @@ export class ReconciliationService {
     row: { id: string; tenantId: string; gptmakerAgentId: string },
     day: string,
   ): Promise<ReconciliationOutcome> {
-    const [year, month, dayOfMonth] = day.split('-').map(Number) as [number, number, number];
-    const spent = await this.gptmaker.getCreditsSpent(row.gptmakerAgentId, {
-      year,
-      month,
-      day: dayOfMonth,
-    });
-    const byModel = new Map<string, number>();
-    for (const item of spent.data) {
-      if (item.year !== year || item.month !== month || item.day !== dayOfMonth) continue;
-      byModel.set(item.model, (byModel.get(item.model) ?? 0) + item.credits);
-    }
+    const byModel = await this.spentOn(row.gptmakerAgentId, day);
     const real = [...byModel.values()].reduce((sum, credits) => sum + credits, 0);
 
     await this.db.transaction(async (tx) => {
@@ -218,12 +273,20 @@ export class ReconciliationService {
 
     const debited = await this.debitedOn(row.id, day);
     const [previous] = await this.db
-      .select({ adjusted: reconciliationAdjustment.adjustedTotal })
+      .select()
       .from(reconciliationAdjustment)
       .where(
         and(eq(reconciliationAdjustment.agentId, row.id), eq(reconciliationAdjustment.day, day)),
       );
-    const adjusted = previous?.adjusted ?? 0;
+    if (
+      previous &&
+      REVIEWED.has(previous.status) &&
+      previous.realTotal === real &&
+      previous.debitedTotal === debited
+    ) {
+      return { agentId: row.id, day, real, debited, status: previous.status, posted: 0 };
+    }
+    const adjusted = previous?.adjustedTotal ?? 0;
     const decision = decideAdjustment({
       real,
       debited,
@@ -253,6 +316,8 @@ export class ReconciliationService {
       debitedTotal: debited,
       adjustedTotal: decision.desired,
       status: decision.status,
+      reviewedBy: null,
+      reviewedAt: null,
     };
     await this.db
       .insert(reconciliationAdjustment)
@@ -271,6 +336,79 @@ export class ReconciliationService {
       this.logger.log({ agentId: row.id, day, real, debited, posted }, 'consumo reconciliado');
     }
     return { agentId: row.id, day, real, debited, status: decision.status, posted };
+  }
+
+  /**
+   * Decisão do operador sobre um ajuste em revisão (backoffice). Aprovar lança o ajuste da
+   * diferença inteira (`debitado - real` dos totais revisados); descartar mantém o que já estava
+   * ajustado. A decisão vale enquanto os totais do dia não mudarem.
+   */
+  async resolveReview(
+    agentId: string,
+    day: string,
+    decision: 'approve' | 'dismiss',
+    actor: string,
+  ): Promise<typeof reconciliationAdjustment.$inferSelect> {
+    const [row] = await this.db
+      .select()
+      .from(reconciliationAdjustment)
+      .where(
+        and(
+          eq(reconciliationAdjustment.agentId, agentId),
+          eq(reconciliationAdjustment.day, day),
+          eq(reconciliationAdjustment.status, 'REVIEW'),
+        ),
+      );
+    if (!row) {
+      throw new DomainError(
+        'REVIEW_NOT_FOUND',
+        'Ajuste em revisão não encontrado ou já decidido.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const desired = decision === 'approve' ? row.debitedTotal - row.realTotal : row.adjustedTotal;
+    const posted = desired - row.adjustedTotal;
+    if (posted !== 0) {
+      await this.ledger.adjust({
+        tenantId: row.tenantId,
+        key: `recon:${agentId}:${day}:${row.adjustedTotal}->${desired}`,
+        amount: posted,
+        agentId,
+        refType: 'reconciliation',
+        refId: `${agentId}:${day}`,
+        reason: `revisão aprovada de ${day}: GPTMaker ${row.realTotal}, debitado ${row.debitedTotal}`,
+        createdBy: `operator:${actor}`,
+      });
+    }
+    const [updated] = await this.db
+      .update(reconciliationAdjustment)
+      .set({
+        adjustedTotal: desired,
+        status: decision === 'approve' ? 'APPROVED' : 'DISMISSED',
+        reviewedBy: actor,
+        reviewedAt: new Date(),
+      })
+      .where(
+        and(eq(reconciliationAdjustment.agentId, agentId), eq(reconciliationAdjustment.day, day)),
+      )
+      .returning();
+    return updated!;
+  }
+
+  /** Consumo real do agente no dia, por modelo (`credits-spent`). */
+  private async spentOn(gptmakerAgentId: string, day: string): Promise<Map<string, number>> {
+    const [year, month, dayOfMonth] = day.split('-').map(Number) as [number, number, number];
+    const spent = await this.gptmaker.getCreditsSpent(gptmakerAgentId, {
+      year,
+      month,
+      day: dayOfMonth,
+    });
+    const byModel = new Map<string, number>();
+    for (const item of spent.data) {
+      if (item.year !== year || item.month !== month || item.day !== dayOfMonth) continue;
+      byModel.set(item.model, (byModel.get(item.model) ?? 0) + item.credits);
+    }
+    return byModel;
   }
 
   /** Créditos debitados do agente no dia (no fuso da reconciliação). */

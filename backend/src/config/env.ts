@@ -49,6 +49,11 @@ export const envSchema = z.object({
   RECONCILIATION_REVIEW_THRESHOLD_CREDITS: z.coerce.number().int().positive().default(100),
   /** Dias para trás reprocessados a cada execução (consumo que chega atrasado). */
   RECONCILIATION_LOOKBACK_DAYS: z.coerce.number().int().positive().max(31).default(3),
+  /**
+   * Quanto o partner paga ao GPTMaker por crédito, em centavos (aceita fração, ex.: 2.5). Sem
+   * ele, o relatório do partner mostra o consumo em créditos, sem custo nem margem em reais.
+   */
+  GPTMAKER_CREDIT_COST_CENTS: z.coerce.number().positive().optional(),
 
   /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
   TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),

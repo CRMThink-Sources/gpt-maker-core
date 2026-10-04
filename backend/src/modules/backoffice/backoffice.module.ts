@@ -15,6 +15,9 @@ import { OperatorService } from './operator.service';
 import { OperatorsController } from './operators.controller';
 import { PlanRightsController } from './plan-rights.controller';
 import { PlanRightsService } from './plan-rights.service';
+import { PartnerReportService } from './partner-report.service';
+import { ReconciliationAdminController } from './reconciliation-admin.controller';
+import { ReconciliationAdminService } from './reconciliation-admin.service';
 import { TenantsAdminController } from './tenants-admin.controller';
 import { TenantsAdminService } from './tenants-admin.service';
 import { WorkspaceAdminController } from './workspace-admin.controller';
@@ -36,6 +39,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     TenantsAdminController,
     ModelsAdminController,
     WorkspaceAdminController,
+    ReconciliationAdminController,
   ],
   providers: [
     AdminAuthService,
@@ -46,6 +50,8 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     TenantsAdminService,
     ModelsAdminService,
     WorkspaceAdminService,
+    ReconciliationAdminService,
+    PartnerReportService,
   ],
   exports: [AdminAuthService, AdminAuthGuard, AuditService, OperatorService],
 })
