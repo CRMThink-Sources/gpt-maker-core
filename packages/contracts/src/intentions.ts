@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import { templateFieldNames } from './templates';
+import {
+  type IntentionActionInput,
+  intentionActionInputSchema,
+  TRIGGER_MAX_ACTIONS,
+} from './triggers';
 
 /** Tipos dos campos que o agente coleta na conversa (os do GPTMaker). */
 export const intentionFieldTypeSchema = z.enum([
@@ -45,6 +51,14 @@ const fieldSchema = z.object({
   required: z.boolean(),
 });
 
+/** Todos os textos de uma ação (para achar os `{{fields.x}}` citados). */
+function actionTexts(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(actionTexts);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(actionTexts);
+  return [];
+}
+
 const pairName = z.string().trim().min(1, 'Informe o nome').max(200);
 
 const headerSchema = z.object({
@@ -62,16 +76,21 @@ const paramSchema = z.object({ name: pairName, value: z.string().max(4000) });
 export const intentionInputSchema = z
   .object({
     /** Nome curto que identifica a intenção (`description` no GPTMaker). Único por agente. */
+    /** `WEBHOOK`: chama a API do cliente; `BITRIX`: o app executa ações no portal. */
+    kind: z.enum(['WEBHOOK', 'BITRIX']).default('WEBHOOK'),
     name: z.string().trim().min(1, 'Dê um nome à intenção').max(255),
     /** Quando o agente deve usar a intenção (`details`). */
     whenToUse: z.string().trim().min(1, 'Explique quando usar').max(2000),
     fields: z.array(fieldSchema).max(INTENTION_MAX_FIELDS),
     httpMethod: z.enum(['GET', 'POST']),
-    url: z.string().trim().min(1, 'Informe a URL').max(2000),
-    headers: z.array(headerSchema).max(INTENTION_MAX_PAIRS),
-    params: z.array(paramSchema).max(INTENTION_MAX_PAIRS),
+    /** Só na intenção `WEBHOOK` (na `BITRIX` a URL é do app). */
+    url: z.string().trim().max(2000).default(''),
+    headers: z.array(headerSchema).max(INTENTION_MAX_PAIRS).default([]),
+    params: z.array(paramSchema).max(INTENTION_MAX_PAIRS).default([]),
     /** Corpo do `POST` (JSON), quando não gerado pelo agente. */
-    body: z.string().max(20_000).nullable(),
+    body: z.string().max(20_000).nullable().default(null),
+    /** Ações no portal (intenção `BITRIX`), executadas em ordem; textos aceitam `{{fields.x}}`. */
+    actions: z.array(intentionActionInputSchema).max(TRIGGER_MAX_ACTIONS).default([]),
     autoGenerateParams: z.boolean(),
     autoGenerateBody: z.boolean(),
     /** `API`: o agente responde a partir do retorno; `INSTRUCTIONS`: segue `instructions`. */
@@ -98,36 +117,56 @@ export const intentionInputSchema = z
     });
 
     const known = new Set(names);
-    const check = (text: string | null, path: (string | number)[]) => {
-      const unknown = intentionPlaceholders(text).filter((name) => !known.has(name));
-      if (unknown.length) {
-        ctx.addIssue({
-          code: 'custom',
-          path,
-          message: `Campo não cadastrado: ${unknown.map((name) => `{{${name}}}`).join(', ')}`,
-        });
+    if (input.kind === 'BITRIX') {
+      if (!input.actions.length) {
+        ctx.addIssue({ code: 'custom', path: ['actions'], message: 'Inclua ao menos uma ação' });
       }
-    };
-    check(input.url, ['url']);
-    input.params.forEach((param, index) => check(param.value, ['params', index, 'value']));
-    input.headers.forEach((header, index) => check(header.value, ['headers', index, 'value']));
-    check(input.body, ['body']);
+      input.actions.forEach((action, index) => {
+        const unknown = [...new Set(actionTexts(action.config).flatMap(templateFieldNames))].filter(
+          (name) => !known.has(name),
+        );
+        if (unknown.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['actions', index],
+            message: `Campo não cadastrado: ${unknown.map((name) => `{{fields.${name}}}`).join(', ')}`,
+          });
+        }
+      });
+    } else {
+      const check = (text: string | null, path: (string | number)[]) => {
+        const unknown = intentionPlaceholders(text).filter((name) => !known.has(name));
+        if (unknown.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path,
+            message: `Campo não cadastrado: ${unknown.map((name) => `{{${name}}}`).join(', ')}`,
+          });
+        }
+      };
+      check(input.url, ['url']);
+      input.params.forEach((param, index) => check(param.value, ['params', index, 'value']));
+      input.headers.forEach((header, index) => check(header.value, ['headers', index, 'value']));
+      check(input.body, ['body']);
 
-    // Com os campos trocados por um valor qualquer, a URL tem de ser http(s) válida.
-    if (!httpUrl.safeParse(input.url.replace(INTENTION_PLACEHOLDER, 'x')).success) {
-      ctx.addIssue({ code: 'custom', path: ['url'], message: 'Informe uma URL http ou https' });
-    }
+      // Com os campos trocados por um valor qualquer, a URL tem de ser http(s) válida.
+      if (!input.url) {
+        ctx.addIssue({ code: 'custom', path: ['url'], message: 'Informe a URL' });
+      } else if (!httpUrl.safeParse(input.url.replace(INTENTION_PLACEHOLDER, 'x')).success) {
+        ctx.addIssue({ code: 'custom', path: ['url'], message: 'Informe uma URL http ou https' });
+      }
 
-    if (input.httpMethod === 'POST' && !input.autoGenerateBody && input.body?.trim()) {
-      try {
-        // Campo como número (`{"qtd": {{qtd}}}`) também é JSON válido depois de preenchido.
-        JSON.parse(input.body.replace(INTENTION_PLACEHOLDER, '0'));
-      } catch {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['body'],
-          message: 'O corpo precisa ser um JSON válido',
-        });
+      if (input.httpMethod === 'POST' && !input.autoGenerateBody && input.body?.trim()) {
+        try {
+          // Campo como número (`{"qtd": {{qtd}}}`) também é JSON válido depois de preenchido.
+          JSON.parse(input.body.replace(INTENTION_PLACEHOLDER, '0'));
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['body'],
+            message: 'O corpo precisa ser um JSON válido',
+          });
+        }
       }
     }
     if (input.responseMode === 'INSTRUCTIONS' && !input.instructions?.trim()) {
@@ -142,6 +181,9 @@ export type IntentionInput = z.input<typeof intentionInputSchema>;
 
 export interface IntentionView {
   id: string;
+  kind: 'WEBHOOK' | 'BITRIX';
+  /** Ações no portal (intenção `BITRIX`). */
+  actions: IntentionActionInput[];
   name: string;
   whenToUse: string;
   fields: Array<{
@@ -166,4 +208,17 @@ export interface IntentionView {
   synced: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface IntentionExecutionView {
+  id: string;
+  createdAt: string;
+  status: 'SUCCESS' | 'FAILED' | 'REJECTED';
+  /** Campos recebidos do agente. */
+  fields: Record<string, string>;
+  dialogId: string | null;
+  /** O que foi devolvido ao agente. */
+  message: string;
+  results: Array<{ type: string; ok: boolean; result?: Record<string, unknown>; error?: string }>;
+  durationMs: number;
 }

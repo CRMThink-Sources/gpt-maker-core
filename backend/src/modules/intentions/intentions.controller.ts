@@ -9,7 +9,12 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { type IntentionInput, intentionInputSchema, type IntentionView } from '@gptmaker/contracts';
+import {
+  type IntentionExecutionView,
+  type IntentionInput,
+  intentionInputSchema,
+  type IntentionView,
+} from '@gptmaker/contracts';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { IntentionService } from './intention.service';
@@ -36,6 +41,16 @@ export class IntentionsController {
     @Body(new ZodValidationPipe(intentionInputSchema)) body: IntentionInput,
   ): Promise<IntentionView> {
     return this.intentions.create(session.tenantId, agentId, body);
+  }
+
+  @Get(':id/executions')
+  @AppAuth()
+  executions(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+  ): Promise<IntentionExecutionView[]> {
+    return this.intentions.executions(session.tenantId, agentId, id);
   }
 
   @Put(':id')

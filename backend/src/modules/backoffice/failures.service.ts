@@ -10,6 +10,8 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { DB, type Database } from '../../shared/database/database.module';
 import {
   agent,
+  agentIntention,
+  intentionExecution,
   messageLog,
   notificationLog,
   paymentEvent,
@@ -46,6 +48,13 @@ const SOURCES: Source[] = [
     tenantId: triggerExecution.tenantId,
     at: triggerExecution.createdAt,
     failed: eq(triggerExecution.status, 'FAILED'),
+  },
+  {
+    source: 'intention',
+    table: intentionExecution,
+    tenantId: intentionExecution.tenantId,
+    at: intentionExecution.createdAt,
+    failed: eq(intentionExecution.status, 'FAILED'),
   },
   {
     source: 'training',
@@ -87,6 +96,7 @@ const TRAINING_TYPES: Record<string, string> = {
 /**
  * Erros por portal no backoffice (tarefa 15.7): falhas definitivas registradas no banco, de
  * mensagens que foram para a DLQ (`message_log` `FAILED`, diálogo já transferido) a gatilhos,
+ * intenções com ações no Bitrix,
  * treinamentos, eventos da plataforma, chamadas de saída para a plataforma e avisos. Só o que
  * esgotou as tentativas; o que ainda vai ser retentado não aparece.
  */
@@ -132,102 +142,120 @@ export class FailuresService {
   /** Falhas do portal nos últimos 30 dias, mais recentes primeiro (até 20 por fonte). */
   async ofTenant(tenantId: string, now = new Date()): Promise<AdminTenantFailures> {
     const since = new Date(now.getTime() - 30 * DAY_MS);
-    const [messages, triggers, trainings, events, outbox, notifications] = await Promise.all([
-      this.db
-        .select({
-          at: messageLog.updatedAt,
-          agent: agent.name,
-          dialogId: messageLog.dialogId,
-          error: messageLog.error,
-          attempts: messageLog.attempts,
-        })
-        .from(messageLog)
-        .innerJoin(agent, eq(agent.id, messageLog.agentId))
-        .where(
-          and(
-            eq(messageLog.tenantId, tenantId),
-            eq(messageLog.status, 'FAILED'),
-            gte(messageLog.updatedAt, since),
-          ),
-        )
-        .orderBy(desc(messageLog.updatedAt))
-        .limit(PER_SOURCE),
-      this.db
-        .select({
-          at: triggerExecution.createdAt,
-          name: trigger.name,
-          error: triggerExecution.error,
-          attempts: triggerExecution.attempts,
-        })
-        .from(triggerExecution)
-        .innerJoin(trigger, eq(trigger.id, triggerExecution.triggerId))
-        .where(
-          and(
-            eq(triggerExecution.tenantId, tenantId),
-            eq(triggerExecution.status, 'FAILED'),
-            gte(triggerExecution.createdAt, since),
-          ),
-        )
-        .orderBy(desc(triggerExecution.createdAt))
-        .limit(PER_SOURCE),
-      this.db
-        .select({
-          at: training.updatedAt,
-          agent: agent.name,
-          type: training.type,
-          document: training.documentName,
-          url: training.url,
-          error: training.error,
-        })
-        .from(training)
-        .innerJoin(agent, eq(agent.id, training.agentId))
-        .where(
-          and(
-            eq(training.tenantId, tenantId),
-            eq(training.status, 'FAILED'),
-            isNull(training.deletedAt),
-            gte(training.updatedAt, since),
-          ),
-        )
-        .orderBy(desc(training.updatedAt))
-        .limit(PER_SOURCE),
-      this.db
-        .select()
-        .from(paymentEvent)
-        .where(
-          and(
-            eq(paymentEvent.tenantId, tenantId),
-            eq(paymentEvent.status, 'FAILED'),
-            gte(paymentEvent.receivedAt, since),
-          ),
-        )
-        .orderBy(desc(paymentEvent.receivedAt))
-        .limit(PER_SOURCE),
-      this.db
-        .select()
-        .from(paymentsOutbox)
-        .where(
-          and(
-            eq(paymentsOutbox.tenantId, tenantId),
-            eq(paymentsOutbox.status, 'FAILED'),
-            gte(paymentsOutbox.createdAt, since),
-          ),
-        )
-        .orderBy(desc(paymentsOutbox.createdAt))
-        .limit(PER_SOURCE),
-      this.db
-        .select()
-        .from(notificationLog)
-        .where(
-          and(
-            eq(notificationLog.tenantId, tenantId),
-            eq(notificationLog.status, 'FAILED'),
-            gte(notificationLog.createdAt, since),
-          ),
-        )
-        .orderBy(desc(notificationLog.createdAt))
-        .limit(PER_SOURCE),
-    ]);
+    const [messages, triggers, intentions, trainings, events, outbox, notifications] =
+      await Promise.all([
+        this.db
+          .select({
+            at: messageLog.updatedAt,
+            agent: agent.name,
+            dialogId: messageLog.dialogId,
+            error: messageLog.error,
+            attempts: messageLog.attempts,
+          })
+          .from(messageLog)
+          .innerJoin(agent, eq(agent.id, messageLog.agentId))
+          .where(
+            and(
+              eq(messageLog.tenantId, tenantId),
+              eq(messageLog.status, 'FAILED'),
+              gte(messageLog.updatedAt, since),
+            ),
+          )
+          .orderBy(desc(messageLog.updatedAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select({
+            at: triggerExecution.createdAt,
+            name: trigger.name,
+            error: triggerExecution.error,
+            attempts: triggerExecution.attempts,
+          })
+          .from(triggerExecution)
+          .innerJoin(trigger, eq(trigger.id, triggerExecution.triggerId))
+          .where(
+            and(
+              eq(triggerExecution.tenantId, tenantId),
+              eq(triggerExecution.status, 'FAILED'),
+              gte(triggerExecution.createdAt, since),
+            ),
+          )
+          .orderBy(desc(triggerExecution.createdAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select({
+            at: intentionExecution.createdAt,
+            name: agentIntention.name,
+            results: intentionExecution.results,
+          })
+          .from(intentionExecution)
+          .innerJoin(agentIntention, eq(agentIntention.id, intentionExecution.intentionId))
+          .where(
+            and(
+              eq(intentionExecution.tenantId, tenantId),
+              eq(intentionExecution.status, 'FAILED'),
+              gte(intentionExecution.createdAt, since),
+            ),
+          )
+          .orderBy(desc(intentionExecution.createdAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select({
+            at: training.updatedAt,
+            agent: agent.name,
+            type: training.type,
+            document: training.documentName,
+            url: training.url,
+            error: training.error,
+          })
+          .from(training)
+          .innerJoin(agent, eq(agent.id, training.agentId))
+          .where(
+            and(
+              eq(training.tenantId, tenantId),
+              eq(training.status, 'FAILED'),
+              isNull(training.deletedAt),
+              gte(training.updatedAt, since),
+            ),
+          )
+          .orderBy(desc(training.updatedAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select()
+          .from(paymentEvent)
+          .where(
+            and(
+              eq(paymentEvent.tenantId, tenantId),
+              eq(paymentEvent.status, 'FAILED'),
+              gte(paymentEvent.receivedAt, since),
+            ),
+          )
+          .orderBy(desc(paymentEvent.receivedAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select()
+          .from(paymentsOutbox)
+          .where(
+            and(
+              eq(paymentsOutbox.tenantId, tenantId),
+              eq(paymentsOutbox.status, 'FAILED'),
+              gte(paymentsOutbox.createdAt, since),
+            ),
+          )
+          .orderBy(desc(paymentsOutbox.createdAt))
+          .limit(PER_SOURCE),
+        this.db
+          .select()
+          .from(notificationLog)
+          .where(
+            and(
+              eq(notificationLog.tenantId, tenantId),
+              eq(notificationLog.status, 'FAILED'),
+              gte(notificationLog.createdAt, since),
+            ),
+          )
+          .orderBy(desc(notificationLog.createdAt))
+          .limit(PER_SOURCE),
+      ]);
 
     const items: AdminFailure[] = [
       ...messages.map((m) => ({
@@ -243,6 +271,17 @@ export class FailuresService {
         subject: t.name,
         error: t.error,
         attempts: t.attempts,
+      })),
+      ...intentions.map((i) => ({
+        source: 'intention' as const,
+        at: i.at.toISOString(),
+        subject: i.name,
+        error:
+          i.results
+            .filter((r) => !r.ok)
+            .map((r) => `${r.type}: ${r.error ?? 'falhou'}`)
+            .join(' · ') || null,
+        attempts: null,
       })),
       ...trainings.map((t) => ({
         source: 'training' as const,

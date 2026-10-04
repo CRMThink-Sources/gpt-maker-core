@@ -4,6 +4,7 @@ import type { FailureSource } from '@gptmaker/contracts';
 export const FAILURE_SOURCES: Record<FailureSource, string> = {
   message: 'Mensagens',
   trigger: 'Gatilhos',
+  intention: 'Intenções',
   training: 'Treinamentos',
   platform_event: 'Eventos da plataforma',
   platform_outbox: 'Envios à plataforma',

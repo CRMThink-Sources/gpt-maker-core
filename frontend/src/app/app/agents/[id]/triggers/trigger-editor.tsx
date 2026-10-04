@@ -6,6 +6,7 @@ import {
   createTriggerSchema,
   renderTemplate,
   TEMPLATE_VARIABLES,
+  type TemplateContext,
   templateErrors,
   TRIGGER_MAX_ACTIONS,
   type TriggerActionInput,
@@ -14,7 +15,7 @@ import {
   type TriggerView,
   type TriggerWriteResult,
 } from '@gptmaker/contracts';
-import { useId, useRef, useState } from 'react';
+import { createContext, useContext, useId, useRef, useState } from 'react';
 import { CloseIcon, PlusIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass, Card } from '@/components/ui';
@@ -34,6 +35,22 @@ import { Field, inputClass } from '../../agent-fields';
 type Action = TriggerActionInput;
 type FieldMap = Record<string, string>;
 
+/**
+ * Onde os textos das ações são usados: nos gatilhos, as variáveis do evento; nas intenções com
+ * ações no Bitrix, também os campos coletados (`{{fields.x}}`), com exemplo próprio.
+ */
+export interface TemplateScope {
+  extra: ReadonlyArray<{ path: string; description: string }>;
+  allowFields: boolean;
+  sample: TemplateContext;
+}
+const TemplateScopeContext = createContext<TemplateScope>({
+  extra: [],
+  allowFields: false,
+  sample: SAMPLE_CONTEXT,
+});
+export const TemplateScopeProvider = TemplateScopeContext.Provider;
+
 /** Campo de texto com variáveis: inserir `{{...}}`, erros do template e prévia com dados de exemplo. */
 function TemplateInput({
   label,
@@ -51,9 +68,10 @@ function TemplateInput({
   disabled?: boolean;
 }) {
   const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  const errors = value.trim() ? templateErrors(value) : [];
+  const scope = useContext(TemplateScopeContext);
+  const errors = value.trim() ? templateErrors(value, { allowFields: scope.allowFields }) : [];
   const preview =
-    value.includes('{{') && !errors.length ? renderTemplate(value, SAMPLE_CONTEXT) : null;
+    value.includes('{{') && !errors.length ? renderTemplate(value, scope.sample) : null;
 
   function insert(path: string) {
     const placeholder = `{{${path}}}`;
@@ -80,7 +98,7 @@ function TemplateInput({
           aria-label={`Inserir variável em ${label}`}
         >
           <option value="">+ variável</option>
-          {TEMPLATE_VARIABLES.map((variable) => (
+          {[...scope.extra, ...TEMPLATE_VARIABLES].map((variable) => (
             <option key={variable.path} value={variable.path}>
               {variable.description}
             </option>
@@ -621,16 +639,6 @@ export function TriggerEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const update = (index: number, action: Action) =>
-    setActions((list) => list.map((current, i) => (i === index ? action : current)));
-  const move = (index: number, delta: number) =>
-    setActions((list) => {
-      const next = [...list];
-      const [item] = next.splice(index, 1);
-      next.splice(index + delta, 0, item!);
-      return next;
-    });
-
   async function save() {
     const body = { name, event, active, actions };
     const problem = firstIssue(body, actions.length);
@@ -725,6 +733,38 @@ export function TriggerEditor({
       </div>
 
       <h3 className="mt-6 mb-3 text-sm font-semibold text-zinc-900">Ações</h3>
+      <ActionsEditor
+        actions={actions}
+        onChange={setActions}
+        disabled={saving}
+        types={triggerActionTypeSchema.options}
+      />
+    </Modal>
+  );
+}
+
+/** Ações em ordem (adicionar, mover, remover e configurar), dos gatilhos e das intenções. */
+export function ActionsEditor<A extends Action>({
+  actions,
+  onChange,
+  disabled,
+  types,
+}: {
+  actions: A[];
+  onChange: (actions: A[]) => void;
+  disabled?: boolean;
+  types: readonly TriggerActionType[];
+}) {
+  const update = (index: number, action: A) =>
+    onChange(actions.map((current, i) => (i === index ? action : current)));
+  const move = (index: number, delta: number) => {
+    const next = [...actions];
+    const [item] = next.splice(index, 1);
+    next.splice(index + delta, 0, item!);
+    onChange(next);
+  };
+  return (
+    <>
       <ol className="space-y-3">
         {actions.map((action, index) => (
           <li key={action.id ?? `nova-${index}`}>
@@ -740,7 +780,7 @@ export function TriggerEditor({
                   <button
                     type="button"
                     className={buttonClass('ghost', 'sm')}
-                    disabled={saving || index === 0}
+                    disabled={disabled || index === 0}
                     onClick={() => move(index, -1)}
                     aria-label="Mover para cima"
                   >
@@ -749,7 +789,7 @@ export function TriggerEditor({
                   <button
                     type="button"
                     className={buttonClass('ghost', 'sm')}
-                    disabled={saving || index === actions.length - 1}
+                    disabled={disabled || index === actions.length - 1}
                     onClick={() => move(index, 1)}
                     aria-label="Mover para baixo"
                   >
@@ -758,8 +798,8 @@ export function TriggerEditor({
                   <button
                     type="button"
                     className={buttonClass('ghost-danger', 'sm')}
-                    disabled={saving || actions.length === 1}
-                    onClick={() => setActions((list) => list.filter((_, i) => i !== index))}
+                    disabled={disabled || actions.length === 1}
+                    onClick={() => onChange(actions.filter((_, i) => i !== index))}
                   >
                     Remover
                   </button>
@@ -767,8 +807,8 @@ export function TriggerEditor({
               </div>
               <ActionConfig
                 action={action}
-                disabled={saving}
-                onChange={(next) => update(index, next)}
+                disabled={disabled}
+                onChange={(next) => update(index, next as A)}
               />
             </Card>
           </li>
@@ -778,21 +818,21 @@ export function TriggerEditor({
         <select
           className={`${buttonClass('secondary', 'sm')} mt-3 pr-2`}
           value=""
-          disabled={saving}
+          disabled={disabled}
           onChange={(e) => {
             if (!e.target.value) return;
-            setActions((list) => [...list, newAction(e.target.value as TriggerActionType)]);
+            onChange([...actions, newAction(e.target.value as TriggerActionType) as A]);
           }}
           aria-label="Adicionar ação"
         >
           <option value="">+ Adicionar ação</option>
-          {triggerActionTypeSchema.options.map((type) => (
+          {types.map((type) => (
             <option key={type} value={type}>
               {ACTION_TYPES[type].label}
             </option>
           ))}
         </select>
       )}
-    </Modal>
+    </>
   );
 }

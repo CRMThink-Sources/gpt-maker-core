@@ -495,7 +495,13 @@ export interface AdminDeadLetterPeek {
 }
 
 export type FailureSource =
-  'message' | 'trigger' | 'training' | 'platform_event' | 'platform_outbox' | 'notification';
+  | 'message'
+  | 'trigger'
+  | 'intention'
+  | 'training'
+  | 'platform_event'
+  | 'platform_outbox'
+  | 'notification';
 
 export interface AdminFailure {
   source: FailureSource;

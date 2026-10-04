@@ -28,75 +28,109 @@ export type TriggerActionType = z.infer<typeof triggerActionTypeSchema>;
 export const TRIGGER_MAX_ACTIONS = 10;
 export const TRIGGER_MAX_PER_AGENT = 50;
 
-/** Texto que pode levar variáveis do evento (`{{contact.name}}`, ver `templates.ts`). */
-const template = z
-  .string()
-  .trim()
-  .min(1)
-  .max(5_000)
-  .superRefine((value, ctx) => {
-    for (const message of templateErrors(value)) ctx.addIssue({ code: 'custom', message });
-  });
-/** Campos do Bitrix (ex.: `TITLE`, `NAME`, `PHONE`) ⇒ template do valor. */
-const fieldMap = z
-  .record(z.string().trim().min(1).max(100), template)
-  .refine((fields) => Object.keys(fields).length <= 50, 'no máximo 50 campos');
-const positiveId = z.number().int().positive();
+/**
+ * Esquemas das ações; `allowFields` libera `{{fields.<campo>}}` (intenções com ações no Bitrix).
+ */
+function actionSchemas(allowFields: boolean) {
+  /** Texto que pode levar variáveis do evento (`{{contact.name}}`, ver `templates.ts`). */
+  const template = z
+    .string()
+    .trim()
+    .min(1)
+    .max(5_000)
+    .superRefine((value, ctx) => {
+      for (const message of templateErrors(value, { allowFields }))
+        ctx.addIssue({ code: 'custom', message });
+    });
+  /** Campos do Bitrix (ex.: `TITLE`, `NAME`, `PHONE`) ⇒ template do valor. */
+  const fieldMap = z
+    .record(z.string().trim().min(1).max(100), template)
+    .refine((fields) => Object.keys(fields).length <= 50, 'no máximo 50 campos');
+  const positiveId = z.number().int().positive();
 
-/** Configuração por tipo de ação; o `id` mantém a ação existente na edição (e o segredo dela). */
+  /** Configuração por tipo de ação; o `id` mantém a ação existente na edição (e o segredo dela). */
+  return [
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('CREATE_LEAD'),
+      config: z.object({ fields: fieldMap.refine((f) => 'TITLE' in f, 'informe o campo TITLE') }),
+    }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('UPSERT_DEAL'),
+      config: z.object({
+        /** Funil (`CATEGORY_ID`; 0 = funil geral). */
+        categoryId: z.number().int().nonnegative(),
+        /** Etapa (`STAGE_ID`, ex.: `NEW` ou `C3:NEW`). */
+        stageId: z.string().trim().min(1).max(50),
+        fields: fieldMap,
+      }),
+    }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('TIMELINE_COMMENT'),
+      /** Comentário na entidade do CRM vinculada ao diálogo. */
+      config: z.object({ text: template }),
+    }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('CREATE_TASK'),
+      config: z.object({
+        title: template,
+        description: template.optional(),
+        responsibleId: positiveId,
+        /** Prazo em dias a partir da execução. */
+        deadlineDays: z.number().int().min(0).max(365).optional(),
+      }),
+    }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('START_BIZPROC'),
+      config: z.object({
+        templateId: positiveId,
+        /** Entidade do CRM em que o processo roda (a vinculada ao diálogo). */
+        documentType: z.enum(['LEAD', 'DEAL', 'CONTACT', 'COMPANY']),
+        parameters: fieldMap.optional(),
+      }),
+    }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('OUTBOUND_WEBHOOK'),
+      /** POST com o payload do evento, assinado com o segredo da ação (gerado pelo app). */
+      config: z.object({
+        url: z
+          .url({ protocol: /^https?$/, message: 'informe um endereço http ou https' })
+          .max(2000),
+      }),
+    }),
+  ] as const;
+}
+
+const [createLead, upsertDeal, timelineComment, createTask, startBizproc, outboundWebhook] =
+  actionSchemas(false);
 export const triggerActionInputSchema = z.discriminatedUnion('type', [
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('CREATE_LEAD'),
-    config: z.object({ fields: fieldMap.refine((f) => 'TITLE' in f, 'informe o campo TITLE') }),
-  }),
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('UPSERT_DEAL'),
-    config: z.object({
-      /** Funil (`CATEGORY_ID`; 0 = funil geral). */
-      categoryId: z.number().int().nonnegative(),
-      /** Etapa (`STAGE_ID`, ex.: `NEW` ou `C3:NEW`). */
-      stageId: z.string().trim().min(1).max(50),
-      fields: fieldMap,
-    }),
-  }),
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('TIMELINE_COMMENT'),
-    /** Comentário na entidade do CRM vinculada ao diálogo. */
-    config: z.object({ text: template }),
-  }),
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('CREATE_TASK'),
-    config: z.object({
-      title: template,
-      description: template.optional(),
-      responsibleId: positiveId,
-      /** Prazo em dias a partir da execução. */
-      deadlineDays: z.number().int().min(0).max(365).optional(),
-    }),
-  }),
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('START_BIZPROC'),
-    config: z.object({
-      templateId: positiveId,
-      /** Entidade do CRM em que o processo roda (a vinculada ao diálogo). */
-      documentType: z.enum(['LEAD', 'DEAL', 'CONTACT', 'COMPANY']),
-      parameters: fieldMap.optional(),
-    }),
-  }),
-  z.object({
-    id: z.uuid().optional(),
-    type: z.literal('OUTBOUND_WEBHOOK'),
-    /** POST com o payload do evento, assinado com o segredo da ação (gerado pelo app). */
-    config: z.object({
-      url: z.url({ protocol: /^https?$/, message: 'informe um endereço http ou https' }).max(2000),
-    }),
-  }),
+  createLead,
+  upsertDeal,
+  timelineComment,
+  createTask,
+  startBizproc,
+  outboundWebhook,
 ]);
+
+const intention = actionSchemas(true);
+/**
+ * Ações de uma intenção "Ação no Bitrix24": as dos gatilhos, com os campos coletados pelo agente;
+ * sem webhook de saída (a intenção genérica já chama APIs externas).
+ */
+export const intentionActionInputSchema = z.discriminatedUnion('type', [
+  intention[0],
+  intention[1],
+  intention[2],
+  intention[3],
+  intention[4],
+]);
+export type IntentionActionInput = z.input<typeof intentionActionInputSchema>;
+
 export type TriggerActionInput = z.input<typeof triggerActionInputSchema>;
 
 const actions = z

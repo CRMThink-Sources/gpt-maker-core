@@ -21,6 +21,6 @@ import { TriggersController } from './triggers.controller';
     TriggerRunner,
     TriggerService,
   ],
-  exports: [TriggerService],
+  exports: [TriggerService, TriggerActionExecutor],
 })
 export class TriggersModule {}

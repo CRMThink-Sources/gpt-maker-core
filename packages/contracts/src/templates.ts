@@ -17,6 +17,8 @@ export interface TemplateContext {
   interaction: { id: string | null; protocol: string | null };
   /** Corpo do webhook como chegou, para campos que não estão acima. */
   payload: unknown;
+  /** Intenções: campos coletados pelo agente na conversa (`{{fields.numero_do_pedido}}`). */
+  fields?: Record<string, string>;
 }
 
 /** Variáveis oferecidas ao usuário (UI e validação); `payload.*` aceita qualquer caminho. */
@@ -34,7 +36,17 @@ export const TEMPLATE_VARIABLES = [
   { path: 'interaction.protocol', description: 'Protocolo do atendimento no GPTMaker' },
 ] as const;
 
-const ROOTS = new Set(['contact', 'message', 'agent', 'event', 'dialog', 'interaction', 'payload']);
+const ROOTS = new Set([
+  'contact',
+  'message',
+  'agent',
+  'event',
+  'dialog',
+  'interaction',
+  'payload',
+  'fields',
+]);
+const FIELD_PATH = /^fields\.[a-z0-9_]+$/;
 const KNOWN_PATHS = new Set<string>(TEMPLATE_VARIABLES.map((variable) => variable.path));
 
 /** `{{ caminho }}` ou `{{ caminho | padrão }}`; o padrão pode vir entre aspas. */
@@ -84,7 +96,10 @@ export function renderFields(
  * Problemas do template para mostrar ao salvar: chaves sem fechar, caminho malformado ou
  * variável desconhecida (fora da lista e fora de `payload.*`). Vazio ⇒ válido.
  */
-export function templateErrors(template: string): string[] {
+export function templateErrors(
+  template: string,
+  options: { allowFields?: boolean } = {},
+): string[] {
   const errors: string[] = [];
   const withoutPlaceholders = template.replace(PLACEHOLDER, '');
   if (withoutPlaceholders.includes('{{') || withoutPlaceholders.includes('}}')) {
@@ -97,8 +112,21 @@ export function templateErrors(template: string): string[] {
       continue;
     }
     const root = trimmed.split('.')[0]!;
-    const known = KNOWN_PATHS.has(trimmed) || (root === 'payload' && trimmed !== 'payload');
+    const known =
+      KNOWN_PATHS.has(trimmed) ||
+      (root === 'payload' && trimmed !== 'payload') ||
+      (options.allowFields === true && FIELD_PATH.test(trimmed));
     if (!ROOTS.has(root) || !known) errors.push(`variável desconhecida: {{${trimmed}}}`);
   }
   return errors;
+}
+
+/** Campos da intenção citados num template (`{{fields.x}}` ⇒ `x`). */
+export function templateFieldNames(template: string): string[] {
+  const names: string[] = [];
+  for (const [, path] of template.matchAll(PLACEHOLDER)) {
+    const trimmed = (path ?? '').trim();
+    if (FIELD_PATH.test(trimmed)) names.push(trimmed.slice('fields.'.length));
+  }
+  return [...new Set(names)];
 }

@@ -135,6 +135,8 @@ export const training = pgTable(
 
 export const intentionHttpMethod = pgEnum('intention_http_method', ['GET', 'POST']);
 export const intentionResponseMode = pgEnum('intention_response_mode', ['API', 'INSTRUCTIONS']);
+/** `WEBHOOK`: API do cliente; `BITRIX`: ações no portal executadas pelo app (design D21). */
+export const intentionKind = pgEnum('intention_kind', ['WEBHOOK', 'BITRIX']);
 
 /** Campo que o agente coleta na conversa (`jsonName` é como é citado: `{{jsonName}}`). */
 export interface IntentionField {
@@ -161,6 +163,7 @@ export const agentIntention = pgTable(
       .references(() => agent.id),
     /** `null` até a listagem do GPTMaker devolver o id (a criação não devolve). */
     gptmakerIntentionId: text('gptmaker_intention_id'),
+    kind: intentionKind('kind').notNull().default('WEBHOOK'),
     name: text('name').notNull(),
     whenToUse: text('when_to_use').notNull(),
     fields: jsonb('fields').$type<IntentionField[]>().notNull().default([]),
@@ -177,6 +180,13 @@ export const agentIntention = pgTable(
     responseMode: intentionResponseMode('response_mode').notNull().default('API'),
     instructions: text('instructions'),
     active: boolean('active').notNull().default(true),
+    /** Ações no portal (intenção `BITRIX`), como as dos gatilhos; textos aceitam `{{fields.x}}`. */
+    actions: jsonb('actions')
+      .$type<Array<{ type: string; config: Record<string, unknown> }>>()
+      .notNull()
+      .default([]),
+    /** Token que o GPTMaker manda ao endpoint do app (intenção `BITRIX`), cifrado para ser reenviado. */
+    tokenEncrypted: text('token_encrypted'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),
@@ -248,5 +258,42 @@ export const messageLog = pgTable(
     uniqueIndex('message_log_message_uq').on(t.tenantId, t.bitrixMessageId, t.direction),
     index('message_log_agent_idx').on(t.agentId, t.createdAt),
     index('message_log_dialog_idx').on(t.tenantId, t.dialogId, t.createdAt),
+  ],
+);
+
+export const intentionExecutionStatus = pgEnum('intention_execution_status', [
+  'SUCCESS',
+  'FAILED',
+  'REJECTED',
+]);
+
+/** Chamadas do GPTMaker a uma intenção  (histórico e erros por portal). */
+export const intentionExecution = pgTable(
+  'intention_execution',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    intentionId: uuid('intention_id')
+      .notNull()
+      .references(() => agentIntention.id),
+    status: intentionExecutionStatus('status').notNull(),
+    fields: jsonb('fields').$type<Record<string, string>>().notNull().default({}),
+    dialogId: text('dialog_id'),
+    /** Texto devolvido ao agente. */
+    message: text('message').notNull(),
+    results: jsonb('results')
+      .$type<
+        Array<{ type: string; ok: boolean; result?: Record<string, unknown>; error?: string }>
+      >()
+      .notNull()
+      .default([]),
+    durationMs: integer('duration_ms').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('intention_execution_intention_idx').on(t.intentionId, t.createdAt),
+    index('intention_execution_tenant_idx').on(t.tenantId, t.createdAt),
   ],
 );

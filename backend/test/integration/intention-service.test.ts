@@ -7,6 +7,7 @@ import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Env } from '../../src/config/env';
 import { AgentEvents } from '../../src/modules/agents/agent-events';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
@@ -101,7 +102,9 @@ describe('serviço de intenções', () => {
       }),
     );
     events = new AgentEvents();
-    service = new IntentionService(new AgentRepository(db), client, events, db, redis);
+    service = new IntentionService(new AgentRepository(db), client, events, db, redis, {
+      API_PUBLIC_URL: 'https://app.exemplo.com',
+    } as Env);
     service.onModuleInit();
     const [model] = await db
       .insert(aiModel)
@@ -257,6 +260,63 @@ describe('serviço de intenções', () => {
     await events.emit({ agentId, tenantId, kind: 'removed' });
     const rows = await db.select().from(agentIntention).where(eq(agentIntention.agentId, agentId));
     expect(rows.every((row) => row.deletedAt !== null)).toBe(true);
+  });
+
+  it('Ação no Bitrix24: aponta para o app com token próprio, mantido nas edições', async () => {
+    await stubWrite('POST', LIST);
+    await stubList([{ id: 'int-bx', description: 'Registrar pedido' }]);
+    const created = await service.create(
+      tenantId,
+      agentId,
+      form({
+        kind: 'BITRIX',
+        name: 'Registrar pedido',
+        url: '',
+        headers: [],
+        params: [],
+        actions: [
+          {
+            type: 'CREATE_LEAD',
+            config: { fields: { TITLE: 'Pedido de {{fields.moeda}}' } },
+          },
+        ],
+      }),
+    );
+    expect(created).toMatchObject({ kind: 'BITRIX', synced: true, headers: [], url: '' });
+    const [sent] = (await wiremock.bodies('POST', LIST)) as Array<Record<string, unknown>>;
+    expect(sent).toMatchObject({
+      httpMethod: 'POST',
+      url: `https://app.exemplo.com/gptmaker/intentions/${created.id}`,
+      autoGenerateBody: false,
+    });
+    expect(JSON.parse(sent!.requestBody as string)).toEqual({
+      fields: { moeda: '{{moeda}}' },
+      chat: '{{chat_id}}',
+      contact: { name: '{{contact_name}}', phone: '{{contact_phone}}' },
+    });
+    const token = (sent!.headers as Array<{ name: string; value: string }>)[0]!;
+    expect(token.name).toBe('X-Intention-Token');
+    expect(token.value.length).toBeGreaterThan(30);
+
+    await stubWrite('PUT', '/v2/intention/int-bx');
+    await service.update(
+      tenantId,
+      agentId,
+      created.id,
+      form({
+        kind: 'BITRIX',
+        name: 'Registrar pedido',
+        url: '',
+        headers: [],
+        params: [],
+        whenToUse: 'Quando o cliente quiser fazer um pedido',
+        actions: [{ type: 'TIMELINE_COMMENT', config: { text: 'Pedido: {{fields.moeda}}' } }],
+      }),
+    );
+    const [updated] = (await wiremock.bodies('PUT', '/v2/intention/int-bx')) as Array<{
+      headers: Array<{ value: string }>;
+    }>;
+    expect(updated!.headers[0]!.value).toBe(token.value);
   });
 
   it('agente de outro tenant responde como inexistente', async () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type IntentionActionInput,
   INTENTION_MAX_FIELDS,
   INTENTION_MAX_PAIRS,
   type IntentionFieldType,
@@ -14,10 +15,12 @@ import { CloseIcon, PlusIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
+import { newAction, SAMPLE_CONTEXT } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
+import { ActionsEditor, TemplateScopeProvider } from '../triggers/trigger-editor';
 
-type Form = IntentionInput;
+type Form = Required<IntentionInput>;
 type FieldRow = Form['fields'][number];
 
 export const FIELD_TYPES: Record<IntentionFieldType, string> = {
@@ -29,7 +32,17 @@ export const FIELD_TYPES: Record<IntentionFieldType, string> = {
   URL: 'Link',
 };
 
+/** Ações do Bitrix que uma intenção executa (as dos gatilhos, sem o webhook de saída). */
+const BITRIX_ACTIONS = [
+  'CREATE_LEAD',
+  'UPSERT_DEAL',
+  'TIMELINE_COMMENT',
+  'CREATE_TASK',
+  'START_BIZPROC',
+] as const;
+
 const SECTION_LABELS: Record<string, string> = {
+  actions: 'Ação',
   name: 'Nome',
   whenToUse: 'Quando usar',
   fields: 'Campo',
@@ -44,6 +57,8 @@ const SECTION_LABELS: Record<string, string> = {
 export function formOf(view: IntentionView | null): Form {
   if (!view) {
     return {
+      kind: 'WEBHOOK',
+      actions: [],
       name: '',
       whenToUse: '',
       fields: [{ name: '', description: '', type: 'STRING', required: true }],
@@ -60,6 +75,8 @@ export function formOf(view: IntentionView | null): Form {
     };
   }
   return {
+    kind: view.kind,
+    actions: view.actions,
     name: view.name,
     whenToUse: view.whenToUse,
     fields: view.fields.map(({ name, description, type, required }) => ({
@@ -436,102 +453,180 @@ export function IntentionEditor({
         </section>
 
         <section>
-          <h3 className="text-sm font-medium text-zinc-800">3. Chamada à API</h3>
-          <div className="mt-2 flex items-start gap-2">
-            <select
-              value={form.httpMethod}
-              onChange={(e) => {
-                const method = e.target.value as Form['httpMethod'];
-                set('httpMethod', method);
-                if (method === 'GET' && tab === 'body') setTab('params');
-              }}
-              aria-label="Método"
-              className={`${inputClass} mt-0 w-24 shrink-0`}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-            </select>
-            <WithFields
-              value={form.url}
-              onChange={(value) => set('url', value)}
-              fields={form.fields}
-              label="URL"
-              placeholder="https://sua-api.com/pedidos/{{numero_do_pedido}}"
-            />
-          </div>
-
-          <div className="mt-4 flex gap-4 border-b border-zinc-200 text-sm">
-            {tabs.map((item) => (
+          <h3 className="text-sm font-medium text-zinc-800">3. O que a intenção faz</h3>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                [
+                  'BITRIX',
+                  'Ação no Bitrix24',
+                  'Cria lead, negócio, tarefa ou comentário no CRM, como nos gatilhos',
+                ],
+                ['WEBHOOK', 'Chamar uma API', 'Consulta ou envia dados para um sistema seu'],
+              ] as const
+            ).map(([kind, title, description]) => (
               <button
-                key={item.key}
+                key={kind}
                 type="button"
-                onClick={() => setTab(item.key)}
-                className={`-mb-px border-b-2 pb-2 ${
-                  tab === item.key
-                    ? 'border-brand-600 font-medium text-brand-700'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    kind,
+                    actions:
+                      kind === 'BITRIX' && !current.actions.length
+                        ? [newAction('CREATE_LEAD') as IntentionActionInput]
+                        : current.actions,
+                  }))
+                }
+                className={`rounded-lg border p-3 text-left text-sm ${
+                  form.kind === kind
+                    ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
+                    : 'border-zinc-200 hover:border-zinc-300'
                 }`}
               >
-                {item.label}
+                <span className="font-medium text-zinc-900">{title}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">{description}</span>
               </button>
             ))}
           </div>
-          <div className="mt-3">
-            {tab === 'params' && (
-              <>
-                <label className="mb-3 flex items-center gap-2 text-sm text-zinc-700">
-                  <input
-                    type="checkbox"
-                    checked={form.autoGenerateParams}
-                    onChange={(e) => set('autoGenerateParams', e.target.checked)}
+        </section>
+
+        {form.kind === 'BITRIX' ? (
+          <section>
+            <h3 className="text-sm font-medium text-zinc-800">Ações no Bitrix24</h3>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Rodam na hora, nesta ordem, com o acesso do app ao seu portal. Use as informações
+              coletadas em{' '}
+              <code className="rounded bg-zinc-100 px-1">{'{{fields.nome_do_campo}}'}</code>.
+              Comentário e negócio usam o cliente do atendimento.
+            </p>
+            <TemplateScopeProvider
+              value={{
+                extra: form.fields
+                  .map((field) => ({ json: intentionJsonName(field.name), name: field.name }))
+                  .filter((field) => field.json)
+                  .map((field) => ({
+                    path: `fields.${field.json}`,
+                    description: `Coletado: ${field.name}`,
+                  })),
+                allowFields: true,
+                sample: {
+                  ...SAMPLE_CONTEXT,
+                  fields: Object.fromEntries(
+                    form.fields.map((field) => [intentionJsonName(field.name), `(${field.name})`]),
+                  ),
+                },
+              }}
+            >
+              <div className="mt-3">
+                <ActionsEditor
+                  actions={form.actions as IntentionActionInput[]}
+                  onChange={(actions) => set('actions', actions)}
+                  disabled={busy}
+                  types={BITRIX_ACTIONS}
+                />
+              </div>
+            </TemplateScopeProvider>
+          </section>
+        ) : (
+          <section>
+            <h3 className="text-sm font-medium text-zinc-800">Chamada à API</h3>
+            <div className="mt-2 flex items-start gap-2">
+              <select
+                value={form.httpMethod}
+                onChange={(e) => {
+                  const method = e.target.value as Form['httpMethod'];
+                  set('httpMethod', method);
+                  if (method === 'GET' && tab === 'body') setTab('params');
+                }}
+                aria-label="Método"
+                className={`${inputClass} mt-0 w-24 shrink-0`}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </select>
+              <WithFields
+                value={form.url}
+                onChange={(value) => set('url', value)}
+                fields={form.fields}
+                label="URL"
+                placeholder="https://sua-api.com/pedidos/{{numero_do_pedido}}"
+              />
+            </div>
+
+            <div className="mt-4 flex gap-4 border-b border-zinc-200 text-sm">
+              {tabs.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setTab(item.key)}
+                  className={`-mb-px border-b-2 pb-2 ${
+                    tab === item.key
+                      ? 'border-brand-600 font-medium text-brand-700'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              {tab === 'params' && (
+                <>
+                  <label className="mb-3 flex items-center gap-2 text-sm text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={form.autoGenerateParams}
+                      onChange={(e) => set('autoGenerateParams', e.target.checked)}
+                    />
+                    O agente monta os parâmetros sozinho a partir das informações coletadas
+                  </label>
+                  <Pairs
+                    kind="param"
+                    rows={form.params}
+                    onChange={(rows) =>
+                      set(
+                        'params',
+                        rows.map((row) => ({ name: row.name, value: row.value ?? '' })),
+                      )
+                    }
+                    fields={form.fields}
                   />
-                  O agente monta os parâmetros sozinho a partir das informações coletadas
-                </label>
+                </>
+              )}
+              {tab === 'headers' && (
                 <Pairs
-                  kind="param"
-                  rows={form.params}
-                  onChange={(rows) =>
-                    set(
-                      'params',
-                      rows.map((row) => ({ name: row.name, value: row.value ?? '' })),
-                    )
-                  }
+                  kind="header"
+                  rows={form.headers}
+                  onChange={(rows) => set('headers', rows)}
                   fields={form.fields}
                 />
-              </>
-            )}
-            {tab === 'headers' && (
-              <Pairs
-                kind="header"
-                rows={form.headers}
-                onChange={(rows) => set('headers', rows)}
-                fields={form.fields}
-              />
-            )}
-            {tab === 'body' && (
-              <>
-                <label className="mb-3 flex items-center gap-2 text-sm text-zinc-700">
-                  <input
-                    type="checkbox"
-                    checked={form.autoGenerateBody}
-                    onChange={(e) => set('autoGenerateBody', e.target.checked)}
-                  />
-                  O agente monta o corpo sozinho a partir das informações coletadas
-                </label>
-                {!form.autoGenerateBody && (
-                  <WithFields
-                    value={form.body ?? ''}
-                    onChange={(value) => set('body', value || null)}
-                    fields={form.fields}
-                    multiline
-                    label="Corpo JSON"
-                    placeholder={'{\n  "pedido": "{{numero_do_pedido}}"\n}'}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </section>
+              )}
+              {tab === 'body' && (
+                <>
+                  <label className="mb-3 flex items-center gap-2 text-sm text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={form.autoGenerateBody}
+                      onChange={(e) => set('autoGenerateBody', e.target.checked)}
+                    />
+                    O agente monta o corpo sozinho a partir das informações coletadas
+                  </label>
+                  {!form.autoGenerateBody && (
+                    <WithFields
+                      value={form.body ?? ''}
+                      onChange={(value) => set('body', value || null)}
+                      fields={form.fields}
+                      multiline
+                      label="Corpo JSON"
+                      placeholder={'{\n  "pedido": "{{numero_do_pedido}}"\n}'}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
         <section>
           <h3 className="text-sm font-medium text-zinc-800">4. Resposta do agente baseada em</h3>
@@ -543,7 +638,9 @@ export function IntentionEditor({
                 checked={form.responseMode === 'API'}
                 onChange={() => set('responseMode', 'API')}
               />
-              No retorno da API (o agente interpreta e responde)
+              {form.kind === 'BITRIX'
+                ? 'No resultado das ações (ex.: "lead criado")'
+                : 'No retorno da API (o agente interpreta e responde)'}
             </label>
             <label className="flex items-center gap-2">
               <input

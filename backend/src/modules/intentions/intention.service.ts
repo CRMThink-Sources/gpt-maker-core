@@ -1,17 +1,21 @@
+import { randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { HttpStatus, Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  type IntentionExecutionView,
   type IntentionInput,
   intentionInputSchema,
   intentionJsonName,
   type IntentionView,
 } from '@gptmaker/contracts';
-import { and, asc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { currentContext } from '../../shared/context/request-context';
 import { fieldCipher } from '../../shared/crypto/field-cipher';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agentIntention } from '../../shared/database/schema/index';
+import { agentIntention, intentionExecution } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
@@ -44,20 +48,57 @@ const notFound = () =>
 const sameName = (a: string | null | undefined, b: string) =>
   (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
 
-/** Corpo do GPTMaker a partir do registro local (cabeçalhos já decifrados). */
-export function toRemote(row: Intention): GptMakerWriteIntention {
+/** Cabeçalho com o token da intenção `BITRIX` (o endpoint do app confere). */
+export const INTENTION_TOKEN_HEADER = 'X-Intention-Token';
+
+/**
+ * Corpo que o GPTMaker manda ao endpoint do app numa intenção `BITRIX`: os campos coletados e,
+ * se o GPTMaker preencher, o chat (que leva o diálogo do Bitrix) e o contato.
+ */
+export function bitrixRequestBody(fields: Intention['fields']): string {
+  return JSON.stringify({
+    fields: Object.fromEntries(fields.map((field) => [field.jsonName, `{{${field.jsonName}}}`])),
+    chat: '{{chat_id}}',
+    contact: { name: '{{contact_name}}', phone: '{{contact_phone}}' },
+  });
+}
+
+/** Corpo do GPTMaker a partir do registro local (cabeçalhos e token já decifrados). */
+export function toRemote(row: Intention, publicUrl: string): GptMakerWriteIntention {
   const cipher = fieldCipher();
-  return {
+  const common = {
     description: row.name,
     details: row.whenToUse,
     manualOutput: row.responseMode === 'INSTRUCTIONS',
     ...(row.responseMode === 'INSTRUCTIONS' && row.instructions
       ? { instructions: row.instructions }
       : {}),
-    type: 'WEBHOOK',
+    type: 'WEBHOOK' as const,
+    fields: row.fields,
+    preprocessingMessage: 'DISABLED' as const,
+    active: row.active,
+  };
+  if (row.kind === 'BITRIX') {
+    return {
+      ...common,
+      httpMethod: 'POST',
+      url: `${publicUrl.replace(/\/+$/, '')}/gptmaker/intentions/${row.id}`,
+      headers: [
+        {
+          name: INTENTION_TOKEN_HEADER,
+          value: row.tokenEncrypted ? cipher.decrypt(row.tokenEncrypted) : '',
+        },
+      ],
+      params: [],
+      requestBody: bitrixRequestBody(row.fields),
+      autoGenerateParams: false,
+      autoGenerateBody: false,
+    };
+  }
+  return {
+    ...common,
     httpMethod: row.httpMethod,
     url: row.url,
-    fields: row.fields,
     headers: row.headers.map((header) => ({
       name: header.name,
       value: header.valueEncrypted ? cipher.decrypt(header.valueEncrypted) : '',
@@ -68,14 +109,14 @@ export function toRemote(row: Intention): GptMakerWriteIntention {
       : {}),
     autoGenerateParams: row.autoGenerateParams,
     autoGenerateBody: row.autoGenerateBody,
-    preprocessingMessage: 'DISABLED',
-    active: row.active,
   };
 }
 
 function toView(row: Intention): IntentionView {
   return {
     id: row.id,
+    kind: row.kind,
+    actions: row.actions as IntentionView['actions'],
     name: row.name,
     whenToUse: row.whenToUse,
     fields: row.fields,
@@ -116,8 +157,13 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
     private readonly agentEvents: AgentEvents,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.lock = new DistributedLock(redis);
+  }
+
+  private remote(row: Intention): GptMakerWriteIntention {
+    return toRemote(row, this.env.API_PUBLIC_URL);
   }
 
   onModuleInit(): void {
@@ -153,8 +199,9 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
     const owner = await this.editableAgent(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
       await this.assertUniqueName(owner, input.name);
-      const values = this.values(input, []);
-      const remote = toRemote({ ...this.blank(owner), ...values });
+      const id = randomUUID();
+      const values = this.values(input, [], null);
+      const remote = this.remote({ ...this.blank(owner), ...values, id });
       const known = await this.knownIds(owner);
       await this.callGptMaker(() => this.gptmaker.createIntention(owner.gptmakerAgentId, remote));
 
@@ -169,7 +216,7 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       }
       const [row] = await this.db
         .insert(agentIntention)
-        .values({ ...values, tenantId: owner.tenantId, agentId: owner.id, gptmakerIntentionId })
+        .values({ ...values, id, tenantId: owner.tenantId, agentId: owner.id, gptmakerIntentionId })
         .returning();
       return toView(row!);
     });
@@ -187,9 +234,9 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       const current = await this.rowOf(owner, id);
       if (!sameName(current.name, input.name)) await this.assertUniqueName(owner, input.name, id);
       const gptmakerIntentionId = await this.remoteIdOf(owner, current);
-      const values = this.values(input, current.headers);
+      const values = this.values(input, current.headers, current.tokenEncrypted);
       await this.callGptMaker(() =>
-        this.gptmaker.updateIntention(gptmakerIntentionId, toRemote({ ...current, ...values })),
+        this.gptmaker.updateIntention(gptmakerIntentionId, this.remote({ ...current, ...values })),
       );
       const [row] = await this.db
         .update(agentIntention)
@@ -198,6 +245,32 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
         .returning();
       return toView(row!);
     });
+  }
+
+  /** Execuções recentes de uma intenção `BITRIX` (histórico da tela). */
+  async executions(
+    tenantId: string,
+    agentId: string,
+    id: string,
+  ): Promise<IntentionExecutionView[]> {
+    const owner = await this.agents.getById(tenantId, agentId);
+    const row = await this.rowOf(owner, id);
+    const rows = await this.db
+      .select()
+      .from(intentionExecution)
+      .where(eq(intentionExecution.intentionId, row.id))
+      .orderBy(desc(intentionExecution.createdAt))
+      .limit(30);
+    return rows.map((execution) => ({
+      id: execution.id,
+      createdAt: execution.createdAt.toISOString(),
+      status: execution.status,
+      fields: execution.fields,
+      dialogId: execution.dialogId,
+      message: execution.message,
+      results: execution.results,
+      durationMs: execution.durationMs,
+    }));
   }
 
   /** Ausente no GPTMaker conta como removida. */
@@ -230,9 +303,17 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
   private values(
     input: Input,
     previous: Intention['headers'],
+    previousToken: string | null,
   ): Omit<typeof agentIntention.$inferInsert, 'tenantId' | 'agentId'> {
     const cipher = fieldCipher();
+    const bitrix = input.kind === 'BITRIX';
     return {
+      kind: input.kind,
+      actions: bitrix ? input.actions : [],
+      // Token mantido entre edições: a intenção no GPTMaker continua valendo.
+      tokenEncrypted: bitrix
+        ? (previousToken ?? cipher.encrypt(randomBytes(32).toString('base64url')))
+        : null,
       name: input.name,
       whenToUse: input.whenToUse,
       fields: input.fields.map((field) => ({
@@ -242,19 +323,19 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
         type: field.type,
         required: field.required,
       })),
-      httpMethod: input.httpMethod,
-      url: input.url,
-      headers: input.headers.map((header) => ({
+      httpMethod: bitrix ? 'POST' : input.httpMethod,
+      url: bitrix ? '' : input.url,
+      headers: (bitrix ? [] : input.headers).map((header) => ({
         name: header.name,
         valueEncrypted:
           header.value === null
             ? (previous.find((old) => old.name === header.name)?.valueEncrypted ?? null)
             : cipher.encrypt(header.value),
       })),
-      params: input.params,
-      body: input.httpMethod === 'POST' && input.body?.trim() ? input.body : null,
-      autoGenerateParams: input.autoGenerateParams,
-      autoGenerateBody: input.httpMethod === 'POST' && input.autoGenerateBody,
+      params: bitrix ? [] : input.params,
+      body: !bitrix && input.httpMethod === 'POST' && input.body?.trim() ? input.body : null,
+      autoGenerateParams: !bitrix && input.autoGenerateParams,
+      autoGenerateBody: !bitrix && input.httpMethod === 'POST' && input.autoGenerateBody,
       responseMode: input.responseMode,
       instructions: input.responseMode === 'INSTRUCTIONS' ? input.instructions : null,
       active: input.active,
@@ -269,6 +350,9 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       tenantId: owner.tenantId,
       agentId: owner.id,
       gptmakerIntentionId: null,
+      kind: 'WEBHOOK',
+      actions: [],
+      tokenEncrypted: null,
       name: '',
       whenToUse: '',
       fields: [],

@@ -73,4 +73,45 @@ describe('intenções: validação', () => {
       }),
     ).toEqual(['fields.1.name: Já existe um campo com esse nome']);
   });
+
+  it('intenção Bitrix: ações obrigatórias, campos citados conferidos, sem URL', () => {
+    const bitrix: IntentionInput = {
+      ...base,
+      kind: 'BITRIX',
+      url: '',
+      actions: [
+        {
+          type: 'CREATE_LEAD',
+          config: {
+            fields: { TITLE: 'Pedido {{fields.numero_do_pedido}}', NAME: '{{contact.name}}' },
+          },
+        },
+      ],
+    };
+    expect(messages(bitrix)).toEqual([]);
+    expect(messages({ ...bitrix, actions: [] })).toEqual(['actions: Inclua ao menos uma ação']);
+    expect(
+      messages({
+        ...bitrix,
+        actions: [{ type: 'TIMELINE_COMMENT', config: { text: 'CPF {{fields.cpf}}' } }],
+      }),
+    ).toEqual(['actions.0: Campo não cadastrado: {{fields.cpf}}']);
+    // Webhook de saída não é ação de intenção.
+    expect(
+      messages({
+        ...bitrix,
+        actions: [{ type: 'OUTBOUND_WEBHOOK', config: { url: 'https://x.com' } } as never],
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('gatilho continua recusando {{fields.x}}', async () => {
+    const { createTriggerSchema } = await import('./triggers');
+    const result = createTriggerSchema.safeParse({
+      name: 'g',
+      event: 'onNewMessage',
+      actions: [{ type: 'TIMELINE_COMMENT', config: { text: '{{fields.cpf}}' } }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
