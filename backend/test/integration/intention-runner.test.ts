@@ -6,6 +6,7 @@ import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PendingHandoffs } from '../../src/modules/channel/pending-handoff';
 import { IntentionRunner } from '../../src/modules/intentions/intention-runner';
 import type { ActionContext } from '../../src/modules/triggers/actions/action-executor';
 import { ActionError } from '../../src/modules/triggers/actions/action-error';
@@ -55,7 +56,7 @@ describe('intenção com ações no Bitrix24', () => {
         return action.type === 'CREATE_LEAD' ? { leadId: 77 } : { commentId: 5 };
       },
     } as unknown as TriggerActionExecutor;
-    runner = new IntentionRunner(executor, db, redis);
+    runner = new IntentionRunner(executor, new PendingHandoffs(redis), db, redis);
   });
 
   beforeEach(async () => {
@@ -173,6 +174,35 @@ describe('intenção com ações no Bitrix24', () => {
     });
     expect(calls[0]!.context.dialogId).toBeNull();
     expect(await executions()).toEqual([expect.objectContaining({ status: 'FAILED' })]);
+  });
+
+  it('transferência: agendada para depois da resposta; sem conversa identificada, falha', async () => {
+    await db
+      .update(agentIntention)
+      .set({
+        actions: [
+          { type: 'CREATE_LEAD', config: { fields: { TITLE: 'Pedido {{fields.pedido}}' } } },
+          { type: 'TRANSFER_TO_HUMAN', config: { target: 'USER', userId: 9 } },
+        ],
+      })
+      .where(eq(agentIntention.id, intentionId));
+    const outcome = await runner.run(intentionId, TOKEN, body());
+    expect(outcome).toMatchObject({
+      reply: { ok: true, message: expect.stringContaining('atendido por uma pessoa') },
+    });
+    expect(calls.map((c) => c.type)).toEqual(['CREATE_LEAD']);
+    expect(await new PendingHandoffs(redis).peek(tenantId, 'chat9498')).toMatchObject({
+      userId: 9,
+    });
+
+    const noChat = await runner.run(
+      intentionId,
+      TOKEN,
+      body({ chat: '{{chat_id}}', fields: { nome: 'Outro', pedido: '9' } }),
+    );
+    expect(noChat).toMatchObject({
+      reply: { ok: false, results: [{ ok: true }, { type: 'TRANSFER_TO_HUMAN', ok: false }] },
+    });
   });
 
   it('intenção desativada ou portal suspenso: recusa sem executar', async () => {

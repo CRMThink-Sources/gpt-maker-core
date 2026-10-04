@@ -13,6 +13,8 @@ import type { InboundMessage } from './inbound-message';
 import { attemptOf, InboundRetry, type RetryOutcome } from './inbound-retry';
 import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
+import { HumanHandoff } from './human-handoff';
+import { PendingHandoffs } from './pending-handoff';
 import { ReplyPublisher } from './reply-publisher';
 
 /** Status do `message_log` das mensagens que o gate descarta. */
@@ -53,6 +55,8 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly replies: ReplyPublisher,
     private readonly noCredit: NoCreditHandler,
     private readonly failures: DeliveryFailureHandler,
+    private readonly handoffs: PendingHandoffs,
+    private readonly handoff: HumanHandoff,
     @Inject(DB) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -148,8 +152,26 @@ export class InboundConsumer implements OnApplicationBootstrap {
           return;
         }
         await this.replies.publish(message, decision.target, reply, attempt);
+        await this.handoffAfterReply(message);
         return;
       }
     }
+  }
+
+  /**
+   * Transferência pedida por uma intenção durante esta resposta: agora que a mensagem do agente
+   * saiu, o diálogo vai para o atendente. Falha transitória sobe (a mensagem é retentada; a
+   * resposta não sai duas vezes) e o pedido só é apagado depois de feito.
+   */
+  private async handoffAfterReply(message: InboundMessage): Promise<void> {
+    const pending = await this.handoffs.peek(message.tenantId, message.dialogId);
+    if (!pending) return;
+    await this.handoff.start({
+      tenantId: message.tenantId,
+      agentId: pending.agentId,
+      dialogId: message.dialogId,
+      userId: pending.userId,
+    });
+    await this.handoffs.clear(message.tenantId, message.dialogId);
   }
 }

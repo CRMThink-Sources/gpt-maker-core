@@ -59,6 +59,10 @@ O sistema MUST permitir intenções do tipo "Ação no Bitrix24": em vez de uma 
 - **WHEN** a ação precisa da entidade do CRM do atendimento (comentário na timeline, negócio do cliente) e a chamada identifica o chat
 - **THEN** o app localiza o diálogo do Bitrix pelo chat do GPTMaker e usa a entidade vinculada a ele
 
+#### Scenario: Transferir para atendente
+- **WHEN** a intenção inclui a ação de transferir (operador livre da Linha Aberta ou usuário escolhido) e a chamada identifica a conversa
+- **THEN** o app agenda a transferência, o agente responde ao cliente e, logo depois que a resposta é entregue, o diálogo passa para o atendente e o agente para de responder nele
+
 #### Scenario: Chamada inválida ou portal indisponível
 - **WHEN** o token não confere, a intenção está desativada ou removida, ou o portal está suspenso, desinstalado ou sem credencial
 - **THEN** o app não executa nenhuma ação e responde com erro (token inválido) ou com uma mensagem para o agente explicar que não foi possível agora

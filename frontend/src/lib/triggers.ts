@@ -4,6 +4,8 @@ import type {
   TriggerActionInput,
   TriggerActionType,
   TriggerExecutionView,
+  IntentionActionInput,
+  IntentionActionType,
 } from '@gptmaker/contracts';
 import type { Tone } from '@/components/ui';
 
@@ -43,7 +45,11 @@ export const AGENT_EVENTS: Record<AgentEventName, { label: string; description: 
   },
 };
 
-export const ACTION_TYPES: Record<TriggerActionType, { label: string; description: string }> = {
+/** Ação de gatilho ou de intenção (a intenção tem também a transferência para atendente). */
+export type AnyActionType = TriggerActionType | IntentionActionType;
+export type AnyActionInput = TriggerActionInput | IntentionActionInput;
+
+export const ACTION_TYPES: Record<AnyActionType, { label: string; description: string }> = {
   CREATE_LEAD: { label: 'Criar lead', description: 'Novo lead no CRM.' },
   UPSERT_DEAL: {
     label: 'Criar ou atualizar negócio',
@@ -62,10 +68,14 @@ export const ACTION_TYPES: Record<TriggerActionType, { label: string; descriptio
     label: 'Chamar URL externa',
     description: 'Envia o evento para outro sistema (POST assinado).',
   },
+  TRANSFER_TO_HUMAN: {
+    label: 'Transferir para atendente',
+    description: 'Depois da resposta do agente, a conversa passa para uma pessoa da equipe.',
+  },
 };
 
 /** Configuração inicial de cada tipo ao adicionar uma ação. */
-export function newAction(type: TriggerActionType): TriggerActionInput {
+export function newAction(type: AnyActionType): AnyActionInput {
   switch (type) {
     case 'CREATE_LEAD':
       return {
@@ -99,6 +109,8 @@ export function newAction(type: TriggerActionType): TriggerActionInput {
       return { type, config: { templateId: 0, documentType: 'DEAL' } };
     case 'OUTBOUND_WEBHOOK':
       return { type, config: { url: '' } };
+    case 'TRANSFER_TO_HUMAN':
+      return { type, config: { target: 'OPERATOR' } };
   }
 }
 

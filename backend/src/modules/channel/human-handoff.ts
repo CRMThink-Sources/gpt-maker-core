@@ -50,6 +50,8 @@ export class HumanHandoff {
     tenantId: string;
     agentId: string;
     dialogId: string;
+    /** Usuário do Bitrix que recebe a conversa (intenção); ausente ⇒ operador livre da linha. */
+    userId?: number;
   }): Promise<HandoffOutcome> {
     const owner = await this.owner(input.tenantId, input.agentId);
     if (!owner) {
@@ -57,7 +59,13 @@ export class HumanHandoff {
       return 'skipped';
     }
     const gptmakerChatId = gptmakerChatIdFor(owner.gptmakerAgentId, input.tenantId, input.dialogId);
-    await this.human.set({ ...input, gptmakerChatId, active: true });
+    await this.human.set({
+      tenantId: input.tenantId,
+      agentId: input.agentId,
+      dialogId: input.dialogId,
+      gptmakerChatId,
+      active: true,
+    });
 
     const chatId = chatIdOf(input.dialogId);
     if (chatId === null) {
@@ -67,9 +75,15 @@ export class HumanHandoff {
       );
     } else {
       await this.tolerant('transferência ao operador', () =>
-        this.bitrix.call(owner.installationId, 'imopenlines.bot.session.operator', {
-          CHAT_ID: chatId,
-        }),
+        input.userId
+          ? this.bitrix.call(owner.installationId, 'imopenlines.bot.session.transfer', {
+              CHAT_ID: chatId,
+              USER_ID: input.userId,
+              LEAVE: 'N',
+            })
+          : this.bitrix.call(owner.installationId, 'imopenlines.bot.session.operator', {
+              CHAT_ID: chatId,
+            }),
       );
     }
     await this.tolerant('start-human no GPTMaker', () => this.gptmaker.startHuman(gptmakerChatId));

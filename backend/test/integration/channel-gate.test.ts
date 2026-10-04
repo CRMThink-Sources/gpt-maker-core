@@ -13,6 +13,8 @@ import { balanceCacheKey, BalanceReader } from '../../src/modules/billing/balanc
 import type { ConversationService } from '../../src/modules/channel/conversation.service';
 import { HumanAttendance, humanFlagKey } from '../../src/modules/channel/human-attendance';
 import { InboundConsumer } from '../../src/modules/channel/inbound.consumer';
+import type { HumanHandoff } from '../../src/modules/channel/human-handoff';
+import { PendingHandoffs } from '../../src/modules/channel/pending-handoff';
 import { InboundGate } from '../../src/modules/channel/inbound-gate';
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
@@ -332,8 +334,27 @@ describe('gate das mensagens do chatbot', () => {
         return 'transferred';
       },
     } as unknown as DeliveryFailureHandler;
+    const handedOff: Array<{ dialogId: string; userId?: number }> = [];
+    const handoff = {
+      start: async (input: { dialogId: string; userId?: number }) => {
+        handedOff.push({ dialogId: input.dialogId, userId: input.userId });
+        return 'started';
+      },
+    } as unknown as HumanHandoff;
     const consumerWith = (g: InboundGate, c: ConversationService = conversation) =>
-      new InboundConsumer({} as AmqpConnection, g, retry, c, replies, noCredit, failures, db, env);
+      new InboundConsumer(
+        {} as AmqpConnection,
+        g,
+        retry,
+        c,
+        replies,
+        noCredit,
+        failures,
+        new PendingHandoffs(redis),
+        handoff,
+        db,
+        env,
+      );
 
     const logOf = async (message: InboundMessage) =>
       db
@@ -381,6 +402,18 @@ describe('gate das mensagens do chatbot', () => {
       expect(asked.map((m) => m.messageId)).toEqual([ok.message.messageId]);
       expect(published.map((m) => m.messageId)).toEqual([ok.message.messageId]);
       expect(blocked.map((m) => m.messageId)).toEqual([broke.message.messageId]);
+    });
+
+    it('transferência pedida por intenção sai depois da resposta, uma vez', async () => {
+      const { message } = await scenario();
+      await new PendingHandoffs(redis).schedule(message.tenantId, message.dialogId, {
+        agentId: message.agentId,
+        userId: 7,
+      });
+      await consumerWith(gate).process(message, 0);
+      expect(published.map((m) => m.messageId)).toEqual([message.messageId]);
+      expect(handedOff).toEqual([{ dialogId: message.dialogId, userId: 7 }]);
+      expect(await new PendingHandoffs(redis).peek(message.tenantId, message.dialogId)).toBeNull();
     });
 
     it('falha no gate vai para a retentativa com a tentativa atual', async () => {

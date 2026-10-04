@@ -12,6 +12,7 @@ import {
   tenant,
 } from '../../shared/database/schema/index';
 import { REDIS } from '../../shared/redis/redis.module';
+import { PendingHandoffs } from '../channel';
 import { ActionError, type ExecutableAction, TriggerActionExecutor } from '../triggers';
 
 /** Repetição da mesma chamada (GPTMaker refazendo após demora) devolve o resultado guardado. */
@@ -26,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   TIMELINE_COMMENT: 'comentário registrado no CRM',
   CREATE_TASK: 'tarefa criada',
   START_BIZPROC: 'processo iniciado',
+  TRANSFER_TO_HUMAN: 'transferência para um atendente agendada',
 };
 
 export interface IntentionReply {
@@ -60,11 +62,14 @@ export function dialogFromChat(chat: string, tenantId: string): string | null {
 export function summarize(results: IntentionReply['results']): string {
   const done = results.filter((r) => r.ok).map((r) => ACTION_LABELS[r.type] ?? r.type);
   const failed = results.filter((r) => !r.ok).length;
-  if (!failed) return `Feito: ${done.join('; ')}.`;
+  const transfer = results.some((r) => r.type === 'TRANSFER_TO_HUMAN' && r.ok)
+    ? ' Avise o cliente que ele será atendido por uma pessoa da equipe em seguida.'
+    : '';
+  if (!failed) return `Feito: ${done.join('; ')}.${transfer}`;
   if (!done.length) {
     return 'Não foi possível registrar no CRM agora. Peça desculpas ao cliente e diga que a equipe vai dar continuidade.';
   }
-  return `Feito em parte: ${done.join('; ')}. ${failed} ação(ões) não foram concluídas; a equipe vai verificar.`;
+  return `Feito em parte: ${done.join('; ')}. ${failed} ação(ões) não foram concluídas; a equipe vai verificar.${transfer}`;
 }
 
 /**
@@ -79,6 +84,7 @@ export class IntentionRunner {
 
   constructor(
     private readonly executor: TriggerActionExecutor,
+    private readonly handoffs: PendingHandoffs,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
@@ -174,6 +180,17 @@ export class IntentionRunner {
     const results: IntentionReply['results'] = [];
     for (const [index, action] of intention.actions.entries()) {
       try {
+        if (action.type === 'TRANSFER_TO_HUMAN') {
+          // Agendada: o canal transfere depois de entregar a resposta que o agente está montando.
+          if (!dialogId) throw new Error('conversa do Bitrix não identificada na chamada');
+          const userId = (action.config as { userId?: number }).userId;
+          await this.handoffs.schedule(intention.tenantId, dialogId, {
+            agentId: intention.agentId,
+            ...(userId ? { userId } : {}),
+          });
+          results.push({ type: action.type, ok: true, result: { scheduled: true } });
+          continue;
+        }
         const result = await this.executor.execute(
           { ...(action as ExecutableAction), id: `${intention.id}:${index}`, secret: null },
           {

@@ -17,6 +17,7 @@ import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
 import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
+import { PendingHandoffs } from './pending-handoff';
 import { ReplyPublisher } from './reply-publisher';
 import { TransferConsumer } from './transfer.consumer';
 
@@ -37,9 +38,10 @@ import { TransferConsumer } from './transfer.consumer';
     InboundConsumer,
     InboundRetry,
     NoCreditHandler,
+    PendingHandoffs,
     ReplyPublisher,
     TransferConsumer,
   ],
-  exports: [ChatbotService, InboundRetry],
+  exports: [ChatbotService, InboundRetry, PendingHandoffs],
 })
 export class ChannelModule {}

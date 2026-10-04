@@ -118,9 +118,39 @@ export const triggerActionInputSchema = z.discriminatedUnion('type', [
 ]);
 
 const intention = actionSchemas(true);
+
 /**
- * Ações de uma intenção "Ação no Bitrix24": as dos gatilhos, com os campos coletados pelo agente;
- * sem webhook de saída (a intenção genérica já chama APIs externas).
+ * Transferir a conversa para um atendente (só em intenções): depois que a resposta do agente é
+ * entregue, o diálogo vai para o operador livre da Linha Aberta ou para um usuário escolhido.
+ */
+const transferToHuman = z.object({
+  id: z.uuid().optional(),
+  type: z.literal('TRANSFER_TO_HUMAN'),
+  config: z
+    .object({
+      target: z.enum(['OPERATOR', 'USER']),
+      /** Usuário do Bitrix que recebe a conversa (`target = USER`). */
+      userId: z.number().int().positive().optional(),
+    })
+    .refine((config) => config.target !== 'USER' || config.userId !== undefined, {
+      message: 'escolha o usuário que recebe a conversa',
+      path: ['userId'],
+    }),
+});
+
+export const intentionActionTypeSchema = z.enum([
+  'CREATE_LEAD',
+  'UPSERT_DEAL',
+  'TIMELINE_COMMENT',
+  'CREATE_TASK',
+  'START_BIZPROC',
+  'TRANSFER_TO_HUMAN',
+]);
+export type IntentionActionType = z.infer<typeof intentionActionTypeSchema>;
+
+/**
+ * Ações de uma intenção "Ação no Bitrix24": as dos gatilhos, com os campos coletados pelo agente,
+ * mais a transferência para atendente; sem webhook de saída (a intenção genérica já chama APIs).
  */
 export const intentionActionInputSchema = z.discriminatedUnion('type', [
   intention[0],
@@ -128,6 +158,7 @@ export const intentionActionInputSchema = z.discriminatedUnion('type', [
   intention[2],
   intention[3],
   intention[4],
+  transferToHuman,
 ]);
 export type IntentionActionInput = z.input<typeof intentionActionInputSchema>;
 

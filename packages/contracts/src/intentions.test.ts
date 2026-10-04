@@ -105,6 +105,19 @@ describe('intenções: validação', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('transferência para atendente: operador livre ou usuário escolhido', () => {
+    const bitrix = { ...base, kind: 'BITRIX' as const, url: '' };
+    expect(
+      messages({
+        ...bitrix,
+        actions: [{ type: 'TRANSFER_TO_HUMAN', config: { target: 'OPERATOR' } }],
+      }),
+    ).toEqual([]);
+    expect(
+      messages({ ...bitrix, actions: [{ type: 'TRANSFER_TO_HUMAN', config: { target: 'USER' } }] }),
+    ).toEqual(['actions.0.config.userId: escolha o usuário que recebe a conversa']);
+  });
+
   it('gatilho continua recusando {{fields.x}}', async () => {
     const { createTriggerSchema } = await import('./triggers');
     const result = createTriggerSchema.safeParse({

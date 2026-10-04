@@ -9,8 +9,6 @@ import {
   type TemplateContext,
   templateErrors,
   TRIGGER_MAX_ACTIONS,
-  type TriggerActionInput,
-  type TriggerActionType,
   triggerActionTypeSchema,
   type TriggerView,
   type TriggerWriteResult,
@@ -28,11 +26,18 @@ import {
   useDealPipelines,
   useDealStages,
 } from '@/lib/crm-fields';
-import { ACTION_TYPES, AGENT_EVENTS, newAction, SAMPLE_CONTEXT } from '@/lib/triggers';
+import {
+  ACTION_TYPES,
+  AGENT_EVENTS,
+  type AnyActionInput,
+  type AnyActionType,
+  newAction,
+  SAMPLE_CONTEXT,
+} from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
 
-type Action = TriggerActionInput;
+type Action = AnyActionInput;
 type FieldMap = Record<string, string>;
 
 /**
@@ -374,15 +379,17 @@ function ResponsiblePicker({
   value,
   onChange,
   disabled,
+  label = 'Responsável',
 }: {
   value: number;
   onChange: (id: number) => void;
   disabled?: boolean;
+  label?: string;
 }) {
   const [name, setName] = useState<string | null>(null);
   const canPick = insideBitrix();
   return (
-    <Field label="Responsável" hint={canPick ? undefined : 'Informe o id do usuário no Bitrix24.'}>
+    <Field label={label} hint={canPick ? undefined : 'Informe o id do usuário no Bitrix24.'}>
       <div className="mt-1.5 flex items-center gap-2">
         {canPick ? (
           <>
@@ -577,6 +584,50 @@ function ActionConfig({
           </div>
         </div>
       );
+    case 'TRANSFER_TO_HUMAN':
+      return (
+        <div className="space-y-3">
+          <div className="space-y-2 text-sm text-zinc-700">
+            {(
+              [
+                [
+                  'OPERATOR',
+                  'Operador livre da Linha Aberta',
+                  'Segue a fila configurada na linha.',
+                ],
+                ['USER', 'Um usuário específico', 'Ex.: o vendedor responsável por esse assunto.'],
+              ] as const
+            ).map(([target, title, hint]) => (
+              <label key={target} className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  className="mt-1"
+                  checked={action.config.target === target}
+                  disabled={disabled}
+                  onChange={() =>
+                    onChange({
+                      ...action,
+                      config: target === 'USER' ? { target, userId: 0 } : { target },
+                    })
+                  }
+                />
+                <span>
+                  {title}
+                  <span className="block text-xs text-zinc-500">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {action.config.target === 'USER' && (
+            <ResponsiblePicker
+              label="Atendente"
+              value={action.config.userId ?? 0}
+              disabled={disabled}
+              onChange={(userId) => onChange({ ...action, config: { target: 'USER', userId } })}
+            />
+          )}
+        </div>
+      );
     case 'OUTBOUND_WEBHOOK':
       return (
         <Field
@@ -753,7 +804,7 @@ export function ActionsEditor<A extends Action>({
   actions: A[];
   onChange: (actions: A[]) => void;
   disabled?: boolean;
-  types: readonly TriggerActionType[];
+  types: readonly AnyActionType[];
 }) {
   const update = (index: number, action: A) =>
     onChange(actions.map((current, i) => (i === index ? action : current)));
@@ -821,7 +872,7 @@ export function ActionsEditor<A extends Action>({
           disabled={disabled}
           onChange={(e) => {
             if (!e.target.value) return;
-            onChange([...actions, newAction(e.target.value as TriggerActionType) as A]);
+            onChange([...actions, newAction(e.target.value as AnyActionType) as A]);
           }}
           aria-label="Adicionar ação"
         >
