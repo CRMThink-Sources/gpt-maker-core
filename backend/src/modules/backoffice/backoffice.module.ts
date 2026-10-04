@@ -3,6 +3,7 @@ import { AgentsModule } from '../agents';
 import { BillingModule } from '../billing';
 import { GptMakerModule } from '../gptmaker';
 import { ModelsModule } from '../models';
+import { PaymentsModule } from '../payments';
 import { ReconciliationModule } from '../reconciliation';
 import { TenancyModule } from '../tenancy';
 import { AdminAuthController } from './admin-auth.controller';
@@ -21,6 +22,7 @@ import { PlanRightsService } from './plan-rights.service';
 import { PartnerReportService } from './partner-report.service';
 import { ReconciliationAdminController } from './reconciliation-admin.controller';
 import { ReconciliationAdminService } from './reconciliation-admin.service';
+import { SubscriptionAdminService } from './subscription-admin.service';
 import { TenantsAdminController } from './tenants-admin.controller';
 import { TenantsAdminService } from './tenants-admin.service';
 import { WorkspaceAdminController } from './workspace-admin.controller';
@@ -32,6 +34,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     BillingModule,
     GptMakerModule,
     ModelsModule,
+    PaymentsModule,
     ReconciliationModule,
     TenancyModule,
   ],
@@ -58,6 +61,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     WorkspaceAdminService,
     ReconciliationAdminService,
     PartnerReportService,
+    SubscriptionAdminService,
   ],
   exports: [AdminAuthService, AdminAuthGuard, AuditService, OperatorService],
 })

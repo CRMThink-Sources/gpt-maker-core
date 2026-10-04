@@ -38,6 +38,7 @@ const ACTIONS: Record<string, string> = {
   'workspace.sync_requested': 'Sincronizou o workspace',
   'reconciliation.approved': 'Aprovou ajuste da reconciliação',
   'reconciliation.dismissed': 'Descartou ajuste da reconciliação',
+  'subscription.checked': 'Conferiu assinatura com a plataforma',
 };
 
 const GROUPS = [
@@ -48,6 +49,7 @@ const GROUPS = [
   { value: 'model.', label: 'Modelos' },
   { value: 'workspace.', label: 'Workspace' },
   { value: 'reconciliation.', label: 'Reconciliação' },
+  { value: 'subscription.', label: 'Assinaturas' },
   { value: 'POST ', label: 'Outras escritas (rota)' },
 ];
 

@@ -419,3 +419,48 @@ export interface AdminAuditPage {
   items: AdminAuditEntry[];
   nextCursor: string | null;
 }
+
+// ---- Assinatura do portal (15.5)
+
+export interface AdminPlatformEvent {
+  eventId: string;
+  type: string;
+  /** Quando aconteceu na plataforma (`occurredAt`). */
+  occurredAt: string | null;
+  receivedAt: string;
+  status: 'RECEIVED' | 'PROCESSED' | 'OBSOLETE' | 'FAILED';
+  attempts: number;
+  error: string | null;
+  /** Gerado pelo job de consistência (evento que faltou), não recebido da plataforma. */
+  correction: boolean;
+  payload: unknown;
+}
+
+export interface AdminSubscriptionView {
+  /** Projeção local (`subscription_state`); `null` sem trial nem plano. */
+  projection: {
+    subscriptionId: string;
+    status: SubscriptionStatusView;
+    modality: 'stripe' | 'manual';
+    plan: { id: string; name: string | null } | null;
+    nextPlan: { id: string; name: string | null } | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    graceUntil: string | null;
+    cancelAt: string | null;
+    version: number;
+    updatedAt: string;
+  } | null;
+  /** Itens no portal CRMThink (SPA de Assinaturas e de Instalações). */
+  links: { subscription: string | null; installation: string };
+  /** Mais novos primeiro. */
+  events: AdminPlatformEvent[];
+  /** Planos da plataforma indisponíveis: nomes dos planos ausentes. */
+  platformError: boolean;
+}
+
+export interface AdminSubscriptionCheckView {
+  /** `ok`: projeção igual à plataforma; `corrected`: evento que faltou aplicado; `alert`: divergência que exige ação manual. */
+  outcome: 'ok' | 'corrected' | 'alert';
+  view: AdminSubscriptionView;
+}

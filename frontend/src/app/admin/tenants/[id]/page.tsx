@@ -13,7 +13,8 @@ import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@
 import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../../admin-provider';
-import { credits, dateTime, SubscriptionBadge, TenantStatusBadge } from '../shared';
+import { credits, dateTime, TenantStatusBadge } from '../shared';
+import { SubscriptionSection } from './subscription';
 
 const ENTRY_LABELS: Record<string, string> = {
   GRANT: 'Crédito do ciclo',
@@ -182,7 +183,6 @@ export default function AdminTenantPage() {
 
   if (error) return <Alert tone="error">{error}</Alert>;
   if (!tenant) return <Loading />;
-  const sub = tenant.subscriptionDetail;
 
   return (
     <>
@@ -263,37 +263,12 @@ export default function AdminTenantPage() {
           </dl>
         </Card>
 
-        <Card className="p-5 lg:col-span-2">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-zinc-900">Assinatura</h2>
-            <SubscriptionBadge subscription={tenant.subscription} />
-          </div>
-          {sub && tenant.subscription ? (
-            <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Fact label="Id na plataforma" value={sub.subscriptionId} />
-              <Fact
-                label="Cobrança"
-                value={
-                  tenant.subscription.modality === 'stripe' ? 'Cartão (Stripe)' : 'Manual (SPA)'
-                }
-              />
-              <Fact
-                label="Período"
-                value={`${dateTime(sub.periodStart)} → ${dateTime(sub.periodEnd)}`}
-              />
-              {sub.graceUntil && <Fact label="Carência até" value={dateTime(sub.graceUntil)} />}
-              {sub.cancelAt && <Fact label="Encerra em" value={dateTime(sub.cancelAt)} />}
-              {sub.nextPlanId && (
-                <Fact label="Plano a partir da renovação" value={sub.nextPlanId} />
-              )}
-            </dl>
-          ) : (
-            <p className="mt-3 text-sm text-zinc-500">O portal ainda não tem assinatura.</p>
-          )}
-          <p className="mt-4 text-xs text-zinc-400">
-            Troca de plano: pela plataforma (cartão) ou no SPA de Assinaturas (manual).
-          </p>
-        </Card>
+        <SubscriptionSection
+          tenantId={tenant.id}
+          isAdmin={isAdmin}
+          onChanged={() => void load().then(setTenant)}
+          className="lg:col-span-2"
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

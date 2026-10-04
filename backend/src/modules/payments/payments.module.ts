@@ -36,6 +36,6 @@ import { TrialService } from './trial.service';
     SubscriptionConsistencyService,
     GraceExpiryJob,
   ],
-  exports: [PaymentsOutbox],
+  exports: [PaymentsOutbox, SubscriptionConsistencyService],
 })
 export class PaymentsModule {}

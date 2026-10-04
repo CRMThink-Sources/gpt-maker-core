@@ -105,6 +105,10 @@ export const envSchema = z.object({
   /** `iss` esperado no JWT da sessão; padrão da plataforma é a própria `PLATFORM_URL`. */
   PLATFORM_JWT_ISSUER: z.url().optional(),
   PLATFORM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  /** Portal CRMThink e SPAs de Assinaturas e Instalações: links do backoffice para os itens. */
+  CRMTHINK_PORTAL_URL: z.url().default('https://crmthink.bitrix24.com.br'),
+  CRMTHINK_SPA_SUBSCRIPTIONS: z.coerce.number().int().positive().default(1142),
+  CRMTHINK_SPA_INSTALLATIONS: z.coerce.number().int().positive().default(1060),
 
   // Armazenamento de documentos de treinamento: DigitalOcean Spaces (SeaweedFS em dev), design D14
   /** Endpoint S3 usado pela API (ex.: `https://nyc3.digitaloceanspaces.com`, `http://storage:8333`). */

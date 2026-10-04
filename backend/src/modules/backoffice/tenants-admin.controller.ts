@@ -10,6 +10,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  type AdminSubscriptionCheckView,
+  type AdminSubscriptionView,
   type AdminTenantDetail,
   type AdminTenantRow,
   grantCreditsSchema,
@@ -18,6 +20,7 @@ import {
 import { createZodDto } from 'nestjs-zod';
 import { AdminAuth, CurrentOperator } from './admin-auth.guard';
 import type { Operator } from './operator.service';
+import { SubscriptionAdminService } from './subscription-admin.service';
 import { TenantsAdminService } from './tenants-admin.service';
 
 class SuspendDto extends createZodDto(suspendTenantSchema) {}
@@ -26,7 +29,10 @@ class GrantCreditsDto extends createZodDto(grantCreditsSchema) {}
 /** Tenants no backoffice: consulta para todos; suspender, reativar e conceder créditos só ADMIN. */
 @Controller('admin/tenants')
 export class TenantsAdminController {
-  constructor(private readonly tenants: TenantsAdminService) {}
+  constructor(
+    private readonly tenants: TenantsAdminService,
+    private readonly subscriptions: SubscriptionAdminService,
+  ) {}
 
   @Get()
   @AdminAuth()
@@ -38,6 +44,23 @@ export class TenantsAdminController {
   @AdminAuth()
   detail(@Param('id', ParseUUIDPipe) id: string): Promise<AdminTenantDetail> {
     return this.tenants.detail(id);
+  }
+
+  /** Assinatura: projeção, eventos da plataforma e links para os SPAs (15.5). */
+  @Get(':id/subscription')
+  @AdminAuth()
+  subscription(@Param('id', ParseUUIDPipe) id: string): Promise<AdminSubscriptionView> {
+    return this.subscriptions.view(id);
+  }
+
+  @Post(':id/subscription/check')
+  @AdminAuth('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  checkSubscription(
+    @CurrentOperator() actor: Operator,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminSubscriptionCheckView> {
+    return this.subscriptions.check(id, actor.id);
   }
 
   @Post(':id/suspend')
