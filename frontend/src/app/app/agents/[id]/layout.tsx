@@ -51,6 +51,11 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
       active: pathname.startsWith(`${base}/trainings`),
     },
     {
+      href: `${base}/intentions`,
+      label: 'Intenções',
+      active: pathname.startsWith(`${base}/intentions`),
+    },
+    {
       href: `${base}/triggers`,
       label: 'Gatilhos',
       active: pathname.startsWith(`${base}/triggers`),

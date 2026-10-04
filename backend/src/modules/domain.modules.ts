@@ -4,6 +4,7 @@ import { GptMakerModule } from './gptmaker';
 import { ModelsModule } from './models';
 import { AgentsModule } from './agents';
 import { TrainingModule } from './training';
+import { IntentionsModule } from './intentions';
 import { ChannelModule } from './channel';
 import { TriggersModule } from './triggers';
 import { NotificationsModule } from './notifications';
@@ -20,6 +21,7 @@ export const DOMAIN_MODULES = [
   ModelsModule,
   AgentsModule,
   TrainingModule,
+  IntentionsModule,
   ChannelModule,
   TriggersModule,
   NotificationsModule,

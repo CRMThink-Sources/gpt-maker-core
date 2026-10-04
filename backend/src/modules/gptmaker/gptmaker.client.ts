@@ -17,6 +17,9 @@ import {
   GptMakerConversationResponse,
   GptMakerCreateTraining,
   GptMakerCreditsSpent,
+  GptMakerIntention,
+  GptMakerWriteIntention,
+  intentionListSchema,
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
@@ -29,6 +32,7 @@ import {
   successSchema,
   trainingSchema,
   updateAgentSettingsSchema,
+  writeIntentionSchema,
   updateTextTrainingSchema,
   webhooksSchema,
   workspaceCreditsSchema,
@@ -232,6 +236,39 @@ export class GptMakerClient {
 
   async deleteTraining(trainingId: string): Promise<void> {
     await this.success('training.delete', 'DELETE', `/training/${enc(trainingId)}`);
+  }
+
+  // ---- Intenções
+
+  listIntentions(agentId: string, page: PageQuery = {}): Promise<GptMakerIntention[]> {
+    return this.request({
+      operation: 'intention.list',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/intentions`,
+      query: { page: page.page, pageSize: page.pageSize, query: page.query },
+      response: intentionListSchema,
+    });
+  }
+
+  /** Responde só `{ success }`: o id vem da listagem. */
+  async createIntention(agentId: string, input: GptMakerWriteIntention): Promise<void> {
+    await this.success(
+      'intention.create',
+      'POST',
+      `/agent/${enc(agentId)}/intentions`,
+      writeIntentionSchema.parse(input),
+    );
+  }
+
+  async updateIntention(intentionId: string, input: GptMakerWriteIntention): Promise<void> {
+    await this.success('intention.update', 'PUT', `/intention/${enc(intentionId)}`, {
+      id: intentionId,
+      ...writeIntentionSchema.parse(input),
+    });
+  }
+
+  async deleteIntention(intentionId: string): Promise<void> {
+    await this.success('intention.delete', 'DELETE', `/intention/${enc(intentionId)}`);
   }
 
   // ---- Webhooks

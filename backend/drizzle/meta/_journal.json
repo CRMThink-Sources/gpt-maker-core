@@ -57,6 +57,13 @@
       "when": 1791080402666,
       "tag": "0007_reconciliation_review",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791087603810,
+      "tag": "0008_agent_intentions",
+      "breakpoints": true
     }
   ]
 }

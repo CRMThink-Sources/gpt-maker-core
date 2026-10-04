@@ -133,6 +133,64 @@ export const training = pgTable(
   ],
 );
 
+export const intentionHttpMethod = pgEnum('intention_http_method', ['GET', 'POST']);
+export const intentionResponseMode = pgEnum('intention_response_mode', ['API', 'INSTRUCTIONS']);
+
+/** Campo que o agente coleta na conversa (`jsonName` é como é citado: `{{jsonName}}`). */
+export interface IntentionField {
+  name: string;
+  jsonName: string;
+  description: string;
+  type: 'STRING' | 'NUMBER' | 'BOOLEAN' | 'DATE' | 'DATE_TIME' | 'URL';
+  required: boolean;
+}
+
+/**
+ * Intenção do agente (spec agent-intentions, design D21): fonte da verdade da tela, espelhada no
+ * GPTMaker. Valores de cabeçalho cifrados (`FieldCipher`): costumam ser chaves de API do cliente.
+ */
+export const agentIntention = pgTable(
+  'agent_intention',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agent.id),
+    /** `null` até a listagem do GPTMaker devolver o id (a criação não devolve). */
+    gptmakerIntentionId: text('gptmaker_intention_id'),
+    name: text('name').notNull(),
+    whenToUse: text('when_to_use').notNull(),
+    fields: jsonb('fields').$type<IntentionField[]>().notNull().default([]),
+    httpMethod: intentionHttpMethod('http_method').notNull(),
+    url: text('url').notNull(),
+    headers: jsonb('headers')
+      .$type<Array<{ name: string; valueEncrypted: string | null }>>()
+      .notNull()
+      .default([]),
+    params: jsonb('params').$type<Array<{ name: string; value: string }>>().notNull().default([]),
+    body: text('body'),
+    autoGenerateParams: boolean('auto_generate_params').notNull().default(false),
+    autoGenerateBody: boolean('auto_generate_body').notNull().default(false),
+    responseMode: intentionResponseMode('response_mode').notNull().default('API'),
+    instructions: text('instructions'),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamptz('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('agent_intention_gptmaker_id_uq').on(t.gptmakerIntentionId),
+    // O nome identifica a intenção para o agente e para achar o id no GPTMaker.
+    uniqueIndex('agent_intention_agent_name_uq')
+      .on(t.agentId, sql`lower(${t.name})`)
+      .where(sql`${t.deletedAt} is null`),
+    index('agent_intention_tenant_idx').on(t.tenantId),
+  ],
+);
+
 /** Estado do diálogo da Linha Aberta: atendimento humano em curso e vínculo com o chat do GPTMaker. */
 export const dialogState = pgTable(
   'dialog_state',

@@ -556,6 +556,31 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 
 ---
 
+## 10. Intenções do agente
+
+- Fonte: https://developer.gptmaker.ai/api-reference/intentions (OpenAPI) e leitura de uma intenção criada no painel em 2026-10-04.
+- **`GET /v2/agent/{agentId}/intentions`** (`page`, `pageSize`, `query` pela descrição). Resposta real no envelope **`{ data: Intention[], count }`** (o OpenAPI diz array).
+- **`POST /v2/agent/{agentId}/intentions`**: cria; resposta `{ success }`, **sem id** (o id vem da listagem).
+- **`PUT /v2/intention/{intentionId}`**: atualiza com o objeto inteiro; resposta `{ success }`.
+- **`DELETE /v2/intention/{intentionId}`**: remove; resposta `{ success }`.
+
+Campos observados (painel atual ⇒ API):
+
+| Painel                                      | Campo                                       | Observação                                                                                                      |
+| ------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Nome da intenção                            | `description`                               | Nome curto (a página de listagem do OpenAPI chama de "descrição")                                               |
+| Quando usar                                 | `details`                                   | O que o agente lê para decidir usar a intenção                                                                  |
+| Resposta baseada em "instrução customizada" | `manualOutput: true` + `instructions`       | `false`: resposta baseada no retorno da API (padrão). Os dois campos não estão no schema `Intention` do OpenAPI |
+| Informações a coletar                       | `fields[]`                                  | `name`, `jsonName`, `description`, `type`, `required` (pode vir `null`), `example`, `sequence`, `isHidden`      |
+| Ação: Chamar Webhook                        | `type: WEBHOOK`, `httpMethod`, `url`        | Campo citado como **`{{jsonName}}`** (chaves duplas) na URL, nos parâmetros e no corpo                          |
+| Headers / Params / Body                     | `headers[]`, `params[]`, `requestBody`      | Valores voltam em texto aberto na listagem; `requestBody` é uma string JSON                                     |
+| Gerar automaticamente (Params / Body)       | `autoGenerateParams`, `autoGenerateBody`    |                                                                                                                 |
+| —                                           | `variables[]`                               | Grava o valor (`{{campo}}`) em campo do contato do GPTMaker (`defaultFieldKey` ou `customField`)                |
+| —                                           | `active`                                    | Liga/desliga a intenção                                                                                         |
+| (não existe mais no painel)                 | `preprocessingMessage`, `preprocessingText` | Veio `DISABLED`/`null`; a mensagem de espera da documentação antiga                                             |
+
+---
+
 ## Apêndice A — Schemas auxiliares (OpenAPI)
 
 `Chat`: `id`, `humanTalk` (bool), `userPicture`, `messageUserName`, `read` (bool), `role`, `agentName`, `agentId`, `whatsappPhone`, `finished` (bool), `avatar`, `title`, `type`, `userName`, `userId`, `picture`, `conversationType`, `createdAt` (integer), `name`, `recipient`, `time` (integer), `unReadCount` (integer), `conversation`.

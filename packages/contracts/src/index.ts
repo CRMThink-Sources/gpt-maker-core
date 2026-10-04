@@ -3,6 +3,7 @@ export * from './agents';
 export * from './credits';
 export * from './errors';
 export * from './health';
+export * from './intentions';
 export * from './models';
 export * from './notifications';
 export * from './plans';

@@ -175,11 +175,11 @@
 
 ## 17. Intenções do agente (agent-intentions)
 
-- [ ] 17.1 Confirmar na API real o formato das intenções: campo da mensagem de pré-processamento, `details` x `instructions`, id na criação, `{campo}` na URL/corpo (~2h)
-- [ ] 17.2 Cliente GPTMaker: listar, criar, atualizar e remover intenções (envelope `{ data, count }`) e testes de contrato (~3h)
-- [ ] 17.3 Tabela `agent_intention` (cabeçalhos cifrados) e serviço: criar com id pela listagem, editar, remover, validação de `{campo}` e descrição única, remoção junto com o agente (~8h)
-- [ ] 17.4 Endpoints `/app/agents/:id/intentions` (administrador do app) e contratos (~3h)
-- [ ] 17.5 Tela Intenções do agente: lista, formulário com campos a coletar, método/URL, cabeçalhos, parâmetros e corpo, inserção de `{campo}` (~10h)
+- [x] 17.1 Confirmar na API real o formato das intenções: campo da mensagem de pré-processamento, `details` x `instructions`, id na criação, `{campo}` na URL/corpo (~2h) — feito em 04/10 lendo uma intenção criada no painel: `description` = nome, `details` = quando usar, `manualOutput` + `instructions` = resposta por instrução customizada, campo citado como `{{jsonName}}`, lista em `{ data, count }`, mensagem de pré-processamento fora do painel atual (enviada `DISABLED`); registrado em `docs/gptmaker-api.md` §10
+- [x] 17.2 Cliente GPTMaker: listar, criar, atualizar e remover intenções (envelope `{ data, count }`) e testes de contrato (~3h) — `listIntentions`, `createIntention`, `updateIntention`, `deleteIntention` (schemas tolerantes aos campos não documentados)
+- [x] 17.3 Tabela `agent_intention` (cabeçalhos cifrados) e serviço: criar com id pela listagem, editar, remover, validação de `{campo}` e descrição única, remoção junto com o agente (~8h) — migração 0008; `IntentionService` (módulo `intentions`): cria no GPTMaker e localiza o id pela listagem (nome único por agente, sem diferenciar maiúsculas), pendente sem id é resolvido na próxima leitura; cabeçalhos cifrados e mantidos quando o valor não é reenviado; remoção junto com o agente pelo `AgentEvents`
+- [x] 17.4 Endpoints `/app/agents/:id/intentions` (administrador do app) e contratos (~3h) — `GET/POST /app/agents/:agentId/intentions`, `PUT/DELETE .../:id` (escrita com permissão `manage`); `intentionInputSchema` valida `{{campo}}` na URL, parâmetros, cabeçalhos e corpo, URL http(s) e corpo JSON
+- [x] 17.5 Tela Intenções do agente: lista, formulário com campos a coletar, método/URL, cabeçalhos, parâmetros e corpo, inserção de `{campo}` (~10h) — aba Intenções do agente: lista, ativar/desativar, editor com campos a coletar, método/URL com inserção de `{{campo}}`, parâmetros, cabeçalhos (valor oculto depois de salvo), corpo e geração automática, resposta pela API ou por instrução
 - [ ] 17.6 Testes de integração e teste real com um agente (~4h)
 - [ ] 17.7 Etapa 2: intenções prontas do Bitrix24 executadas pelo app com o token do portal (desenho próprio) (~?)
 

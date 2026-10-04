@@ -200,6 +200,81 @@ export const updateTextTrainingSchema = z.object({
 });
 export type GptMakerUpdateTextTraining = z.infer<typeof updateTextTrainingSchema>;
 
+// ---- Intenções (docs/gptmaker-api.md §10; campos fora do OpenAPI observados na API real)
+
+export const intentionFieldSchema = z
+  .object({
+    name: z.string(),
+    jsonName: z.string(),
+    description: z.string().nullish(),
+    type: z.string(),
+    required: z.boolean().nullish(),
+  })
+  .loose();
+
+const namedValueSchema = z.object({ name: z.string(), value: z.string().nullish() }).loose();
+
+export const intentionSchema = z
+  .object({
+    id: z.string(),
+    /** Nome curto da intenção. */
+    description: z.string().nullish(),
+    /** Quando usar. */
+    details: z.string().nullish(),
+    /** Instrução de resposta (com `manualOutput`). */
+    instructions: z.string().nullish(),
+    manualOutput: z.boolean().nullish(),
+    type: z.string().nullish(),
+    httpMethod: z.string().nullish(),
+    url: z.string().nullish(),
+    requestBody: z.string().nullish(),
+    autoGenerateParams: z.boolean().nullish(),
+    autoGenerateBody: z.boolean().nullish(),
+    fields: z.array(intentionFieldSchema).nullish(),
+    headers: z.array(namedValueSchema).nullish(),
+    params: z.array(namedValueSchema).nullish(),
+    active: z.boolean().nullish(),
+  })
+  .loose();
+export type GptMakerIntention = z.infer<typeof intentionSchema>;
+
+/** Lista no envelope `{ data, count }` (o OpenAPI promete array); aceita os dois. */
+export const intentionListSchema = z.union([
+  intentionSchema.array(),
+  z
+    .object({ data: intentionSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
+/** Corpo de criação e atualização (`type` sempre `WEBHOOK` na etapa 1). */
+export const writeIntentionSchema = z.object({
+  description: z.string().min(1),
+  details: z.string(),
+  instructions: z.string().optional(),
+  manualOutput: z.boolean(),
+  type: z.literal('WEBHOOK'),
+  httpMethod: z.enum(['GET', 'POST']),
+  url: z.string().min(1),
+  fields: z.array(
+    z.object({
+      name: z.string(),
+      jsonName: z.string(),
+      description: z.string(),
+      type: z.enum(['STRING', 'URL', 'DATE_TIME', 'DATE', 'NUMBER', 'BOOLEAN']),
+      required: z.boolean(),
+    }),
+  ),
+  headers: z.array(z.object({ name: z.string(), value: z.string() })),
+  params: z.array(z.object({ name: z.string(), value: z.string() })),
+  requestBody: z.string().optional(),
+  autoGenerateParams: z.boolean(),
+  autoGenerateBody: z.boolean(),
+  preprocessingMessage: z.literal('DISABLED'),
+  active: z.boolean(),
+});
+export type GptMakerWriteIntention = z.infer<typeof writeIntentionSchema>;
+
 // ---- Webhooks
 
 export const WEBHOOK_EVENTS = [
