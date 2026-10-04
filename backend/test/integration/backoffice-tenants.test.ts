@@ -126,26 +126,22 @@ describe('backoffice: tenants', () => {
       type: 'GRANT',
       amount: 5000,
     });
-    await db
-      .insert(subscriptionState)
-      .values({
-        tenantId: busy.id,
-        subscriptionId: '1',
-        status: 'active',
-        modality: 'stripe',
-        planId: '11',
-        version: 1,
-      });
-    await db
-      .insert(messageLog)
-      .values({
-        tenantId: busy.id,
-        agentId: a.id,
-        dialogId: 'chat1',
-        bitrixMessageId: '1',
-        direction: 'IN',
-        status: 'RESPONDED',
-      });
+    await db.insert(subscriptionState).values({
+      tenantId: busy.id,
+      subscriptionId: '1',
+      status: 'active',
+      modality: 'stripe',
+      planId: '11',
+      version: 1,
+    });
+    await db.insert(messageLog).values({
+      tenantId: busy.id,
+      agentId: a.id,
+      dialogId: 'chat1',
+      bitrixMessageId: '1',
+      direction: 'IN',
+      status: 'RESPONDED',
+    });
 
     const all = await service.list();
     const index = (id: string) => all.findIndex((t) => t.id === id);
