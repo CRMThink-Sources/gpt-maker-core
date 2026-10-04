@@ -5,7 +5,6 @@ import { useOperator } from './admin-provider';
 
 const SECTIONS = [
   ['Assinaturas', 'Projeção local, eventos da plataforma e link para o SPA (15.5).'],
-  ['Workspace GPTMaker', 'Saúde, créditos, agentes órfãos e fora de sincronia (15.6).'],
   [
     'Reconciliação',
     'Consumo real × débitos, ajustes para revisão e relatório do partner (14.x, 15.7).',

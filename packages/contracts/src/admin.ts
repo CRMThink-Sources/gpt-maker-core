@@ -246,3 +246,55 @@ export interface AdminModelCostChange {
   /** Nome do operador (ou o autor registrado). */
   changedBy: string;
 }
+
+// ---- Workspace GPTMaker (15.6)
+
+export interface AdminWorkspaceView {
+  /** Último estado do job `workspace-health` (a cada 15 min); `null` antes da primeira checagem. */
+  status: {
+    state: 'up' | 'down';
+    checkedAt: string;
+    reason: string | null;
+    subscriptionStatus: string | null;
+    credits: number | null;
+  } | null;
+  orphans: Array<{
+    findingId: string;
+    gptmakerAgentId: string;
+    name: string | null;
+    detectedAt: string;
+    /** Portal sugerido pelo prefixo `[código]` do nome. */
+    suggestedTenant: { id: string; domain: string; tenantCode: string } | null;
+    /** Órfão de um agente removido no app: só pode ser removido do GPTMaker. */
+    removedLocally: boolean;
+  }>;
+  outOfSync: Array<{
+    agentId: string;
+    name: string;
+    gptmakerAgentId: string;
+    tenant: { id: string; domain: string };
+    detectedAt: string | null;
+  }>;
+  /** Correções e resoluções recentes (status reaplicado, órfãos resolvidos), mais novas primeiro. */
+  recent: Array<{
+    kind: 'ORPHAN' | 'MISSING' | 'STATUS_MISMATCH';
+    gptmakerAgentId: string;
+    resolvedAt: string;
+    resolvedBy: string | null;
+    resolution: string | null;
+  }>;
+}
+
+export const linkOrphanSchema = z.object({ tenantId: z.uuid() });
+
+export interface WorkspaceSyncView {
+  /** `null`: o job já estava rodando. */
+  summary: {
+    remoteAgents: number;
+    localAgents: number;
+    orphansFound: number;
+    missingConfirmed: number;
+    statusCorrected: number;
+    findingsResolved: number;
+  } | null;
+}

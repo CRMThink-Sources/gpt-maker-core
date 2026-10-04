@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  agentTypeSchema,
   type AgentView,
   type AvailableModel,
+  communicationTypeSchema,
   createAgentSchema,
   type CreateAgentInput,
   updateAgentSchema,
@@ -23,6 +25,7 @@ import {
   GptMakerError,
   type GptMakerNewAgent,
   type GptMakerWebhooks,
+  fromGptMakerName,
   TenantAgentLimitService,
   toGptMakerName,
   WEBHOOK_EVENTS,
@@ -137,6 +140,107 @@ export class AgentService {
       throw new DomainError(
         'AGENT_CREATION_IN_PROGRESS',
         'Outro agente está sendo criado; aguarde e tente de novo',
+        HttpStatus.CONFLICT,
+      );
+    }
+    await this.events.emit({
+      agentId: outcome.result.id,
+      tenantId: owner.tenantId,
+      kind: 'created',
+    });
+    return outcome.result;
+  }
+
+  /**
+   * Vincula um agente órfão do workspace a um tenant (spec admin-backoffice, "Vincular agente
+   * órfão"; backoffice 15.6): o mesmo que a criação faz, sobre um agente que já existe no
+   * GPTMaker. Renomeia com o prefixo do tenant, aplica um modelo permitido pelo plano (o atual, se
+   * permitido; senão o padrão), aponta os webhooks para esta API com token novo e grava o registro
+   * local (com o espelho na assinatura). O status vem do GPTMaker (`DISABLED` ⇒ inativo `MANUAL`).
+   * Conta no limite de agentes do tenant.
+   */
+  async adopt(owner: AgentOwner, gptmakerAgentId: string): Promise<AgentView> {
+    const outcome = await this.lock.runExclusive(
+      `agent-create:${owner.tenantId}`,
+      CREATE_LOCK_TTL_MS,
+      async () => {
+        await this.limits.assertCanCreate(owner.tenantId);
+        const linked = await this.agents.findByGptMakerId(gptmakerAgentId);
+        if (linked?.status === 'DELETED') {
+          throw new DomainError(
+            'AGENT_REMOVED_LOCALLY',
+            'Este agente foi removido no app e ficou no GPTMaker; remova-o do workspace em vez de vincular',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (linked) {
+          throw new DomainError(
+            'AGENT_ALREADY_LINKED',
+            'Este agente do GPTMaker já pertence a um portal',
+            HttpStatus.CONFLICT,
+          );
+        }
+        const remote = await this.callGptMaker(() => this.gptmaker.getAgent(gptmakerAgentId));
+        const settings = await this.callGptMaker(() =>
+          this.gptmaker.getAgentSettings(gptmakerAgentId),
+        );
+        const catalog = await this.models.list();
+        const current = catalog.find((m) => m.code === settings.prefferModel);
+        const model = await this.resolveModel(owner.tenantId, current?.id).catch(() =>
+          this.resolveModel(owner.tenantId, undefined),
+        );
+        const profile: Profile = {
+          name: fromGptMakerName(remote.name ?? '').trim() || 'Agente',
+          avatarUrl: remote.avatar ?? null,
+          behavior: remote.behavior ?? null,
+          type: agentTypeSchema.safeParse(remote.type).success
+            ? (remote.type as Agent['type'])
+            : 'SUPPORT',
+          communicationType: communicationTypeSchema.safeParse(remote.communicationType).success
+            ? (remote.communicationType as Agent['communicationType'])
+            : 'NORMAL',
+          jobName: remote.jobName ?? null,
+          jobSite: remote.jobSite ?? null,
+          jobDescription: remote.jobDescription ?? null,
+        };
+
+        await this.callGptMaker(() =>
+          this.gptmaker.updateAgent(gptmakerAgentId, remoteProfile(owner, profile)),
+        );
+        if (settings.prefferModel !== model.code) {
+          await this.callGptMaker(() =>
+            this.gptmaker.updateAgentSettings(gptmakerAgentId, { prefferModel: model.code }),
+          );
+        }
+        const webhookToken = randomBytes(32).toString('base64url');
+        await this.callGptMaker(() =>
+          this.gptmaker.updateWebhooks(
+            gptmakerAgentId,
+            webhookUrlsFor(this.env.API_PUBLIC_URL, webhookToken),
+          ),
+        );
+        const inactive = remote.status === 'DISABLED';
+        const row = await this.mirrored(owner.tenantId, (tx) =>
+          this.agents.insert(
+            owner.tenantId,
+            {
+              gptmakerAgentId,
+              ...profile,
+              modelId: model.id,
+              status: inactive ? 'INACTIVE' : 'ACTIVE',
+              inactiveReason: inactive ? 'MANUAL' : null,
+              webhookTokenHash: hashWebhookToken(webhookToken),
+            },
+            tx,
+          ),
+        );
+        return toView(row, model);
+      },
+    );
+    if (!outcome.ran) {
+      throw new DomainError(
+        'AGENT_CREATION_IN_PROGRESS',
+        'Outro agente está sendo criado neste portal; aguarde e tente de novo',
         HttpStatus.CONFLICT,
       );
     }

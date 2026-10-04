@@ -881,4 +881,93 @@ describe('serviço de agentes', () => {
       expect((await stored(other.id)).status).toBe('ACTIVE');
     });
   });
+
+  describe('vincular agente órfão (backoffice)', () => {
+    const ORPHAN = 'gm-orfao-1';
+
+    async function stubOrphan(remote: Record<string, unknown>, prefferModel: string) {
+      await wiremock.stub({
+        request: { method: 'GET', urlPath: `/v2/agent/${ORPHAN}` },
+        response: { status: 200, jsonBody: { id: ORPHAN, ...remote } },
+      });
+      await wiremock.stub({
+        request: { method: 'GET', urlPath: `/v2/agent/${ORPHAN}/settings` },
+        response: { status: 200, jsonBody: { prefferModel } },
+      });
+      await wiremock.stub({
+        request: { method: 'PUT', urlPath: `/v2/agent/${ORPHAN}` },
+        response: { status: 200, jsonBody: { id: ORPHAN, name: 'x' } },
+      });
+      for (const path of ['settings', 'webhooks']) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: `/v2/agent/${ORPHAN}/${path}` },
+          response: { status: 200, jsonBody: { success: true } },
+        });
+      }
+    }
+
+    it('renomeia com o prefixo do portal, troca o modelo não permitido, aponta webhooks e grava inativo', async () => {
+      await stubOrphan(
+        {
+          name: '[outro] Vendedor',
+          status: 'DISABLED',
+          type: 'SALE',
+          communicationType: 'FORMAL',
+          behavior: 'Venda com calma',
+        },
+        'GPT_5',
+      );
+      const view = await service.adopt(owner, ORPHAN);
+      expect(view).toMatchObject({ name: 'Vendedor', type: 'SALE', status: 'INACTIVE' });
+
+      const [renamed] = (await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}`)) as Array<{
+        name: string;
+      }>;
+      expect(renamed!.name).toBe(`[${owner.tenantCode}] Vendedor`);
+      // GPT-5 não está no plano (sem plano): vai para o padrão.
+      expect(await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}/settings`)).toEqual([
+        { prefferModel: 'GPT_5_MINI' },
+      ]);
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}/webhooks`)).toBe(1);
+
+      const [row] = await db.select().from(agent).where(eq(agent.gptmakerAgentId, ORPHAN));
+      expect(row).toMatchObject({
+        tenantId: owner.tenantId,
+        status: 'INACTIVE',
+        inactiveReason: 'MANUAL',
+        modelId: defaultModel.id,
+        communicationType: 'FORMAL',
+      });
+      expect(await mirrorsOf(row!.id)).toHaveLength(1);
+      expect(changes).toContainEqual(
+        expect.objectContaining({ agentId: row!.id, kind: 'created' }),
+      );
+    });
+
+    it('modelo permitido pelo plano é mantido, sem trocar settings', async () => {
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+      await stubOrphan(
+        { name: 'Suporte', status: 'ACTIVE', type: 'SUPPORT', communicationType: 'NORMAL' },
+        'GPT_5',
+      );
+      const view = await service.adopt(owner, ORPHAN);
+      expect(view).toMatchObject({ status: 'ACTIVE', model: { id: premiumModel.id } });
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}/settings`)).toBe(0);
+    });
+
+    it('já vinculado ou removido no app: recusado sem tocar no GPTMaker', async () => {
+      await stubOrphan(
+        { name: 'Suporte', type: 'SUPPORT', communicationType: 'NORMAL' },
+        'GPT_5_MINI',
+      );
+      await service.adopt(owner, ORPHAN);
+      const again = (await errorOf(service.adopt(await newTenant(), ORPHAN))) as { code: string };
+      expect(again.code).toBe('AGENT_ALREADY_LINKED');
+
+      await db.update(agent).set({ status: 'DELETED' }).where(eq(agent.gptmakerAgentId, ORPHAN));
+      const removed = (await errorOf(service.adopt(owner, ORPHAN))) as { code: string };
+      expect(removed.code).toBe('AGENT_REMOVED_LOCALLY');
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}`)).toBe(1);
+    });
+  });
 });

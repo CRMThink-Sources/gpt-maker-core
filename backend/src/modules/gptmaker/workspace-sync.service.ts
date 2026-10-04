@@ -84,6 +84,14 @@ export class WorkspaceSyncService {
     });
   }
 
+  /** Sincronização pedida pelo backoffice, no mesmo lock do job; `null` se ele já está rodando. */
+  async syncNow(): Promise<SyncSummary | null> {
+    const outcome = await this.lock.runExclusive('job:workspace-sync', 30 * 60_000, () =>
+      this.sync(),
+    );
+    return outcome.ran ? outcome.result : null;
+  }
+
   async sync(): Promise<SyncSummary> {
     const remote = await collectAllAgents((page, pageSize) =>
       this.client.listWorkspaceAgents({ page, pageSize }),

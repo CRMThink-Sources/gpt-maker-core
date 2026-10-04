@@ -58,6 +58,15 @@ export class AgentRepository {
     return row;
   }
 
+  /** Agente local (de qualquer tenant, inclusive removido) ligado a um agente do GPTMaker. */
+  async findByGptMakerId(gptmakerAgentId: string): Promise<Agent | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(agent)
+      .where(eq(agent.gptmakerAgentId, gptmakerAgentId));
+    return row;
+  }
+
   /** Como `findById`, mas responde 404 `AGENT_NOT_FOUND` (spec agent-management: isolamento). */
   async getById(tenantId: string, id: string, executor: Executor = this.db): Promise<Agent> {
     const row = await this.findById(tenantId, id, executor);
