@@ -211,3 +211,38 @@ export const grantCreditsSchema = z.object({
   /** Gerado no navegador: o mesmo pedido enviado duas vezes concede uma vez. */
   requestId: z.uuid(),
 });
+
+// ---- Modelos de IA (15.3, 14.3)
+
+export interface AdminModelView {
+  id: string;
+  code: string;
+  displayName: string;
+  description: string | null;
+  creditsPerResponse: number;
+  active: boolean;
+  isDefault: boolean;
+  /** Agentes não removidos usando o modelo. */
+  agentsUsing: number;
+  /** Planos que liberam o modelo. */
+  plansAllowing: number;
+  /**
+   * Reconciliação dos últimos 30 dias: média real (créditos do GPTMaker ÷ respostas), custo
+   * sugerido (média dos últimos 7 dias) e se está defasado (7 dias seguidos fora do custo).
+   */
+  insight: {
+    average: number | null;
+    real: number;
+    responses: number;
+    suggestion: number | null;
+    stale: boolean;
+  };
+}
+
+export interface AdminModelCostChange {
+  changedAt: string;
+  previousCost: number;
+  newCost: number;
+  /** Nome do operador (ou o autor registrado). */
+  changedBy: string;
+}

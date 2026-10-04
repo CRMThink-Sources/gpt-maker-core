@@ -49,6 +49,11 @@ const NAV = [
     match: (path: string) => path.startsWith('/admin/tenants'),
   },
   {
+    href: '/admin/models',
+    label: 'Modelos',
+    match: (path: string) => path.startsWith('/admin/models'),
+  },
+  {
     href: '/admin/plans',
     label: 'Planos',
     match: (path: string) => path.startsWith('/admin/plans'),

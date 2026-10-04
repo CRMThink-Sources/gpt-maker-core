@@ -4,7 +4,6 @@ import { Card, PageHeader } from '@/components/ui';
 import { useOperator } from './admin-provider';
 
 const SECTIONS = [
-  ['Modelos de IA', 'Catálogo, custo por resposta e sugestão da reconciliação (15.3).'],
   ['Assinaturas', 'Projeção local, eventos da plataforma e link para o SPA (15.5).'],
   ['Workspace GPTMaker', 'Saúde, créditos, agentes órfãos e fora de sincronia (15.6).'],
   [
