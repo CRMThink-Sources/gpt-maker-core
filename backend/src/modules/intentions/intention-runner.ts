@@ -161,11 +161,25 @@ export class IntentionRunner {
       });
     }
 
+    // A versão da intenção entra na chave: depois de editar, a mesma chamada roda de novo.
     const dedupeKey = `intention:run:${createHash('sha256')
-      .update(JSON.stringify([intention.id, chat, Object.entries(fields).sort()]))
+      .update(
+        JSON.stringify([
+          intention.id,
+          intention.updatedAt.toISOString(),
+          chat,
+          Object.entries(fields).sort(),
+        ]),
+      )
       .digest('hex')}`;
     const cached = await this.redis.get(dedupeKey);
-    if (cached) return { kind: 'reply', reply: JSON.parse(cached) as IntentionReply };
+    if (cached) {
+      this.logger.log(
+        { intentionId: intention.id, dialogId },
+        'chamada repetida da intenção: devolvido o resultado anterior sem executar',
+      );
+      return { kind: 'reply', reply: JSON.parse(cached) as IntentionReply };
+    }
 
     const template: TemplateContext = {
       contact: { name: text(contact.name) || null, phone: text(contact.phone) || null },

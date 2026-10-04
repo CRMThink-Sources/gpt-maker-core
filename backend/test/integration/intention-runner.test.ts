@@ -162,6 +162,17 @@ describe('intenção com ações no Bitrix24', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('intenção editada: a mesma chamada executa de novo', async () => {
+    await runner.run(intentionId, TOKEN, body());
+    await db
+      .update(agentIntention)
+      .set({ updatedAt: new Date(Date.now() + 1000) })
+      .where(eq(agentIntention.id, intentionId));
+    await runner.run(intentionId, TOKEN, body());
+    expect(calls).toHaveLength(4);
+    expect(await executions()).toHaveLength(2);
+  });
+
   it('ação que falha: resultado parcial e texto para o agente; sem chat, diálogo nulo', async () => {
     failOn = 'TIMELINE_COMMENT';
     const outcome = await runner.run(intentionId, TOKEN, body({ chat: '{{chat_id}}' }));
