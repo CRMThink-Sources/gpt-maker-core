@@ -39,6 +39,7 @@ const ACTIONS: Record<string, string> = {
   'reconciliation.approved': 'Aprovou ajuste da reconciliação',
   'reconciliation.dismissed': 'Descartou ajuste da reconciliação',
   'subscription.checked': 'Conferiu assinatura com a plataforma',
+  'operations.dlq_purged': 'Descartou mensagens da DLQ',
 };
 
 const GROUPS = [
@@ -50,6 +51,7 @@ const GROUPS = [
   { value: 'workspace.', label: 'Workspace' },
   { value: 'reconciliation.', label: 'Reconciliação' },
   { value: 'subscription.', label: 'Assinaturas' },
+  { value: 'operations.', label: 'Filas (DLQ)' },
   { value: 'POST ', label: 'Outras escritas (rota)' },
 ];
 

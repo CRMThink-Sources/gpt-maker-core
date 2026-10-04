@@ -74,6 +74,11 @@ const NAV: Array<{
     match: (path: string) => path.startsWith('/admin/consumption'),
   },
   {
+    href: '/admin/operations',
+    label: 'Erros',
+    match: (path: string) => path.startsWith('/admin/operations'),
+  },
+  {
     href: '/admin/audit',
     label: 'Auditoria',
     match: (path: string) => path.startsWith('/admin/audit'),

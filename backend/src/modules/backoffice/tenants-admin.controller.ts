@@ -13,6 +13,7 @@ import {
   type AdminSubscriptionCheckView,
   type AdminSubscriptionView,
   type AdminTenantDetail,
+  type AdminTenantFailures,
   type AdminTenantRow,
   grantCreditsSchema,
   suspendTenantSchema,
@@ -20,6 +21,7 @@ import {
 import { createZodDto } from 'nestjs-zod';
 import { AdminAuth, CurrentOperator } from './admin-auth.guard';
 import type { Operator } from './operator.service';
+import { FailuresService } from './failures.service';
 import { SubscriptionAdminService } from './subscription-admin.service';
 import { TenantsAdminService } from './tenants-admin.service';
 
@@ -32,6 +34,7 @@ export class TenantsAdminController {
   constructor(
     private readonly tenants: TenantsAdminService,
     private readonly subscriptions: SubscriptionAdminService,
+    private readonly failures: FailuresService,
   ) {}
 
   @Get()
@@ -51,6 +54,13 @@ export class TenantsAdminController {
   @AdminAuth()
   subscription(@Param('id', ParseUUIDPipe) id: string): Promise<AdminSubscriptionView> {
     return this.subscriptions.view(id);
+  }
+
+  /** Falhas definitivas do portal nos últimos 30 dias (15.7). */
+  @Get(':id/failures')
+  @AdminAuth()
+  tenantFailures(@Param('id', ParseUUIDPipe) id: string): Promise<AdminTenantFailures> {
+    return this.failures.ofTenant(id);
   }
 
   @Post(':id/subscription/check')

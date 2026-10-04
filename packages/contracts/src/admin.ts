@@ -464,3 +464,62 @@ export interface AdminSubscriptionCheckView {
   outcome: 'ok' | 'corrected' | 'alert';
   view: AdminSubscriptionView;
 }
+
+// ---- DLQ e erros por portal (15.7)
+
+export type DeadLetterQueueKey = 'inbound' | 'transfer';
+
+export interface AdminDeadLetterQueue {
+  key: DeadLetterQueueKey;
+  name: string;
+  /** `null`: RabbitMQ indisponível. */
+  messages: number | null;
+}
+
+export interface AdminDeadLetterMessage {
+  tenant: { id: string; domain: string } | null;
+  agentId: string | null;
+  dialogId: string | null;
+  /** Id da mensagem do Bitrix (inbound) ou do evento do agente (transferência). */
+  reference: string | null;
+  attempts: number | null;
+  lastError: string | null;
+  /** Quando chegou (inbound) ou `null`. */
+  receivedAt: string | null;
+}
+
+export interface AdminDeadLetterPeek {
+  queue: AdminDeadLetterQueue;
+  /** Primeiras mensagens da fila (só metadados; o texto do cliente não sai daqui). */
+  messages: AdminDeadLetterMessage[];
+}
+
+export type FailureSource =
+  'message' | 'trigger' | 'training' | 'platform_event' | 'platform_outbox' | 'notification';
+
+export interface AdminFailure {
+  source: FailureSource;
+  at: string;
+  /** O que falhou (agente, gatilho, evento...). */
+  subject: string;
+  error: string | null;
+  attempts: number | null;
+}
+
+export interface AdminFailuresRanking {
+  tenant: { id: string; domain: string };
+  total: number;
+  bySource: Partial<Record<FailureSource, number>>;
+  lastAt: string;
+}
+
+export interface AdminOperationsView {
+  queues: AdminDeadLetterQueue[];
+  /** Portais com falhas nos últimos 7 dias, mais falhas primeiro. */
+  ranking: AdminFailuresRanking[];
+}
+
+export interface AdminTenantFailures {
+  /** Últimos 30 dias, mais recentes primeiro. */
+  items: AdminFailure[];
+}

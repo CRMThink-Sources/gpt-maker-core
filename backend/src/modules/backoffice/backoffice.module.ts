@@ -23,6 +23,10 @@ import { PartnerReportService } from './partner-report.service';
 import { ReconciliationAdminController } from './reconciliation-admin.controller';
 import { ReconciliationAdminService } from './reconciliation-admin.service';
 import { SubscriptionAdminService } from './subscription-admin.service';
+import { DeadLetterInspector } from './dead-letter-inspector';
+import { FailuresService } from './failures.service';
+import { OperationsAdminController } from './operations-admin.controller';
+import { OperationsAdminService } from './operations-admin.service';
 import { TenantsAdminController } from './tenants-admin.controller';
 import { TenantsAdminService } from './tenants-admin.service';
 import { WorkspaceAdminController } from './workspace-admin.controller';
@@ -47,6 +51,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     WorkspaceAdminController,
     ReconciliationAdminController,
     AuditController,
+    OperationsAdminController,
   ],
   providers: [
     AdminAuthService,
@@ -62,6 +67,9 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     ReconciliationAdminService,
     PartnerReportService,
     SubscriptionAdminService,
+    DeadLetterInspector,
+    FailuresService,
+    OperationsAdminService,
   ],
   exports: [AdminAuthService, AdminAuthGuard, AuditService, OperatorService],
 })

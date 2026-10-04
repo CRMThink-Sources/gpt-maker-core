@@ -14,6 +14,7 @@ import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../../admin-provider';
 import { credits, dateTime, TenantStatusBadge } from '../shared';
+import { TenantFailures } from './failures';
 import { SubscriptionSection } from './subscription';
 
 const ENTRY_LABELS: Record<string, string> = {
@@ -354,6 +355,8 @@ export default function AdminTenantPage() {
           </ul>
         )}
       </Card>
+
+      <TenantFailures tenantId={tenant.id} />
 
       {action === 'suspend' && (
         <ActionModal
