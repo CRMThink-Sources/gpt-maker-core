@@ -173,6 +173,16 @@
 - [ ] 16.7 Piloto com 1–3 clientes (trial e assinaturas `manual`) e acompanhamento da reconciliação (~16h de esforço, ~2 semanas de calendário)
 - [ ] 16.8 Abertura geral com Stripe live no `crmthink-platform` (~4h)
 
+## 17. Intenções do agente (agent-intentions)
+
+- [ ] 17.1 Confirmar na API real o formato das intenções: campo da mensagem de pré-processamento, `details` x `instructions`, id na criação, `{campo}` na URL/corpo (~2h)
+- [ ] 17.2 Cliente GPTMaker: listar, criar, atualizar e remover intenções (envelope `{ data, count }`) e testes de contrato (~3h)
+- [ ] 17.3 Tabela `agent_intention` (cabeçalhos cifrados) e serviço: criar com id pela listagem, editar, remover, validação de `{campo}` e descrição única, remoção junto com o agente (~8h)
+- [ ] 17.4 Endpoints `/app/agents/:id/intentions` (administrador do app) e contratos (~3h)
+- [ ] 17.5 Tela Intenções do agente: lista, formulário com campos a coletar, método/URL, cabeçalhos, parâmetros e corpo, inserção de `{campo}` (~10h)
+- [ ] 17.6 Testes de integração e teste real com um agente (~4h)
+- [ ] 17.7 Etapa 2: intenções prontas do Bitrix24 executadas pelo app com o token do portal (desenho próprio) (~?)
+
 ## Estimativa
 
 | Seção | Horas |
@@ -193,6 +203,7 @@
 | 14. Reconciliação | 33 |
 | 15. Backoffice | 65 |
 | 16. Observabilidade e go-live | 65 |
+| 17. Intenções (etapa 1) | 30 |
 | **Subtotal** | **736** |
 | Contingência 20% (payload webhooks GPTMaker, ajustes de contrato com o `crmthink-platform`, retrabalho) | 147 |
 | **Total** | **~885** |

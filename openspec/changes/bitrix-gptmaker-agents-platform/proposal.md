@@ -24,6 +24,7 @@ Temos uma conta PARTNER no GPTMaker com criação de agentes e créditos ilimita
 - `ai-model-catalog`: cadastro, edição de custo, desativação e remoção de modelos de IA disponíveis para os agentes, com histórico de custos.
 - `agent-management`: criação, edição de configurações (incluindo modelo), inativação, reativação e remoção de agentes, sincronizados com o GPTMaker, com limite de 5 agentes por tenant.
 - `agent-training`: cadastro, edição, listagem e remoção de treinamentos do agente, refletidos no GPTMaker.
+- `agent-intentions`: intenções do agente (chamadas a APIs externas durante a conversa), cadastradas no app e refletidas no GPTMaker.
 - `bitrix-chatbot-channel`: registro do chatbot no Bitrix, roteamento de mensagens Linhas Abertas ↔ GPTMaker, transferência para humano e tratamento de saldo insuficiente.
 - `agent-triggers`: configuração de gatilhos que ligam eventos de webhook do GPTMaker a ações no Bitrix24.
 - `credit-billing`: planos, saldo, ledger, débito por resposta, alertas de consumo e bloqueio por saldo.

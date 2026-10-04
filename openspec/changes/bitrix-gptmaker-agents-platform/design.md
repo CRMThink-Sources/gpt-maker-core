@@ -164,6 +164,13 @@ Saldo, agente/bot por `botId`, dedupe de eventos (TTL 24h), locks, rate limiting
 ### D20. Observabilidade
 Logs JSON via pino (`traceId`, `tenantId`, `agentId`, `dialogId` propagados com `AsyncLocalStorage`) com rotação; `prom-client` + Prometheus + Grafana (containers no Droplet ou Grafana Cloud free); OpenTelemetry (`@opentelemetry/sdk-node`) API → fila → worker; alertas (e-mail/Bitrix da empresa) para DLQ, workspace `!= ACTIVE`, falha de reconciliação, eventos do `crmthink-platform` falhando/atrasados, projeção divergente, disco.
 
+### D21. Intenções do agente
+Intenções do GPTMaker (`GET|POST /agent/{id}/intentions`, `PUT|DELETE /intention/{id}`; listagem no envelope `{ data, count }`) são a forma de o agente chamar APIs externas durante a conversa: coleta os campos, chama a URL e interpreta a resposta. Etapa 1 (decisão de 04/10): intenções genéricas, paridade com o painel do GPTMaker, só do tipo `WEBHOOK`, sem limite por plano. Etapa 2: intenções prontas do Bitrix24 executadas pelo app com o token do portal (endpoint próprio como URL da intenção), sem o cliente expor chave de API.
+- Registro local `agent_intention` (fonte da verdade da tela), como nos treinamentos: criado no GPTMaker e depois localmente; a criação responde só `{ success }`, então o id vem da listagem, pela descrição (única por agente). Edição envia o objeto inteiro; remoção ausente no GPTMaker conta como feita.
+- Cabeçalhos cifrados com a chave de campo (`DATA_ENCRYPTION_KEY`); a API devolve só o nome e se há valor. `variables` (gravar em campos do contato do GPTMaker) fica fora: o canal é o Bitrix, e os dados vão para o CRM pelos gatilhos.
+- `{campo}` na URL, nos parâmetros e no corpo é validado contra os campos declarados (`jsonName` derivado do nome). Corpo do `POST`: JSON válido ou geração automática.
+- A conferir na API real: campo da "mensagem de pré-processamento" do painel (fora do OpenAPI) e o papel de `details` x `instructions` (a documentação descreve os dois de formas trocadas).
+
 ## Risks / Trade-offs
 
 - [Custo por resposta estimado diverge do real] → reconciliação diária com `ADJUSTMENT`; sugestão de custo por modelo; tolerância configurável.
