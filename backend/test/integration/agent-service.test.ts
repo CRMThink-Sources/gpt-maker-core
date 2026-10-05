@@ -66,6 +66,7 @@ describe('serviço de agentes', () => {
     type: 'SUPPORT',
     communicationType: 'NORMAL',
     jobName: 'Loja Exemplo',
+    jobDescription: 'Roupas femininas',
     ...extra,
   });
 
@@ -228,7 +229,7 @@ describe('serviço de agentes', () => {
       type: 'SUPPORT',
       communicationType: 'NORMAL',
       jobName: 'Loja Exemplo',
-      jobDescription: '',
+      jobDescription: 'Roupas femininas',
     });
     expect(await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/settings`)).toEqual([
       { prefferModel: 'GPT_5_MINI' },
@@ -496,14 +497,14 @@ describe('serviço de agentes', () => {
 
       const view = await service.update(owner, existing.id, {
         name: 'Vendedor',
-        behavior: null,
+        behavior: 'Venda com calma',
         type: 'SALE',
       });
 
       expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
         {
           name: 'Vendedor',
-          behavior: '',
+          behavior: 'Venda com calma',
           type: 'SALE',
           communicationType: 'NORMAL',
           jobName: 'Loja Exemplo',
@@ -511,8 +512,12 @@ describe('serviço de agentes', () => {
         },
       ]);
       expect((await remoteCalls()).settings).toBe(0);
-      expect(view).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
-      expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      expect(view).toMatchObject({ name: 'Vendedor', behavior: 'Venda com calma', type: 'SALE' });
+      expect(await stored()).toMatchObject({
+        name: 'Vendedor',
+        behavior: 'Venda com calma',
+        type: 'SALE',
+      });
       // Nome mudou: o título do item de assinatura acompanha.
       expect(await mirrorsOf(existing.id)).toEqual([
         { operation: 'agent-item.sync', status: 'PENDING' },

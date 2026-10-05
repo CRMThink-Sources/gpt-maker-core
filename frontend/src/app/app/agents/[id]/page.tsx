@@ -10,9 +10,11 @@ import { type AgentFormValues, initialValues } from '../agent-fields';
 import { AgentForm } from '../agent-form';
 import { useAgent } from './agent-context';
 
-const TEXTS = ['avatarUrl', 'behavior', 'jobName', 'jobSite', 'jobDescription'] as const;
+const TEXTS = ['avatarUrl', 'jobName', 'jobSite'] as const;
+/** Obrigatórios: nunca vão como `null` (o formulário não deixa salvar vazio). */
+const REQUIRED_TEXTS = ['behavior', 'jobDescription'] as const;
 
-/** Só o que mudou; texto apagado vai como `null` para limpar no servidor. */
+/** Só o que mudou; texto opcional apagado vai como `null` para limpar no servidor. */
 function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput {
   const body: UpdateAgentInput = {};
   const name = values.name.trim();
@@ -24,6 +26,10 @@ function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput
   for (const key of TEXTS) {
     const value = values[key].trim() || null;
     if (value !== agent[key]) body[key] = value;
+  }
+  for (const key of REQUIRED_TEXTS) {
+    const value = values[key].trim();
+    if (value !== (agent[key] ?? '')) body[key] = value;
   }
   if (values.modelId !== agent.model.id) body.modelId = values.modelId;
   const settings = Object.fromEntries(

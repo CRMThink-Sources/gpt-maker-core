@@ -5,17 +5,22 @@ export const communicationTypeSchema = z.enum(['FORMAL', 'NORMAL', 'RELAXED']);
 export const agentStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'OUT_OF_SYNC']);
 
 const optionalText = (max: number) => z.string().trim().max(max).optional();
+const requiredText = (max: number) => z.string().trim().min(1).max(max);
+
+/** Limites dos textos obrigatórios do agente (formulário e API). */
+export const AGENT_BEHAVIOR_MAX = 3000;
+export const AGENT_JOB_DESCRIPTION_MAX = 500;
 
 /** Formulário de novo agente (spec agent-management). Sem `modelId`, vale o padrão do catálogo. */
 export const createAgentSchema = z.object({
   name: z.string().trim().min(1).max(100),
   avatarUrl: z.url().max(2000).optional(),
-  behavior: optionalText(10_000),
+  behavior: requiredText(AGENT_BEHAVIOR_MAX),
   type: agentTypeSchema,
   communicationType: communicationTypeSchema,
   jobName: optionalText(200),
   jobSite: z.url().max(2000).optional(),
-  jobDescription: optionalText(5000),
+  jobDescription: requiredText(AGENT_JOB_DESCRIPTION_MAX),
   modelId: z.uuid().optional(),
 });
 export type CreateAgentInput = z.input<typeof createAgentSchema>;
@@ -61,17 +66,20 @@ export type AgentSettings = z.infer<typeof agentSettingsSchema>;
 
 const clearableText = (max: number) => z.string().trim().max(max).nullable().optional();
 
-/** Edição parcial: campo omitido mantém o valor; `null` limpa os textos opcionais. */
+/**
+ * Edição parcial: campo omitido mantém o valor; `null` limpa os textos opcionais. Comportamento e
+ * "sobre a empresa" são obrigatórios: não aceitam `null` nem vazio.
+ */
 export const updateAgentSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     avatarUrl: z.url().max(2000).nullable(),
-    behavior: clearableText(10_000),
+    behavior: requiredText(AGENT_BEHAVIOR_MAX),
     type: agentTypeSchema,
     communicationType: communicationTypeSchema,
     jobName: clearableText(200),
     jobSite: z.url().max(2000).nullable(),
-    jobDescription: clearableText(5000),
+    jobDescription: requiredText(AGENT_JOB_DESCRIPTION_MAX),
     modelId: z.uuid(),
     settings: agentSettingsSchema,
   })
