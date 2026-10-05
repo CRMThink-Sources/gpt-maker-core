@@ -182,6 +182,7 @@ export interface AdminTenantDetail extends AdminTenantRow {
   agentList: Array<{
     id: string;
     name: string;
+    gptmakerAgentId: string;
     status: 'ACTIVE' | 'INACTIVE' | 'DELETED' | 'OUT_OF_SYNC';
     inactiveReason: string | null;
     model: string | null;
@@ -263,7 +264,7 @@ export interface AdminWorkspaceView {
     gptmakerAgentId: string;
     name: string | null;
     detectedAt: string;
-    /** Portal sugerido pelo prefixo `[código]` do nome. */
+    /** Portal sugerido pela criação registrada no app (ou pelo prefixo legado `[código]` do nome). */
     suggestedTenant: { id: string; domain: string; tenantCode: string } | null;
     /** Órfão de um agente removido no app: só pode ser removido do GPTMaker. */
     removedLocally: boolean;

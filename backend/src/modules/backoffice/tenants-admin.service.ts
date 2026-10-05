@@ -121,6 +121,7 @@ export class TenantsAdminService {
         .select({
           id: agent.id,
           name: agent.name,
+          gptmakerAgentId: agent.gptmakerAgentId,
           status: agent.status,
           inactiveReason: agent.inactiveReason,
           model: aiModel.displayName,

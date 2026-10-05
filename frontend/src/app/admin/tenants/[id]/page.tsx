@@ -13,6 +13,7 @@ import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@
 import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../../admin-provider';
+import { GptMakerAgentLink } from '../../gptmaker-link';
 import { credits, dateTime, TenantStatusBadge } from '../shared';
 import { TenantFailures } from './failures';
 import { SubscriptionSection } from './subscription';
@@ -288,7 +289,9 @@ export default function AdminTenantPage() {
                 >
                   <div>
                     <p className="font-medium text-zinc-900">{a.name}</p>
-                    <p className="text-xs text-zinc-500">{a.model ?? 'sem modelo'}</p>
+                    <p className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+                      {a.model ?? 'sem modelo'} · <GptMakerAgentLink id={a.gptmakerAgentId} />
+                    </p>
                   </div>
                   <Badge tone={a.status === 'ACTIVE' ? 'green' : 'zinc'}>
                     {AGENT_STATUS[a.status] ?? a.status}

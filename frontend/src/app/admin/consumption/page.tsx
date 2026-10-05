@@ -12,6 +12,7 @@ import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@
 import { ApiRequestError } from '@/lib/platform-session';
 import { inputClass } from '../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../admin-provider';
+import { GptMakerAgentLink } from '../gptmaker-link';
 
 function message(e: unknown, fallback: string): string {
   return e instanceof ApiRequestError && !e.code.startsWith('HTTP_') ? e.message : fallback;
@@ -267,8 +268,7 @@ function PartnerReport({ onReviews }: { onReviews: () => void }) {
                 {report.unlinked.map((u) => (
                   <li key={u.gptmakerAgentId} className="flex justify-between gap-3 py-1.5">
                     <span>
-                      {u.name ?? 'Sem nome'}{' '}
-                      <code className="text-xs text-zinc-500">{u.gptmakerAgentId}</code>
+                      {u.name ?? 'Sem nome'} <GptMakerAgentLink id={u.gptmakerAgentId} />
                     </span>
                     <span className="tabular-nums">{credits(u.consumed)}</span>
                   </li>
