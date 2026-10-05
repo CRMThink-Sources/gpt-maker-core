@@ -3,6 +3,7 @@
 import {
   type CreateTrainingInput,
   TRAINING_DOCUMENT_MAX_BYTES,
+  TRAINING_TEXT_MAX,
   type TrainingInterval,
   type TrainingView,
 } from '@gptmaker/contracts';
@@ -177,13 +178,13 @@ export function AddTrainingModal({
           {kind === 'TEXT' && (
             <Field
               label="Conteúdo"
-              hint="Escreva como explicaria a um atendente novo: regras, preços, perguntas frequentes."
+              hint={`Escreva como explicaria a um atendente novo: regras, preços, perguntas frequentes. ${text.length.toLocaleString('pt-BR')}/${TRAINING_TEXT_MAX.toLocaleString('pt-BR')} caracteres.`}
             >
               <textarea
                 className={`${inputClass} min-h-48`}
                 required
                 autoFocus
-                maxLength={50_000}
+                maxLength={TRAINING_TEXT_MAX}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />

@@ -3,6 +3,8 @@
 import {
   type IntentionActionInput,
   INTENTION_MAX_FIELDS,
+  INTENTION_NAME_MAX,
+  INTENTION_WHEN_TO_USE_MAX,
   INTENTION_MAX_PAIRS,
   type IntentionFieldType,
   type IntentionInput,
@@ -337,17 +339,18 @@ function IntentStep({ form, set }: { form: Form; set: Setter }) {
           value={form.name}
           onChange={(e) => set('name', e.target.value)}
           placeholder="Registrar interesse"
-          maxLength={255}
+          maxLength={INTENTION_NAME_MAX}
           className={inputClass}
           autoFocus
         />
       </Field>
       <Field
         label="Quando usar"
-        hint="É o que o agente lê para decidir usar a intenção. Descreva a situação do cliente, não a ação."
+        hint={`É o que o agente lê para decidir usar a intenção. Descreva a situação do cliente, não a ação. ${form.whenToUse.length.toLocaleString('pt-BR')}/${INTENTION_WHEN_TO_USE_MAX.toLocaleString('pt-BR')} caracteres.`}
       >
         <textarea
           value={form.whenToUse}
+          maxLength={INTENTION_WHEN_TO_USE_MAX}
           onChange={(e) => set('whenToUse', e.target.value)}
           placeholder="Quando o cliente quiser falar com um vendedor ou pedir um orçamento"
           className={`${inputClass} min-h-28`}
