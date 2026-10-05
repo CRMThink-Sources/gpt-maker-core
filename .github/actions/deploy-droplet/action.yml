@@ -2,15 +2,15 @@ name: Deploy no Droplet
 description: Copia a stack, grava o .env e executa infra/deploy/deploy.sh no Droplet via SSH.
 
 inputs:
-  image-tag: { description: Tag das imagens (SHA), required: true }
-  ssh-host: { description: Host do Droplet, required: true }
-  ssh-user: { description: Usuário SSH, required: true }
-  deploy-dir: { description: Diretório da stack no Droplet, required: true }
-  ssh-private-key: { description: Chave privada SSH, required: true }
-  ssh-known-hosts: { description: Linha(s) do known_hosts do Droplet, required: true }
-  env-file: { description: Conteúdo do .env do ambiente, required: true }
-  ghcr-user: { description: Usuário do ghcr.io, required: true }
-  ghcr-token: { description: Token com read:packages, required: true }
+  image-tag: { description: "Tag das imagens (SHA)", required: true }
+  ssh-host: { description: "Host do Droplet", required: true }
+  ssh-user: { description: "Usuário SSH", required: true }
+  deploy-dir: { description: "Diretório da stack no Droplet", required: true }
+  ssh-private-key: { description: "Chave privada SSH", required: true }
+  ssh-known-hosts: { description: "Linha(s) do known_hosts do Droplet", required: true }
+  env-file: { description: "Conteúdo do .env do ambiente", required: true }
+  ghcr-user: { description: "Usuário do ghcr.io", required: true }
+  ghcr-token: { description: "Token com read:packages", required: true }
 
 runs:
   using: composite
