@@ -13,7 +13,7 @@
 ## 2. Infraestrutura DigitalOcean e CI/CD GitHub Actions
 
 - [ ] 2.1 Provisionar Droplet de produção (Ubuntu LTS, Docker, Compose), DO Volume para dados, Cloud Firewall (80/443 públicos, 22 restrito) e DNS (`app.`, `api.`) (~6h)
-- [ ] 2.2 Provisionar Droplet de staging separado (menor), com DNS próprio (`app-staging.`, `api-staging.`) e mesmas regras de firewall (~3h)
+- [ ] 2.2 Provisionar Droplet de staging separado (menor), com DNS próprio (`app-staging.`, `api-staging.`) e mesmas regras de firewall (~3h) — roteiro em `docs/staging.md` e `infra/deploy/cloud-init.yml`; `.env.prod.example` corrigido (faltavam `API_PUBLIC_URL` e `FRONTEND_ORIGINS`; credenciais do Postgres/RabbitMQ divergentes das URLs; `PUBLIC_API_BASE_URL` apontava para a plataforma)
 - [ ] 2.3 Criar bucket DigitalOcean Spaces (documentos de treinamento e backups) com chaves de acesso (~1h)
 - [x] 2.4 Criar `infra/docker-compose.prod.yml` com caddy (TLS automático, CSP `frame-ancestors` Bitrix), frontend, backend-api, backend-worker, postgres, rabbitmq, redis (~4h)
 - [x] 2.5 Workflow `ci.yml`: lint, typecheck, testes unitários backend/frontend (Vitest), testes de integração (Testcontainers for Node + WireMock container + fixtures de eventos do `crmthink-platform`) (~5h)
