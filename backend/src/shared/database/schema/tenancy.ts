@@ -17,7 +17,7 @@ export const tenant = pgTable(
     installationId: text('installation_id').notNull(),
     memberId: text('member_id').notNull(),
     domain: text('domain').notNull(),
-    /** Código curto e estável usado no prefixo do nome dos agentes no GPTMaker: `[<tenantCode>] <nome>`. */
+    /** Código curto e estável do tenant (suporte e backoffice; antes prefixava o nome dos agentes no GPTMaker). */
     tenantCode: text('tenant_code').notNull(),
     status: tenantStatus('status').notNull().default('ACTIVE'),
     suspendedReason: text('suspended_reason'),

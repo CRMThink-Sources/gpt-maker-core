@@ -14,7 +14,8 @@
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js"
+    "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js",
+    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",

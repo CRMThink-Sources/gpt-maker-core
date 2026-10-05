@@ -34,7 +34,7 @@ export const agent = pgTable(
       .notNull()
       .references(() => tenant.id),
     gptmakerAgentId: text('gptmaker_agent_id').notNull(),
-    /** Nome exibido ao cliente, sem o prefixo `[<tenantCode>]` usado no GPTMaker. */
+    /** Nome do agente, igual ao do GPTMaker (agentes antigos lá podem ter o prefixo `[<tenantCode>]`). */
     name: text('name').notNull(),
     avatarUrl: text('avatar_url'),
     behavior: text('behavior'),
@@ -64,6 +64,28 @@ export const agent = pgTable(
       .on(t.tenantId)
       .where(sql`${t.status} <> 'DELETED'`),
     index('agent_model_idx').on(t.modelId),
+  ],
+);
+
+/**
+ * Criação de agente em andamento (design D2): gravada antes do `POST` no GPTMaker e removida
+ * quando o registro local fica pronto ou a criação remota é desfeita. A que sobra aponta o dono
+ * de um agente órfão: pelo id, quando o GPTMaker chegou a responder; senão, pelo nome.
+ */
+export const agentCreationAttempt = pgTable(
+  'agent_creation_attempt',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    name: text('name').notNull(),
+    gptmakerAgentId: text('gptmaker_agent_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('agent_creation_attempt_gptmaker_idx').on(t.gptmakerAgentId),
+    index('agent_creation_attempt_created_idx').on(t.createdAt),
   ],
 );
 

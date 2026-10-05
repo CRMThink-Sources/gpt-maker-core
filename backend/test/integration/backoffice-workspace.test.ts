@@ -111,7 +111,7 @@ describe('backoffice: workspace GPTMaker', () => {
   });
 
   it('visão: saúde, órfãos com portal sugerido, fora de sincronia e resoluções recentes', async () => {
-    const suggested = await orphan(`[${owner.tenantCode}] Vendedor`, {
+    const suggested = await orphan('Vendedor', {
       suggestedTenantId: owner.id,
     });
     const [lost] = await db
@@ -145,7 +145,7 @@ describe('backoffice: workspace GPTMaker', () => {
     expect(view.orphans).toEqual([
       expect.objectContaining({
         findingId: suggested.id,
-        name: `[${owner.tenantCode}] Vendedor`,
+        name: 'Vendedor',
         suggestedTenant: { id: owner.id, domain: owner.domain, tenantCode: owner.tenantCode },
         removedLocally: false,
       }),

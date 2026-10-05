@@ -8,6 +8,7 @@ import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@
 import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../admin-provider';
+import { GptMakerAgentLink } from '../gptmaker-link';
 
 type Orphan = AdminWorkspaceView['orphans'][number];
 
@@ -21,7 +22,7 @@ function dateTime(iso: string | null): string {
     : '—';
 }
 
-/** Vincular órfão: escolhe o portal (sugerido pelo prefixo do nome, quando houver). */
+/** Vincular órfão: escolhe o portal (sugerido pela criação registrada no app, quando houver). */
 function LinkOrphan({
   orphan,
   onClose,
@@ -309,7 +310,8 @@ export default function AdminWorkspacePage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-zinc-900">{o.name ?? 'Sem nome'}</p>
                       <p className="text-xs text-zinc-500">
-                        <code>{o.gptmakerAgentId}</code> · encontrado em {dateTime(o.detectedAt)}
+                        <GptMakerAgentLink id={o.gptmakerAgentId} /> · encontrado em{' '}
+                        {dateTime(o.detectedAt)}
                         {o.suggestedTenant && <> · sugerido: {o.suggestedTenant.domain}</>}
                       </p>
                       {o.removedLocally && (
@@ -366,7 +368,8 @@ export default function AdminWorkspacePage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-zinc-900">{a.name}</p>
                       <p className="text-xs text-zinc-500">
-                        <code>{a.gptmakerAgentId}</code> · desde {dateTime(a.detectedAt)}
+                        <GptMakerAgentLink id={a.gptmakerAgentId} /> · desde{' '}
+                        {dateTime(a.detectedAt)}
                       </p>
                     </div>
                     <Link

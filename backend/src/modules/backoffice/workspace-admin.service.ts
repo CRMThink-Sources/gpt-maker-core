@@ -176,7 +176,7 @@ export class WorkspaceAdminService {
     return this.view();
   }
 
-  /** Vincula o órfão a um portal: vira agente do tenant, com o prefixo dele no GPTMaker. */
+  /** Vincula o órfão a um portal: vira agente do tenant (sem o prefixo legado no nome). */
   async linkOrphan(findingId: string, tenantId: string, actor: string): Promise<AgentView> {
     const finding = await this.openOrphan(findingId);
     const [owner] = await this.db.select().from(tenant).where(eq(tenant.id, tenantId));
@@ -187,10 +187,7 @@ export class WorkspaceAdminService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const linked = await this.agents.adopt(
-      { tenantId: owner.id, tenantCode: owner.tenantCode },
-      finding.gptmakerAgentId,
-    );
+    const linked = await this.agents.adopt({ tenantId: owner.id }, finding.gptmakerAgentId);
     await this.resolve(findingId, actor, `vinculado ao portal ${owner.domain}`);
     await this.audit.record({
       actorId: actor,

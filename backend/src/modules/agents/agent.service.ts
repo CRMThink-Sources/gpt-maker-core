@@ -16,7 +16,7 @@ import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { currentContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
-import { subscriptionState } from '../../shared/database/schema/index';
+import { agentCreationAttempt, subscriptionState } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
@@ -27,7 +27,6 @@ import {
   type GptMakerWebhooks,
   fromGptMakerName,
   TenantAgentLimitService,
-  toGptMakerName,
   WEBHOOK_EVENTS,
 } from '../gptmaker';
 import { type AiModel, ModelCatalogService } from '../models';
@@ -40,7 +39,6 @@ import { type Agent, AgentRepository, type Executor } from './agent.repository';
 /** Dono da operação: tenant da sessão do iframe. */
 export interface AgentOwner {
   tenantId: string;
-  tenantCode: string;
 }
 
 // Cobre a criação no GPTMaker e as duas configurações seguintes, com retentativas.
@@ -121,7 +119,7 @@ export class AgentService {
   }
 
   /**
-   * Cria o agente no GPTMaker (nome `[<tenantCode>] <nome>`), aplica o modelo em `prefferModel`,
+   * Cria o agente no GPTMaker (com o nome puro), aplica o modelo em `prefferModel`,
    * aponta os webhooks para esta API e só então grava o registro local `ACTIVE`. Criações do mesmo
    * tenant são serializadas para o limite de agentes valer sob concorrência.
    */
@@ -154,7 +152,7 @@ export class AgentService {
   /**
    * Vincula um agente órfão do workspace a um tenant (spec admin-backoffice, "Vincular agente
    * órfão"; backoffice 15.6): o mesmo que a criação faz, sobre um agente que já existe no
-   * GPTMaker. Renomeia com o prefixo do tenant, aplica um modelo permitido pelo plano (o atual, se
+   * GPTMaker. Tira o prefixo legado do nome, aplica um modelo permitido pelo plano (o atual, se
    * permitido; senão o padrão), aponta os webhooks para esta API com token novo e grava o registro
    * local (com o espelho na assinatura). O status vem do GPTMaker (`DISABLED` ⇒ inativo `MANUAL`).
    * Conta no limite de agentes do tenant.
@@ -205,7 +203,7 @@ export class AgentService {
         };
 
         await this.callGptMaker(() =>
-          this.gptmaker.updateAgent(gptmakerAgentId, remoteProfile(owner, profile)),
+          this.gptmaker.updateAgent(gptmakerAgentId, remoteProfile(profile)),
         );
         if (settings.prefferModel !== model.code) {
           await this.callGptMaker(() =>
@@ -288,7 +286,7 @@ export class AgentService {
 
       if (profileChanged) {
         await this.callGptMaker(() =>
-          this.gptmaker.updateAgent(current.gptmakerAgentId, remoteProfile(owner, profile)),
+          this.gptmaker.updateAgent(current.gptmakerAgentId, remoteProfile(profile)),
         );
       }
       if (settingsChanged) {
@@ -445,7 +443,7 @@ export class AgentService {
 
   private async revertProfile(owner: AgentOwner, previous: Agent): Promise<void> {
     try {
-      await this.gptmaker.updateAgent(previous.gptmakerAgentId, remoteProfile(owner, previous));
+      await this.gptmaker.updateAgent(previous.gptmakerAgentId, remoteProfile(previous));
     } catch (error) {
       this.logger.error(
         { agentId: previous.id, err: error },
@@ -459,20 +457,39 @@ export class AgentService {
     input: ReturnType<typeof createAgentSchema.parse>,
     model: AiModel,
   ): Promise<Agent> {
-    const remote = await this.callGptMaker(() =>
-      this.gptmaker.createAgent(
-        remoteProfile(owner, {
-          name: input.name,
-          avatarUrl: input.avatarUrl ?? null,
-          behavior: input.behavior ?? null,
-          type: input.type,
-          communicationType: input.communicationType,
-          jobName: input.jobName ?? null,
-          jobSite: input.jobSite ?? null,
-          jobDescription: input.jobDescription ?? null,
-        }),
-      ),
-    );
+    // Sem o prefixo no nome, é este registro que aponta o dono se a criação deixar um órfão.
+    const [attempt] = await this.db
+      .insert(agentCreationAttempt)
+      .values({ tenantId: owner.tenantId, name: input.name })
+      .returning({ id: agentCreationAttempt.id });
+    const attemptId = attempt!.id;
+    const settle = (db: Executor = this.db) =>
+      db.delete(agentCreationAttempt).where(eq(agentCreationAttempt.id, attemptId));
+
+    const remote = await this.callGptMaker(async () => {
+      try {
+        return await this.gptmaker.createAgent(
+          remoteProfile({
+            name: input.name,
+            avatarUrl: input.avatarUrl ?? null,
+            behavior: input.behavior ?? null,
+            type: input.type,
+            communicationType: input.communicationType,
+            jobName: input.jobName ?? null,
+            jobSite: input.jobSite ?? null,
+            jobDescription: input.jobDescription ?? null,
+          }),
+        );
+      } catch (error) {
+        // Recusa é certeza de que nada foi criado; demais falhas podem ter criado (fica o registro).
+        if (error instanceof GptMakerError && error.kind === 'VALIDATION') await settle();
+        throw error;
+      }
+    });
+    await this.db
+      .update(agentCreationAttempt)
+      .set({ gptmakerAgentId: remote.id })
+      .where(eq(agentCreationAttempt.id, attemptId));
 
     // O token em claro só vai para o GPTMaker, na URL dos webhooks; aqui fica o hash.
     const webhookToken = randomBytes(32).toString('base64url');
@@ -486,8 +503,9 @@ export class AgentService {
           webhookUrlsFor(this.env.API_PUBLIC_URL, webhookToken),
         ),
       );
-      return await this.mirrored(owner.tenantId, (tx) =>
-        this.agents.insert(
+      return await this.mirrored(owner.tenantId, async (tx) => {
+        await settle(tx);
+        return this.agents.insert(
           owner.tenantId,
           {
             gptmakerAgentId: remote.id,
@@ -504,10 +522,10 @@ export class AgentService {
             webhookTokenHash: hashWebhookToken(webhookToken),
           },
           tx,
-        ),
-      );
+        );
+      });
     } catch (error) {
-      await this.discardRemote(remote.id);
+      if (await this.discardRemote(remote.id)) await settle();
       throw error;
     }
   }
@@ -547,15 +565,20 @@ export class AgentService {
     return row?.planId ?? null;
   }
 
-  /** Desfaz a criação remota; se falhar, o `workspace-sync` acha o órfão pelo prefixo do nome. */
-  private async discardRemote(gptmakerAgentId: string): Promise<void> {
+  /**
+   * Desfaz a criação remota. Se falhar, o registro da criação fica e o `workspace-sync` sugere o
+   * dono do órfão por ele.
+   */
+  private async discardRemote(gptmakerAgentId: string): Promise<boolean> {
     try {
       await this.gptmaker.deleteAgent(gptmakerAgentId);
+      return true;
     } catch (error) {
       this.logger.error(
         { gptmakerAgentId, err: error },
         'agente criado no GPTMaker ficou órfão após falha na criação',
       );
+      return false;
     }
   }
 
@@ -614,12 +637,12 @@ function keep<T>(value: T | null | undefined, current: T | null): T | null {
 }
 
 /**
- * Corpo de `POST|PUT /agent` no GPTMaker: nome com o prefixo do tenant. Texto limpo vai como
- * string vazia, pois omitir o campo não o apaga num PUT de semântica não documentada.
+ * Corpo de `POST|PUT /agent` no GPTMaker, com o nome puro (sem o prefixo legado do tenant). Texto
+ * limpo vai como string vazia, pois omitir o campo não o apaga num PUT de semântica não documentada.
  */
-function remoteProfile(owner: AgentOwner, profile: Profile): GptMakerNewAgent {
+export function remoteProfile(profile: Profile): GptMakerNewAgent {
   return {
-    name: toGptMakerName(owner.tenantCode, profile.name),
+    name: profile.name.trim(),
     avatar: profile.avatarUrl ?? undefined,
     behavior: profile.behavior ?? '',
     type: profile.type,

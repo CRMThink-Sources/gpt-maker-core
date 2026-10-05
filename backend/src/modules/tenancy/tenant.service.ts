@@ -12,7 +12,7 @@ const CODE_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 const CODE_LENGTH = 6;
 const CODE_ATTEMPTS = 5;
 
-/** Código curto do prefixo `[<tenantCode>]` no GPTMaker; sem caracteres ambíguos (0/o, 1/l). */
+/** Código curto do tenant para o suporte; sem caracteres ambíguos (0/o, 1/l). */
 export function generateTenantCode(random: (max: number) => number = randomInt): string {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[random(CODE_ALPHABET.length)];

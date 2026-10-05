@@ -26,6 +26,7 @@ import { WireMock } from '../support/wiremock';
 
 const {
   agent,
+  agentCreationAttempt,
   aiModel,
   paymentsOutbox,
   planAllowedModel,
@@ -83,7 +84,7 @@ describe('serviço de agentes', () => {
   }
 
   async function stubGptMaker(
-    overrides: { create?: number; settings?: number; webhooks?: number } = {},
+    overrides: { create?: number; settings?: number; webhooks?: number; discard?: number } = {},
   ) {
     await wiremock.stub({
       request: { method: 'POST', urlPath: `/v2/workspace/${WS}/agents` },
@@ -106,9 +107,14 @@ describe('serviço de agentes', () => {
     }
     await wiremock.stub({
       request: { method: 'DELETE', urlPath: `/v2/agent/${REMOTE_ID}` },
-      response: { status: 200, jsonBody: { success: true } },
+      response:
+        (overrides.discard ?? 200) === 200
+          ? { status: 200, jsonBody: { success: true } }
+          : { status: overrides.discard!, jsonBody: { error: 'falhou' } },
     });
   }
+
+  const attempts = () => db.select().from(agentCreationAttempt);
 
   async function allowOnPlan(tenantId: string, modelId: string) {
     const planSpaId = `plan-${randomUUID()}`;
@@ -195,6 +201,7 @@ describe('serviço de agentes', () => {
     await redis.flushall();
     await db.delete(paymentsOutbox);
     await db.delete(agent);
+    await db.delete(agentCreationAttempt);
     await db.delete(subscriptionState);
     await db.delete(planAllowedModel);
     await db.delete(planEntitlement);
@@ -209,14 +216,14 @@ describe('serviço de agentes', () => {
     await Promise.all([postgres?.stop(), redisContainer?.stop(), wiremock?.stop()]);
   });
 
-  it('cria no GPTMaker com nome prefixado, modelo padrão e webhooks, e grava o registro ACTIVE', async () => {
+  it('cria no GPTMaker com o nome puro, modelo padrão e webhooks, e grava o registro ACTIVE', async () => {
     await stubGptMaker();
 
     const view = await service.create(owner, form());
 
     const [created] = await wiremock.bodies('POST', `/v2/workspace/${WS}/agents`);
     expect(created).toEqual({
-      name: `[${owner.tenantCode}] Atendente`,
+      name: 'Atendente',
       behavior: 'Seja cordial',
       type: 'SUPPORT',
       communicationType: 'NORMAL',
@@ -257,6 +264,8 @@ describe('serviço de agentes', () => {
     expect(view).not.toHaveProperty('gptmakerAgentId');
     expect(await mirrorsOf(view.id)).toEqual([{ operation: 'agent-item.sync', status: 'PENDING' }]);
     expect(changes).toEqual([{ agentId: view.id, tenantId: owner.tenantId, kind: 'created' }]);
+    // Criação concluída: o registro da criação em andamento some.
+    expect(await attempts()).toEqual([]);
   });
 
   it('usa o modelo escolhido quando o plano do tenant o libera', async () => {
@@ -363,6 +372,30 @@ describe('serviço de agentes', () => {
     });
     expect(await db.select().from(agent)).toHaveLength(0);
     expect(await db.select().from(paymentsOutbox)).toHaveLength(0);
+    // Pode ter sido criado sem resposta: o registro fica para o workspace-sync sugerir o dono.
+    expect(await attempts()).toEqual([
+      expect.objectContaining({
+        tenantId: owner.tenantId,
+        name: 'Atendente',
+        gptmakerAgentId: null,
+      }),
+    ]);
+  });
+
+  it('GPTMaker recusa a criação: nada criado, sem registro da criação', async () => {
+    await stubGptMaker({ create: 400 });
+    expect(await errorOf(service.create(owner, form()))).toMatchObject({
+      code: 'GPTMAKER_REJECTED',
+    });
+    expect(await attempts()).toEqual([]);
+  });
+
+  it('desfazer a criação também falha: o registro fica com o id do órfão', async () => {
+    await stubGptMaker({ settings: 500, discard: 500 });
+    await errorOf(service.create(owner, form()));
+    expect(await attempts()).toEqual([
+      expect.objectContaining({ tenantId: owner.tenantId, gptmakerAgentId: REMOTE_ID }),
+    ]);
   });
 
   it.each(['settings', 'webhooks'] as const)(
@@ -373,6 +406,7 @@ describe('serviço de agentes', () => {
       expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
       expect(await wiremock.count('DELETE', `/v2/agent/${REMOTE_ID}`)).toBe(1);
       expect(await db.select().from(agent)).toHaveLength(0);
+      expect(await attempts()).toEqual([]);
     },
   );
 
@@ -457,7 +491,7 @@ describe('serviço de agentes', () => {
       });
     });
 
-    it('dados: envia o perfil completo com o prefixo e não mexe nas settings', async () => {
+    it('dados: envia o perfil completo e não mexe nas settings', async () => {
       await stubEdit();
 
       const view = await service.update(owner, existing.id, {
@@ -468,7 +502,7 @@ describe('serviço de agentes', () => {
 
       expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
         {
-          name: `[${owner.tenantCode}] Vendedor`,
+          name: 'Vendedor',
           behavior: '',
           type: 'SALE',
           communicationType: 'NORMAL',
@@ -564,10 +598,7 @@ describe('serviço de agentes', () => {
 
       expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
       const profiles = (await wiremock.bodies('PUT', PROFILE_PATH)) as Array<{ name: string }>;
-      expect(profiles.map((body) => body.name)).toEqual([
-        `[${owner.tenantCode}] Novo`,
-        `[${owner.tenantCode}] Atendente`,
-      ]);
+      expect(profiles.map((body) => body.name)).toEqual(['Novo', 'Atendente']);
       expect(await stored()).toMatchObject({
         name: 'Atendente',
         settings: { timezone: 'America/Sao_Paulo', enabledEmoji: true },
@@ -906,7 +937,7 @@ describe('serviço de agentes', () => {
       }
     }
 
-    it('renomeia com o prefixo do portal, troca o modelo não permitido, aponta webhooks e grava inativo', async () => {
+    it('tira o prefixo legado do nome, troca o modelo não permitido, aponta webhooks e grava inativo', async () => {
       await stubOrphan(
         {
           name: '[outro] Vendedor',
@@ -923,7 +954,7 @@ describe('serviço de agentes', () => {
       const [renamed] = (await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}`)) as Array<{
         name: string;
       }>;
-      expect(renamed!.name).toBe(`[${owner.tenantCode}] Vendedor`);
+      expect(renamed!.name).toBe('Vendedor');
       // GPT-5 não está no plano (sem plano): vai para o padrão.
       expect(await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}/settings`)).toEqual([
         { prefferModel: 'GPT_5_MINI' },

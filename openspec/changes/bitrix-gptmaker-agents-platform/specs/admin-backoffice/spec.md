@@ -30,7 +30,7 @@ O backoffice MUST oferecer telas para o catálogo de modelos (`ai-model-catalog`
 
 #### Scenario: Vincular agente órfão
 - **WHEN** um `ADMIN` vincula um agente órfão a um tenant
-- **THEN** o agente passa a constar no registro local do tenant e é renomeado com o prefixo do tenant no GPTMaker
+- **THEN** o agente passa a constar no registro local do tenant, com o nome sem o prefixo legado `[<tenantCode>]` também no GPTMaker
 
 ### Requirement: Visão de assinaturas
 O backoffice MUST exibir, por tenant, a projeção local da assinatura (modalidade, status, período, plano, carência), os últimos eventos recebidos do `crmthink-platform` e o link para o item no SPA de Assinaturas. Criação e alteração de assinaturas manuais MUST ser feitas no SPA, não no backoffice.

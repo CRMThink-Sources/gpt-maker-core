@@ -1,5 +1,5 @@
 // API pública do módulo: outros módulos só importam daqui.
-export { fromGptMakerName, tenantCodeFromGptMakerName, toGptMakerName } from './agent-naming';
+export { fromGptMakerName, tenantCodeFromGptMakerName } from './agent-naming';
 export { collectAllPages } from './collect-pages';
 export { GptMakerClient } from './gptmaker.client';
 export { GptMakerError, type GptMakerErrorKind } from './gptmaker.errors';
