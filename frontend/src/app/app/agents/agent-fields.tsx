@@ -1,6 +1,12 @@
 'use client';
 
-import type { AgentSettings, AgentView, AvailableModel } from '@gptmaker/contracts';
+import {
+  AGENT_BEHAVIOR_MAX,
+  AGENT_JOB_DESCRIPTION_MAX,
+  type AgentSettings,
+  type AgentView,
+  type AvailableModel,
+} from '@gptmaker/contracts';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui';
 import { AGENT_TYPES, COMMUNICATION_TYPES, credits } from '@/lib/agents';
@@ -42,6 +48,11 @@ export function initialValues(
 export interface FieldsProps {
   values: AgentFormValues;
   set: <K extends keyof AgentFormValues>(key: K, value: AgentFormValues[K]) => void;
+}
+
+/** Caracteres usados do limite, para o usuário ver quanto ainda cabe. */
+function counter(text: string, max: number): string {
+  return `${text.length.toLocaleString('pt-BR')}/${max.toLocaleString('pt-BR')} caracteres.`;
 }
 
 export const inputClass =
@@ -126,11 +137,12 @@ export function IdentityFields({ values, set, autoFocus }: FieldsProps & { autoF
       </Field>
       <Field
         label="Comportamento"
-        hint="O que o agente pode e não pode fazer, como se apresentar, quando encaminhar."
+        hint={`O que o agente pode e não pode fazer, como se apresentar, quando encaminhar. ${counter(values.behavior, AGENT_BEHAVIOR_MAX)}`}
       >
         <textarea
           className={`${inputClass} min-h-32`}
-          maxLength={10_000}
+          required
+          maxLength={AGENT_BEHAVIOR_MAX}
           value={values.behavior}
           onChange={(e) => set('behavior', e.target.value)}
         />
@@ -163,10 +175,14 @@ export function CompanyFields({ values, set, autoFocus }: FieldsProps & { autoFo
           />
         </Field>
       </div>
-      <Field label="Sobre a empresa" hint="O que a empresa faz, para quem e o que oferece.">
+      <Field
+        label="Sobre a empresa"
+        hint={`O que a empresa faz, para quem e o que oferece. ${counter(values.jobDescription, AGENT_JOB_DESCRIPTION_MAX)}`}
+      >
         <textarea
           className={`${inputClass} min-h-24`}
-          maxLength={5000}
+          required
+          maxLength={AGENT_JOB_DESCRIPTION_MAX}
           value={values.jobDescription}
           onChange={(e) => set('jobDescription', e.target.value)}
         />

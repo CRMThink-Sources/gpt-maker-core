@@ -27,12 +27,12 @@ function createBody(values: AgentFormValues): CreateAgentInput {
   return {
     name: values.name.trim(),
     avatarUrl: optional(values.avatarUrl),
-    behavior: optional(values.behavior),
+    behavior: values.behavior.trim(),
     type: values.type,
     communicationType: values.communicationType,
     jobName: optional(values.jobName),
     jobSite: optional(values.jobSite),
-    jobDescription: optional(values.jobDescription),
+    jobDescription: values.jobDescription.trim(),
     modelId: values.modelId || undefined,
   };
 }
