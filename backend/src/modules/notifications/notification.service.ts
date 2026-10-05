@@ -138,7 +138,17 @@ export class NotificationService {
     const due = await this.db
       .select()
       .from(notificationLog)
-      .where(and(eq(notificationLog.status, 'PENDING'), lte(notificationLog.nextAttemptAt, now)))
+      .where(
+        and(
+          eq(notificationLog.status, 'PENDING'),
+          // `next_attempt_at` nasce com o relógio do banco (microssegundos); o do Node vem em
+          // milissegundos e pode ficar uma fração atrás de um aviso recém-gravado.
+          lte(
+            notificationLog.nextAttemptAt,
+            sql`greatest(now(), ${now.toISOString()}::timestamptz)`,
+          ),
+        ),
+      )
       .orderBy(asc(notificationLog.nextAttemptAt))
       .limit(BATCH);
     for (const row of due) await this.dispatch(row, now);

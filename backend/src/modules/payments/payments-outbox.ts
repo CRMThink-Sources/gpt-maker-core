@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, asc, eq, lte } from 'drizzle-orm';
+import { and, asc, eq, lte, sql } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { paymentsOutbox } from '../../shared/database/schema/index';
 
@@ -74,7 +74,8 @@ export class PaymentsOutbox {
           .where(
             and(
               eq(paymentsOutbox.status, 'PENDING'),
-              lte(paymentsOutbox.nextAttemptAt, new Date()),
+              // Relógio do banco, o mesmo do `defaultNow()` de quem enfileirou.
+              lte(paymentsOutbox.nextAttemptAt, sql`now()`),
             ),
           )
           .orderBy(asc(paymentsOutbox.nextAttemptAt), asc(paymentsOutbox.createdAt))
