@@ -85,6 +85,11 @@ export const envSchema = z.object({
     .transform((value) => value.replace(/\/+$/, '')),
 
   // crmthink-platform: instalação, tokens do Bitrix, sessão do iframe e cobrança (design D3/D9)
+  /**
+   * Código do app no cadastro da plataforma, um por ambiente (ex.: `crmthink.thinkflow` e
+   * `crmthink.homolog-thinkflow`): `aud` do JWT e `appCode` do instalador e dos eventos.
+   */
+  APP_CODE: z.string().min(1),
   PLATFORM_URL: z.url(),
   /** Chave de API do app (`credentials.apiKey` do cadastro). */
   PLATFORM_API_KEY: z.string().min(1),

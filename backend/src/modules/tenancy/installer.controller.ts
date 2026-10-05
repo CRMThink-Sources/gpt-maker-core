@@ -1,7 +1,8 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { APP_CODE } from '@gptmaker/contracts';
+import { Body, Controller, HttpCode, HttpStatus, Inject, Post, UseGuards } from '@nestjs/common';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { enrichContext } from '../../shared/context/request-context';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { PlatformSignatureGuard } from '../../shared/platform/platform-signature.guard';
@@ -20,13 +21,16 @@ class InstallerPayloadDto extends createZodDto(installerPayload) {}
 
 @Controller('platform')
 export class InstallerController {
-  constructor(private readonly installer: InstallerService) {}
+  constructor(
+    private readonly installer: InstallerService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
 
   @Post('installer')
   @HttpCode(HttpStatus.OK)
   @UseGuards(PlatformSignatureGuard)
   async install(@Body() body: InstallerPayloadDto): Promise<{ tenantCode: string }> {
-    if (body.appCode !== APP_CODE) {
+    if (body.appCode !== this.env.APP_CODE) {
       throw new DomainError(
         'APP_CODE_MISMATCH',
         'Instalador chamado para outro app',

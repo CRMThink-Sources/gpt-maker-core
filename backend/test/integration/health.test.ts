@@ -48,6 +48,7 @@ describe('api: health e métricas', () => {
       GPTMAKER_API_TOKEN: 'test-token',
       GPTMAKER_WORKSPACE_ID: 'ws-1',
       PLATFORM_URL: 'http://127.0.0.1:1',
+      APP_CODE: 'crmthink.thinkflow',
       PLATFORM_API_KEY: 'test-key',
       PLATFORM_WEBHOOK_SECRETS: 'test-secret',
       STORAGE_ENDPOINT: 'http://127.0.0.1:1',

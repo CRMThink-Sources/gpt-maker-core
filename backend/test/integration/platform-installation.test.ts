@@ -64,14 +64,14 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       installationId: INSTALLATION,
       memberId: MEMBER,
       domain: 'acme.bitrix24.com.br',
-      appCode: 'crmthink.gptmaker',
+      appCode: 'crmthink.thinkflow',
       isReinstall,
     });
 
   const platformEvent = (type: string, data: Record<string, unknown> = {}) => ({
     eventId: randomUUID(),
     type,
-    appCode: 'crmthink.gptmaker',
+    appCode: 'crmthink.thinkflow',
     installationId: INSTALLATION,
     memberId: MEMBER,
     occurredAt: new Date().toISOString(),
@@ -104,7 +104,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
       .setSubject(claims.sub)
-      .setAudience(claims.aud ?? 'crmthink.gptmaker')
+      .setAudience(claims.aud ?? 'crmthink.thinkflow')
       .setIssuer(wiremock.baseUrl)
       .setExpirationTime('15m')
       .sign(privateKey);
@@ -147,7 +147,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
           urlPath: '/rest/app.info.json',
           bodyPatterns: [{ matchesJsonPath: "$[?(@.auth == 'portal-token')]" }],
         },
-        response: { status: 200, jsonBody: { result: { ID: 1, CODE: 'crmthink.gptmaker' } } },
+        response: { status: 200, jsonBody: { result: { ID: 1, CODE: 'crmthink.thinkflow' } } },
       },
       {
         request: { method: 'GET', urlPath: '/v2/workspaces' },
@@ -175,6 +175,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       GPTMAKER_API_TOKEN: 'test-token',
       GPTMAKER_WORKSPACE_ID: 'ws-1',
       PLATFORM_URL: wiremock.baseUrl,
+      APP_CODE: 'crmthink.thinkflow',
       PLATFORM_API_KEY: 'api-key',
       PLATFORM_WEBHOOK_SECRETS: `novo,${SECRET}`,
       STORAGE_ENDPOINT: 'http://127.0.0.1:1',
@@ -205,7 +206,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
         installationId: INSTALLATION,
         memberId: MEMBER,
         domain: 'x',
-        appCode: 'crmthink.gptmaker',
+        appCode: 'crmthink.thinkflow',
         isReinstall: false,
       },
       'segredo-errado',
@@ -431,7 +432,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
           status: 200,
           jsonBody: {
             installationId: INSTALLATION,
-            appCode: 'crmthink.gptmaker',
+            appCode: 'crmthink.thinkflow',
             memberId: MEMBER,
             domain: 'acme.bitrix24.com.br',
             status: 'active',
