@@ -16,6 +16,7 @@ x-backend-env: &backend-env
   GPTMAKER_API_TOKEN: ${GPTMAKER_API_TOKEN:-trocar}
   GPTMAKER_WORKSPACE_ID: ${GPTMAKER_WORKSPACE_ID:-trocar}
   API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:3001}
+  APP_CODE: ${APP_CODE:-crmthink.homolog-thinkflow}
   PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
   PLATFORM_API_KEY: ${PLATFORM_API_KEY:-trocar}
   PLATFORM_WEBHOOK_SECRETS: ${PLATFORM_WEBHOOK_SECRETS:-trocar}
@@ -139,6 +140,7 @@ services:
     ports: ['3000:3000']
     environment:
       PUBLIC_PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
+      PUBLIC_APP_CODE: ${APP_CODE:-crmthink.homolog-thinkflow}
       PUBLIC_API_BASE_URL: http://localhost:3001
       PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       API_INTERNAL_URL: http://backend-api:3001

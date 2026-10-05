@@ -18,6 +18,7 @@ import { TenantService, type Tenant } from '../../src/modules/tenancy/tenant.ser
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import { PlatformApiClient } from '../../src/shared/platform/platform-api.client';
+import type { Env } from '../../src/config/env';
 import * as schema from '../../src/shared/database/schema/index';
 
 const { paymentEvent, planEntitlement, subscriptionState, tenant } = schema;
@@ -72,7 +73,7 @@ describe('consistência da projeção da assinatura', () => {
     return {
       eventId: randomUUID(),
       type,
-      appCode: 'crmthink.gptmaker',
+      appCode: 'crmthink.thinkflow',
       installationId,
       memberId: owner.memberId,
       occurredAt: new Date().toISOString(),
@@ -124,6 +125,7 @@ describe('consistência da projeção da assinatura', () => {
       events,
       db,
       redis,
+      { APP_CODE: 'crmthink.thinkflow' } as Env,
     );
     await db.insert(planEntitlement).values([
       { planSpaId: String(PLAN), planType: 'subscription', creditsPerCycle: 5000 },

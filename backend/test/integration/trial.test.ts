@@ -74,7 +74,7 @@ describe('trial por cadastro', () => {
     return {
       eventId: randomUUID(),
       type: 'subscription.trial_started',
-      appCode: 'crmthink.gptmaker',
+      appCode: 'crmthink.thinkflow',
       installationId,
       memberId: owner.memberId,
       occurredAt: new Date().toISOString(),

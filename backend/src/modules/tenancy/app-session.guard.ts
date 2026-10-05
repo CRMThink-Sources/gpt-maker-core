@@ -45,7 +45,7 @@ const ACCESS = 'app:access';
 
 /**
  * Autentica a rota pelo JWT da sessão do iframe (`Authorization: Bearer`), validado localmente
- * pelo JWKS da plataforma (assinatura RS256, `iss`, `aud` = `crmthink.gptmaker`, `exp`), e
+ * pelo JWKS da plataforma (assinatura RS256, `iss`, `aud` = `APP_CODE` do ambiente, `exp`), e
  * resolve tenant e permissão. `manage`: admin do portal ou usuário autorizado; `admin`: só admin.
  */
 export function AppAuth(access: AppAccess = 'read') {

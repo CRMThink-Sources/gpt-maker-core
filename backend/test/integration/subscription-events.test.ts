@@ -62,7 +62,7 @@ describe('ciclo de vida da assinatura', () => {
     return {
       eventId: randomUUID(),
       type,
-      appCode: 'crmthink.gptmaker',
+      appCode: 'crmthink.thinkflow',
       installationId,
       memberId: owner.memberId,
       occurredAt: new Date().toISOString(),

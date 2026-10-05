@@ -7,7 +7,6 @@ export * from './intentions';
 export * from './models';
 export * from './notifications';
 export * from './plans';
-export * from './platform';
 export * from './trainings';
 export * from './trial';
 export * from './triggers';

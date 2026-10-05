@@ -8,6 +8,7 @@ const base = {
   DATA_ENCRYPTION_KEY: 'a2V5',
   GPTMAKER_API_TOKEN: 'token',
   GPTMAKER_WORKSPACE_ID: 'ws',
+  APP_CODE: 'crmthink.thinkflow',
   PLATFORM_URL: 'https://platform.exemplo.com.br',
   PLATFORM_API_KEY: 'key',
   PLATFORM_WEBHOOK_SECRETS: 's1',

@@ -52,7 +52,7 @@ describe('carência de pagamento', () => {
     return {
       eventId: randomUUID(),
       type,
-      appCode: 'crmthink.gptmaker',
+      appCode: 'crmthink.thinkflow',
       installationId,
       memberId: owner.memberId,
       occurredAt: occurredAt.toISOString(),

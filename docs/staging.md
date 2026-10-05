@@ -108,6 +108,7 @@ Secrets:
 
 `ENV_FILE`: copie `infra/.env.prod.example` e preencha:
 
+- `APP_CODE=crmthink.homolog-thinkflow` (o código do app no cadastro da plataforma de staging)
 - domínios `thinkflow-staging.crmthink.com.br` e `api.thinkflow-staging.crmthink.com.br`; `API_PUBLIC_URL`, `FRONTEND_ORIGINS` e `PUBLIC_API_BASE_URL` com eles
 - senhas novas do Postgres e do RabbitMQ (`openssl rand -hex 24`), repetidas na `DATABASE_URL` e na `RABBITMQ_URL`
 - GPTMaker do workspace de staging; plataforma de staging; Spaces do bucket de staging
