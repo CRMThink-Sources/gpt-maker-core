@@ -1,6 +1,6 @@
 'use client';
 
-import type { TrainingUsage, TrainingView } from '@gptmaker/contracts';
+import { TRAINING_TEXT_MAX, type TrainingUsage, type TrainingView } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { BookIcon, FileIcon, GlobeIcon, PlusIcon, TextIcon, VideoIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
@@ -381,13 +381,17 @@ function EditTextModal({
       )}
       <textarea
         className={`${inputClass} mt-0 min-h-64`}
-        maxLength={50_000}
+        maxLength={TRAINING_TEXT_MAX}
         autoFocus
         disabled={saving}
         value={text}
         onChange={(e) => setText(e.target.value)}
         aria-label="Conteúdo do treinamento"
       />
+      <p className="mt-1.5 text-xs text-zinc-500">
+        {text.length.toLocaleString('pt-BR')}/{TRAINING_TEXT_MAX.toLocaleString('pt-BR')}{' '}
+        caracteres.
+      </p>
     </Modal>
   );
 }

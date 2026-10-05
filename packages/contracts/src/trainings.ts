@@ -23,9 +23,12 @@ const httpUrl = z
   .url({ protocol: /^https?$/, message: 'informe um endereço http ou https' })
   .max(2000);
 
+/** Tamanho máximo do texto de um treinamento (criação e edição). */
+export const TRAINING_TEXT_MAX = 1028;
+
 /** Treinamentos sem arquivo; documento vai por upload (`multipart/form-data`, campo `file`). */
 export const createTrainingSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('TEXT'), text: z.string().trim().min(1).max(50_000) }),
+  z.object({ type: z.literal('TEXT'), text: z.string().trim().min(1).max(TRAINING_TEXT_MAX) }),
   z.object({
     type: z.literal('WEBSITE'),
     url: httpUrl,
@@ -38,7 +41,9 @@ export const createTrainingSchema = z.discriminatedUnion('type', [
 export type CreateTrainingInput = z.input<typeof createTrainingSchema>;
 
 /** Só treinamentos de texto são editáveis; os demais são removidos e criados de novo. */
-export const updateTrainingSchema = z.object({ text: z.string().trim().min(1).max(50_000) });
+export const updateTrainingSchema = z.object({
+  text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
+});
 export type UpdateTrainingInput = z.input<typeof updateTrainingSchema>;
 
 /**
