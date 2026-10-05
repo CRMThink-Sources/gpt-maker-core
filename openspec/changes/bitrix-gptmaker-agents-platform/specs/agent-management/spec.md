@@ -5,7 +5,7 @@ O sistema MUST permitir que o tenant crie um agente informando nome, avatar, com
 
 #### Scenario: Criação com sucesso
 - **WHEN** um administrador do tenant envia o formulário válido de novo agente e o tenant está abaixo do limite de agentes
-- **THEN** o sistema cria o agente no GPTMaker com nome prefixado pelo tenant, aplica o modelo via `prefferModel` nas settings, persiste o registro local com status `ACTIVE`, configura os webhooks do agente apontando para o backend e retorna o agente criado
+- **THEN** o sistema registra a criação em andamento, cria o agente no GPTMaker com o nome dado pelo cliente, aplica o modelo via `prefferModel` nas settings, persiste o registro local com status `ACTIVE`, configura os webhooks do agente apontando para o backend e retorna o agente criado
 
 #### Scenario: Modelo não permitido
 - **WHEN** o formulário informa modelo inativo ou não permitido pelo plano

@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
+import { AdminProvider } from './admin-provider';
 
-export const metadata: Metadata = { title: 'Backoffice GPTMaker', robots: { index: false } };
+export const metadata: Metadata = { title: 'Backoffice ThinkFlow AI', robots: { index: false } };
 
-/** Backoffice interno (autenticação de operadores na seção 15). */
+/**
+ * Backoffice interno (spec admin-backoffice, design D17): operadores com senha + TOTP, fora do
+ * Bitrix. A API é chamada pelo repasse `/admin/api/*` do próprio frontend (cookie de primeira parte).
+ */
 export default function AdminLayout({ children }: LayoutProps<'/admin'>) {
-  return <main className="flex-1 p-6">{children}</main>;
+  return <AdminProvider>{children}</AdminProvider>;
 }

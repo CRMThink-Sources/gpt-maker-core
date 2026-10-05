@@ -47,6 +47,15 @@ describe('GptMakerClient', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-secreto');
   });
 
+  it('lista de agentes no envelope { data, count } da API real', async () => {
+    const { c } = client([
+      { status: 200, body: { data: [{ id: 'a1', name: '[t1] Bot' }], count: 1 } },
+    ]);
+    await expect(c.listWorkspaceAgents({ page: 0, pageSize: 50 })).resolves.toEqual([
+      { id: 'a1', name: '[t1] Bot' },
+    ]);
+  });
+
   it('envia corpo JSON validado', async () => {
     const { c, calls } = client([{ status: 200, body: { id: 'a1', name: '[t1] Bot' } }]);
     await c.createAgent({ name: '[t1] Bot', type: 'SUPPORT', communicationType: 'NORMAL' });

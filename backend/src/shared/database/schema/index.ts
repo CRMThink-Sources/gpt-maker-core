@@ -4,6 +4,7 @@ export * from './agents';
 export * from './backoffice';
 export * from './billing';
 export * from './models';
+export * from './notifications';
 export * from './payments';
 export * from './reconciliation';
 export * from './tenancy';

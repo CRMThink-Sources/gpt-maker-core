@@ -8,4 +8,4 @@ export {
   type AgentStatus,
   type NewAgent,
 } from './agent.repository';
-export { AgentService, hashWebhookToken, type AgentOwner } from './agent.service';
+export { AgentService, hashWebhookToken, webhookUrlsFor, type AgentOwner } from './agent.service';

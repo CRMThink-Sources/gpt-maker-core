@@ -38,6 +38,7 @@ describe('chatbot do Bitrix por agente', () => {
   let events: AgentEvents;
   let lifecycle: TenantLifecycle;
   let modelId: string;
+  let env: Env;
   let owner: Tenant;
 
   const ok = (result: unknown) => ({ status: 200, jsonBody: { result } });
@@ -109,10 +110,11 @@ describe('chatbot do Bitrix por agente', () => {
       },
       { timeoutMs: 5000, maxAttempts: 1, acquire: async () => {} },
     );
-    service = new ChatbotService(bitrix, db, { API_PUBLIC_URL: API } as Env);
+    env = { API_PUBLIC_URL: API, APP_ROLE: 'api' } as Env;
+    service = new ChatbotService(bitrix, db, env);
     events = new AgentEvents();
     lifecycle = new TenantLifecycle();
-    sync = new ChatbotSync(service, events, lifecycle, db, redis);
+    sync = new ChatbotSync(service, events, lifecycle, db, redis, env);
     sync.onModuleInit();
     const [model] = await db
       .insert(aiModel)
@@ -204,6 +206,26 @@ describe('chatbot do Bitrix por agente', () => {
     expect((await bodies(UPDATE))[0]).toMatchObject({
       fields: { properties: { name: 'Ana Paula' } },
     });
+  });
+
+  it('API_PUBLIC_URL mudou (túnel novo): a reconciliação leva o webhook novo ao bot', async () => {
+    await stubBitrix();
+    const row = await newAgent();
+    await service.syncAgent(row.id);
+    await wiremock.reset();
+    await stubBitrix();
+
+    env.API_PUBLIC_URL = 'https://tunel-novo.trycloudflare.com';
+    try {
+      expect(await sync.reconcile()).toMatchObject({ pending: 1, synced: 1 });
+      expect((await bodies(UPDATE))[0]).toMatchObject({
+        botId: 456,
+        fields: { webhookUrl: 'https://tunel-novo.trycloudflare.com/bitrix/bots/events' },
+      });
+      expect(await sync.reconcile()).toMatchObject({ pending: 0 });
+    } finally {
+      env.API_PUBLIC_URL = API;
+    }
   });
 
   it('bot apagado no portal (BOT_NOT_FOUND): registra de novo', async () => {

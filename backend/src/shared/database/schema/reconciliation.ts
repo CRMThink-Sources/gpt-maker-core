@@ -37,6 +37,35 @@ export const usageDailyReal = pgTable(
 );
 
 /**
+ * Consumo real de agentes do workspace sem vínculo com tenant (órfãos do workspace-sync): custo do
+ * partner que nenhum cliente paga (relatório do partner, spec usage-reconciliation).
+ */
+export const usageDailyUnlinked = pgTable(
+  'usage_daily_unlinked',
+  {
+    gptmakerAgentId: text('gptmaker_agent_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    modelCode: text('model_code').notNull(),
+    credits: integer('credits').notNull(),
+    collectedAt: timestamptz('collected_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.gptmakerAgentId, t.day, t.modelCode] }),
+    index('usage_daily_unlinked_day_idx').on(t.day),
+  ],
+);
+
+export const reconciliationStatus = pgEnum('reconciliation_status', [
+  'APPLIED',
+  'WITHIN_TOLERANCE',
+  'REVIEW',
+  /** Revisão aprovada por um operador: ajuste da diferença inteira lançado. */
+  'APPROVED',
+  /** Revisão descartada por um operador: nada lançado além do que já estava. */
+  'DISMISSED',
+]);
+
+/**
  * Total já ajustado por (agente, dia): a reexecução lança só a diferença ainda não ajustada.
  * O `ADJUSTMENT` no ledger usa idempotency key com esse total.
  */
@@ -54,6 +83,14 @@ export const reconciliationAdjustment = pgTable(
     debitedTotal: integer('debited_total').notNull(),
     /** Soma dos `ADJUSTMENT` já lançados (positivo devolve créditos, negativo cobra). */
     adjustedTotal: integer('adjusted_total').notNull().default(0),
+    /** `REVIEW`: diferença acima do limite, não lançada; aguarda um operador (backoffice). */
+    status: reconciliationStatus('status').notNull().default('APPLIED'),
+    /**
+     * Decisão do operador (`APPROVED`/`DISMISSED`) vale para os totais em que foi tomada: a
+     * reexecução com o mesmo consumo e débito a mantém; com totais novos, decide de novo.
+     */
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: timestamptz('reviewed_at'),
     updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.day] })],

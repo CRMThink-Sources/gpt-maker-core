@@ -1,0 +1,56 @@
+#cloud-config
+# Inicialização do Droplet (staging ou produção), colada em "User data" na criação.
+# Antes de colar, troque <CHAVE_PUBLICA_DO_DEPLOY> pela chave pública do par usado pelo GitHub
+# Actions (secret DEPLOY_SSH_KEY). Roteiro completo: docs/staging.md.
+#
+# O que faz: usuário `deploy` (só chave, grupo docker), Docker + Compose, swap de 2 GB,
+# atualizações de segurança automáticas, SSH sem senha e sem root, e o diretório de dados no
+# Volume (o painel monta em /mnt/<nome_do_volume>; o .env usa /mnt/gptmaker-data).
+
+package_update: true
+package_upgrade: true
+packages:
+  - unattended-upgrades
+  - ca-certificates
+  - curl
+
+users:
+  - default
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - <CHAVE_PUBLICA_DO_DEPLOY>
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/60-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+  - path: /etc/docker/daemon.json
+    content: |
+      { "log-driver": "json-file", "log-opts": { "max-size": "20m", "max-file": "5" } }
+
+runcmd:
+  # Docker oficial (inclui o plugin compose)
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker deploy
+  - systemctl enable --now docker
+  # Swap: folga para picos de memória (build não roda aqui, mas Postgres + Node somam)
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  # Dados no Volume: aponta /mnt/gptmaker-data para o ponto de montagem do painel
+  - |
+    VOLUME_MOUNT="$(findmnt -rno TARGET | grep '^/mnt/' | head -n1)"
+    if [ -n "$VOLUME_MOUNT" ] && [ "$VOLUME_MOUNT" != /mnt/gptmaker-data ]; then
+      ln -sfn "$VOLUME_MOUNT" /mnt/gptmaker-data
+    else
+      mkdir -p /mnt/gptmaker-data
+      echo "AVISO: nenhum Volume montado em /mnt; os dados ficam no disco do Droplet" > /root/VOLUME_AUSENTE
+    fi
+    mkdir -p /mnt/gptmaker-data/postgres /mnt/gptmaker-data/rabbitmq /mnt/gptmaker-data/redis
+  # Diretório da stack (DEPLOY_DIR no GitHub Environment)
+  - install -d -o deploy -g deploy /opt/gptmaker
+  - systemctl restart ssh
+  - dpkg-reconfigure -f noninteractive unattended-upgrades

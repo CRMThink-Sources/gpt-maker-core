@@ -121,7 +121,6 @@ export default function AgentSettingsPage() {
           models={models}
           currentModel={agent.model}
           readOnly={!session.canManage || agent.status === 'OUT_OF_SYNC'}
-          cancelHref="/app"
           onSubmit={save}
         />
       )}

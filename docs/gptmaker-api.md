@@ -88,7 +88,7 @@ Exemplo (montado a partir do schema):
 | `pageSize` | integer (int32) | Tamanho da página          |
 | `query`    | string          | Filtro pelo nome do agente |
 
-- Resposta `200`: **array** de `Assistant` (ver §2.0). **Não há envelope de paginação** (sem `total`, `hasMore` etc.). Base da página (0 ou 1), valor padrão e máximo de `pageSize`: **NÃO DOCUMENTADO**.
+- Resposta `200` documentada: **array** de `Assistant` (ver §2.0), sem envelope. **Observado na API real (2026-10-03): `{ data: Assistant[], count }`**, com `count` = total de agentes do workspace; o cliente aceita os dois formatos. Base da página (0 ou 1), valor padrão e máximo de `pageSize`: **NÃO DOCUMENTADO**.
 
 ---
 
@@ -375,7 +375,53 @@ Os 8 nomes do rascunho estão todos confirmados com a grafia exata acima.
 
 ### 5.4 Payload enviado pelo GPTMaker
 
-**NÃO DOCUMENTADO** para todos os 8 eventos: a documentação não descreve corpo, headers, método HTTP, assinatura/HMAC, política de retry nem timeout das chamadas de webhook. Isso vale também para os callbacks `callbackUrl`/`onFinishCallback` da conversa (§6) e `callbackUrl` de treinamento (§4.2). Será necessário capturar payloads reais (ex. webhook.site) antes de tipá-los. Schemas relacionados que podem servir de pista (não confirmados como payload de webhook): `Message`, `Chat`, `Interaction` no OpenAPI (ver Apêndice A).
+**NÃO DOCUMENTADO** na documentação oficial para os 8 eventos: corpo, headers, método HTTP, assinatura/HMAC, política de retry e timeout. Isso vale também para os callbacks `callbackUrl`/`onFinishCallback` da conversa (§6) e `callbackUrl` de treinamento (§4.2). Schemas que podem servir de pista: `Message`, `Chat`, `Interaction` no OpenAPI (ver Apêndice A).
+
+#### 5.4.1 Payloads observados (capturados em 2026-10-01, conversa pela API, `channel: "API"`)
+
+Capturados pelo endpoint `/gptmaker/webhooks/{event}` do app (gravados em `agent_event`). Chegam por `POST` com corpo JSON. Valores de ids e nomes trocados por exemplos.
+
+`onFirstInteraction` e `onStartInteraction` (mesmo corpo; os dois chegaram juntos no primeiro atendimento do diálogo):
+
+```json
+{
+  "name": "Maria",
+  "agentId": "<id do agente>",
+  "channel": "API",
+  "protocol": 1005,
+  "channelId": "<id do canal>",
+  "contextId": "public-api-<id do agente>-<tenantId>:chat9498",
+  "recipient": "<tenantId>:chat9498",
+  "interactionId": "<id do atendimento>"
+}
+```
+
+`onNewMessage` (um por mensagem, do cliente e do agente; `role` distingue):
+
+```json
+{
+  "date": "2026-10-01T17:26:53.388+00:00",
+  "role": "user",
+  "audios": [],
+  "images": [],
+  "channel": "API",
+  "message": "Boa tarde",
+  "contextId": "public-api-<id do agente>-<tenantId>:chat9498",
+  "documents": [],
+  "messageId": "<id da mensagem>",
+  "assistantId": "<id do agente>",
+  "contactName": "Maria",
+  "contactPhone": null
+}
+```
+
+Observações:
+
+- **`contextId` vem prefixado** pelo GPTMaker: `public-api-<agentId>-` + o `contextId` que o app mandou na conversa (§6). O valor original só aparece em `recipient`, e só nos eventos de atendimento (`onFirstInteraction`, `onStartInteraction`). O app tira o diálogo do Bitrix do que vem depois de `<tenantId>:`, em `contextId` ou `recipient`.
+- `onNewMessage` chega também para as respostas do agente (`role: "assistant"`), poucos segundos depois da mensagem do cliente.
+- O corpo do `onNewMessage` usa `assistantId`; o dos atendimentos, `agentId`.
+- O `contextId` prefixado é o id do chat no GPTMaker: é o `id` que `GET /workspace/{id}/chats` devolve para esse diálogo (§7). O `interactionId` identifica o atendimento.
+- **Não capturados** (não dispararam no teste): `onTransfer` (pedir humano só gerou `onNewMessage`; provavelmente exige transferência configurada no agente), `onLackKnowLedge`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`. Headers, assinatura e retries também seguem sem confirmação.
 
 ---
 
@@ -396,13 +442,15 @@ Os 8 nomes do rascunho estão todos confirmados com a grafia exata acima.
 
 Variantes (campos específicos e obrigatórios):
 
-| Variante (título na doc) | Campos específicos                   | `required`                     |
-| ------------------------ | ------------------------------------ | ------------------------------ |
-| Texto                    | `prompt` (string)                    | `contextId`, `prompt`          |
-| Imagem                   | `prompt`, `image` (URL)              | `contextId`, `prompt`, `image` |
-| Áudio                    | `audio` (URL) — sem `prompt`         | `contextId`, `audio`           |
-| Vídeo                    | `video` (URL), `prompt` (caption)    | `contextId`, `video`           |
-| Documento                | `document` (URL), `prompt` (caption) | `contextId`, `document`        |
+| Variante (título na doc) | Campos específicos                   | `required`                         |
+| ------------------------ | ------------------------------------ | ---------------------------------- |
+| Texto                    | `prompt` (string)                    | `contextId`, `prompt`              |
+| Imagem                   | `prompt`, `image` (URL)              | `contextId`, `prompt`, `image` (¹) |
+| Áudio                    | `audio` (URL) — sem `prompt`         | `contextId`, `audio`               |
+| Vídeo                    | `video` (URL), `prompt` (caption)    | `contextId`, `video`               |
+| Documento                | `document` (URL), `prompt` (caption) | `contextId`, `document`            |
+
+(¹) Divergência da API real (testado em 2026-10-01): imagem sem `prompt` (ou com `prompt: ""`) é aceita, `200` com `success: true`, e o agente descreve a imagem. O app manda o texto do cliente como `prompt` só quando existe.
 
 Exemplo (valores copiados dos `example` do OpenAPI, variante Texto):
 
@@ -437,7 +485,7 @@ Observações:
 - Campo `email`: **NÃO DOCUMENTADO** (não existe no schema).
 - Resposta quando `callbackUrl` é informado (chamada assíncrona): corpo da resposta imediata e payload enviado ao callback **NÃO DOCUMENTADOS**.
 - Comportamento quando o chat está sob controle humano (§7), agente inativo ou sem créditos: **NÃO DOCUMENTADO**.
-- Relação `contextId` ↔ `chatId`: o schema `Interaction` descreve `chatId` como "Id do chat/contextId", sugerindo que o `contextId` enviado aqui vira o `chatId` usado em §7. Não há afirmação explícita além disso.
+- Relação `contextId` ↔ `chatId`: `chatId = public-api-<agentId>-<contextId>` (observado; ver §7).
 
 Endpoint relacionado (fora do rascunho, útil para disparos ativos): **`POST /v2/agent/{agentId}/add-message`** — adiciona mensagem ao contexto sem gerar resposta; campos `contextId` (obrigatório), `prompt`, `image`/`audio`/`video`/`document`, `role` (`"user"` ou `"assistant"`, default `"assistant"`). Fonte: https://developer.gptmaker.ai/api-reference/agents/add-context
 
@@ -460,6 +508,8 @@ Endpoint relacionado (fora do rascunho, útil para disparos ativos): **`POST /v2
 - Resposta `200`: `{ "success": boolean }`.
 
 O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, retornado por `GET /v2/workspace/{workspaceId}/chats` (https://developer.gptmaker.ai/api-reference/chats/list-chats).
+
+**`chatId` de uma conversa pela API (observado em 2026-10-01):** `public-api-<agentId>-<contextId>`, onde `<contextId>` é o valor mandado em `/conversation` (§6). A listagem de chats devolve esse `id`, com o `contextId` original em `recipient` e `type: "API"`; é o mesmo valor que chega como `contextId` nos webhooks (§5.4.1). O app calcula o `chatId` sem consultar a listagem. Ainda não testado: `start-human`/`stop-human` com esse id.
 
 ---
 
@@ -484,6 +534,13 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 { "total": 0, "data": [{ "credits": 0, "year": 2026, "month": 9, "day": 25, "model": "string" }] }
 ```
 
+**Observado em 2026-10-03** (workspace de teste, chamadas reais):
+
+- `year` é **obrigatório**: sem ele a API responde `Year is required` (texto puro), apesar de o OpenAPI marcar todos como opcionais. Com `year` + `month` vêm os dias do mês; com `day`, só aquele dia.
+- `data[].model` traz o **código do enum** `prefferModel` (ex.: `GPT_5_MINI`), o mesmo do catálogo de modelos do app.
+- Os totais bateram com as respostas do app no mesmo dia (6 créditos em 03/10 para 6 respostas de GPT-5 Mini). O GPTMaker também conta conversas feitas fora do app (testes no painel), que só a reconciliação corrige.
+- O **fuso** do agrupamento por dia segue a confirmar: as mensagens de teste caíram no mesmo dia em UTC e em Brasília. A reconciliação usa `RECONCILIATION_TIMEZONE` (padrão `America/Sao_Paulo`); uma mensagem entre 21:00 e 23:59 de Brasília resolve a dúvida.
+
 **Inteiros ou fracionários?** Em toda a documentação os créditos são `integer`: `Credits.credits`, `total` (int32), `data[].credits`, e a tabela de cobrança usa apenas valores inteiros por resposta (1 a 25). Não há menção a créditos fracionários. Observação para implementação: `int32` limita `total` a 2.147.483.647.
 
 ---
@@ -496,6 +553,31 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
   - `403` — "Erro de token" — `{ "error": "<mensagem>" }` (token inválido/ausente responde **403**, não 401)
 - Outras rotas da API (fora do escopo) documentam também `500` com `{ "error": string }` e `204` com corpo — portanto um cliente robusto deve tratar `500` e `2xx` em geral.
 - `401`, `404`, `422`, `429`: **NÃO DOCUMENTADOS**. Conteúdo/códigos das mensagens `error`: **NÃO DOCUMENTADO**.
+
+---
+
+## 10. Intenções do agente
+
+- Fonte: https://developer.gptmaker.ai/api-reference/intentions (OpenAPI) e leitura de uma intenção criada no painel em 2026-10-04.
+- **`GET /v2/agent/{agentId}/intentions`** (`page`, `pageSize`, `query` pela descrição). Resposta real no envelope **`{ data: Intention[], count }`** (o OpenAPI diz array).
+- **`POST /v2/agent/{agentId}/intentions`**: cria. Desde 2026-10-04 responde **`{ id, tenant }`** (antes `{ success }`, sem id; o app ainda localiza pela listagem quando o id não vem).
+- **`PUT /v2/intention/{intentionId}`**: atualiza com o objeto inteiro; desde 2026-10-04 responde `{ tenant }` (antes `{ success }`).
+- **`DELETE /v2/intention/{intentionId}`**: remove; resposta `{ success }`.
+
+Campos observados (painel atual ⇒ API):
+
+| Painel                                      | Campo                                       | Observação                                                                                                      |
+| ------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Nome da intenção                            | `description`                               | Nome curto (a página de listagem do OpenAPI chama de "descrição")                                               |
+| Quando usar                                 | `details`                                   | O que o agente lê para decidir usar a intenção                                                                  |
+| Resposta baseada em "instrução customizada" | `manualOutput: true` + `instructions`       | `false`: resposta baseada no retorno da API (padrão). Os dois campos não estão no schema `Intention` do OpenAPI |
+| Informações a coletar                       | `fields[]`                                  | `name`, `jsonName`, `description`, `type`, `required` (pode vir `null`), `example`, `sequence`, `isHidden`      |
+| Ação: Chamar Webhook                        | `type: WEBHOOK`, `httpMethod`, `url`        | Campo citado como **`{{jsonName}}`** (chaves duplas) na URL, nos parâmetros e no corpo                          |
+| Headers / Params / Body                     | `headers[]`, `params[]`, `requestBody`      | Valores voltam em texto aberto na listagem; `requestBody` é uma string JSON                                     |
+| Gerar automaticamente (Params / Body)       | `autoGenerateParams`, `autoGenerateBody`    |                                                                                                                 |
+| —                                           | `variables[]`                               | Grava o valor (`{{campo}}`) em campo do contato do GPTMaker (`defaultFieldKey` ou `customField`)                |
+| —                                           | `active`                                    | Liga/desliga a intenção                                                                                         |
+| (não existe mais no painel)                 | `preprocessingMessage`, `preprocessingText` | Veio `DISABLED`/`null`; a mensagem de espera da documentação antiga                                             |
 
 ---
 
@@ -517,7 +599,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 | ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `/workspaces`                             | `GET /v2/workspaces`                                        | ok (plural)                                                                                             |
 | `/workspace/{id}/credits`                 | `GET /v2/workspace/{workspaceId}/credits`                   | ok (singular); `status` TRIAL\|ACTIVE\|PAST_DUE\|CANCELED confirmado                                    |
-| `/workspace/{id}/agents`                  | `GET /v2/workspace/{workspaceId}/agents`                    | ok; paginação por `page`/`pageSize` + filtro `query`, sem envelope                                      |
+| `/workspace/{id}/agents`                  | `GET /v2/workspace/{workspaceId}/agents`                    | ok; paginação por `page`/`pageSize` + filtro `query`, real responde `{ data, count }`                   |
 | criar agente "no workspace"               | `POST /v2/workspace/{workspaceId}/agents`                   | —                                                                                                       |
 | obter/atualizar/remover agente            | `GET` / `PUT` / `DELETE /v2/agent/{agentId}`                | atualização é **PUT** (não PATCH)                                                                       |
 | `/agent/{id}/active`, `/inactive`         | `PUT /v2/agent/{agentId}/active` e `/inactive`              | confirmados; verbo **PUT**                                                                              |
@@ -543,7 +625,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 
 ### Não documentado (precisa de validação empírica)
 
-1. Payload, headers, método, assinatura e retries de **todos** os webhooks (8 eventos do agente, `callbackUrl`/`onFinishCallback` da conversa, `callbackUrl` de treinamento).
+1. Payload, headers, método, assinatura e retries dos webhooks. Capturados `onFirstInteraction`, `onStartInteraction` e `onNewMessage` (§5.4.1); faltam `onTransfer`, `onLackKnowLedge`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`, os callbacks da conversa e o `callbackUrl` de treinamento, além de headers, assinatura e retries de todos.
 2. Resposta imediata da conversa quando `callbackUrl` é informado (modo assíncrono).
 3. Rate limits (`429`, headers, cotas).
 4. Paginação: base de `page`, padrão/máximo de `pageSize`, ausência de total.
@@ -551,7 +633,7 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 6. Semântica de PUT (merge parcial ou substituição) em agente, settings e webhooks; forma de limpar um webhook.
 7. Enum completo de `status` do agente (observados `ACTIVE` e `DISABLED`; o campo não está no OpenAPI).
 8. Status de processamento de treinamentos; MIME types e tamanhos aceitos.
-9. Valor de `data[].model` em credits-spent (enum ou nome comercial), padrão dos filtros e fuso horário.
+9. Fuso horário do agrupamento por dia em credits-spent (o `model` é o código do enum e `year` é obrigatório: §8).
 10. Formato de `timezone` e do valor de `onLackKnowLedge` em settings.
 11. Comportamento da conversa com chat em modo humano, agente inativo ou workspace sem créditos (status HTTP e corpo).
 12. Mapeamento oficial enum `prefferModel` → linha da tabela de custo (feito aqui por correspondência de nome).

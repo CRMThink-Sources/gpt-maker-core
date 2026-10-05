@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev:api": "nest start --watch -b swc --entryFile main.api",
-    "dev:worker": "nest start --watch -b swc --entryFile main.worker",
+    "dev:api": "nest start --watch -b swc --entryFile main.api --env-file .env",
+    "dev:worker": "nest start --watch -b swc --entryFile main.worker --env-file .env",
     "start:api": "node dist/main.api.js",
     "start:worker": "node dist/main.worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -13,7 +13,9 @@
     "test:integration": "vitest run --project integration",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js",
+    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",
@@ -40,7 +42,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1144.0",
     "@aws-sdk/s3-request-presigner": "^3.1144.0",
-    "@crmthink-sources/platform-sdk": "^1.0.0",
+    "@crmthink-sources/platform-sdk": "^1.1.0",
     "@golevelup/nestjs-rabbitmq": "^9.0.2",
     "@gptmaker/contracts": "*",
     "@nestjs/common": "^11.2.6",

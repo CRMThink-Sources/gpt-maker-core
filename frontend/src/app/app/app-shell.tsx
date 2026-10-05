@@ -3,7 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
-import { BoltIcon, BotIcon, CloseIcon, MenuIcon, UsersIcon, WalletIcon } from '@/components/icons';
+import {
+  BellIcon,
+  BoltIcon,
+  BotIcon,
+  CloseIcon,
+  MenuIcon,
+  UsersIcon,
+  WalletIcon,
+} from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Alert, Avatar } from '@/components/ui';
 import { useAppSession } from './session-provider';
@@ -28,7 +36,12 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
       },
       // Treinamentos ficam em cada agente (aba). Seções seguintes (10 e 12) entram quando existirem.
       { label: 'Gatilhos', icon: BoltIcon },
-      { label: 'Créditos e plano', icon: WalletIcon },
+      {
+        label: 'Créditos e plano',
+        icon: WalletIcon,
+        href: '/app/plan',
+        match: (path) => path.startsWith('/app/plan'),
+      },
     ],
   },
   {
@@ -39,6 +52,13 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         icon: UsersIcon,
         href: '/app/permissions',
         match: (path) => path.startsWith('/app/permissions'),
+        adminOnly: true,
+      },
+      {
+        label: 'Avisos',
+        icon: BellIcon,
+        href: '/app/notifications',
+        match: (path) => path.startsWith('/app/notifications'),
         adminOnly: true,
       },
     ],

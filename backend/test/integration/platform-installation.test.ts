@@ -1,8 +1,9 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { RabbitMQContainer, StartedRabbitMQContainer } from '@testcontainers/rabbitmq';
+import type { StartedRabbitMQContainer } from '@testcontainers/rabbitmq';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { exportJWK, generateKeyPair, SignJWT, type CryptoKey } from 'jose';
@@ -15,8 +16,16 @@ import { contextMiddleware } from '../../src/shared/context/context.middleware';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { DB, type Database } from '../../src/shared/database/database.module';
 import { runMigrations } from '../../src/shared/database/migrate';
-import { agent, aiModel, paymentEvent, tenant } from '../../src/shared/database/schema/index';
+import {
+  agent,
+  agentBot,
+  aiModel,
+  paymentEvent,
+  tenant,
+} from '../../src/shared/database/schema/index';
+import { channelInboundQueue } from '../../src/shared/messaging/topology';
 import { initMetrics } from '../../src/shared/metrics/metrics';
+import { startRabbitMQ } from '../support/rabbitmq';
 import { WireMock } from '../support/wiremock';
 
 // Fluxo da seção 6 contra a API real (Postgres, Redis, RabbitMQ) com o WireMock fazendo o papel
@@ -105,7 +114,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
     [postgres, redis, rabbit, wiremock] = await Promise.all([
       new PostgreSqlContainer('postgres:16-alpine').start(),
       new RedisContainer('redis:7-alpine').start(),
-      new RabbitMQContainer('rabbitmq:4-alpine').start(),
+      startRabbitMQ(),
       WireMock.start(),
     ]);
     const keys = await generateKeyPair('RS256');
@@ -360,5 +369,138 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       ...platformEvent('installation.created'),
       appCode: 'crmthink.outro',
     }).expect(400);
+  });
+
+  describe('eventos de mensagem do chatbot (imbot.v2, webhook)', () => {
+    const APP_TOKEN = 'app-token-1001';
+    let agentId: string;
+
+    /** Corpo como o Bitrix manda no modo webhook: form-urlencoded, tudo texto. */
+    function botEvent(
+      overrides: { token?: string; messageId?: number; dialogId?: string; userBot?: string } = {},
+    ) {
+      const fields: Record<string, string> = {
+        event: 'ONIMBOTV2MESSAGEADD',
+        'data[bot][id]': '456',
+        'data[bot][code]': 'gptmaker_agent_x',
+        'data[bot][auth][member_id]': MEMBER,
+        'data[message][id]': String(overrides.messageId ?? 789),
+        'data[message][chatId]': '5',
+        'data[message][authorId]': '12',
+        'data[message][text]': 'Olá, qual o horário?',
+        'data[message][isSystem]': '0',
+        'data[chat][id]': '5',
+        'data[chat][dialogId]': overrides.dialogId ?? 'chat5',
+        'data[chat][type]': 'openChannel',
+        'data[chat][entityType]': 'LINES',
+        'data[chat][entityId]': 'whatsapp|1|5511999999999|10',
+        'data[user][id]': '12',
+        'data[user][name]': 'Maria',
+        'data[user][bot]': overrides.userBot ?? '0',
+        'data[user][connector]': '1',
+        'data[language]': 'br',
+        ts: '1772093963',
+        'auth[domain]': 'acme.bitrix24.com.br',
+        'auth[application_token]': overrides.token ?? APP_TOKEN,
+      };
+      return http()
+        .post('/bitrix/bots/events')
+        .type('form')
+        .send(new URLSearchParams(fields).toString());
+    }
+
+    /** Mensagens em todas as partições, com a fila em que caíram. */
+    async function drain(): Promise<Array<{ queue: string; body: Record<string, unknown> }>> {
+      const channel = app.get(AmqpConnection).channel;
+      const found: Array<{ queue: string; body: Record<string, unknown> }> = [];
+      for (let index = 0; index < 4; index++) {
+        const queue = channelInboundQueue(index);
+        for (;;) {
+          const message = await channel.get(queue, { noAck: true });
+          if (!message) break;
+          found.push({ queue, body: JSON.parse(message.content.toString()) });
+        }
+      }
+      return found;
+    }
+
+    beforeAll(async () => {
+      await wiremock.stub({
+        request: { method: 'GET', urlPath: `/v1/installations/${INSTALLATION}` },
+        response: {
+          status: 200,
+          jsonBody: {
+            installationId: INSTALLATION,
+            appCode: 'crmthink.gptmaker',
+            memberId: MEMBER,
+            domain: 'acme.bitrix24.com.br',
+            status: 'active',
+            applicationToken: APP_TOKEN,
+          },
+        },
+      });
+      const [owner] = await db.select().from(tenant).where(eq(tenant.memberId, MEMBER));
+      await db.update(tenant).set({ status: 'ACTIVE' }).where(eq(tenant.id, owner!.id));
+      const [model] = await db.select().from(aiModel).limit(1);
+      const [row] = await db
+        .insert(agent)
+        .values({
+          tenantId: owner!.id,
+          gptmakerAgentId: `gm-${randomUUID()}`,
+          name: 'Ana',
+          type: 'SUPPORT',
+          communicationType: 'NORMAL',
+          modelId: model!.id,
+          webhookTokenHash: randomUUID(),
+        })
+        .returning();
+      agentId = row!.id;
+      await db
+        .insert(agentBot)
+        .values({ agentId, tenantId: owner!.id, botId: '456', botCode: 'gptmaker_agent_x' });
+      await drain();
+    });
+
+    it('mensagem do cliente: 200 e publicada na partição do diálogo, já tipada', async () => {
+      await botEvent().expect(200, { status: 'ok' });
+
+      const [published, ...rest] = await drain();
+      expect(rest).toEqual([]);
+      expect(published!.body).toMatchObject({
+        agentId,
+        botId: 456,
+        dialogId: 'chat5',
+        chatId: 5,
+        messageId: 789,
+        text: 'Olá, qual o horário?',
+        user: { id: 12, name: 'Maria', connector: true },
+        chat: { entityType: 'LINES', entityId: 'whatsapp|1|5511999999999|10' },
+      });
+    });
+
+    it('evento repetido é publicado uma vez só', async () => {
+      await botEvent({ messageId: 900 }).expect(200);
+      await botEvent({ messageId: 900 }).expect(200);
+      expect(await drain()).toHaveLength(1);
+    });
+
+    it('mensagens do mesmo diálogo caem na mesma partição', async () => {
+      for (const messageId of [1001, 1002, 1003]) {
+        await botEvent({ messageId, dialogId: 'chat77' }).expect(200);
+      }
+      const published = await drain();
+      expect(published.map((entry) => entry.body.messageId)).toEqual([1001, 1002, 1003]);
+      expect(new Set(published.map((entry) => entry.queue)).size).toBe(1);
+    });
+
+    it('application_token diferente: 401 e nada publicado', async () => {
+      await botEvent({ token: 'outro', messageId: 2000 }).expect(401);
+      expect(await drain()).toEqual([]);
+    });
+
+    it('mensagem de bot não vai para a fila', async () => {
+      await botEvent({ userBot: '1', messageId: 3000 }).expect(200);
+      expect(await drain()).toEqual([]);
+    });
   });
 });

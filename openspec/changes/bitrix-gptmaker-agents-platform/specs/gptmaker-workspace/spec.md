@@ -12,15 +12,19 @@ O sistema MUST operar com um único workspace GPTMaker para todos os tenants, cu
 - **THEN** o health check do backend fica `DOWN` para o componente GPTMaker e um alerta operacional é emitido
 
 ### Requirement: Registro e convenção de nomes dos agentes
-O sistema MUST manter registro local de todo agente criado no workspace, com `tenantId`, `gptmakerAgentId` e data de criação, e MUST nomear o agente no GPTMaker com prefixo identificador do tenant (ex.: `[<tenantCode>] <nome>`), exibindo ao cliente apenas o nome sem prefixo.
-
-#### Scenario: Nome exibido ao cliente
-- **WHEN** o cliente lista seus agentes
-- **THEN** os nomes aparecem sem o prefixo do tenant
+O sistema MUST manter registro local de todo agente criado no workspace, com `tenantId`, `gptmakerAgentId` e data de criação, e MUST nomear o agente no GPTMaker com o mesmo nome dado pelo cliente, sem identificador do tenant (o GPTMaker usa o nome como identidade do agente na conversa). Antes de criar o agente no GPTMaker, o sistema MUST registrar localmente a criação em andamento (tenant e nome), completando-a com o `gptmakerAgentId` devolvido, para que um agente que fique órfão por falha na criação tenha o dono sugerido.
 
 #### Scenario: Nome no GPTMaker
 - **WHEN** um agente é criado ou renomeado
-- **THEN** o nome enviado ao GPTMaker contém o prefixo do tenant
+- **THEN** o nome enviado ao GPTMaker é o nome do agente, sem prefixo do tenant
+
+#### Scenario: Órfão de criação interrompida
+- **WHEN** a criação falha depois de o GPTMaker criar o agente e o desfazer também falha
+- **THEN** o `workspace-sync` registra o órfão com o tenant da criação em andamento como sugestão de dono
+
+#### Scenario: Agente antigo com prefixo
+- **WHEN** um agente criado antes da mudança ainda tem o prefixo `[<tenantCode>]` no GPTMaker
+- **THEN** o comando de migração o renomeia para o nome local, e um órfão com esse prefixo continua tendo o tenant sugerido pelo código
 
 ### Requirement: Sincronização e detecção de divergências
 O sistema MUST executar periodicamente a comparação entre os agentes listados em `GET /workspace/agents` e o registro local, classificando agentes órfãos (existem no GPTMaker sem registro local), ausentes (registro local sem agente no GPTMaker) e com status divergente.

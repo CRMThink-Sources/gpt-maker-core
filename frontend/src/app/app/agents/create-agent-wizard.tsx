@@ -2,8 +2,8 @@
 
 import type { AgentView, AvailableModel, CreateAgentInput } from '@gptmaker/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
+import { Stepper } from '@/components/stepper';
 import { Alert, Avatar, buttonClass, Loading } from '@/components/ui';
 import { AGENT_TYPES, COMMUNICATION_TYPES, credits, errorMessage } from '@/lib/agents';
 import { useAppSession } from '../session-provider';
@@ -48,40 +48,6 @@ function hasTyped(values: AgentFormValues): boolean {
     values.jobDescription,
   ];
   return texts.some((text) => text.trim() !== '');
-}
-
-function Stepper({ current }: { current: number }) {
-  return (
-    <ol className="mt-4 flex items-center gap-2">
-      {STEPS.map((step, index) => {
-        const done = index < current;
-        const active = index === current;
-        return (
-          <li key={step.title} className="flex flex-1 items-center gap-2">
-            <span
-              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                done
-                  ? 'bg-brand-600 text-white'
-                  : active
-                    ? 'bg-brand-50 text-brand-700 ring-2 ring-brand-600'
-                    : 'bg-zinc-100 text-zinc-500'
-              }`}
-            >
-              {done ? <CheckIcon className="size-3.5" strokeWidth={2.5} /> : index + 1}
-            </span>
-            <span
-              className={`hidden text-xs font-medium sm:block ${active ? 'text-zinc-900' : 'text-zinc-500'}`}
-            >
-              {step.title}
-            </span>
-            {index < STEPS.length - 1 && (
-              <span className={`h-px flex-1 ${done ? 'bg-brand-600' : 'bg-zinc-200'}`} />
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
 }
 
 function Summary({ values }: { values: AgentFormValues }) {
@@ -217,7 +183,7 @@ export function CreateAgentWizard({
     <Modal
       title="Novo agente"
       description={STEPS[step]!.description}
-      header={<Stepper current={step} />}
+      header={<Stepper steps={STEPS} current={step} />}
       footer={footer}
       onRequestClose={requestClose}
     >

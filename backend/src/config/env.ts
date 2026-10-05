@@ -30,6 +30,31 @@ export const envSchema = z.object({
   /** `/conversation` é síncrono na v1 e pode demorar (design D5). */
   GPTMAKER_CONVERSATION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
+  // Backoffice (spec admin-backoffice, design D17): sessão de operador em cookie httpOnly
+  /** Inatividade que encerra a sessão. */
+  BACKOFFICE_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(120),
+  /** Duração máxima da sessão, mesmo em uso. */
+  BACKOFFICE_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
+  /** Cookie só por HTTPS; desligar apenas em desenvolvimento local (http://localhost). */
+  BACKOFFICE_COOKIE_SECURE: booleanFromString.default(true),
+  /** Nome que aparece no app autenticador. */
+  BACKOFFICE_TOTP_ISSUER: z.string().min(1).default('ThinkFlow AI Backoffice'),
+
+  // Reconciliação diária com o consumo real do GPTMaker (spec usage-reconciliation, design D7)
+  /** Fuso dos dias do `credits-spent` (não documentado pelo GPTMaker; a confirmar). */
+  RECONCILIATION_TIMEZONE: z.string().min(1).default('America/Sao_Paulo'),
+  /** Diferença por agente e dia, em créditos, que não gera ajuste. */
+  RECONCILIATION_TOLERANCE_CREDITS: z.coerce.number().int().nonnegative().default(2),
+  /** Acima disso o ajuste não é lançado sozinho: fica para revisão, com alerta. */
+  RECONCILIATION_REVIEW_THRESHOLD_CREDITS: z.coerce.number().int().positive().default(100),
+  /** Dias para trás reprocessados a cada execução (consumo que chega atrasado). */
+  RECONCILIATION_LOOKBACK_DAYS: z.coerce.number().int().positive().max(31).default(3),
+  /**
+   * Quanto o partner paga ao GPTMaker por crédito, em centavos (aceita fração, ex.: 2.5). Sem
+   * ele, o relatório do partner mostra o consumo em créditos, sem custo nem margem em reais.
+   */
+  GPTMAKER_CREDIT_COST_CENTS: z.coerce.number().positive().optional(),
+
   /** Agentes não removidos por tenant, igual para todos os planos (spec gptmaker-workspace). */
   TENANT_AGENT_LIMIT: z.coerce.number().int().positive().default(5),
 
@@ -80,6 +105,10 @@ export const envSchema = z.object({
   /** `iss` esperado no JWT da sessão; padrão da plataforma é a própria `PLATFORM_URL`. */
   PLATFORM_JWT_ISSUER: z.url().optional(),
   PLATFORM_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  /** Portal CRMThink e SPAs de Assinaturas e Instalações: links do backoffice para os itens. */
+  CRMTHINK_PORTAL_URL: z.url().default('https://crmthink.bitrix24.com.br'),
+  CRMTHINK_SPA_SUBSCRIPTIONS: z.coerce.number().int().positive().default(1142),
+  CRMTHINK_SPA_INSTALLATIONS: z.coerce.number().int().positive().default(1060),
 
   // Armazenamento de documentos de treinamento: DigitalOcean Spaces (SeaweedFS em dev), design D14
   /** Endpoint S3 usado pela API (ex.: `https://nyc3.digitaloceanspaces.com`, `http://storage:8333`). */
@@ -97,6 +126,26 @@ export const envSchema = z.object({
   STORAGE_FORCE_PATH_STYLE: booleanFromString.default(false),
   /** Validade das URLs pré-assinadas; o máximo do SigV4 é 7 dias. */
   STORAGE_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(604_800).default(604_800),
+
+  /**
+   * Partições de `channel.inbound` (uma fila e um consumidor cada; ordem por diálogo). Mudar o
+   * número redistribui os diálogos entre as filas: só com as filas vazias.
+   */
+  CHANNEL_INBOUND_PARTITIONS: z.coerce.number().int().positive().max(64).default(4),
+  /**
+   * Esperas entre as tentativas de uma mensagem do chatbot, em ms, separadas por vírgula
+   * (design D5: 10 s, 1 min, 5 min). Esgotadas, a mensagem vai para a DLQ.
+   */
+  CHANNEL_RETRY_DELAYS_MS: z
+    .string()
+    .default('10000,60000,300000')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    )
+    .pipe(z.array(z.number()).min(1).max(10)),
 
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),

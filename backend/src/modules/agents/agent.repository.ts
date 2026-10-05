@@ -19,7 +19,7 @@ export type AgentPatch = Partial<
 >;
 
 /** Executor aceito: conexão normal ou transação aberta pelo chamador. */
-export type Executor = Pick<Database, 'select' | 'insert' | 'update'>;
+export type Executor = Pick<Database, 'select' | 'insert' | 'update' | 'delete'>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -55,6 +55,15 @@ export class AgentRepository {
       .select()
       .from(agent)
       .where(this.scope(tenantId, eq(agent.id, id)));
+    return row;
+  }
+
+  /** Agente local (de qualquer tenant, inclusive removido) ligado a um agente do GPTMaker. */
+  async findByGptMakerId(gptmakerAgentId: string): Promise<Agent | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(agent)
+      .where(eq(agent.gptmakerAgentId, gptmakerAgentId));
     return row;
   }
 
