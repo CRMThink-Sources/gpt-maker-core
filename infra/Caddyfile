@@ -11,10 +11,16 @@
 	}
 }
 
-# Frontend: carregado no iframe do Bitrix24; só os domínios do Bitrix podem embutir.
+# Frontend. `/app` é carregado no iframe do portal Bitrix24, cujo domínio não é conhecido de
+# antemão (qualquer TLD do Bitrix24 cloud, domínio próprio ou on-premise): aceita qualquer origem
+# HTTPS. Não há sessão por cookie para sequestrar num clickjacking: a sessão nasce da auth do BX24
+# dentro do iframe, verificada no servidor pela plataforma. O resto (ex.: `/admin`) não embute.
 {$APP_DOMAIN} {
 	import security_headers
-	header Content-Security-Policy "frame-ancestors 'self' {$BITRIX_FRAME_ANCESTORS}"
+	@bitrix_iframe path /app /app/*
+	header @bitrix_iframe Content-Security-Policy "frame-ancestors https:"
+	@not_bitrix_iframe not path /app /app/*
+	header @not_bitrix_iframe Content-Security-Policy "frame-ancestors 'self'"
 	encode zstd gzip
 	reverse_proxy frontend:3000
 }

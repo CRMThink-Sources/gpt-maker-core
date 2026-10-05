@@ -11,6 +11,9 @@ const base = {
   PLATFORM_URL: 'https://platform.exemplo.com.br',
   PLATFORM_API_KEY: 'key',
   PLATFORM_WEBHOOK_SECRETS: 's1',
+  STORAGE_ENDPOINT: 'http://localhost:8333',
+  STORAGE_ACCESS_KEY: 'k',
+  STORAGE_SECRET_KEY: 's',
 };
 
 describe('loadEnv', () => {

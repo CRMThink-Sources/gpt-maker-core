@@ -1,0 +1,1004 @@
+import { randomBytes, randomUUID } from 'node:crypto';
+import type { CreateAgentInput } from '@gptmaker/contracts';
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
+import { eq } from 'drizzle-orm';
+import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
+import Redis from 'ioredis';
+import { Pool } from 'pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Env } from '../../src/config/env';
+import { AgentAccessPolicy } from '../../src/modules/agents/agent-access.policy';
+import { type AgentChange, AgentEvents } from '../../src/modules/agents/agent-events';
+import { AgentRepository } from '../../src/modules/agents/agent.repository';
+import { AgentService, hashWebhookToken } from '../../src/modules/agents/agent.service';
+import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
+import { GptMakerResilience } from '../../src/modules/gptmaker/gptmaker.resilience';
+import { WEBHOOK_EVENTS } from '../../src/modules/gptmaker/gptmaker.schemas';
+import { TenantAgentLimitService } from '../../src/modules/gptmaker/tenant-agent-limit.service';
+import { ModelCatalogService } from '../../src/modules/models/model-catalog.service';
+import { PaymentsOutbox } from '../../src/modules/payments/payments-outbox';
+import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
+import { runWithContext } from '../../src/shared/context/request-context';
+import { runMigrations } from '../../src/shared/database/migrate';
+import * as schema from '../../src/shared/database/schema/index';
+import { WireMock } from '../support/wiremock';
+
+const {
+  agent,
+  agentCreationAttempt,
+  aiModel,
+  paymentsOutbox,
+  planAllowedModel,
+  planEntitlement,
+  subscriptionState,
+  tenant,
+} = schema;
+const WS = 'ws-test';
+const API = 'https://api.gptmaker.test';
+const REMOTE_ID = 'gm-agent-1';
+
+describe('serviço de agentes', () => {
+  let postgres: StartedPostgreSqlContainer;
+  let redisContainer: StartedRedisContainer;
+  let wiremock: WireMock;
+  let pool: Pool;
+  let db: NodePgDatabase<typeof schema>;
+  let redis: Redis;
+  let repository: AgentRepository;
+  let service: AgentService;
+  let defaultModel: typeof aiModel.$inferSelect;
+  let premiumModel: typeof aiModel.$inferSelect;
+  let owner: { tenantId: string; tenantCode: string };
+  /** Mudanças avisadas aos ouvintes (ex.: chatbot). */
+  let changes: AgentChange[];
+
+  const errorOf = (promise: Promise<unknown>) => promise.catch((error: unknown) => error);
+  /** Linhas do outbox que espelham o agente como item de assinatura. */
+  const mirrorsOf = (agentId: string) =>
+    db
+      .select({ operation: paymentsOutbox.operation, status: paymentsOutbox.status })
+      .from(paymentsOutbox)
+      .where(eq(paymentsOutbox.aggregateRef, agentId));
+  const form = (extra: Partial<CreateAgentInput> = {}): CreateAgentInput => ({
+    name: 'Atendente',
+    behavior: 'Seja cordial',
+    type: 'SUPPORT',
+    communicationType: 'NORMAL',
+    jobName: 'Loja Exemplo',
+    ...extra,
+  });
+
+  async function newTenant() {
+    const code = randomBytes(3).toString('hex');
+    const [row] = await db
+      .insert(tenant)
+      .values({
+        installationId: code,
+        memberId: code,
+        domain: `${code}.bitrix24.com.br`,
+        tenantCode: code,
+      })
+      .returning();
+    return { tenantId: row!.id, tenantCode: row!.tenantCode };
+  }
+
+  async function stubGptMaker(
+    overrides: { create?: number; settings?: number; webhooks?: number; discard?: number } = {},
+  ) {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: `/v2/workspace/${WS}/agents` },
+      response:
+        (overrides.create ?? 200) === 200
+          ? { status: 200, jsonBody: { id: REMOTE_ID, name: 'x' } }
+          : { status: overrides.create!, jsonBody: { error: 'falhou' } },
+    });
+    for (const [path, status] of [
+      ['settings', overrides.settings ?? 200],
+      ['webhooks', overrides.webhooks ?? 200],
+    ] as const) {
+      await wiremock.stub({
+        request: { method: 'PUT', urlPath: `/v2/agent/${REMOTE_ID}/${path}` },
+        response:
+          status === 200
+            ? { status, jsonBody: { success: true } }
+            : { status, jsonBody: { error: 'falhou' } },
+      });
+    }
+    await wiremock.stub({
+      request: { method: 'DELETE', urlPath: `/v2/agent/${REMOTE_ID}` },
+      response:
+        (overrides.discard ?? 200) === 200
+          ? { status: 200, jsonBody: { success: true } }
+          : { status: overrides.discard!, jsonBody: { error: 'falhou' } },
+    });
+  }
+
+  const attempts = () => db.select().from(agentCreationAttempt);
+
+  async function allowOnPlan(tenantId: string, modelId: string) {
+    const planSpaId = `plan-${randomUUID()}`;
+    await db
+      .insert(planEntitlement)
+      .values({ planSpaId, planType: 'subscription', creditsPerCycle: 1000 });
+    await db.insert(planAllowedModel).values({ planSpaId, modelId });
+    await db.insert(subscriptionState).values({
+      tenantId,
+      subscriptionId: `sub-${randomUUID()}`,
+      status: 'active',
+      modality: 'stripe',
+      planId: planSpaId,
+      version: 1,
+    });
+  }
+
+  beforeAll(async () => {
+    [postgres, redisContainer, wiremock] = await Promise.all([
+      new PostgreSqlContainer('postgres:16-alpine').start(),
+      new RedisContainer('redis:7-alpine').start(),
+      WireMock.start(),
+    ]);
+    configureFieldCipher(randomBytes(32).toString('base64'));
+    await runMigrations(postgres.getConnectionUri());
+    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    db = drizzle(pool, { schema });
+    redis = new Redis(redisContainer.getConnectionUrl());
+    const client = new GptMakerClient(
+      {
+        baseUrl: `${wiremock.baseUrl}/v2`,
+        token: 't',
+        workspaceId: WS,
+        timeoutMs: 5000,
+        conversationTimeoutMs: 5000,
+      },
+      new GptMakerResilience({
+        maxAttempts: 1,
+        breakerThreshold: 50,
+        halfOpenAfterMs: 1000,
+        beforeAttempt: async () => {},
+      }),
+    );
+    const env = { API_PUBLIC_URL: API, TENANT_AGENT_LIMIT: 5 } as Env;
+    repository = new AgentRepository(db);
+    const events = new AgentEvents();
+    events.register({
+      name: 'teste',
+      onAgentChanged: async (change) => {
+        changes.push(change);
+      },
+    });
+    // Ouvinte que falha não derruba a operação do agente.
+    events.register({
+      name: 'quebrado',
+      onAgentChanged: async () => {
+        throw new Error('falhou');
+      },
+    });
+    service = new AgentService(
+      repository,
+      new TenantAgentLimitService(db, env),
+      new ModelCatalogService(db, client),
+      client,
+      new PaymentsOutbox(db),
+      new AgentAccessPolicy(db),
+      events,
+      db,
+      redis,
+      env,
+    );
+    const models = await db
+      .insert(aiModel)
+      .values([
+        { code: 'GPT_5_MINI', displayName: 'GPT-5 Mini', creditsPerResponse: 1, isDefault: true },
+        { code: 'GPT_5', displayName: 'GPT-5', creditsPerResponse: 5 },
+      ])
+      .returning();
+    [defaultModel, premiumModel] = [models[0]!, models[1]!];
+  });
+
+  beforeEach(async () => {
+    await wiremock.reset();
+    await redis.flushall();
+    await db.delete(paymentsOutbox);
+    await db.delete(agent);
+    await db.delete(agentCreationAttempt);
+    await db.delete(subscriptionState);
+    await db.delete(planAllowedModel);
+    await db.delete(planEntitlement);
+    await db.update(aiModel).set({ active: true });
+    owner = await newTenant();
+    changes = [];
+  });
+
+  afterAll(async () => {
+    redis?.disconnect();
+    await pool?.end();
+    await Promise.all([postgres?.stop(), redisContainer?.stop(), wiremock?.stop()]);
+  });
+
+  it('cria no GPTMaker com o nome puro, modelo padrão e webhooks, e grava o registro ACTIVE', async () => {
+    await stubGptMaker();
+
+    const view = await service.create(owner, form());
+
+    const [created] = await wiremock.bodies('POST', `/v2/workspace/${WS}/agents`);
+    expect(created).toEqual({
+      name: 'Atendente',
+      behavior: 'Seja cordial',
+      type: 'SUPPORT',
+      communicationType: 'NORMAL',
+      jobName: 'Loja Exemplo',
+      jobDescription: '',
+    });
+    expect(await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/settings`)).toEqual([
+      { prefferModel: 'GPT_5_MINI' },
+    ]);
+
+    const [webhooks] = (await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/webhooks`)) as Array<
+      Record<string, string>
+    >;
+    expect(Object.keys(webhooks!).sort()).toEqual([...WEBHOOK_EVENTS].sort());
+    const url = new URL(webhooks!.onNewMessage!);
+    expect(`${url.origin}${url.pathname}`).toBe(`${API}/gptmaker/webhooks/onNewMessage`);
+    const token = url.searchParams.get('t')!;
+    // Mesmo token em todos os eventos.
+    for (const event of WEBHOOK_EVENTS) {
+      expect(new URL(webhooks![event]!).searchParams.get('t')).toBe(token);
+    }
+
+    const [stored] = await db.select().from(agent).where(eq(agent.id, view.id));
+    expect(stored).toMatchObject({
+      tenantId: owner.tenantId,
+      gptmakerAgentId: REMOTE_ID,
+      name: 'Atendente',
+      status: 'ACTIVE',
+      modelId: defaultModel.id,
+      webhookTokenHash: hashWebhookToken(token),
+    });
+    expect(stored!.webhookTokenHash).not.toBe(token);
+    expect(view).toMatchObject({
+      name: 'Atendente',
+      status: 'ACTIVE',
+      model: { code: 'GPT_5_MINI', creditsPerResponse: 1 },
+    });
+    expect(view).not.toHaveProperty('gptmakerAgentId');
+    expect(await mirrorsOf(view.id)).toEqual([{ operation: 'agent-item.sync', status: 'PENDING' }]);
+    expect(changes).toEqual([{ agentId: view.id, tenantId: owner.tenantId, kind: 'created' }]);
+    // Criação concluída: o registro da criação em andamento some.
+    expect(await attempts()).toEqual([]);
+  });
+
+  it('usa o modelo escolhido quando o plano do tenant o libera', async () => {
+    await stubGptMaker();
+    await allowOnPlan(owner.tenantId, premiumModel.id);
+
+    const view = await service.create(owner, form({ modelId: premiumModel.id }));
+
+    expect(view.model.code).toBe('GPT_5');
+    expect(await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/settings`)).toEqual([
+      { prefferModel: 'GPT_5' },
+    ]);
+  });
+
+  describe('recusa sem chamar o GPTMaker', () => {
+    beforeEach(() => stubGptMaker());
+
+    const expectNoRemoteCall = async () => {
+      expect(await wiremock.count('POST', `/v2/workspace/${WS}/agents`)).toBe(0);
+      expect(await db.select().from(agent)).toHaveLength(0);
+    };
+
+    it('modelo fora do plano: MODEL_NOT_ALLOWED', async () => {
+      await allowOnPlan(owner.tenantId, defaultModel.id);
+      const error = await errorOf(service.create(owner, form({ modelId: premiumModel.id })));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      await expectNoRemoteCall();
+    });
+
+    it('tenant sem plano só pode usar o modelo padrão', async () => {
+      const error = await errorOf(service.create(owner, form({ modelId: premiumModel.id })));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      await expectNoRemoteCall();
+    });
+
+    it('modelo inativo, mesmo liberado no plano: MODEL_NOT_ALLOWED', async () => {
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+      await db.update(aiModel).set({ active: false }).where(eq(aiModel.id, premiumModel.id));
+      const error = await errorOf(service.create(owner, form({ modelId: premiumModel.id })));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      await expectNoRemoteCall();
+    });
+
+    it('modelo inexistente: MODEL_NOT_ALLOWED', async () => {
+      const error = await errorOf(service.create(owner, form({ modelId: randomUUID() })));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      await expectNoRemoteCall();
+    });
+
+    it('limite de agentes atingido: TENANT_AGENT_LIMIT, contando inativos', async () => {
+      for (let i = 0; i < 5; i++) {
+        await repository.insert(owner.tenantId, {
+          gptmakerAgentId: `gm-${randomUUID()}`,
+          name: `Bot ${i}`,
+          type: 'SUPPORT',
+          communicationType: 'NORMAL',
+          modelId: defaultModel.id,
+          status: i === 0 ? 'INACTIVE' : 'ACTIVE',
+          webhookTokenHash: randomUUID(),
+        });
+      }
+      const error = await errorOf(service.create(owner, form()));
+      expect(error).toMatchObject({ code: 'TENANT_AGENT_LIMIT', status: 409 });
+      expect(await wiremock.count('POST', `/v2/workspace/${WS}/agents`)).toBe(0);
+    });
+
+    it('outra criação em andamento no tenant: AGENT_CREATION_IN_PROGRESS', async () => {
+      await redis.set(`lock:agent-create:${owner.tenantId}`, 'outro', 'PX', 10_000);
+      const error = await errorOf(service.create(owner, form()));
+      expect(error).toMatchObject({ code: 'AGENT_CREATION_IN_PROGRESS', status: 409 });
+      await expectNoRemoteCall();
+    });
+  });
+
+  it('criações simultâneas no limite: só uma passa', async () => {
+    await stubGptMaker();
+    for (let i = 0; i < 4; i++) {
+      await repository.insert(owner.tenantId, {
+        gptmakerAgentId: `gm-${randomUUID()}`,
+        name: `Bot ${i}`,
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        webhookTokenHash: randomUUID(),
+      });
+    }
+    const results = await Promise.allSettled([
+      service.create(owner, form()),
+      service.create(owner, form()),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await wiremock.count('POST', `/v2/workspace/${WS}/agents`)).toBe(1);
+  });
+
+  it('falha ao criar no GPTMaker: erro recuperável com traceId e nada gravado', async () => {
+    await stubGptMaker({ create: 500 });
+    const error = await runWithContext({ traceId: 'trace-123' }, () =>
+      errorOf(service.create(owner, form())),
+    );
+    expect(error).toMatchObject({
+      code: 'GPTMAKER_UNAVAILABLE',
+      status: 503,
+      details: { traceId: 'trace-123' },
+    });
+    expect(await db.select().from(agent)).toHaveLength(0);
+    expect(await db.select().from(paymentsOutbox)).toHaveLength(0);
+    // Pode ter sido criado sem resposta: o registro fica para o workspace-sync sugerir o dono.
+    expect(await attempts()).toEqual([
+      expect.objectContaining({
+        tenantId: owner.tenantId,
+        name: 'Atendente',
+        gptmakerAgentId: null,
+      }),
+    ]);
+  });
+
+  it('GPTMaker recusa a criação: nada criado, sem registro da criação', async () => {
+    await stubGptMaker({ create: 400 });
+    expect(await errorOf(service.create(owner, form()))).toMatchObject({
+      code: 'GPTMAKER_REJECTED',
+    });
+    expect(await attempts()).toEqual([]);
+  });
+
+  it('desfazer a criação também falha: o registro fica com o id do órfão', async () => {
+    await stubGptMaker({ settings: 500, discard: 500 });
+    await errorOf(service.create(owner, form()));
+    expect(await attempts()).toEqual([
+      expect.objectContaining({ tenantId: owner.tenantId, gptmakerAgentId: REMOTE_ID }),
+    ]);
+  });
+
+  it.each(['settings', 'webhooks'] as const)(
+    'falha ao configurar %s: remove o agente criado no GPTMaker e não grava nada',
+    async (step) => {
+      await stubGptMaker({ [step]: 500 });
+      const error = await errorOf(service.create(owner, form()));
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect(await wiremock.count('DELETE', `/v2/agent/${REMOTE_ID}`)).toBe(1);
+      expect(await db.select().from(agent)).toHaveLength(0);
+      expect(await attempts()).toEqual([]);
+    },
+  );
+
+  it('libera o lock depois da criação', async () => {
+    await stubGptMaker();
+    await service.create(owner, form());
+    expect(await redis.exists(`lock:agent-create:${owner.tenantId}`)).toBe(0);
+  });
+
+  describe('modelos disponíveis', () => {
+    it('sem plano: só o modelo padrão', async () => {
+      expect((await service.availableModels(owner.tenantId)).map((m) => m.code)).toEqual([
+        'GPT_5_MINI',
+      ]);
+    });
+
+    it('com plano: padrão e liberados, do mais barato ao mais caro, sem os inativos', async () => {
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+      const models = await service.availableModels(owner.tenantId);
+      expect(models).toMatchObject([
+        { code: 'GPT_5_MINI', creditsPerResponse: 1, isDefault: true },
+        { code: 'GPT_5', creditsPerResponse: 5, isDefault: false },
+      ]);
+
+      await db.update(aiModel).set({ active: false }).where(eq(aiModel.id, premiumModel.id));
+      expect((await service.availableModels(owner.tenantId)).map((m) => m.code)).toEqual([
+        'GPT_5_MINI',
+      ]);
+    });
+  });
+
+  it('lista e busca só agentes do tenant; outro tenant recebe 404', async () => {
+    await stubGptMaker();
+    const view = await service.create(owner, form());
+    const other = await newTenant();
+
+    expect((await service.list(owner.tenantId)).map((row) => row.id)).toEqual([view.id]);
+    expect(await service.list(other.tenantId)).toEqual([]);
+    expect(await service.get(owner.tenantId, view.id)).toMatchObject({ id: view.id });
+    const error = await errorOf(service.get(other.tenantId, view.id));
+    expect(error).toMatchObject({ code: 'AGENT_NOT_FOUND', status: 404 });
+  });
+
+  describe('edição', () => {
+    const PROFILE_PATH = `/v2/agent/${REMOTE_ID}`;
+    const SETTINGS_PATH = `/v2/agent/${REMOTE_ID}/settings`;
+    let existing: Awaited<ReturnType<AgentRepository['insert']>>;
+
+    async function stubEdit(overrides: { profile?: number; settings?: number } = {}) {
+      for (const [path, status, okBody] of [
+        [PROFILE_PATH, overrides.profile ?? 200, { id: REMOTE_ID }],
+        [SETTINGS_PATH, overrides.settings ?? 200, { success: true }],
+      ] as const) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: path },
+          response:
+            status === 200
+              ? { status, jsonBody: okBody }
+              : { status, jsonBody: { error: 'recusado' } },
+        });
+      }
+    }
+
+    const remoteCalls = async () => ({
+      profile: await wiremock.count('PUT', PROFILE_PATH),
+      settings: await wiremock.count('PUT', SETTINGS_PATH),
+    });
+
+    const stored = async () => (await db.select().from(agent).where(eq(agent.id, existing.id)))[0]!;
+
+    beforeEach(async () => {
+      existing = await repository.insert(owner.tenantId, {
+        gptmakerAgentId: REMOTE_ID,
+        name: 'Atendente',
+        behavior: 'Seja cordial',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        jobName: 'Loja Exemplo',
+        modelId: defaultModel.id,
+        settings: { timezone: 'America/Sao_Paulo', enabledEmoji: true },
+        webhookTokenHash: randomUUID(),
+      });
+    });
+
+    it('dados: envia o perfil completo e não mexe nas settings', async () => {
+      await stubEdit();
+
+      const view = await service.update(owner, existing.id, {
+        name: 'Vendedor',
+        behavior: null,
+        type: 'SALE',
+      });
+
+      expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
+        {
+          name: 'Vendedor',
+          behavior: '',
+          type: 'SALE',
+          communicationType: 'NORMAL',
+          jobName: 'Loja Exemplo',
+          jobDescription: '',
+        },
+      ]);
+      expect((await remoteCalls()).settings).toBe(0);
+      expect(view).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      // Nome mudou: o título do item de assinatura acompanha.
+      expect(await mirrorsOf(existing.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
+      // E o chatbot é avisado (nome e foto do bot no Bitrix).
+      expect(changes).toEqual([
+        { agentId: existing.id, tenantId: owner.tenantId, kind: 'profile-updated' },
+      ]);
+    });
+
+    it('settings: mescla com as atuais e reenvia o prefferModel do modelo atual', async () => {
+      await stubEdit();
+
+      const view = await service.update(owner, existing.id, {
+        settings: { enabledEmoji: false, maxDailyMessages: 100 },
+      });
+
+      expect(await wiremock.bodies('PUT', SETTINGS_PATH)).toEqual([
+        {
+          timezone: 'America/Sao_Paulo',
+          enabledEmoji: false,
+          maxDailyMessages: 100,
+          prefferModel: 'GPT_5_MINI',
+        },
+      ]);
+      expect((await remoteCalls()).profile).toBe(0);
+      expect(view.settings).toEqual({
+        timezone: 'America/Sao_Paulo',
+        enabledEmoji: false,
+        maxDailyMessages: 100,
+      });
+      expect(await mirrorsOf(existing.id)).toEqual([]);
+      expect(changes).toEqual([]);
+    });
+
+    it('troca de modelo liberado no plano: novo prefferModel e registro local', async () => {
+      await stubEdit();
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+
+      const view = await service.update(owner, existing.id, { modelId: premiumModel.id });
+
+      expect(await wiremock.bodies('PUT', SETTINGS_PATH)).toEqual([
+        { timezone: 'America/Sao_Paulo', enabledEmoji: true, prefferModel: 'GPT_5' },
+      ]);
+      expect(view.model.code).toBe('GPT_5');
+      expect((await stored()).modelId).toBe(premiumModel.id);
+    });
+
+    it('troca para modelo fora do plano: MODEL_NOT_ALLOWED sem chamar o GPTMaker', async () => {
+      await stubEdit();
+      const error = await errorOf(service.update(owner, existing.id, { modelId: premiumModel.id }));
+      expect(error).toMatchObject({ code: 'MODEL_NOT_ALLOWED' });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('manter o modelo atual não passa pela regra do plano', async () => {
+      await stubEdit();
+      await db.update(agent).set({ modelId: premiumModel.id }).where(eq(agent.id, existing.id));
+
+      const view = await service.update(owner, existing.id, {
+        modelId: premiumModel.id,
+        name: 'Outro nome',
+      });
+      expect(view.model.code).toBe('GPT_5');
+      expect((await remoteCalls()).settings).toBe(0);
+    });
+
+    it('valores iguais aos atuais: nenhuma chamada ao GPTMaker', async () => {
+      await stubEdit();
+      await service.update(owner, existing.id, {
+        name: 'Atendente',
+        settings: { enabledEmoji: true },
+      });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('falha nas settings depois dos dados: desfaz os dados e mantém o registro local', async () => {
+      await stubEdit({ settings: 500 });
+
+      const error = await errorOf(
+        service.update(owner, existing.id, { name: 'Novo', settings: { enabledEmoji: false } }),
+      );
+
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      const profiles = (await wiremock.bodies('PUT', PROFILE_PATH)) as Array<{ name: string }>;
+      expect(profiles.map((body) => body.name)).toEqual(['Novo', 'Atendente']);
+      expect(await stored()).toMatchObject({
+        name: 'Atendente',
+        settings: { timezone: 'America/Sao_Paulo', enabledEmoji: true },
+      });
+    });
+
+    it('GPTMaker recusa os dados: GPTMAKER_REJECTED e nada alterado', async () => {
+      await stubEdit({ profile: 400 });
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'GPTMAKER_REJECTED', status: 422 });
+      expect((await stored()).name).toBe('Atendente');
+    });
+
+    it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubEdit();
+      const other = await newTenant();
+      const error = await errorOf(service.update(other, existing.id, { name: 'Invadido' }));
+      expect(error).toMatchObject({ code: 'AGENT_NOT_FOUND', status: 404 });
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
+    it('agente fora de sincronia: AGENT_OUT_OF_SYNC', async () => {
+      await db.update(agent).set({ status: 'OUT_OF_SYNC' }).where(eq(agent.id, existing.id));
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'AGENT_OUT_OF_SYNC', status: 409 });
+    });
+
+    it('outra alteração em andamento no agente: AGENT_BUSY', async () => {
+      await redis.set(`lock:agent:${owner.tenantId}:${existing.id}`, 'outro', 'PX', 10_000);
+      const error = await errorOf(service.update(owner, existing.id, { name: 'Novo' }));
+      expect(error).toMatchObject({ code: 'AGENT_BUSY', status: 409 });
+    });
+
+    it('edição vazia é recusada pela validação', async () => {
+      await expect(service.update(owner, existing.id, {})).rejects.toThrow(/ao menos um campo/);
+    });
+  });
+
+  describe('inativação e reativação', () => {
+    const INACTIVE_PATH = `/v2/agent/${REMOTE_ID}/inactive`;
+    const ACTIVE_PATH = `/v2/agent/${REMOTE_ID}/active`;
+    const session = () => ({ ...owner, tenantStatus: 'ACTIVE' as const });
+
+    async function stubToggle(status = 200) {
+      for (const path of [INACTIVE_PATH, ACTIVE_PATH]) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: path },
+          response:
+            status === 200
+              ? { status, jsonBody: { success: true } }
+              : { status, jsonBody: { error: 'falhou' } },
+        });
+      }
+    }
+
+    async function agentWith(
+      status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_SYNC',
+      inactiveReason:
+        'MANUAL' | 'SUBSCRIPTION_EXPIRED' | 'TENANT_SUSPENDED' | 'UNINSTALLED' | null = null,
+    ) {
+      return repository.insert(owner.tenantId, {
+        gptmakerAgentId: REMOTE_ID,
+        name: 'Atendente',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        status,
+        inactiveReason,
+        webhookTokenHash: randomUUID(),
+      });
+    }
+
+    const stored = async (id: string) =>
+      (await db.select().from(agent).where(eq(agent.id, id)))[0]!;
+
+    it('inativa no GPTMaker e localmente com motivo MANUAL', async () => {
+      await stubToggle();
+      const row = await agentWith('ACTIVE');
+
+      const view = await service.inactivate(owner, row.id);
+
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(1);
+      expect(view).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
+      expect(await stored(row.id)).toMatchObject({ status: 'INACTIVE', inactiveReason: 'MANUAL' });
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
+    });
+
+    it('reativa agente inativado manualmente', async () => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+
+      const view = await service.activate(session(), row.id);
+
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(1);
+      expect(view).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
+      expect(await stored(row.id)).toMatchObject({ status: 'ACTIVE', inactiveReason: null });
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
+    });
+
+    it('é idempotente: inativar inativo e reativar ativo não chamam o GPTMaker', async () => {
+      await stubToggle();
+      const inactive = await agentWith('INACTIVE', 'SUBSCRIPTION_EXPIRED');
+      const active = await repository.insert(owner.tenantId, {
+        gptmakerAgentId: `gm-${randomUUID()}`,
+        name: 'Outro',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        webhookTokenHash: randomUUID(),
+      });
+
+      expect(await service.inactivate(owner, inactive.id)).toMatchObject({
+        status: 'INACTIVE',
+        inactiveReason: 'SUBSCRIPTION_EXPIRED',
+      });
+      expect(await service.activate(session(), active.id)).toMatchObject({ status: 'ACTIVE' });
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(0);
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it.each(['SUBSCRIPTION_EXPIRED', 'TENANT_SUSPENDED', 'UNINSTALLED'] as const)(
+      'não reativa inativação do sistema (%s)',
+      async (reason) => {
+        await stubToggle();
+        const row = await agentWith('INACTIVE', reason);
+        const error = await errorOf(service.activate(session(), row.id));
+        expect(error).toMatchObject({
+          code: 'AGENT_INACTIVE_BY_SYSTEM',
+          status: 409,
+          details: { reason },
+        });
+        expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+      },
+    );
+
+    it('tenant suspenso não reativa', async () => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+      const error = await errorOf(
+        service.activate({ ...owner, tenantStatus: 'SUSPENDED' }, row.id),
+      );
+      expect(error).toMatchObject({ code: 'TENANT_SUSPENDED', status: 409 });
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it.each([
+      ['cancelada', { status: 'cancelled' as const }],
+      [
+        'em atraso com a carência vencida',
+        { status: 'past_due' as const, graceUntil: new Date(0) },
+      ],
+    ])('assinatura %s não reativa nem o manual', async (_, state) => {
+      await stubToggle();
+      const row = await agentWith('INACTIVE', 'MANUAL');
+      await db.insert(subscriptionState).values({
+        tenantId: owner.tenantId,
+        subscriptionId: 'sub-1',
+        modality: 'stripe',
+        version: 1,
+        ...state,
+      });
+      const error = await errorOf(service.activate(session(), row.id));
+      expect(error).toMatchObject({ code: 'SUBSCRIPTION_INACTIVE', status: 409 });
+      expect(await wiremock.count('PUT', ACTIVE_PATH)).toBe(0);
+    });
+
+    it('falha no GPTMaker mantém o status local', async () => {
+      await stubToggle(500);
+      const row = await agentWith('ACTIVE');
+      const error = await errorOf(service.inactivate(owner, row.id));
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+      expect(await mirrorsOf(row.id)).toEqual([]);
+    });
+
+    it('agente fora de sincronia: AGENT_OUT_OF_SYNC', async () => {
+      const row = await agentWith('OUT_OF_SYNC');
+      await expect(service.inactivate(owner, row.id)).rejects.toMatchObject({
+        code: 'AGENT_OUT_OF_SYNC',
+      });
+      await expect(service.activate(session(), row.id)).rejects.toMatchObject({
+        code: 'AGENT_OUT_OF_SYNC',
+      });
+    });
+
+    it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubToggle();
+      const row = await agentWith('ACTIVE');
+      const other = await newTenant();
+      await expect(service.inactivate(other, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      expect(await wiremock.count('PUT', INACTIVE_PATH)).toBe(0);
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+    });
+  });
+
+  describe('remoção', () => {
+    const DELETE_PATH = `/v2/agent/${REMOTE_ID}`;
+
+    async function stubDelete(status = 200) {
+      await wiremock.stub({
+        request: { method: 'DELETE', urlPath: DELETE_PATH },
+        response:
+          status === 200
+            ? { status, jsonBody: { success: true } }
+            : { status, jsonBody: { error: 'falhou' } },
+      });
+    }
+
+    const agentWith = (
+      status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_SYNC' = 'ACTIVE',
+      gptmakerAgentId = REMOTE_ID,
+    ) =>
+      repository.insert(owner.tenantId, {
+        gptmakerAgentId,
+        name: 'Atendente',
+        type: 'SUPPORT',
+        communicationType: 'NORMAL',
+        modelId: defaultModel.id,
+        status,
+        inactiveReason: status === 'INACTIVE' ? 'MANUAL' : null,
+        webhookTokenHash: randomUUID(),
+      });
+
+    const stored = async (id: string) =>
+      (await db.select().from(agent).where(eq(agent.id, id)))[0]!;
+
+    it('remove no GPTMaker e marca DELETED, sumindo da listagem', async () => {
+      await stubDelete();
+      const row = await agentWith('INACTIVE');
+
+      await service.remove(owner, row.id);
+
+      expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
+      expect(await stored(row.id)).toMatchObject({ status: 'DELETED', inactiveReason: null });
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+      expect(await service.list(owner.tenantId)).toEqual([]);
+      expect(await mirrorsOf(row.id)).toEqual([
+        { operation: 'agent-item.sync', status: 'PENDING' },
+      ]);
+      expect(changes).toEqual([{ agentId: row.id, tenantId: owner.tenantId, kind: 'removed' }]);
+      await expect(service.get(owner.tenantId, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+    });
+
+    it('libera a vaga no limite de agentes', async () => {
+      await stubDelete();
+      const rows = [];
+      for (let i = 0; i < 5; i++) {
+        rows.push(
+          await repository.insert(owner.tenantId, {
+            gptmakerAgentId: `gm-${i}`,
+            name: `Agente ${i}`,
+            type: 'SUPPORT',
+            communicationType: 'NORMAL',
+            modelId: defaultModel.id,
+            webhookTokenHash: randomUUID(),
+          }),
+        );
+      }
+      await wiremock.stub({
+        request: { method: 'DELETE', urlPath: '/v2/agent/gm-0' },
+        response: { status: 200, jsonBody: { success: true } },
+      });
+      await service.remove(owner, rows[0]!.id);
+
+      await stubGptMaker();
+      await expect(service.create(owner, form())).resolves.toMatchObject({ status: 'ACTIVE' });
+    });
+
+    it.each(['OUT_OF_SYNC', 'ACTIVE'] as const)(
+      'agente que já não existe no GPTMaker (%s): só marca DELETED',
+      async (status) => {
+        await stubDelete(404);
+        const row = await agentWith(status);
+
+        await service.remove(owner, row.id);
+
+        expect((await stored(row.id)).status).toBe('DELETED');
+      },
+    );
+
+    it('falha no GPTMaker: erro recuperável e registro local intacto', async () => {
+      await stubDelete(500);
+      const row = await agentWith();
+      const error = await errorOf(service.remove(owner, row.id));
+      expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
+      expect((await stored(row.id)).status).toBe('ACTIVE');
+    });
+
+    it('agente já removido ou de outro tenant: 404 sem chamar o GPTMaker', async () => {
+      await stubDelete();
+      const row = await agentWith();
+      await service.remove(owner, row.id);
+
+      await expect(service.remove(owner, row.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      const other = await agentWith('ACTIVE', `gm-${randomUUID()}`);
+      await expect(service.remove(await newTenant(), other.id)).rejects.toMatchObject({
+        code: 'AGENT_NOT_FOUND',
+      });
+      expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
+      expect(await wiremock.count('DELETE', `/v2/agent/${other.gptmakerAgentId}`)).toBe(0);
+      expect((await stored(other.id)).status).toBe('ACTIVE');
+    });
+  });
+
+  describe('vincular agente órfão (backoffice)', () => {
+    const ORPHAN = 'gm-orfao-1';
+
+    async function stubOrphan(remote: Record<string, unknown>, prefferModel: string) {
+      await wiremock.stub({
+        request: { method: 'GET', urlPath: `/v2/agent/${ORPHAN}` },
+        response: { status: 200, jsonBody: { id: ORPHAN, ...remote } },
+      });
+      await wiremock.stub({
+        request: { method: 'GET', urlPath: `/v2/agent/${ORPHAN}/settings` },
+        response: { status: 200, jsonBody: { prefferModel } },
+      });
+      await wiremock.stub({
+        request: { method: 'PUT', urlPath: `/v2/agent/${ORPHAN}` },
+        response: { status: 200, jsonBody: { id: ORPHAN, name: 'x' } },
+      });
+      for (const path of ['settings', 'webhooks']) {
+        await wiremock.stub({
+          request: { method: 'PUT', urlPath: `/v2/agent/${ORPHAN}/${path}` },
+          response: { status: 200, jsonBody: { success: true } },
+        });
+      }
+    }
+
+    it('tira o prefixo legado do nome, troca o modelo não permitido, aponta webhooks e grava inativo', async () => {
+      await stubOrphan(
+        {
+          name: '[outro] Vendedor',
+          status: 'DISABLED',
+          type: 'SALE',
+          communicationType: 'FORMAL',
+          behavior: 'Venda com calma',
+        },
+        'GPT_5',
+      );
+      const view = await service.adopt(owner, ORPHAN);
+      expect(view).toMatchObject({ name: 'Vendedor', type: 'SALE', status: 'INACTIVE' });
+
+      const [renamed] = (await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}`)) as Array<{
+        name: string;
+      }>;
+      expect(renamed!.name).toBe('Vendedor');
+      // GPT-5 não está no plano (sem plano): vai para o padrão.
+      expect(await wiremock.bodies('PUT', `/v2/agent/${ORPHAN}/settings`)).toEqual([
+        { prefferModel: 'GPT_5_MINI' },
+      ]);
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}/webhooks`)).toBe(1);
+
+      const [row] = await db.select().from(agent).where(eq(agent.gptmakerAgentId, ORPHAN));
+      expect(row).toMatchObject({
+        tenantId: owner.tenantId,
+        status: 'INACTIVE',
+        inactiveReason: 'MANUAL',
+        modelId: defaultModel.id,
+        communicationType: 'FORMAL',
+      });
+      expect(await mirrorsOf(row!.id)).toHaveLength(1);
+      expect(changes).toContainEqual(
+        expect.objectContaining({ agentId: row!.id, kind: 'created' }),
+      );
+    });
+
+    it('modelo permitido pelo plano é mantido, sem trocar settings', async () => {
+      await allowOnPlan(owner.tenantId, premiumModel.id);
+      await stubOrphan(
+        { name: 'Suporte', status: 'ACTIVE', type: 'SUPPORT', communicationType: 'NORMAL' },
+        'GPT_5',
+      );
+      const view = await service.adopt(owner, ORPHAN);
+      expect(view).toMatchObject({ status: 'ACTIVE', model: { id: premiumModel.id } });
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}/settings`)).toBe(0);
+    });
+
+    it('já vinculado ou removido no app: recusado sem tocar no GPTMaker', async () => {
+      await stubOrphan(
+        { name: 'Suporte', type: 'SUPPORT', communicationType: 'NORMAL' },
+        'GPT_5_MINI',
+      );
+      await service.adopt(owner, ORPHAN);
+      const again = (await errorOf(service.adopt(await newTenant(), ORPHAN))) as { code: string };
+      expect(again.code).toBe('AGENT_ALREADY_LINKED');
+
+      await db.update(agent).set({ status: 'DELETED' }).where(eq(agent.gptmakerAgentId, ORPHAN));
+      const removed = (await errorOf(service.adopt(owner, ORPHAN))) as { code: string };
+      expect(removed.code).toBe('AGENT_REMOVED_LOCALLY');
+      expect(await wiremock.count('PUT', `/v2/agent/${ORPHAN}`)).toBe(1);
+    });
+  });
+});

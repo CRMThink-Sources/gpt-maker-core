@@ -12,7 +12,7 @@ O sistema MUST expor o endpoint de instalador chamado de forma síncrona pela pl
 
 #### Scenario: Primeira instalação
 - **WHEN** a plataforma chama o instalador com `isReinstall = false`
-- **THEN** o sistema cria o tenant com status `ACTIVE`, gera o `tenantCode`, registra os handlers de eventos e responde 2xx; o trial de 14 dias é criado pela plataforma e chega como `subscription.trial_started` (ver `payments-integration`)
+- **THEN** o sistema cria o tenant com status `ACTIVE`, gera o `tenantCode`, registra os handlers de eventos e responde 2xx; nenhum trial é criado na instalação: o tenant ativa o trial pelo formulário de cadastro (ver `payments-integration`)
 
 #### Scenario: Reinstalação de portal existente
 - **WHEN** a plataforma chama o instalador com `isReinstall = true`

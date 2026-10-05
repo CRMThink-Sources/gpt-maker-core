@@ -15,6 +15,69 @@
       "when": 1790303890098,
       "tag": "0001_credit_ledger_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790819528514,
+      "tag": "0002_agent_bot_profile_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790876847344,
+      "tag": "0003_trigger_action_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790878709152,
+      "tag": "0004_trigger_execution_next_attempt",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791066953058,
+      "tag": "0005_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791070391986,
+      "tag": "0006_reconciliation_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791080402666,
+      "tag": "0007_reconciliation_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791087603810,
+      "tag": "0008_agent_intentions",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791088814996,
+      "tag": "0009_intention_bitrix",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791157222111,
+      "tag": "0010_agent_creation_attempt",
+      "breakpoints": true
     }
   ]
 }

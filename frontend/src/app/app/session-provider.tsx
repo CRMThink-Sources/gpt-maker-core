@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { LogoMark } from '@/components/logo';
+import { Spinner } from '@/components/ui';
 import { insideBitrix } from '@/lib/bx24';
 import { ApiRequestError, type ClientConfig, PlatformSessionClient } from '@/lib/platform-session';
 
@@ -14,6 +16,7 @@ export interface AppSession {
 interface SessionContextValue {
   session: AppSession;
   api: PlatformSessionClient['api'];
+  config: ClientConfig;
 }
 
 type State =
@@ -74,29 +77,53 @@ export function SessionProvider({
   const value = useMemo(
     () =>
       state.kind === 'ready'
-        ? { session: state.session, api: client.api.bind(client) as PlatformSessionClient['api'] }
+        ? {
+            session: state.session,
+            api: client.api.bind(client) as PlatformSessionClient['api'],
+            config,
+          }
         : null,
-    [state, client],
+    [state, client, config],
   );
 
-  if (state.kind === 'loading') return <p className="text-sm text-zinc-500">Carregando…</p>;
-  if (state.kind === 'outside') {
-    return <p className="text-sm text-zinc-600">Abra o app GPTMaker dentro do seu Bitrix24.</p>;
+  if (state.kind === 'loading') {
+    return (
+      <Splash>
+        <Spinner className="size-6" />
+        <p className="text-sm text-zinc-500">Conectando ao Bitrix24…</p>
+      </Splash>
+    );
   }
-  if (state.kind === 'error') return <p className="text-sm text-red-700">{state.message}</p>;
+  if (state.kind === 'outside') {
+    return (
+      <Splash>
+        <p className="font-medium text-zinc-900">Abra o app pelo Bitrix24</p>
+        <p className="text-sm text-zinc-500">
+          O GPTMaker funciona dentro do seu portal. Abra-o pelo menu de aplicativos do Bitrix24.
+        </p>
+      </Splash>
+    );
+  }
+  if (state.kind === 'error') {
+    return (
+      <Splash>
+        <p className="font-medium text-zinc-900">Não foi possível abrir o app</p>
+        <p className="text-sm text-red-700">{state.message}</p>
+      </Splash>
+    );
+  }
 
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+/** Tela cheia centralizada para os estados antes da sessão (sem o aside). */
+function Splash({ children }: { children: ReactNode }) {
   return (
-    <SessionContext.Provider value={value}>
-      {state.session.tenant.status === 'AUTH_ERROR' && (
-        <div
-          role="alert"
-          className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-        >
-          O Bitrix24 recusou a autorização do app e o atendimento dos agentes está pausado. Um
-          administrador do portal precisa reinstalar o app para restabelecer o acesso.
-        </div>
-      )}
-      {children}
-    </SessionContext.Provider>
+    <div className="flex min-h-screen flex-1 items-center justify-center p-6">
+      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+        <LogoMark className="mb-2 size-12" />
+        {children}
+      </div>
+    </div>
   );
 }

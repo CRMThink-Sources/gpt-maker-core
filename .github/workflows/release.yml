@@ -2,11 +2,11 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [master, develop]
   workflow_dispatch:
 
 concurrency:
-  group: release
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
           secrets: github_token=${{ secrets.GITHUB_TOKEN }}
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/gptmaker-${{ matrix.app }}:${{ github.sha }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/gptmaker-${{ matrix.app }}:main
+            ghcr.io/${{ steps.meta.outputs.owner }}/gptmaker-${{ matrix.app }}:${{ github.ref_name }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

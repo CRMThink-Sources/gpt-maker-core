@@ -1,8 +1,9 @@
 import { Logger } from '@nestjs/common';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { GptMakerError, kindFromStatus, parseRetryAfter } from './gptmaker.errors';
 import { GptMakerResilience } from './gptmaker.resilience';
 import {
+  assistantListSchema,
   assistantSchema,
   agentSettingsSchema,
   conversationRequestSchema,
@@ -16,6 +17,10 @@ import {
   GptMakerConversationResponse,
   GptMakerCreateTraining,
   GptMakerCreditsSpent,
+  GptMakerIntention,
+  GptMakerWriteIntention,
+  intentionListSchema,
+  intentionWriteAckSchema,
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
@@ -28,6 +33,7 @@ import {
   successSchema,
   trainingSchema,
   updateAgentSettingsSchema,
+  writeIntentionSchema,
   updateTextTrainingSchema,
   webhooksSchema,
   workspaceCreditsSchema,
@@ -108,7 +114,7 @@ export class GptMakerClient {
       method: 'GET',
       path: `/workspace/${this.ws()}/agents`,
       query: { page: page.page, pageSize: page.pageSize, query: page.query },
-      response: assistantSchema.array(),
+      response: assistantListSchema,
     });
   }
 
@@ -191,14 +197,34 @@ export class GptMakerClient {
     });
   }
 
-  /** A API não devolve o id do treinamento criado; é preciso listar para obtê-lo. */
-  async createTraining(agentId: string, input: GptMakerCreateTraining): Promise<void> {
-    await this.success(
-      'training.create',
-      'POST',
-      `/agent/${enc(agentId)}/trainings`,
-      createTrainingSchema.parse(input),
+  /**
+   * A documentação promete `{ success }`, mas a API real responde outra coisa (corpo sem
+   * `success`). Aceita qualquer 2xx e só falha com `success: false` explícito; se o corpo
+   * trouxer o id do treinamento (`id`, `data.id` ou `training.id`), devolve-o, senão é
+   * preciso listar para obtê-lo.
+   */
+  async createTraining(
+    agentId: string,
+    input: GptMakerCreateTraining,
+  ): Promise<{ id: string | null }> {
+    const body = await this.request({
+      operation: 'training.create',
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/trainings`,
+      body: createTrainingSchema.parse(input),
+      response: z.unknown(),
+    });
+    const record = asRecord(body);
+    if (record?.success === false) {
+      throw new GptMakerError('UNKNOWN', 'training.create', 'provedor respondeu success=false', {
+        status: 200,
+        body,
+      });
+    }
+    const id = [record?.id, asRecord(record?.data)?.id, asRecord(record?.training)?.id].find(
+      (value): value is string => typeof value === 'string' && value !== '',
     );
+    return { id: id ?? null };
   }
 
   /** Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. */
@@ -211,6 +237,64 @@ export class GptMakerClient {
 
   async deleteTraining(trainingId: string): Promise<void> {
     await this.success('training.delete', 'DELETE', `/training/${enc(trainingId)}`);
+  }
+
+  // ---- Intenções
+
+  listIntentions(agentId: string, page: PageQuery = {}): Promise<GptMakerIntention[]> {
+    return this.request({
+      operation: 'intention.list',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/intentions`,
+      query: { page: page.page, pageSize: page.pageSize, query: page.query },
+      response: intentionListSchema,
+    });
+  }
+
+  /** Responde só `{ success }`: o id vem da listagem. */
+  /** Id da intenção criada, quando a resposta traz (senão vem da listagem). */
+  async createIntention(agentId: string, input: GptMakerWriteIntention): Promise<string | null> {
+    const ack = await this.intentionWrite(
+      'intention.create',
+      'POST',
+      `/agent/${enc(agentId)}/intentions`,
+      writeIntentionSchema.parse(input),
+    );
+    return ack.id ?? null;
+  }
+
+  async updateIntention(intentionId: string, input: GptMakerWriteIntention): Promise<void> {
+    await this.intentionWrite('intention.update', 'PUT', `/intention/${enc(intentionId)}`, {
+      id: intentionId,
+      ...writeIntentionSchema.parse(input),
+    });
+  }
+
+  /** `{ success: false }` com HTTP 200 continua sendo falha; sem `success`, vale o HTTP. */
+  private async intentionWrite(
+    operation: string,
+    method: Request<z.ZodType>['method'],
+    path: string,
+    body: unknown,
+  ): Promise<z.infer<typeof intentionWriteAckSchema>> {
+    const ack = await this.request({
+      operation,
+      method,
+      path,
+      body,
+      response: intentionWriteAckSchema,
+    });
+    if (ack.success === false) {
+      throw new GptMakerError('UNKNOWN', operation, 'provedor respondeu success=false', {
+        status: 200,
+        body: ack,
+      });
+    }
+    return ack;
+  }
+
+  async deleteIntention(intentionId: string): Promise<void> {
+    await this.success('intention.delete', 'DELETE', `/intention/${enc(intentionId)}`);
   }
 
   // ---- Webhooks
@@ -230,12 +314,16 @@ export class GptMakerClient {
 
   // ---- Conversa e atendimento humano
 
-  /** Não idempotente: não é retentado em timeout/5xx para não duplicar a resposta ao cliente final. */
+  /**
+   * Não idempotente: não é retentado em timeout/5xx para não duplicar a resposta ao cliente final.
+   * O GPTMaker responde 200 com `success: false` quando falha ao processar (ex.: não conseguiu
+   * baixar a mídia: `java.net.ConnectException`); isso vira erro, não resposta.
+   */
   async sendMessage(
     agentId: string,
     input: GptMakerConversationRequest,
   ): Promise<GptMakerConversationResponse> {
-    return this.request({
+    const result = await this.request({
       operation: 'agent.conversation',
       method: 'POST',
       path: `/agent/${enc(agentId)}/conversation`,
@@ -243,6 +331,16 @@ export class GptMakerClient {
       response: conversationResponseSchema,
       timeoutMs: this.options.conversationTimeoutMs,
     });
+    if ((result as { success?: unknown }).success === false) {
+      const error = (result as { error?: unknown }).error;
+      throw new GptMakerError(
+        'UNKNOWN',
+        'agent.conversation',
+        `provedor respondeu success=false${typeof error === 'string' ? `: ${error}` : ''}`,
+        { status: 200, body: result },
+      );
+    }
+    return result;
   }
 
   async startHuman(chatId: string): Promise<void> {
@@ -331,15 +429,28 @@ export class GptMakerClient {
 
         const parsed = req.response.safeParse(payload);
         if (!parsed.success) {
+          // O corpo recebido vai junto: os contratos do GPTMaker divergem da documentação.
           throw new GptMakerError('INVALID_RESPONSE', req.operation, 'resposta fora do contrato', {
             status: response.status,
-            body: parsed.error.issues,
+            body: { issues: parsed.error.issues, received: truncated(payload) },
           });
         }
         return parsed.data as z.infer<S>;
       },
     );
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** Corpo para o log de erro, cortado. */
+function truncated(payload: unknown): unknown {
+  const json = JSON.stringify(payload ?? null) ?? 'null';
+  return json.length > 2000 ? `${json.slice(0, 2000)}…` : payload;
 }
 
 function enc(value: string): string {

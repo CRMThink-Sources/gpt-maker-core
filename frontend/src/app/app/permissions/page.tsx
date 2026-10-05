@@ -1,37 +1,17 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { bx24Call, bx24SelectUsers } from '@/lib/bx24';
+import { PlusIcon, UsersIcon } from '@/components/icons';
+import { Alert, Avatar, buttonClass, Card, EmptyState, Loading, PageHeader } from '@/components/ui';
+import { bx24SelectUsers } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
+import { userNames } from '@/lib/portal-users';
 import { useAppSession } from '../session-provider';
 
 interface GrantedUser {
   bitrixUserId: string;
   grantedBy: string;
   grantedAt: string;
-}
-
-interface BitrixUser {
-  ID: string;
-  NAME?: string;
-  LAST_NAME?: string;
-}
-
-/** Nomes vêm do próprio portal (auth do usuário no BX24); o backend guarda só os ids. */
-async function userNames(ids: string[]): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  try {
-    const users = await bx24Call<BitrixUser[]>('user.get', { ID: ids });
-    return Object.fromEntries(
-      users.map((user) => [
-        user.ID,
-        [user.NAME, user.LAST_NAME].filter(Boolean).join(' ') || `#${user.ID}`,
-      ]),
-    );
-  } catch {
-    return {};
-  }
 }
 
 /** Concessão de permissão: o admin do portal escolhe quem pode gerenciar agentes. */
@@ -94,69 +74,77 @@ export default function PermissionsPage() {
   const remove = (bitrixUserId: string) =>
     run(() => api(`/app/permissions/${encodeURIComponent(bitrixUserId)}`, { method: 'DELETE' }));
 
+  const header = (
+    <PageHeader
+      title="Permissões"
+      description="Administradores do portal sempre podem criar, editar, treinar e configurar gatilhos. Autorize aqui outros usuários; os demais só consultam."
+      actions={
+        session.user.isAdmin && (
+          <button type="button" onClick={add} disabled={busy} className={buttonClass('primary')}>
+            <PlusIcon className="size-4" />
+            Autorizar usuários
+          </button>
+        )
+      }
+    />
+  );
+
   if (!session.user.isAdmin) {
     return (
-      <p className="text-sm text-zinc-600">
-        Somente administradores do portal gerenciam permissões.
-      </p>
+      <>
+        {header}
+        <Alert tone="warning">Somente administradores do portal gerenciam permissões.</Alert>
+      </>
     );
   }
 
   return (
-    <section className="max-w-2xl">
-      <Link href="/app" className="text-sm text-violet-700 underline">
-        Voltar
-      </Link>
-      <h1 className="mt-2 text-2xl font-semibold">Quem pode gerenciar os agentes</h1>
-      <p className="mt-2 text-sm text-zinc-600">
-        Administradores do portal sempre podem criar, editar, treinar e configurar gatilhos.
-        Autorize aqui outros usuários; os demais só consultam.
-      </p>
-
-      <button
-        type="button"
-        onClick={add}
-        disabled={busy}
-        className="mt-4 rounded bg-violet-700 px-3 py-2 text-sm text-white disabled:opacity-50"
-      >
-        Autorizar usuários
-      </button>
-
+    <>
+      {header}
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <Alert tone="error" className="mb-6">
           {error}
-        </p>
+        </Alert>
       )}
-
       {users === null ? (
-        <p className="mt-4 text-sm text-zinc-500">Carregando…</p>
-      ) : users.length === 0 ? (
-        <p className="mt-4 text-sm text-zinc-600">
-          Nenhum usuário autorizado além dos administradores.
-        </p>
+        !error && <Loading />
       ) : (
-        <ul className="mt-4 divide-y divide-zinc-200 rounded border border-zinc-200">
-          {users.map((user) => (
-            <li key={user.bitrixUserId} className="flex items-center justify-between p-3 text-sm">
-              <span>
-                {names[user.bitrixUserId] ?? `Usuário #${user.bitrixUserId}`}
-                <span className="block text-xs text-zinc-500">
-                  por {names[user.grantedBy] ?? `#${user.grantedBy}`} em{' '}
-                  {new Date(user.grantedAt).toLocaleDateString('pt-BR')}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(user.bitrixUserId)}
-                disabled={busy}
-                className="text-red-700 underline disabled:opacity-50"
-              >
-                Remover
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Card>
+          {users.length === 0 ? (
+            <EmptyState
+              icon={<UsersIcon className="size-6" />}
+              title="Só administradores gerenciam agentes"
+              description="Autorize outros usuários do portal para que também possam criar e editar agentes."
+            />
+          ) : (
+            <ul className="divide-y divide-zinc-100">
+              {users.map((user) => {
+                const name = names[user.bitrixUserId] ?? `Usuário #${user.bitrixUserId}`;
+                return (
+                  <li key={user.bitrixUserId} className="flex items-center gap-4 px-5 py-4 text-sm">
+                    <Avatar name={name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-zinc-900">{name}</p>
+                      <p className="text-xs text-zinc-500">
+                        Autorizado por {names[user.grantedBy] ?? `#${user.grantedBy}`} em{' '}
+                        {new Date(user.grantedAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => remove(user.bitrixUserId)}
+                      disabled={busy}
+                      className={buttonClass('ghost-danger', 'sm')}
+                    >
+                      Remover acesso
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
       )}
-    </section>
+    </>
   );
 }

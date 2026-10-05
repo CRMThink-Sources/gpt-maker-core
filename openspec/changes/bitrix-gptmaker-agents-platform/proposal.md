@@ -12,7 +12,7 @@ Temos uma conta PARTNER no GPTMaker com criação de agentes e créditos ilimita
 - Canal de atendimento via chatbot Bitrix (`imbot.v2`) conectado às Linhas Abertas: mensagens do cliente final são repassadas à API de conversa do GPTMaker e as respostas voltam ao chat do Bitrix. Transferência para operador humano.
 - Configuração de gatilhos: eventos de webhook do GPTMaker mapeados para ações no Bitrix (lead, negócio, comentário na timeline, etc.).
 - Billing por créditos: planos com cota de créditos, saldo por tenant, ledger imutável, débito por resposta com base nos créditos reais gastos (1 crédito do cliente = 1 crédito GPTMaker; margem embutida no preço do plano), bloqueio ao zerar saldo e reconciliação diária com `credits-spent`.
-- Pagamentos e assinaturas delegados ao módulo `billing` do **`crmthink-platform`** compartilhado entre as aplicações CRMThink (change própria, repositório próprio): Stripe (Checkout embutido, renovação, pacotes, portal, estornos) e SPAs do portal CRMThink (Instalações, Assinaturas, Itens de assinatura, Planos) ficam no serviço. Este app consome eventos assinados do serviço e aplica a política do GPTMaker: trial de 14 dias com 500 créditos, créditos por ciclo, carência de 3 dias, inativação de agentes e avisos. Cada agente é espelhado como item de assinatura não cobrável.
+- Pagamentos e assinaturas delegados ao módulo `billing` do **`crmthink-platform`** compartilhado entre as aplicações CRMThink (change própria, repositório próprio): Stripe (Checkout embutido, renovação, pacotes, portal, estornos) e SPAs do portal CRMThink (Instalações, Assinaturas, Itens de assinatura, Planos) ficam no serviço. Este app consome eventos assinados do serviço e aplica a política do GPTMaker: trial de 14 dias com 500 créditos, créditos por ciclo, carência de 1 dia (fim de semana empurra para segunda), inativação de agentes e avisos. Cada agente é espelhado como item de assinatura não cobrável.
 - Backoffice interno para gerenciar planos, tenants, concessão de créditos, catálogo de modelos, workspace e relatório de consumo do partner.
 - Infraestrutura: RabbitMQ (filas e DLQ), Redis (cache, locks, idempotência, rate limit), PostgreSQL, Docker Compose em Droplet DigitalOcean, DigitalOcean Spaces para arquivos e CI/CD com GitHub Actions.
 
@@ -24,10 +24,11 @@ Temos uma conta PARTNER no GPTMaker com criação de agentes e créditos ilimita
 - `ai-model-catalog`: cadastro, edição de custo, desativação e remoção de modelos de IA disponíveis para os agentes, com histórico de custos.
 - `agent-management`: criação, edição de configurações (incluindo modelo), inativação, reativação e remoção de agentes, sincronizados com o GPTMaker, com limite de 5 agentes por tenant.
 - `agent-training`: cadastro, edição, listagem e remoção de treinamentos do agente, refletidos no GPTMaker.
+- `agent-intentions`: intenções do agente (chamadas a APIs externas durante a conversa), cadastradas no app e refletidas no GPTMaker.
 - `bitrix-chatbot-channel`: registro do chatbot no Bitrix, roteamento de mensagens Linhas Abertas ↔ GPTMaker, transferência para humano e tratamento de saldo insuficiente.
 - `agent-triggers`: configuração de gatilhos que ligam eventos de webhook do GPTMaker a ações no Bitrix24.
 - `credit-billing`: planos, saldo, ledger, débito por resposta, alertas de consumo e bloqueio por saldo.
-- `payments-integration`: consumo do módulo `billing` do `crmthink-platform` (trial, checkout embutido, troca de plano, portal, eventos de assinatura/compra/estorno, carência, itens de assinatura por agente, projeção local da assinatura).
+- `payments-integration`: consumo do módulo `billing` do `crmthink-platform` (trial liberado por formulário de cadastro, checkout embutido, troca de plano, portal, eventos de assinatura/compra/estorno, carência, itens de assinatura por agente, projeção local da assinatura).
 - `usage-reconciliation`: reconciliação diária do consumo estimado com o consumo real do GPTMaker e relatório de consumo do partner por período.
 - `admin-backoffice`: painel interno para operação (planos, tenants, créditos, modelos, workspace, relatórios, auditoria).
 

@@ -47,6 +47,15 @@ describe('GptMakerClient', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-secreto');
   });
 
+  it('lista de agentes no envelope { data, count } da API real', async () => {
+    const { c } = client([
+      { status: 200, body: { data: [{ id: 'a1', name: '[t1] Bot' }], count: 1 } },
+    ]);
+    await expect(c.listWorkspaceAgents({ page: 0, pageSize: 50 })).resolves.toEqual([
+      { id: 'a1', name: '[t1] Bot' },
+    ]);
+  });
+
   it('envia corpo JSON validado', async () => {
     const { c, calls } = client([{ status: 200, body: { id: 'a1', name: '[t1] Bot' } }]);
     await c.createAgent({ name: '[t1] Bot', type: 'SUPPORT', communicationType: 'NORMAL' });
@@ -72,9 +81,38 @@ describe('GptMakerClient', () => {
     await expect(c.activateAgent('a1')).rejects.toMatchObject({ kind: 'UNKNOWN' });
   });
 
-  it('resposta fora do contrato vira INVALID_RESPONSE', async () => {
+  it('resposta fora do contrato vira INVALID_RESPONSE, com o corpo recebido', async () => {
     const { c } = client([{ status: 200, body: { credits: 'muitos', status: 'ACTIVE' } }]);
-    await expect(c.getWorkspaceCredits()).rejects.toMatchObject({ kind: 'INVALID_RESPONSE' });
+    await expect(c.getWorkspaceCredits()).rejects.toMatchObject({
+      kind: 'INVALID_RESPONSE',
+      body: { received: { credits: 'muitos', status: 'ACTIVE' } },
+    });
+  });
+
+  describe('criação de treinamento (resposta real diverge da documentada)', () => {
+    const text = { type: 'TEXT' as const, text: 'Oi' };
+
+    it.each([[{}], [undefined], [{ message: 'ok' }], [[]]])(
+      'qualquer 2xx sem success=false é sucesso: %j',
+      async (body) => {
+        const { c } = client([{ status: 200, body }]);
+        await expect(c.createTraining('a1', text)).resolves.toEqual({ id: null });
+      },
+    );
+
+    it.each([
+      [{ id: 'tr-1', type: 'TEXT' }],
+      [{ success: true, data: { id: 'tr-1' } }],
+      [{ training: { id: 'tr-1' } }],
+    ])('devolve o id quando o corpo traz: %j', async (body) => {
+      const { c } = client([{ status: 200, body }]);
+      await expect(c.createTraining('a1', text)).resolves.toEqual({ id: 'tr-1' });
+    });
+
+    it('success=false explícito é falha', async () => {
+      const { c } = client([{ status: 200, body: { success: false } }]);
+      await expect(c.createTraining('a1', text)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    });
   });
 
   it('lê Retry-After do 429', async () => {

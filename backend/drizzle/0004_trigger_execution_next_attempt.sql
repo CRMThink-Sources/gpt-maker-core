@@ -1,0 +1,2 @@
+ALTER TABLE "trigger_execution" ADD COLUMN "next_attempt_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "trigger_execution_due_idx" ON "trigger_execution" USING btree ("next_attempt_at") WHERE "trigger_execution"."status" = 'PENDING';

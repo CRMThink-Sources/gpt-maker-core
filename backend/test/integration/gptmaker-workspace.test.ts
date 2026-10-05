@@ -20,7 +20,7 @@ import { HealthRegistry } from '../../src/shared/health/health-registry';
 import { DomainError } from '../../src/shared/http/api-exception.filter';
 import { WireMock } from '../support/wiremock';
 
-const { agent, aiModel, tenant, workspaceSyncFinding } = schema;
+const { agent, agentCreationAttempt, aiModel, tenant, workspaceSyncFinding } = schema;
 const WS = 'ws-1';
 
 describe('workspace GPTMaker: sync, health e limite', () => {
@@ -128,6 +128,7 @@ describe('workspace GPTMaker: sync, health e limite', () => {
     await wiremock.reset();
     await db.delete(workspaceSyncFinding);
     await db.delete(agent);
+    await db.delete(agentCreationAttempt);
   });
 
   afterAll(async () => {
@@ -139,9 +140,12 @@ describe('workspace GPTMaker: sync, health e limite', () => {
   describe('workspace-sync', () => {
     const sync = () => new WorkspaceSyncService(client, db, redis).sync();
 
-    it('registra órfão sugerindo o tenant pelo prefixo e não duplica na reexecução', async () => {
+    it('registra órfão sugerindo o tenant pela criação que recebeu o id e não duplica', async () => {
       const t = await newTenant();
-      await remoteAgents([{ id: 'gm-orfao', name: `[${t.tenantCode}] Bot perdido` }]);
+      await db
+        .insert(agentCreationAttempt)
+        .values({ tenantId: t.id, name: 'Bot perdido', gptmakerAgentId: 'gm-orfao' });
+      await remoteAgents([{ id: 'gm-orfao', name: 'Bot perdido' }]);
 
       const first = await sync();
       expect(first).toMatchObject({ remoteAgents: 1, orphansFound: 1 });
@@ -157,10 +161,55 @@ describe('workspace GPTMaker: sync, health e limite', () => {
       });
     });
 
+    it('criação sem resposta: sugere pelo nome só quando um único tenant tentou', async () => {
+      const [a, b] = [await newTenant(), await newTenant()];
+      await db.insert(agentCreationAttempt).values([
+        { tenantId: a.id, name: 'Vendas' },
+        { tenantId: a.id, name: 'Suporte' },
+        { tenantId: b.id, name: 'Suporte' },
+        // Antiga demais para casar.
+        { tenantId: b.id, name: 'Antigo', createdAt: new Date(Date.now() - 8 * 86_400_000) },
+      ]);
+      await remoteAgents([
+        { id: 'gm-vendas', name: ' vendas ' },
+        { id: 'gm-suporte', name: 'Suporte' },
+        { id: 'gm-antigo', name: 'Antigo' },
+      ]);
+      await sync();
+      const suggested = Object.fromEntries(
+        (await db.select().from(workspaceSyncFinding)).map((f) => [
+          f.gptmakerAgentId,
+          (f.details as { suggestedTenantId: string | null }).suggestedTenantId,
+        ]),
+      );
+      expect(suggested).toEqual({ 'gm-vendas': a.id, 'gm-suporte': null, 'gm-antigo': null });
+    });
+
+    it('órfão com o prefixo legado: sugere pelo código do tenant', async () => {
+      const t = await newTenant();
+      await remoteAgents([{ id: 'gm-legado', name: `[${t.tenantCode}] Bot antigo` }]);
+      await sync();
+      const [finding] = await db.select().from(workspaceSyncFinding);
+      expect(finding!.details).toMatchObject({ suggestedTenantId: t.id });
+    });
+
+    it('apaga registros de criação com mais de 30 dias', async () => {
+      const t = await newTenant();
+      await db.insert(agentCreationAttempt).values([
+        { tenantId: t.id, name: 'Velho', createdAt: new Date(Date.now() - 31 * 86_400_000) },
+        { tenantId: t.id, name: 'Recente' },
+      ]);
+      await remoteAgents([]);
+      await sync();
+      expect((await db.select().from(agentCreationAttempt)).map((r) => r.name)).toEqual([
+        'Recente',
+      ]);
+    });
+
     it('agente removido localmente que ainda existe no GPTMaker é órfão', async () => {
       const t = await newTenant();
       const removed = await newAgent(t.id, 'DELETED');
-      await remoteAgents([{ id: removed.gptmakerAgentId, name: `[${t.tenantCode}] Bot` }]);
+      await remoteAgents([{ id: removed.gptmakerAgentId, name: 'Bot' }]);
       await sync();
       const [finding] = await db.select().from(workspaceSyncFinding);
       expect(finding).toMatchObject({ kind: 'ORPHAN', agentId: removed.id });

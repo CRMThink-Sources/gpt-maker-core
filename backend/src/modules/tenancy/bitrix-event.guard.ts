@@ -3,11 +3,12 @@ import {
   createParamDecorator,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { enrichContext } from '../../shared/context/request-context';
-import { BitrixEventVerifier } from './bitrix-event.verifier';
+import { BitrixEventVerifier, tokenFingerprint } from './bitrix-event.verifier';
 import type { Tenant } from './tenant.service';
 
 type BitrixEventRequest = Request & { bitrixTenant?: Tenant };
@@ -19,13 +20,40 @@ type BitrixEventRequest = Request & { bitrixTenant?: Tenant };
  */
 @Injectable()
 export class BitrixEventGuard implements CanActivate {
+  private readonly logger = new Logger(BitrixEventGuard.name);
+
   constructor(private readonly verifier: BitrixEventVerifier) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<BitrixEventRequest>();
-    const auth = (req.body as { auth?: Record<string, unknown> } | undefined)?.auth;
+    const body = req.body as
+      | { auth?: Record<string, unknown>; data?: { bot?: { auth?: Record<string, unknown> } } }
+      | undefined;
+    // Eventos `imbot.v2` trazem só `domain` e `application_token` no `auth` de cima; o portal
+    // vem em `data.bot.auth.member_id`. Ele só localiza o tenant: quem autentica é o token.
+    const auth = {
+      ...body?.auth,
+      member_id: body?.auth?.member_id ?? body?.data?.bot?.auth?.member_id,
+    };
     const check = await this.verifier.verify(auth);
-    if (!check.ok) throw new UnauthorizedException('Evento não autenticado');
+    if (!check.ok) {
+      if (check.reason === 'token_mismatch') {
+        // Qual token cada parte do evento trouxe (impressão digital), para comparar com o esperado.
+        const botAuth = body?.data?.bot?.auth;
+        this.logger.warn(
+          {
+            event: (body as { event?: unknown } | undefined)?.event,
+            authKeys: Object.keys(body?.auth ?? {}),
+            botAuthKeys: Object.keys(botAuth ?? {}),
+            botApplicationToken: tokenFingerprint(
+              typeof botAuth?.application_token === 'string' ? botAuth.application_token : null,
+            ),
+          },
+          'tokens do evento recusado',
+        );
+      }
+      throw new UnauthorizedException('Evento não autenticado');
+    }
     req.bitrixTenant = check.tenant;
     enrichContext({ tenantId: check.tenant.id });
     return true;

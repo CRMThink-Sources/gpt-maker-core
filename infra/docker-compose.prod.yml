@@ -23,7 +23,6 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
-      BITRIX_FRAME_ANCESTORS: ${BITRIX_FRAME_ANCESTORS}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -37,6 +36,9 @@ services:
     environment:
       PUBLIC_PLATFORM_URL: ${PUBLIC_PLATFORM_URL}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
+      PUBLIC_STRIPE_PUBLISHABLE_KEY: ${PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      # Repasse do backoffice (/admin/api) para a API pela rede interna
+      API_INTERNAL_URL: http://backend-api:3001
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 15s

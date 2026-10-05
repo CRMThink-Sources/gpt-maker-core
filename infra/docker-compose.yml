@@ -15,10 +15,16 @@ x-backend-env: &backend-env
   GPTMAKER_API_URL: ${GPTMAKER_API_URL:-https://api.gptmaker.ai/v2}
   GPTMAKER_API_TOKEN: ${GPTMAKER_API_TOKEN:-trocar}
   GPTMAKER_WORKSPACE_ID: ${GPTMAKER_WORKSPACE_ID:-trocar}
+  API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:3001}
   PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
   PLATFORM_API_KEY: ${PLATFORM_API_KEY:-trocar}
   PLATFORM_WEBHOOK_SECRETS: ${PLATFORM_WEBHOOK_SECRETS:-trocar}
   DATA_ENCRYPTION_KEY: ZGV2LWtleS1kZXYta2V5LWRldi1rZXktZGV2LWtleSE=
+  STORAGE_ENDPOINT: http://storage:8333
+  STORAGE_PUBLIC_ENDPOINT: ${STORAGE_PUBLIC_ENDPOINT:-http://localhost:8333}
+  STORAGE_ACCESS_KEY: gptmaker
+  STORAGE_SECRET_KEY: gptmaker123
+  STORAGE_FORCE_PATH_STYLE: 'true'
 
 services:
   postgres:
@@ -134,6 +140,8 @@ services:
     environment:
       PUBLIC_PLATFORM_URL: ${PLATFORM_URL:-https://platform-staging.crmthink.com.br}
       PUBLIC_API_BASE_URL: http://localhost:3001
+      PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      API_INTERNAL_URL: http://backend-api:3001
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']
       interval: 5s

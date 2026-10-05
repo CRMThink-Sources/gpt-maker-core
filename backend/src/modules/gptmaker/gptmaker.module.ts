@@ -56,6 +56,12 @@ import { WorkspaceSyncService } from './workspace-sync.service';
     WorkspaceHealthService,
     WorkspaceSyncService,
   ],
-  exports: [GptMakerClient, TenantAgentLimitService],
+  exports: [
+    GptMakerClient,
+    TenantAgentLimitService,
+    WorkspaceHealthService,
+    WorkspaceStatusStore,
+    WorkspaceSyncService,
+  ],
 })
 export class GptMakerModule {}

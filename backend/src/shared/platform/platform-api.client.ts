@@ -1,9 +1,21 @@
 import {
+  type BillingPortalRequest,
+  type BillingPortalSession,
+  type ChangePlanResult,
+  type CheckoutRequest,
+  type CheckoutSession,
+  type CreateItemRequest,
+  type CurrentSubscription,
   type Installation,
+  type Plan,
   PlatformClient,
   PlatformError,
   PlatformRequestError,
   type PlatformToken,
+  type SubscriptionItem,
+  type TrialRequest,
+  type TrialRequestResult,
+  type UpdateItemRequest,
 } from '@crmthink-sources/platform-sdk';
 import { ExponentialBackoff, handleWhen, retry } from 'cockatiel';
 import { Histogram } from 'prom-client';
@@ -75,6 +87,68 @@ export class PlatformApiClient {
     return this.call('token.refresh', () =>
       this.client.refreshInstallationToken(installationId, staleAccessToken),
     );
+  }
+
+  /** Assinatura vigente da instalação; sem assinatura responde `NO_SUBSCRIPTION`. */
+  getSubscription(installationId: number): Promise<CurrentSubscription> {
+    return this.call('subscription.get', () => this.client.getSubscription(installationId));
+  }
+
+  /**
+   * Solicita o trial com o contato do cliente. Retentar é seguro: a plataforma serializa por
+   * instalação e responde 200 com o trial já vigente (`created = false`).
+   */
+  requestTrial(installationId: number, contact: TrialRequest): Promise<TrialRequestResult> {
+    return this.call('trial.request', () => this.client.requestTrial(installationId, contact));
+  }
+
+  /** Planos ativos dos produtos do app (assinaturas, pacotes e o plano de trial). */
+  listPlans(): Promise<Plan[]> {
+    return this.call('plan.list', async () => (await this.client.listPlans()).items);
+  }
+
+  /**
+   * Sessão do Stripe Embedded Checkout. Repetir só cria outra sessão (a não usada expira), então
+   * a retentativa em falha transitória é segura.
+   */
+  createCheckoutSession(body: CheckoutRequest): Promise<CheckoutSession> {
+    return this.call('checkout.create', () => this.client.createCheckoutSession(body));
+  }
+
+  /** Sessão do Stripe Customer Portal; `NO_GATEWAY_SUBSCRIPTION` sem cobrança Stripe ativa. */
+  createBillingPortalSession(body: BillingPortalRequest): Promise<BillingPortalSession> {
+    return this.call('billing-portal.create', () => this.client.createBillingPortalSession(body));
+  }
+
+  /**
+   * Troca de plano de assinatura `stripe`: upgrade imediato (cobrança proporcional), downgrade no
+   * próximo período. O efeito nos créditos chega pelo evento `subscription.plan_changed`.
+   */
+  changePlan(subscriptionId: number, planId: number): Promise<ChangePlanResult> {
+    return this.call('subscription.change-plan', () =>
+      this.client.changePlan(subscriptionId, { planId }),
+    );
+  }
+
+  listItems(subscriptionId: number): Promise<SubscriptionItem[]> {
+    return this.call('item.list', async () => (await this.client.listItems(subscriptionId)).items);
+  }
+
+  /** Idempotente por `externalRef`: se o item já existe, a plataforma devolve o existente. */
+  createItem(subscriptionId: number, body: CreateItemRequest): Promise<SubscriptionItem> {
+    return this.call('item.create', () => this.client.createItem(subscriptionId, body));
+  }
+
+  updateItem(
+    subscriptionId: number,
+    itemId: number,
+    body: UpdateItemRequest,
+  ): Promise<SubscriptionItem> {
+    return this.call('item.update', () => this.client.updateItem(subscriptionId, itemId, body));
+  }
+
+  removeItem(subscriptionId: number, itemId: number): Promise<SubscriptionItem> {
+    return this.call('item.remove', () => this.client.removeItem(subscriptionId, itemId));
   }
 
   private async call<T>(operation: string, send: () => Promise<T>): Promise<T> {

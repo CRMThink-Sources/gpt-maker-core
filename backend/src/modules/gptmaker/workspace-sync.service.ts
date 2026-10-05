@@ -1,20 +1,31 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { and, count, eq, inArray, isNull } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { Gauge } from 'prom-client';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agent, tenant, workspaceSyncFinding } from '../../shared/database/schema/index';
+import {
+  agent,
+  agentCreationAttempt,
+  tenant,
+  workspaceSyncFinding,
+} from '../../shared/database/schema/index';
 import { metricsRegistry } from '../../shared/metrics/metrics';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { tenantCodeFromGptMakerName } from './agent-naming';
+import { collectAllPages } from './collect-pages';
 import { GptMakerClient } from './gptmaker.client';
 import { GptMakerError } from './gptmaker.errors';
 import { GPTMAKER_AGENT_STATUS, type GptMakerAgent } from './gptmaker.schemas';
 
 const PAGE_SIZE = 100;
+/** Criação sem resposta do GPTMaker: casa com um órfão de mesmo nome só se for recente. */
+const PENDING_ATTEMPT_DAYS = 7;
+/** Registros de criação mais antigos já não servem para sugerir dono. */
+const ATTEMPT_RETENTION_DAYS = 30;
+const DAY_MS = 86_400_000;
 const MAX_PAGES = 1000;
 
 const orphansGauge = new Gauge({
@@ -42,28 +53,13 @@ export interface SyncSummary {
 
 type LocalAgent = { id: string; tenantId: string; gptmakerAgentId: string; status: string };
 
-/**
- * Lê todas as páginas de agentes do workspace. A API não documenta se `page` começa em 0 ou 1
- * nem o máximo de `pageSize`, então: começa em 0, deduplica por id e para na primeira página
- * vazia ou após duas páginas seguidas sem agente novo (cobre as duas bases e APIs que repetem a
- * última página).
- */
-export async function collectAllAgents(
+/** Todos os agentes do workspace (paginação tolerante, ver `collectAllPages`). */
+export function collectAllAgents(
   fetchPage: (page: number, pageSize: number) => Promise<GptMakerAgent[]>,
   pageSize = PAGE_SIZE,
   maxPages = MAX_PAGES,
 ): Promise<GptMakerAgent[]> {
-  const byId = new Map<string, GptMakerAgent>();
-  let pagesWithoutNew = 0;
-  for (let page = 0; page < maxPages; page++) {
-    const items = await fetchPage(page, pageSize);
-    if (items.length === 0) return [...byId.values()];
-    const before = byId.size;
-    for (const item of items) byId.set(item.id, item);
-    pagesWithoutNew = byId.size === before ? pagesWithoutNew + 1 : 0;
-    if (pagesWithoutNew >= 2) return [...byId.values()];
-  }
-  throw new Error(`listagem do workspace passou de ${maxPages} páginas`);
+  return collectAllPages(fetchPage, pageSize, maxPages);
 }
 
 /**
@@ -96,6 +92,14 @@ export class WorkspaceSyncService {
         this.logger.error({ alert: true, err: error }, 'workspace-sync falhou');
       }
     });
+  }
+
+  /** Sincronização pedida pelo backoffice, no mesmo lock do job; `null` se ele já está rodando. */
+  async syncNow(): Promise<SyncSummary | null> {
+    const outcome = await this.lock.runExclusive('job:workspace-sync', 30 * 60_000, () =>
+      this.sync(),
+    );
+    return outcome.ran ? outcome.result : null;
   }
 
   async sync(): Promise<SyncSummary> {
@@ -168,19 +172,19 @@ export class WorkspaceSyncService {
     summary.findingsResolved =
       (await this.resolveStaleOrphans(remoteById, localByRemoteId)) +
       (await this.resolveStatusMismatches(failedCorrections));
+    await this.db
+      .delete(agentCreationAttempt)
+      .where(
+        lt(agentCreationAttempt.createdAt, new Date(Date.now() - ATTEMPT_RETENTION_DAYS * DAY_MS)),
+      );
     await this.updateGauges();
     return summary;
   }
 
-  /** Grava a divergência (uma aberta por agente); sugere o tenant pelo prefixo do nome. */
+  /** Grava a divergência (uma aberta por agente), com o tenant sugerido como dono. */
   private async recordOrphan(item: GptMakerAgent, deletedLocalAgentId?: string): Promise<boolean> {
-    const suggestedTenantCode = item.name ? tenantCodeFromGptMakerName(item.name) : null;
-    const [suggestedTenant] = suggestedTenantCode
-      ? await this.db
-          .select({ id: tenant.id })
-          .from(tenant)
-          .where(eq(tenant.tenantCode, suggestedTenantCode))
-      : [];
+    const suggestedTenant = await this.suggestOwner(item);
+    const suggestedTenantCode = suggestedTenant?.tenantCode ?? null;
     const inserted = await this.db
       .insert(workspaceSyncFinding)
       .values({
@@ -200,6 +204,47 @@ export class WorkspaceSyncService {
       this.logger.warn({ gptmakerAgentId: item.id, name: item.name }, 'agente órfão no workspace');
     }
     return inserted.length > 0;
+  }
+
+  /**
+   * Dono provável de um órfão: a criação que recebeu este id do GPTMaker; senão, uma criação
+   * recente sem resposta com o mesmo nome (se só um tenant tiver uma); senão, o prefixo legado.
+   */
+  private async suggestOwner(
+    item: GptMakerAgent,
+  ): Promise<{ id: string; tenantCode: string } | null> {
+    const owner = { id: tenant.id, tenantCode: tenant.tenantCode };
+    const [byId] = await this.db
+      .select(owner)
+      .from(agentCreationAttempt)
+      .innerJoin(tenant, eq(tenant.id, agentCreationAttempt.tenantId))
+      .where(eq(agentCreationAttempt.gptmakerAgentId, item.id))
+      .limit(1);
+    if (byId) return byId;
+
+    const name = item.name?.trim();
+    if (!name) return null;
+    const byName = await this.db
+      .selectDistinct(owner)
+      .from(agentCreationAttempt)
+      .innerJoin(tenant, eq(tenant.id, agentCreationAttempt.tenantId))
+      .where(
+        and(
+          isNull(agentCreationAttempt.gptmakerAgentId),
+          sql`lower(trim(${agentCreationAttempt.name})) = lower(${name})`,
+          gte(agentCreationAttempt.createdAt, new Date(Date.now() - PENDING_ATTEMPT_DAYS * DAY_MS)),
+        ),
+      );
+    if (byName.length === 1) return byName[0]!;
+    if (byName.length > 1) return null;
+
+    const legacyCode = tenantCodeFromGptMakerName(name);
+    if (!legacyCode) return null;
+    const [byPrefix] = await this.db
+      .select(owner)
+      .from(tenant)
+      .where(eq(tenant.tenantCode, legacyCode));
+    return byPrefix ?? null;
   }
 
   /**

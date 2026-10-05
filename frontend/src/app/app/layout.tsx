@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
+import { AppShell } from './app-shell';
 import { SessionProvider } from './session-provider';
 
 export const metadata: Metadata = { title: 'GPTMaker' };
@@ -13,10 +14,11 @@ export default async function ClientAppLayout({ children }: LayoutProps<'/app'>)
   const config = {
     platformUrl: process.env.PUBLIC_PLATFORM_URL ?? 'https://platform-staging.crmthink.com.br',
     apiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? 'http://localhost:3001',
+    stripePublishableKey: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || null,
   };
   return (
-    <main className="flex-1 p-6">
-      <SessionProvider config={config}>{children}</SessionProvider>
-    </main>
+    <SessionProvider config={config}>
+      <AppShell>{children}</AppShell>
+    </SessionProvider>
   );
 }

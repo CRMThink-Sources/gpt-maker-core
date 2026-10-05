@@ -84,6 +84,10 @@ export class AppSessionGuard implements CanActivate {
     }
 
     const isAdmin = claims.isAdmin === true;
+    if (isAdmin) {
+      // Melhor esforço: falhar aqui não pode derrubar a requisição.
+      await this.permissions.rememberAdmin(tenant.id, claims.sub).catch(() => undefined);
+    }
     const canManage = isAdmin || (await this.permissions.isGranted(tenant.id, claims.sub));
     req.appSession = {
       tenantId: tenant.id,

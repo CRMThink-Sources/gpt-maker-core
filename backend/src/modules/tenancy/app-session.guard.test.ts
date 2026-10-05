@@ -34,7 +34,10 @@ function setup(options: {
     {
       findByInstallationId: vi.fn(async () => ('tenant' in options ? options.tenant : tenant)),
     } as unknown as TenantService,
-    { isGranted: vi.fn(async () => options.granted ?? false) } as unknown as PermissionService,
+    {
+      isGranted: vi.fn(async () => options.granted ?? false),
+      rememberAdmin: vi.fn(async () => undefined),
+    } as unknown as PermissionService,
     { getAllAndOverride: () => options.access } as unknown as Reflector,
   );
   const run = async (authorization?: string) => {

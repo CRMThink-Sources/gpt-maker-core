@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { RabbitMQContainer, StartedRabbitMQContainer } from '@testcontainers/rabbitmq';
+import type { StartedRabbitMQContainer } from '@testcontainers/rabbitmq';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ import { loadEnv } from '../../src/config/env';
 import { contextMiddleware } from '../../src/shared/context/context.middleware';
 import { runMigrations } from '../../src/shared/database/migrate';
 import { initMetrics } from '../../src/shared/metrics/metrics';
+import { startRabbitMQ } from '../support/rabbitmq';
 import { WireMock } from '../support/wiremock';
 
 describe('api: health e métricas', () => {
@@ -24,7 +25,7 @@ describe('api: health e métricas', () => {
     [postgres, redis, rabbit, wiremock] = await Promise.all([
       new PostgreSqlContainer('postgres:16-alpine').start(),
       new RedisContainer('redis:7-alpine').start(),
-      new RabbitMQContainer('rabbitmq:4-alpine').start(),
+      startRabbitMQ(),
       WireMock.start(),
     ]);
     // Workspace GPTMaker saudável, verificado em segundo plano no boot da API.
@@ -49,6 +50,9 @@ describe('api: health e métricas', () => {
       PLATFORM_URL: 'http://127.0.0.1:1',
       PLATFORM_API_KEY: 'test-key',
       PLATFORM_WEBHOOK_SECRETS: 'test-secret',
+      STORAGE_ENDPOINT: 'http://127.0.0.1:1',
+      STORAGE_ACCESS_KEY: 'test',
+      STORAGE_SECRET_KEY: 'test',
     });
     initMetrics(env.APP_ROLE);
     await runMigrations(env.DATABASE_URL);

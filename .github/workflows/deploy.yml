@@ -1,13 +1,14 @@
 name: Deploy
 
-# staging: automático após cada release bem-sucedido em main.
-# production: manual (workflow_dispatch) com a tag (SHA) já validada em staging; a aprovação
-# é exigida pelas regras de proteção do GitHub Environment "production".
+# staging: automático após cada release bem-sucedido em develop.
+# production: automático após release em master, com a aprovação exigida pelas regras de proteção
+# do GitHub Environment "production". workflow_dispatch serve para redeploy/rollback de uma tag
+# (SHA) já publicada.
 on:
   workflow_run:
     workflows: [Release]
     types: [completed]
-    branches: [main]
+    branches: [master, develop]
   workflow_dispatch:
     inputs:
       environment:
@@ -27,17 +28,20 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.event.workflow_run.head_branch == 'master' && 'production' || 'staging') }}
+      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.event.workflow_run.head_sha }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.event.workflow_run.head_branch == 'master' && 'production' || 'staging') }}
     concurrency:
-      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.event.workflow_run.head_branch == 'master' && 'production' || 'staging') }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.event.workflow_run.head_sha }}
+          ref: ${{ env.IMAGE_TAG }}
       - uses: ./.github/actions/deploy-droplet
         with:
-          image-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.event.workflow_run.head_sha }}
+          image-tag: ${{ env.IMAGE_TAG }}
           ssh-host: ${{ vars.DEPLOY_HOST }}
           ssh-user: ${{ vars.DEPLOY_USER }}
           deploy-dir: ${{ vars.DEPLOY_DIR }}
