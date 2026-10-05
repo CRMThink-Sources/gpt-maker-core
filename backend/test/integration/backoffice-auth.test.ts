@@ -143,7 +143,9 @@ describe('backoffice: autenticação', () => {
   });
 
   it('segundo acesso pede só o código; o mesmo código não vale duas vezes', async () => {
-    const { secret } = await signIn(email, password, undefined, currentStep() - 1);
+    // Um passo fixo para o teste todo: a virada dos 30 s no meio não muda o código repetido.
+    const step = currentStep();
+    const { secret } = await signIn(email, password, undefined, step);
     const login = await request(app.getHttpServer())
       .post('/admin/auth/login')
       .set(H)
@@ -154,12 +156,12 @@ describe('backoffice: autenticação', () => {
     await request(app.getHttpServer())
       .post('/admin/auth/totp')
       .set(H)
-      .send({ challenge: login.body.challenge, code: totpCode(secret, currentStep() - 1) })
+      .send({ challenge: login.body.challenge, code: totpCode(secret, step) })
       .expect(401);
     await request(app.getHttpServer())
       .post('/admin/auth/totp')
       .set(H)
-      .send({ challenge: login.body.challenge, code: totpCode(secret, currentStep()) })
+      .send({ challenge: login.body.challenge, code: totpCode(secret, step + 1) })
       .expect(200);
   });
 
@@ -262,7 +264,9 @@ describe('backoffice: autenticação', () => {
   });
 
   it('trocar a senha derruba as sessões; a nova senha entra', async () => {
-    const { cookie, secret } = await signIn(email, password, undefined, currentStep() - 1);
+    // Passos crescentes (o servidor recusa repetir um passo) e dentro da janela de ±1 mesmo se
+    // os 30 s virarem entre gerar o código e o servidor conferir.
+    const { cookie, secret } = await signIn(email, password, undefined, currentStep());
     await request(app.getHttpServer())
       .post('/admin/auth/password')
       .set(H)
@@ -270,7 +274,7 @@ describe('backoffice: autenticação', () => {
       .send({ current: password, next: 'uma-senha-bem-longa' })
       .expect(204);
     await request(app.getHttpServer()).get('/admin/auth/me').set('Cookie', cookie).expect(401);
-    await signIn(email, 'uma-senha-bem-longa', secret, currentStep());
+    await signIn(email, 'uma-senha-bem-longa', secret, currentStep() + 1);
   });
 
   it('logout encerra a sessão', async () => {

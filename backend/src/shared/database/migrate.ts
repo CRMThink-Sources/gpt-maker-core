@@ -26,6 +26,8 @@ const MIGRATION_LOCK_KEY = 72_401_337;
 /** Aplica as migrações pendentes; chamado no start do papel `api`, antes de aceitar tráfego. */
 export async function runMigrations(databaseUrl: string): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  // Erro de conexão ociosa não pode virar exceção não tratada; a migração em curso já falha sozinha.
+  pool.on('error', () => {});
   const lockClient = await pool.connect();
   try {
     await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);

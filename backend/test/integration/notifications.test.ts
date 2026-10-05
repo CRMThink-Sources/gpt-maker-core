@@ -154,6 +154,14 @@ describe('avisos do app', () => {
       expect((await logs())[0]).toMatchObject({ status: 'SENT', sentTo: ['1', '2'] });
     });
 
+    it('aviso recém-gravado sai mesmo com o relógio do Node uma fração atrás do banco', async () => {
+      await notifications.setRecipients(tenantId, ['1'], 'admin');
+      await notifications.notify({ tenantId, type: 'CREDIT_80', dedupeKey: 'r', message: 'x' });
+      // `next_attempt_at` = now() do banco, em microssegundos; o Node fica até 1 ms atrás.
+      await notifications.dispatchPending(new Date(Date.now() - 1000));
+      expect((await logs())[0]).toMatchObject({ status: 'SENT', sentTo: ['1'] });
+    });
+
     it('recusa para um usuário não impede os demais', async () => {
       await notifications.setRecipients(tenantId, ['1', '2'], 'admin');
       portal.fail.set('1', new BitrixError('API_ERROR', 'im.notify.system.add', 'ACCESS', 'x'));
