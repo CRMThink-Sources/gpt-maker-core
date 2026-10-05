@@ -7,7 +7,7 @@ import { Alert, Loading } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
 import { type AgentFormValues, initialValues } from '../agent-fields';
-import { AgentForm } from '../agent-form';
+import { AgentForm, type SectionKey } from '../agent-form';
 import { useAgent } from './agent-context';
 
 const TEXTS = ['avatarUrl', 'jobName', 'jobSite'] as const;
@@ -62,6 +62,7 @@ export default function AgentSettingsPage() {
   const [saved, setSaved] = useState<string | null>(null);
   // Remonta o formulário com os valores salvos.
   const [version, setVersion] = useState(0);
+  const [section, setSection] = useState<SectionKey>('identity');
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +129,8 @@ export default function AgentSettingsPage() {
           currentModel={agent.model}
           readOnly={!session.canManage || agent.status === 'OUT_OF_SYNC'}
           onSubmit={save}
+          section={section}
+          onSectionChange={setSection}
         />
       )}
     </>
