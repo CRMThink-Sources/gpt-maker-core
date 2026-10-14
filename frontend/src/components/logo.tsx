@@ -1,6 +1,6 @@
 /**
- * Marca do app (ThinkFlow AI): um fluxo que sai de um ponto (o contato no canal) e chega numa
- * faísca (a IA), sobre gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
+ * Marca do app (GPT Think AI): um balão de conversa (o agente atendendo no canal) com uma faísca
+ * (a IA) dentro, sobre gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
  */
 export function LogoMark({ className = 'size-8' }: { className?: string }) {
   return (
@@ -13,14 +13,10 @@ export function LogoMark({ className = 'size-8' }: { className?: string }) {
       </defs>
       <rect width="32" height="32" rx="8" fill="url(#logo-gradient)" />
       <path
-        d="M12.3 23C16.3 23 14.8 13 18.3 13"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.4"
-        strokeLinecap="round"
+        d="M11.5 7.5h9a4.5 4.5 0 0 1 4.5 4.5v5a4.5 4.5 0 0 1-4.5 4.5H15.2l-4.3 3.7c-.5.4-1.2.1-1.2-.6v-3.4A4.5 4.5 0 0 1 7 17V12a4.5 4.5 0 0 1 4.5-4.5z"
+        fill="white"
       />
-      <circle cx="7.8" cy="23" r="2.3" fill="white" />
-      <path d="M23 6Q23.5 9.5 27 10Q23.5 10.5 23 14Q22.5 10.5 19 10Q22.5 9.5 23 6Z" fill="white" />
+      <path d="M16 10.2Q16.5 14 20.3 14.5Q16.5 15 16 18.8Q15.5 15 11.7 14.5Q15.5 14 16 10.2Z" fill="#6d28d9" />
     </svg>
   );
 }
@@ -37,7 +33,7 @@ const TONES = {
   dark: { name: 'text-white', accent: 'text-brand-400', ai: 'text-zinc-500', sub: 'text-zinc-400' },
 } as const;
 
-/** Logo completo: marca e "ThinkFlow AI", como em `public/brand/thinkflow-logo.svg`. */
+/** Logo completo: marca e "GPT Think AI", como em `public/brand/gptthink-logo.svg`. */
 export function Logo({
   subtitle = true,
   tone = 'light',
@@ -51,7 +47,7 @@ export function Logo({
       <LogoMark />
       <span className="leading-tight">
         <span className={`block text-[15px] font-semibold tracking-tight ${colors.name}`}>
-          Think<span className={colors.accent}>Flow</span>{' '}
+          GPT <span className={colors.accent}>Think</span>{' '}
           <span className={`font-medium ${colors.ai}`}>AI</span>
         </span>
         {subtitle && (

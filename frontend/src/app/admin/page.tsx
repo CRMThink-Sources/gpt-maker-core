@@ -18,7 +18,7 @@ export default function AdminHome() {
     <>
       <PageHeader
         title={`Olá, ${operator.name.split(' ')[0]}`}
-        description="Operação do ThinkFlow AI: planos, tenants, modelos, workspace e reconciliação."
+        description="Operação do GPT Think AI: planos, tenants, modelos, workspace e reconciliação."
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SECTIONS.map(([title, description]) => (
