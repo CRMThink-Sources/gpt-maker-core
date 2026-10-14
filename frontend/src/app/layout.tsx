@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ThinkFlow AI para Bitrix24',
+  title: 'GPT Think AI para Bitrix24',
   description: 'Agentes de IA do GPTMaker integrados ao Bitrix24',
 };
 
