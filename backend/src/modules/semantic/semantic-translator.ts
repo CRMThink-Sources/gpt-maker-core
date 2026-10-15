@@ -90,9 +90,12 @@ export function translateRecord(
   entity: CrmEntity,
   record: Record<string, unknown>,
   ctx: TranslationContext,
+  /** Campos que a ferramenta já entrega à parte (título, valor...). */
+  omit: ReadonlySet<string> = new Set(),
 ): SemanticValue[] {
   const values: SemanticValue[] = [];
   for (const field of exposedFields(entity, ctx)) {
+    if (omit.has(field.code)) continue;
     const valor = translateValue(field, record, ctx);
     if (valor === null) continue;
     const significado = ctx.choices.description(entity, field.code).trim();

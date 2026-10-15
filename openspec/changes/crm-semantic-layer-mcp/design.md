@@ -37,7 +37,7 @@
 ### S3. Credencial e estado do acesso
 Tabela `agent_crm_access(agent_id PK → agent, tenant_id, status DISABLED|CONNECTING|CONNECTED|ERROR, token_hash UNIQUE NULL, token_encrypted NULL, gptmaker_intention_id NULL, gptmaker_mcp_id NULL, last_error NULL, last_call_at NULL, created_at, updated_at)`.
 - Token aleatório de 32 bytes: hash (SHA-256, igual a `hashWebhookToken`) para autenticar; cifrado (`fieldCipher`) para reenviar ao GPTMaker ao recriar a intenção/conexão sem trocar a credencial. Nunca volta ao navegador.
-- Um guard único (`CrmAccessGuard`) resolve `Authorization: Bearer` → acesso `CONNECTED` → agente não removido e `ACTIVE` → tenant `ACTIVE`, e grava `tenantId`/`agentId`/`installationId` no contexto. Serve a intenção e o MCP.
+- Um guard único (`CrmAccessGuard`) resolve `Authorization: Bearer` → acesso `CONNECTING` ou `CONNECTED` → agente não removido e `ACTIVE` → tenant `ACTIVE`, e grava `tenantId`/`agentId`/`installationId` no contexto. Serve a intenção e o MCP. `CONNECTING` vale porque o GPTMaker chama `initialize` e `tools/list` durante o próprio `mcp/add`.
 - *Alternativa*: reusar o token de webhook ou o da intenção do cliente. Rejeitada: revogações independentes.
 
 ### S4. Ativação e desativação no GPTMaker
@@ -49,10 +49,10 @@ Tabela `agent_crm_access(agent_id PK → agent, tenant_id, status DISABLED|CONNE
 - `disable`: apaga hash e cifra **antes** de remover no GPTMaker (credencial morre na hora), depois `DELETE /v2/mcp/{mcpId}` e `DELETE /v2/intention/{id}` (404 = ok), `DISABLED`.
 - Agente removido (`AgentChangeListener`): só marca `DISABLED` e apaga a credencial; o GPTMaker remove junto com o agente.
 - Agente inativado/reativado: nada a fazer; o guard já recusa agente inativo.
-- Mudança das descrições das ferramentas MCP em deploy: job no boot da API chama `sync-tools` para os acessos `CONNECTED` quando a versão do catálogo de ferramentas (`TOOLS_VERSION`) mudar (guardada no Redis).
+- `CrmToolsSync` (worker, ao subir): guarda no Redis a versão das ferramentas (`TOOLS_VERSION`) e o `API_PUBLIC_URL` publicados. Mudou a URL ⇒ atualiza a intenção e recria a conexão MCP de cada acesso `CONNECTED` (o GPTMaker não tem atualização de conexão); mudou só a versão ⇒ `sync-tools`.
 
 ### S5. Nome reservado e isolamento das intenções do cliente
-- `IntentionService` passa a recusar o nome reservado na criação/edição (`INTENTION_NAME_RESERVED`) e a ignorar, na busca de id por nome, o id gravado em `agent_crm_access.gptmaker_intention_id`.
+- `IntentionService` passa a recusar o nome reservado na criação/edição (`INTENTION_NAME_RESERVED`). Como nenhuma intenção do cliente pode ter esse nome, a busca de id por nome das intenções do cliente nunca casa com a de sistema.
 - A intenção de sistema não tem linha em `agent_intention`, logo não aparece na lista do cliente.
 
 ### S6. Referências opacas
@@ -68,7 +68,7 @@ Tabela `agent_crm_access(agent_id PK → agent, tenant_id, status DISABLED|CONNE
 SDK oficial `@modelcontextprotocol/sdk`, `StreamableHTTPServerTransport` com `sessionIdGenerator: undefined` e `enableJsonResponse: true`, um `McpServer` por requisição, controller Nest `POST /mcp`; `GET`/`DELETE` → 405 (o GPTMaker tenta `GET` e segue). Ferramentas com descrições em pt-BR voltadas ao LLM; erros de negócio voltam como resultado (`isError` quando cabível), nunca como erro de protocolo.
 
 ### S9. Limites, observabilidade e flag
-- Rate limiter Redis existente, chave `crm-tools:{agentId}`, 60/min (env `CRM_TOOLS_RATE_PER_MINUTE`).
+- Limite por agente contado por execução de ferramenta (não por requisição HTTP: cada chamada do GPTMaker faz `initialize`, `GET` e `tools/call`): janela de 1 minuto no Redis (`crm-tools:rate:{agentId}:{minuto}`), 60/min (env `CRM_TOOLS_RATE_PER_MINUTE`); Redis fora ⇒ libera.
 - Métricas `crm_tool_calls_total{tool,outcome}` e `crm_tool_duration_seconds{tool}`; log por chamada com tenant, agente, ferramenta, duração, contagem e resultado; nada de argumentos ou respostas.
 - Flag `CRM_TOOLS_ENABLED` (env): desligada, `/mcp` e `/gptmaker/crm/client` respondem 404, a ativação é recusada e o painel esconde as telas.
 

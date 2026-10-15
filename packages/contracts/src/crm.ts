@@ -339,3 +339,9 @@ export interface CrmAccessView {
   lastError: string | null;
   lastCallAt: string | null;
 }
+
+/**
+ * Nome da intenção de sistema que identifica o cliente da conversa (spec agent-crm-tools). Fica
+ * reservado: o cliente não cria intenção com esse nome.
+ */
+export const CRM_SYSTEM_INTENTION_NAME = 'Consultar cliente no CRM';

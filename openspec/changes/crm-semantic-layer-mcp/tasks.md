@@ -21,17 +21,17 @@
 
 ## 4. Acesso ao CRM do agente
 
-- [ ] 4.1 Cliente GPTMaker com as rotas de MCP (`mcpAdd`, `listMcpTools`, `activateMcpTool`, `syncMcpTools`, `deleteMcp`), schemas zod e resiliência existente; verificação: testes do cliente com respostas documentadas (~2h)
-- [ ] 4.2 `CrmAccessService`: ativar (credencial, intenção de sistema, conexão MCP, ativação das ferramentas, desfazer em falha), desativar (credencial morre antes da remoção remota), agente removido, lock por agente; endpoints `GET|PUT /agents/{id}/crm-access` com checagem de posse e flag; verificação: testes de serviço com GPTMaker falso para sucesso, falha no meio e desativação (~6h)
-- [ ] 4.3 Nome reservado da intenção de sistema no `IntentionService` (recusa e exclusão na busca por nome); verificação: testes de criação/edição com o nome reservado (~1h)
-- [ ] 4.4 `CrmAccessGuard` (Bearer → acesso `CONNECTED` → agente ativo → tenant ativo), rate limit por agente, métricas e log por chamada sem dados pessoais; verificação: testes de credencial inválida, agente inativo, limite excedido e log sem argumentos (~3h)
+- [x] 4.1 Cliente GPTMaker com as rotas de MCP (`mcpAdd`, `listMcpTools`, `activateMcpTool`, `syncMcpTools`, `deleteMcp`), schemas zod e resiliência existente; verificação: testes do cliente com respostas documentadas (~2h)
+- [x] 4.2 `CrmAccessService`: ativar (credencial, intenção de sistema, conexão MCP, ativação das ferramentas, desfazer em falha), desativar (credencial morre antes da remoção remota), agente removido, lock por agente; endpoints `GET|PUT /agents/{id}/crm-access` com checagem de posse e flag; verificação: testes de serviço com GPTMaker falso para sucesso, falha no meio e desativação (~6h)
+- [x] 4.3 Nome reservado da intenção de sistema no `IntentionService` (recusa e exclusão na busca por nome); verificação: testes de criação/edição com o nome reservado (~1h)
+- [x] 4.4 `CrmAccessGuard` (Bearer → acesso `CONNECTED` → agente ativo → tenant ativo), rate limit por agente, métricas e log por chamada sem dados pessoais; verificação: testes de credencial inválida, agente inativo, limite excedido e log sem argumentos (~3h)
 
 ## 5. Ferramentas
 
-- [ ] 5.1 Referências opacas assinadas por tenant (S6); verificação: testes de ida e volta, adulteração e referência de outro tenant (~1h)
-- [ ] 5.2 `CrmToolsService.identifyClient(chat)`: diálogo pelo chat (com o tenant da credencial), vínculo pelo `imopenlines.dialog.get`, contato → lead → empresa, dados traduzidos, até 10 negócios em andamento e referência; endpoint `POST /gptmaker/crm/client`; verificação: testes dos cenários de "Identificar o cliente da conversa" (~5h)
-- [ ] 5.3 `CrmToolsService.clientDeals(ref, situação)` e `pipelineStages(funil?)`; verificação: testes de filtro, limite com `ha_mais`, campo não exposto ausente, funil inexistente (~4h)
-- [ ] 5.4 Controller `POST /mcp` com transporte Streamable HTTP sem estado (405 para GET/DELETE, 404 com flag desligada), ferramentas `negocios_do_cliente` e `etapas_do_funil` com descrições em pt-BR e erros de negócio como resultado; verificação: teste e2e com cliente MCP do SDK fazendo `initialize`, `tools/list` e `tools/call` (~4h)
+- [x] 5.1 Referências opacas assinadas por tenant (S6); verificação: testes de ida e volta, adulteração e referência de outro tenant (~1h)
+- [x] 5.2 `CrmToolsService.identifyClient(chat)`: diálogo pelo chat (com o tenant da credencial), vínculo pelo `imopenlines.dialog.get`, contato → lead → empresa, dados traduzidos, até 10 negócios em andamento e referência; endpoint `POST /gptmaker/crm/client`; verificação: testes dos cenários de "Identificar o cliente da conversa" (~5h)
+- [x] 5.3 `CrmToolsService.clientDeals(ref, situação)` e `pipelineStages(funil?)`; verificação: testes de filtro, limite com `ha_mais`, campo não exposto ausente, funil inexistente (~4h)
+- [x] 5.4 Controller `POST /mcp` com transporte Streamable HTTP sem estado (405 para GET/DELETE, 404 com flag desligada), ferramentas `negocios_do_cliente` e `etapas_do_funil` com descrições em pt-BR e erros de negócio como resultado; verificação: teste e2e com cliente MCP do SDK fazendo `initialize`, `tools/list` e `tools/call` (~4h)
 - [ ] 5.5 Documentar em `docs/crm-tools.md` (fluxo híbrido, credencial, ferramentas, flag, como testar); verificação: documento revisado junto do PR (~1h)
 
 ## 6. Frontend

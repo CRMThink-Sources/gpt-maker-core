@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { HttpStatus, Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  CRM_SYSTEM_INTENTION_NAME,
   type IntentionExecutionView,
   type IntentionInput,
   intentionInputSchema,
@@ -405,6 +406,14 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
   }
 
   private async assertUniqueName(owner: Agent, name: string, except?: string): Promise<void> {
+    // Nome da intenção de sistema do acesso ao CRM (spec agent-crm-tools): reservado.
+    if (sameName(name, CRM_SYSTEM_INTENTION_NAME)) {
+      throw new DomainError(
+        'INTENTION_NAME_RESERVED',
+        'Esse nome é reservado para a consulta do cliente no CRM. Escolha outro nome',
+        HttpStatus.CONFLICT,
+      );
+    }
     const [taken] = await this.db
       .select({ id: agentIntention.id })
       .from(agentIntention)

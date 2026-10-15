@@ -1,6 +1,6 @@
 import type Redis from 'ioredis';
 
-/** Subconjunto de Redis em memória para testes unitários (get/set com PX/EX/NX, del, eval). */
+/** Subconjunto de Redis em memória para testes unitários (get/set com PX/EX/NX, del, incr, expire, eval). */
 export class FakeRedis {
   readonly store = new Map<string, { value: string; expiresAt?: number }>();
   failing = false;
@@ -40,6 +40,21 @@ export class FakeRedis {
     let removed = 0;
     for (const key of keys) if (this.store.delete(key)) removed++;
     return removed;
+  }
+
+  async incr(key: string): Promise<number> {
+    const next = Number((await this.get(key)) ?? '0') + 1;
+    const expiresAt = this.store.get(key)?.expiresAt;
+    this.store.set(key, { value: String(next), expiresAt });
+    return next;
+  }
+
+  async expire(key: string, seconds: number): Promise<number> {
+    this.check();
+    const entry = this.store.get(key);
+    if (!entry) return 0;
+    entry.expiresAt = this.now() + seconds * 1000;
+    return 1;
   }
 
   /** Só o script de liberação do DistributedLock (GET == token ⇒ DEL). */

@@ -134,4 +134,68 @@ describe('GptMakerClient', () => {
     const error = await c.getAgent('a1').catch((e: Error) => e);
     expect(JSON.stringify({ message: error.message, ...error })).not.toContain('tok-secreto');
   });
+
+  describe('MCP', () => {
+    it('conecta o servidor ao agente com cabeçalhos e devolve o id', async () => {
+      const { c, calls } = client([
+        { status: 200, body: { connected: true, success: true, id: 'mcp-1', url: '' } },
+      ]);
+      const id = await c.addMcp('ag 1', {
+        name: 'CRM Bitrix24',
+        description: 'Consulta do CRM',
+        mcpUrl: 'https://api.exemplo/mcp',
+        urlType: 'STREAMABLEHTTP',
+        authType: 'HEADERS',
+        headers: { Authorization: 'Bearer cred' },
+      });
+      expect(id).toBe('mcp-1');
+      const { url, init } = calls[0]!;
+      expect(url.toString()).toBe('https://api.gptmaker.ai/v2/agent/ag%201/mcp/add');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toMatchObject({
+        urlType: 'STREAMABLEHTTP',
+        authType: 'HEADERS',
+        headers: { Authorization: 'Bearer cred' },
+      });
+    });
+
+    it('conexão sem id é falha', async () => {
+      const { c } = client([{ status: 200, body: { success: false } }]);
+      await expect(
+        c.addMcp('a1', {
+          name: 'x',
+          description: 'x',
+          mcpUrl: 'https://x/mcp',
+          urlType: 'STREAMABLEHTTP',
+          authType: 'NO_OAUTH',
+        }),
+      ).rejects.toMatchObject({ kind: 'UNKNOWN', operation: 'mcp.add' });
+    });
+
+    it('lista, ativa, sincroniza e remove', async () => {
+      const { c, calls } = client([
+        { status: 200, body: [{ id: 't1', name: 'etapas_do_funil', active: false }] },
+        { status: 200, body: { success: true } },
+        { status: 200, body: { success: true } },
+        { status: 200, body: { success: true } },
+      ]);
+      await expect(c.listMcpTools('mcp-1')).resolves.toEqual([
+        { id: 't1', name: 'etapas_do_funil', active: false },
+      ]);
+      await c.activateMcpTool('mcp-1', 't1');
+      await c.syncMcpTools('mcp-1');
+      await c.deleteMcp('mcp-1');
+      expect(calls.map(({ url, init }) => `${init.method} ${url.pathname}`)).toEqual([
+        'GET /v2/mcp/mcp-1/tools',
+        'GET /v2/mcp/mcp-1/tool/t1/active',
+        'GET /v2/mcp/mcp-1/sync-tools',
+        'DELETE /v2/mcp/mcp-1',
+      ]);
+    });
+
+    it('lista de ferramentas no envelope { data }', async () => {
+      const { c } = client([{ status: 200, body: { data: [{ id: 't1' }], count: 1 } }]);
+      await expect(c.listMcpTools('mcp-1')).resolves.toEqual([{ id: 't1' }]);
+    });
+  });
 });
