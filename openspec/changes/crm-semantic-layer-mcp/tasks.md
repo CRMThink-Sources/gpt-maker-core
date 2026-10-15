@@ -32,7 +32,7 @@
 - [x] 5.2 `CrmToolsService.identifyClient(chat)`: diálogo pelo chat (com o tenant da credencial), vínculo pelo `imopenlines.dialog.get`, contato → lead → empresa, dados traduzidos, até 10 negócios em andamento e referência; endpoint `POST /gptmaker/crm/client`; verificação: testes dos cenários de "Identificar o cliente da conversa" (~5h)
 - [x] 5.3 `CrmToolsService.clientDeals(ref, situação)` e `pipelineStages(funil?)`; verificação: testes de filtro, limite com `ha_mais`, campo não exposto ausente, funil inexistente (~4h)
 - [x] 5.4 Controller `POST /mcp` com transporte Streamable HTTP sem estado (405 para GET/DELETE, 404 com flag desligada), ferramentas `negocios_do_cliente` e `etapas_do_funil` com descrições em pt-BR e erros de negócio como resultado; verificação: teste e2e com cliente MCP do SDK fazendo `initialize`, `tools/list` e `tools/call` (~4h)
-- [ ] 5.5 Documentar em `docs/crm-tools.md` (fluxo híbrido, credencial, ferramentas, flag, como testar); verificação: documento revisado junto do PR (~1h)
+- [x] 5.5 Documentar em `docs/crm-tools.md` (fluxo híbrido, credencial, ferramentas, flag, como testar); verificação: documento revisado junto do PR (~1h)
 
 ## 6. Frontend
 
