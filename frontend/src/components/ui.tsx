@@ -142,6 +142,40 @@ export function EmptyState({
   );
 }
 
+/** Chave liga/desliga (`role="switch"`). */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  /** Nome acessível (a chave não tem texto visível). */
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked ? 'bg-brand-600' : 'bg-zinc-200'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-4.5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
 export function Spinner({ className = 'size-5' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={`animate-spin text-brand-600 ${className}`} aria-hidden>

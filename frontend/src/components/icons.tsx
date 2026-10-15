@@ -103,6 +103,15 @@ export const SparkIcon = (p: P) => (
     d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8l1.2 2.8L16 12l-2.8 1.2L12 16l-1.2-2.8L8 12l2.8-1.2Z"
   />
 );
+export const DatabaseIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3Zm0 0v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"
+  />
+);
+export const RefreshIcon = (p: P) => (
+  <Icon {...p} d="M20 11a8 8 0 0 0-14.9-3.9M4 4v4h4m-4 5a8 8 0 0 0 14.9 3.9M20 20v-4h-4" />
+);
 export const ChatIcon = (p: P) => (
   <Icon {...p} d="M8 10h8m-8 4h5m-8 6 1.5-3.5A8 8 0 1 1 9 19.6L5 20Z" />
 );

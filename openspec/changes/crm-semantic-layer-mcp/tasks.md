@@ -36,8 +36,8 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 Página "CRM para o agente" (`/app/crm`): abas por entidade, rótulo, tipo, valores aceitos, chave de exposição, descrição com contador de 300 caracteres, campos indisponíveis sinalizados e "atualizar"; verificação: typecheck/lint e uso manual dentro do Bitrix (~6h)
-- [ ] 6.2 Bloco "Acesso ao CRM" na configuração do agente: chave, estado (conectado / conectando / erro com "tentar de novo"); verificação: typecheck/lint e fluxo completo com um agente real (~3h)
+- [x] 6.1 Página "CRM para o agente" (`/app/crm`): abas por entidade, rótulo, tipo, valores aceitos, chave de exposição, descrição com contador de 300 caracteres, campos indisponíveis sinalizados e "atualizar"; verificação: typecheck/lint e uso manual dentro do Bitrix (~6h)
+- [x] 6.2 Bloco "Acesso ao CRM" na configuração do agente: chave, estado (conectado / conectando / erro com "tentar de novo"); verificação: typecheck/lint e fluxo completo com um agente real (~3h)
 
 ## 7. Integração e piloto
 
