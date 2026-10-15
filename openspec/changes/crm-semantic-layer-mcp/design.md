@@ -73,8 +73,8 @@ SDK oficial `@modelcontextprotocol/sdk`, `StreamableHTTPServerTransport` com `se
 - Flag `CRM_TOOLS_ENABLED` (env): desligada, `/mcp` e `/gptmaker/crm/client` respondem 404, a ativação é recusada e o painel esconde as telas.
 
 ### S10. Frontend
-- Página do tenant "CRM para o agente" (`/app/crm`): abas por entidade, rótulo, tipo, valores aceitos, chave de exposição, descrição (300 caracteres) e "atualizar". API: `GET /semantic/fields`, `PUT /semantic/fields/{entity}/{code}`, `POST /semantic/refresh`.
-- Na configuração do agente: chave "Acesso ao CRM", estado (conectado / conectando / erro com "tentar de novo"). API: `GET|PUT /agents/{id}/crm-access`.
+- Página do tenant "CRM para o agente" (`/app/crm`): abas por entidade, rótulo, tipo, valores aceitos, chave de exposição, descrição (300 caracteres) e "atualizar". API: `GET /app/crm/fields`, `PUT /app/crm/fields/{entity}/{code}`, `POST /app/crm/refresh`.
+- Na configuração do agente: chave "Acesso ao CRM", estado (conectado / conectando / erro com "tentar de novo"). API: `GET|PUT /app/agents/{id}/crm-access`.
 - Schemas zod em `packages/contracts/`.
 
 ## Risks / Trade-offs

@@ -8,16 +8,16 @@
 
 ## 2. Dados e contratos
 
-- [ ] 2.1 Schema Drizzle e migração com `crm_field_setting` (único por `tenant_id, entity, field_code`) e `agent_crm_access` (S3); verificação: `npm run db:generate` gera a migração e o teste de migração passa (~2h)
+- [x] 2.1 Schema Drizzle e migração com `crm_field_setting` (único por `tenant_id, entity, field_code`) e `agent_crm_access` (S3); verificação: `npm run db:generate` gera a migração e o teste de migração passa (~2h)
 - [x] 2.2 Contratos em `packages/contracts/src/crm.ts`: schemas zod da configuração de campo, do catálogo (campo semântico, funil/etapa) e do acesso ao CRM, e funções puras de normalização de metadado do Bitrix (rótulos `formLabel`/`listLabel`/`title`, itens de lista, booleanos, etapas com semântica); verificação: testes unitários com fixtures de `crm.*.fields` e `crm.status.list` (~4h)
 - [x] 2.3 Dependência `@modelcontextprotocol/sdk` no backend e variáveis `CRM_TOOLS_ENABLED`/`CRM_TOOLS_RATE_PER_MINUTE` na config validada; verificação: typecheck e teste da config com a flag ligada e desligada (~1h)
 
 ## 3. Camada semântica no backend
 
-- [ ] 3.1 Módulo `semantic` com `FieldCatalogService`: `batch` dos metadados, normalizado, em cache Redis por tenant (TTL 10 min) com invalidação; verificação: testes com `BitrixClient` falso cobrindo cache, invalidação e funis/etapas (~5h)
-- [ ] 3.2 Escolhas do cliente (`crm_field_setting`) com padrões (conjunto mínimo de campos padrão exposto; `UF_*`, telefone e e-mail não), visão do catálogo com campos indisponíveis e filtro obrigatório por tenant; verificação: testes de padrão, alteração, campo removido e isolamento entre tenants (~3h)
-- [ ] 3.3 `SemanticTranslator`: exposição + tradução (lista/status, Sim/Não, responsável, funil/etapa/situação, valor com moeda, datas ISO), omissão de valor sem tradução, corte de texto longo e descrição junto do campo; verificação: testes cobrindo os cenários de "Tradução de valores" e "Exposição somente por lista de permissão" (~5h)
-- [ ] 3.4 Endpoints `GET /semantic/fields`, `PUT /semantic/fields/{entity}/{code}` (descrição até 300 caracteres) e `POST /semantic/refresh`, com sessão do iframe; verificação: testes de controller incluindo campo de outro tenant respondido como inexistente (~3h)
+- [x] 3.1 Módulo `semantic` com `FieldCatalogService`: `batch` dos metadados, normalizado, em cache Redis por tenant (TTL 10 min) com invalidação; verificação: testes com `BitrixClient` falso cobrindo cache, invalidação e funis/etapas (~5h)
+- [x] 3.2 Escolhas do cliente (`crm_field_setting`) com padrões (conjunto mínimo de campos padrão exposto; `UF_*`, telefone e e-mail não), visão do catálogo com campos indisponíveis e filtro obrigatório por tenant; verificação: testes de padrão, alteração, campo removido e isolamento entre tenants (~3h)
+- [x] 3.3 `SemanticTranslator`: exposição + tradução (lista/status, Sim/Não, responsável, funil/etapa/situação, valor com moeda, datas ISO), omissão de valor sem tradução, corte de texto longo e descrição junto do campo; verificação: testes cobrindo os cenários de "Tradução de valores" e "Exposição somente por lista de permissão" (~5h)
+- [x] 3.4 Endpoints `GET /app/crm/fields`, `PUT /app/crm/fields/{entity}/{code}` (descrição até 300 caracteres) e `POST /app/crm/refresh`, com sessão do iframe; verificação: testes de controller incluindo campo de outro tenant respondido como inexistente (~3h)
 
 ## 4. Acesso ao CRM do agente
 
