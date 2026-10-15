@@ -9,8 +9,8 @@
 ## 2. Dados e contratos
 
 - [ ] 2.1 Schema Drizzle e migração com `crm_field_setting` (único por `tenant_id, entity, field_code`) e `agent_crm_access` (S3); verificação: `npm run db:generate` gera a migração e o teste de migração passa (~2h)
-- [ ] 2.2 Contratos em `packages/contracts/src/crm.ts`: schemas zod da configuração de campo, do catálogo (campo semântico, funil/etapa) e do acesso ao CRM, e funções puras de normalização de metadado do Bitrix (rótulos `formLabel`/`listLabel`/`title`, itens de lista, booleanos, etapas com semântica); verificação: testes unitários com fixtures de `crm.*.fields` e `crm.status.list` (~4h)
-- [ ] 2.3 Dependência `@modelcontextprotocol/sdk` no backend e variáveis `CRM_TOOLS_ENABLED`/`CRM_TOOLS_RATE_PER_MINUTE` na config validada; verificação: typecheck e teste da config com a flag ligada e desligada (~1h)
+- [x] 2.2 Contratos em `packages/contracts/src/crm.ts`: schemas zod da configuração de campo, do catálogo (campo semântico, funil/etapa) e do acesso ao CRM, e funções puras de normalização de metadado do Bitrix (rótulos `formLabel`/`listLabel`/`title`, itens de lista, booleanos, etapas com semântica); verificação: testes unitários com fixtures de `crm.*.fields` e `crm.status.list` (~4h)
+- [x] 2.3 Dependência `@modelcontextprotocol/sdk` no backend e variáveis `CRM_TOOLS_ENABLED`/`CRM_TOOLS_RATE_PER_MINUTE` na config validada; verificação: typecheck e teste da config com a flag ligada e desligada (~1h)
 
 ## 3. Camada semântica no backend
 

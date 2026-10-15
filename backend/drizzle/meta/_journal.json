@@ -78,6 +78,13 @@
       "when": 1791157222111,
       "tag": "0010_agent_creation_attempt",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792069429896,
+      "tag": "0011_crm_semantic_layer",
+      "breakpoints": true
     }
   ]
 }

@@ -30,6 +30,13 @@ describe('loadEnv', () => {
     expect(env).toMatchObject({ APP_ROLE: 'worker', PORT: 8080, LOG_PRETTY: true });
   });
 
+  it('ferramentas do CRM desligadas por padrão', () => {
+    expect(loadEnv(base)).toMatchObject({ CRM_TOOLS_ENABLED: false, CRM_TOOLS_RATE_PER_MINUTE: 60 });
+    expect(
+      loadEnv({ ...base, CRM_TOOLS_ENABLED: 'true', CRM_TOOLS_RATE_PER_MINUTE: '30' }),
+    ).toMatchObject({ CRM_TOOLS_ENABLED: true, CRM_TOOLS_RATE_PER_MINUTE: 30 });
+  });
+
   it('lista variáveis ausentes', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
   });

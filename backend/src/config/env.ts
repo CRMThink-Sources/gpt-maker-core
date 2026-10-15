@@ -155,6 +155,15 @@ export const envSchema = z.object({
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),
   BITRIX_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
+  // Ferramentas do agente sobre o CRM (spec agent-crm-tools, design S9)
+  /**
+   * Liga a intenção "Consultar cliente no CRM" e o servidor MCP. Desligado, as rotas respondem
+   * 404, a ativação é recusada e o painel esconde as telas.
+   */
+  CRM_TOOLS_ENABLED: booleanFromString.default(false),
+  /** Chamadas por minuto por agente, somando a intenção e o MCP. */
+  CRM_TOOLS_RATE_PER_MINUTE: z.coerce.number().int().positive().default(60),
 });
 
 export type Env = z.infer<typeof envSchema>;
