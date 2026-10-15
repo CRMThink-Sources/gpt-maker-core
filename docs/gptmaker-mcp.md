@@ -38,8 +38,22 @@ Corpo de `mcp/add` (todos obrigatórios, exceto `headers`):
 2. Formato de `headers` não especificado (objeto chave → valor presumido).
 3. Se as ferramentas já vêm ativas após `mcp/add` ou precisam de `.../active` (o app lista e ativa as que vierem inativas).
 4. Não há rota para listar as conexões MCP de um agente: o app precisa guardar o `id` devolvido por `mcp/add`.
-5. **O que o GPTMaker envia na chamada da ferramenta** (cabeçalhos, `_meta`, identificador do chat ou do contato): não documentado. É o ponto da tarefa 1.1.
+5. **O que o GPTMaker envia na chamada da ferramenta** (cabeçalhos, `_meta`, identificador do chat ou do contato): não documentado; respondido empiricamente abaixo (nada é enviado).
 
 ## Comparação com as intenções `BITRIX`
 
-As intenções já são ferramentas HTTP do agente, criadas pela API, e o GPTMaker substitui variáveis no corpo: `{{chat_id}}` (`public-api-<agente>-<tenantId>:<diálogo>`), `{{contact_name}}` e `{{contact_phone}}` (ver `bitrixRequestBody` em `backend/src/modules/intentions/intention.service.ts`). Ou seja, numa intenção a conversa é identificada de forma garantida; no MCP, depende da lacuna 5.
+As intenções já são ferramentas HTTP do agente, criadas pela API, e o GPTMaker substitui variáveis no corpo: `{{chat_id}}` (`public-api-<agente>-<tenantId>:<diálogo>`), `{{contact_name}}` e `{{contact_phone}}` (ver `bitrixRequestBody` em `backend/src/modules/intentions/intention.service.ts`). Ou seja, numa intenção a conversa é identificada de forma garantida; no MCP, não (ver abaixo).
+
+## O que o GPTMaker envia (tarefa 1.1, capturado em 2026-10-15)
+
+Servidor de eco (Streamable HTTP, sem estado, autenticação `HEADERS`) conectado a um agente de teste e exercitado em conversas reais.
+
+- **Cliente**: `clientInfo: { name: "GPT Maker MCP Connector", version: "1.0.0" }`, `protocolVersion: 2025-06-18`, `capabilities: {}`, `user-agent: node`.
+- **Na conexão**: `initialize` → `notifications/initialized` → `GET /mcp` (tenta abrir SSE; 405 é aceito sem erro) → `tools/list`. A lista de ferramentas só é relida na conexão ou em `GET /v2/mcp/{mcpId}/sync-tools`: mudar nome, descrição ou esquema de uma ferramenta exige sincronizar.
+- **A cada chamada de ferramenta**: nova sequência `initialize` → `notifications/initialized` → `GET /mcp` → `tools/call`. Não há reuso de sessão (`mcp-session-id` ausente), e um servidor sem estado é o ajuste natural.
+- **Autenticação**: o cabeçalho cadastrado em `headers` chega intacto (`Authorization: Bearer …`).
+- **Identificação da conversa: nenhuma.** O `tools/call` traz só `name` e `arguments`: sem `_meta`, sem cabeçalho de chat, contato, agente ou `contextId`. Os únicos cabeçalhos além do protocolo são os do proxy (Cloudflare).
+- **Argumentos preenchidos pelo modelo**: em "qual o status da minha proposta?", o agente chamou `consultar_cliente` com `{ telefone: "<número do cliente>" }`, sem `conversa`.
+- Origem das chamadas observada: IP `144.22.231.86` (não documentado; não usar como controle de acesso).
+
+Conclusão para o design (S4): a camada 1 (identificador nativo) não existe. Restam a referência injetada pelo canal, o telefone/e-mail como argumento, ou a intenção `BITRIX`, que recebe `{{chat_id}}` garantido.

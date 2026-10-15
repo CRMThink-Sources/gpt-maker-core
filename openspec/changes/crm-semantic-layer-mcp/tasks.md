@@ -2,7 +2,7 @@
 
 ## 1. Spike: MCP no GPTMaker
 
-- [ ] 1.1 Subir um servidor MCP descartável (Streamable HTTP, uma ferramenta `eco` que devolve cabeçalhos, `_meta` e argumentos recebidos), conectá-lo a um agente de teste no painel do GPTMaker e conversar com ele; registrar em `docs/gptmaker-mcp.md` os campos do cadastro (URL, cabeçalhos), o transporte aceito e se algum identificador da conversa (`contextId`, chat, telefone) chega na chamada. Verificação: documento com os payloads reais capturados (~4h)
+- [x] 1.1 Subir um servidor MCP descartável (Streamable HTTP, uma ferramenta `eco` que devolve cabeçalhos, `_meta` e argumentos recebidos), conectá-lo a um agente de teste no painel do GPTMaker e conversar com ele; registrar em `docs/gptmaker-mcp.md` os campos do cadastro (URL, cabeçalhos), o transporte aceito e se algum identificador da conversa (`contextId`, chat, telefone) chega na chamada. Verificação: documento com os payloads reais capturados (~4h)
 - [x] 1.2 Investigar se a API do GPTMaker permite configurar MCP no agente (OpenAPI, inspeção das chamadas do painel); registrar a resposta e o contrato em `docs/gptmaker-mcp.md`. Verificação: seção "Conexão por API" com sim/não e exemplo de requisição (~2h)
 - [ ] 1.3 Decidir a camada de identificação da conversa (S4: nativa ou referência no `chatName`) e testar se o agente repassa a referência ao chamar a ferramenta; registrar a decisão no `design.md` (S4). Verificação: 5 conversas de teste com a ferramenta recebendo a conversa correta (~2h)
 
