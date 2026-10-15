@@ -3,12 +3,12 @@
 ## 1. Spike: MCP no GPTMaker
 
 - [ ] 1.1 Subir um servidor MCP descartável (Streamable HTTP, uma ferramenta `eco` que devolve cabeçalhos, `_meta` e argumentos recebidos), conectá-lo a um agente de teste no painel do GPTMaker e conversar com ele; registrar em `docs/gptmaker-mcp.md` os campos do cadastro (URL, cabeçalhos), o transporte aceito e se algum identificador da conversa (`contextId`, chat, telefone) chega na chamada. Verificação: documento com os payloads reais capturados (~4h)
-- [ ] 1.2 Investigar se a API do GPTMaker permite configurar MCP no agente (OpenAPI, inspeção das chamadas do painel); registrar a resposta e o contrato em `docs/gptmaker-mcp.md`. Verificação: seção "Conexão por API" com sim/não e exemplo de requisição (~2h)
+- [x] 1.2 Investigar se a API do GPTMaker permite configurar MCP no agente (OpenAPI, inspeção das chamadas do painel); registrar a resposta e o contrato em `docs/gptmaker-mcp.md`. Verificação: seção "Conexão por API" com sim/não e exemplo de requisição (~2h)
 - [ ] 1.3 Decidir a camada de identificação da conversa (S4: nativa ou referência no `chatName`) e testar se o agente repassa a referência ao chamar a ferramenta; registrar a decisão no `design.md` (S4). Verificação: 5 conversas de teste com a ferramenta recebendo a conversa correta (~2h)
 
 ## 2. Dados e contratos
 
-- [ ] 2.1 Migração Drizzle com `crm_field_setting` (único por `tenant_id, entity, field_code`) e `agent_crm_access` (`token_hash` único, FK para `agent`); verificação: `drizzle-kit` gera a migração e o teste de migração sobe no Testcontainers (~2h)
+- [ ] 2.1 Migração Drizzle com `crm_field_setting` (único por `tenant_id, entity, field_code`) e `agent_crm_access` (`token_hash` único, `gptmaker_mcp_id`, FK para `agent`); verificação: `drizzle-kit` gera a migração e o teste de migração sobe no Testcontainers (~2h)
 - [ ] 2.2 Schemas zod em `packages/contracts/` (campo semântico, funil/etapa, configuração de campo, estado do acesso ao CRM) e funções puras de normalização de metadado do Bitrix portadas de `frontend/src/lib/crm-fields.ts` (rótulos `formLabel`/`listLabel`/`title`, itens de lista, booleanos, etapas com semântica); verificação: testes unitários com fixtures reais de `crm.*.fields` e `crm.status.list` (~4h)
 - [ ] 2.3 Adicionar `@modelcontextprotocol/sdk` ao backend e a flag `MCP_ENABLED` na config validada; verificação: `npm run build` e boot com a flag ligada e desligada (~1h)
 
