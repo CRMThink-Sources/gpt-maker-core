@@ -61,16 +61,17 @@ describe('acesso do agente ao CRM', () => {
     await stub('DELETE', '/v2/intention/int-sys', 200, { success: true });
   }
 
-  /** Credencial em claro, tirada do cabeçalho que o app mandou ao GPTMaker. */
+  /** Credencial em claro, tirada da URL da conexão MCP que o app mandou ao GPTMaker. */
   async function issuedToken(): Promise<string> {
-    const [body] = (await wiremock.bodies('POST', MCP_ADD)) as Array<{
-      headers: { Authorization: string };
-    }>;
-    return body!.headers.Authorization.replace('Bearer ', '');
+    const [body] = (await wiremock.bodies('POST', MCP_ADD)) as Array<{ mcpUrl: string }>;
+    return new URL(body!.mcpUrl).searchParams.get('t')!;
   }
 
-  async function authenticate(token: string): Promise<unknown> {
-    const request: Record<string, unknown> = { headers: { authorization: `Bearer ${token}` } };
+  async function authenticate(token: string, via: 'header' | 'query' = 'header'): Promise<unknown> {
+    const request: Record<string, unknown> =
+      via === 'header'
+        ? { headers: { authorization: `Bearer ${token}` }, query: {} }
+        : { headers: {}, query: { t: token } };
     const context = {
       switchToHttp: () => ({ getRequest: () => request }),
     } as unknown as ExecutionContext;
@@ -180,10 +181,12 @@ describe('acesso do agente ao CRM', () => {
     });
     const [connection] = await wiremock.bodies('POST', MCP_ADD);
     expect(connection).toMatchObject({
-      mcpUrl: `${PUBLIC_URL}/mcp`,
+      mcpUrl: `${PUBLIC_URL}/mcp?t=${token}`,
       urlType: 'STREAMABLEHTTP',
-      authType: 'HEADERS',
+      authType: 'NO_OAUTH',
     });
+    // A intenção usa a mesma credencial, no cabeçalho.
+    expect(JSON.stringify(intention)).toContain(`Bearer ${token}`);
     expect(await wiremock.count('GET', '/v2/mcp/mcp-1/tool/tool-1/active')).toBe(1);
     expect(await wiremock.count('GET', '/v2/mcp/mcp-1/tool/tool-2/active')).toBe(0);
 
@@ -192,6 +195,8 @@ describe('acesso do agente ao CRM', () => {
     expect(row!.tokenHash).not.toBe(token);
 
     expect(await authenticate(token)).toEqual({ tenantId, agentId, installationId: 101 });
+    // A conexão MCP chama com a credencial na URL.
+    expect(await authenticate(token, 'query')).toEqual({ tenantId, agentId, installationId: 101 });
     // Ativar de novo não recria nada.
     await service.update(tenantId, agentId, { enabled: true });
     expect(await wiremock.count('POST', MCP_ADD)).toBe(1);
@@ -229,6 +234,7 @@ describe('acesso do agente ao CRM', () => {
     const view = await service.update(tenantId, agentId, { enabled: false });
     expect(view.status).toBe('DISABLED');
     expect(await authenticate(token)).toBe(401);
+    expect(await authenticate(token, 'query')).toBe(401);
     expect(await wiremock.count('DELETE', '/v2/mcp/mcp-1')).toBe(1);
     expect(await wiremock.count('DELETE', '/v2/intention/int-sys')).toBe(1);
   });
