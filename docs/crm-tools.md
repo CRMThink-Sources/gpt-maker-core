@@ -32,13 +32,13 @@ Por que híbrido: o GPTMaker **não envia nenhuma informação da conversa** nas
 - `PUT /app/agents/{id}/crm-access { enabled }` (`CrmAccessService`, lock por agente):
   1. gera a credencial (32 bytes; no banco só o hash e a versão cifrada, para reenviar ao GPTMaker);
   2. cria a intenção de sistema `Consultar cliente no CRM` (nome reservado: o cliente não consegue criar outra igual);
-  3. `POST /v2/agent/{agentId}/mcp/add` com `STREAMABLEHTTP`, `authType: NO_OAUTH` e a credencial na URL (`/mcp?t=<credencial>`). Pela API, o GPTMaker não repassou o `headers` de `authType: HEADERS`. **O GPTMaker já chama o `/mcp` nesse momento** (`initialize` + `tools/list`), por isso a credencial vale no estado `CONNECTING`;
+  3. `POST /v2/agent/{agentId}/mcp/add` com `STREAMABLEHTTP` e `Authorization: Bearer <credencial>`. **O GPTMaker já chama o `/mcp` nesse momento** (`initialize` + `tools/list`), por isso a credencial vale no estado `CONNECTING`;
   4. lista as ferramentas e ativa as inativas; nenhuma ferramenta ⇒ falha.
 
   Falha em qualquer passo desfaz o que foi criado e grava `ERROR` com o motivo resumido (o painel oferece "tentar de novo").
 
 - Desativar apaga a credencial **antes** de remover a intenção e a conexão no GPTMaker. Agente removido: só apaga a credencial (o GPTMaker remove o resto junto com o agente).
-- `CrmAccessGuard` autentica a intenção (cabeçalho `Authorization: Bearer`) e o MCP (`?t=` na URL). Os logs mascaram `t=` nas URLs. Recusa (401, sem detalhe) quando a credencial é desconhecida, o acesso está desativado, o agente foi removido ou está inativo, ou o tenant não está ativo.
+- `CrmAccessGuard` autentica a intenção e o MCP. Recusa (401, sem detalhe) quando a credencial é desconhecida, o acesso está desativado, o agente foi removido ou está inativo, ou o tenant não está ativo.
 - `CrmToolsSync` (worker, ao subir): se o `API_PUBLIC_URL` mudou, atualiza a intenção e recria a conexão MCP dos agentes conectados; se só mudou `TOOLS_VERSION` (`mcp.controller.ts`), chama `sync-tools`. **Mudou nome, descrição ou esquema de uma ferramenta MCP? Incremente `TOOLS_VERSION`**: o GPTMaker só relê as ferramentas assim.
 
 ## Ferramentas

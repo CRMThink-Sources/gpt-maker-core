@@ -35,7 +35,7 @@ Corpo de `mcp/add` (todos obrigatórios, exceto `headers`):
 ### Lacunas (validar empiricamente)
 
 1. O OpenAPI de `mcp/add` declara o parâmetro de caminho como `mcpId`, mas a rota usa `{agentId}`. Tratamos como erro de documentação: o valor é o id do agente.
-2. Formato de `headers` não especificado (objeto chave → valor presumido). **Em staging (2026-10-19), `mcp/add` com `authType: HEADERS` e `headers: { Authorization: "Bearer …" }` terminou em `error on connect with mcp server`: o GPTMaker não repassou o cabeçalho ao conectar.** O app passou a usar `authType: NO_OAUTH` com a credencial na URL (`/mcp?t=…`), como os webhooks.
+2. Formato de `headers` não especificado (objeto chave → valor presumido). **Confirmado em staging (2026-10-19):** `mcp/add` com `authType: HEADERS` e `headers: { Authorization: "Bearer …" }` conecta, e o cabeçalho chega em `initialize`, `GET` e `tools/list`.
 3. Se as ferramentas já vêm ativas após `mcp/add` ou precisam de `.../active` (o app lista e ativa as que vierem inativas).
 4. Não há rota para listar as conexões MCP de um agente: o app precisa guardar o `id` devolvido por `mcp/add`.
 5. **O que o GPTMaker envia na chamada da ferramenta** (cabeçalhos, `_meta`, identificador do chat ou do contato): não documentado; respondido empiricamente abaixo (nada é enviado).
