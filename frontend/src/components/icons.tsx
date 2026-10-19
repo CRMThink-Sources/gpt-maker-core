@@ -53,6 +53,9 @@ export const WalletIcon = (p: P) => (
   />
 );
 export const PlusIcon = (p: P) => <Icon {...p} d="M12 5v14m-7-7h14" />;
+export const PencilIcon = (p: P) => (
+  <Icon {...p} d="M16.86 3.49a2.1 2.1 0 0 1 2.97 2.97L7.5 18.79 3 20l1.21-4.5L16.86 3.49Z" />
+);
 export const MenuIcon = (p: P) => <Icon {...p} d="M4 6h16M4 12h16M4 18h16" />;
 export const CloseIcon = (p: P) => <Icon {...p} d="M6 6l12 12M18 6 6 18" />;
 export const ArrowLeftIcon = (p: P) => <Icon {...p} d="M19 12H5m6-6-6 6 6 6" />;
