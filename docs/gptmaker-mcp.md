@@ -6,15 +6,15 @@ Levantamento da change `crm-semantic-layer-mcp` (tarefas 1.1 a 1.3). Fonte: Open
 
 **Existe.** Todas as rotas usam o mesmo Bearer token do partner.
 
-| Rota | Uso | Resposta 200 |
-| --- | --- | --- |
-| `POST /v2/agent/{agentId}/mcp/add` | Cria a conexão MCP no agente | `{ connected, success, id, url }` (`url` só no fluxo OAuth) |
-| `POST /v2/mcp/connect` | Conclui conexão OAuth (`code`, `state`) | `{ agentId, success, mcpId }` |
-| `GET /v2/mcp/{mcpId}/tools` | Lista as ferramentas descobertas | `[{ id, agentId, integrationId, active, name, description, inputSchema, ... }]` |
-| `GET /v2/mcp/{mcpId}/tool/{toolId}/active` | Ativa uma ferramenta | `{ success }` |
-| `GET /v2/mcp/{mcpId}/tool/{toolId}/inactive` | Desativa uma ferramenta | `{ success }` |
-| `GET /v2/mcp/{mcpId}/sync-tools` | Relê as ferramentas do servidor | `{ success }` |
-| `DELETE /v2/mcp/{mcpId}` | Remove a conexão | `{ success }` |
+| Rota                                         | Uso                                     | Resposta 200                                                                    |
+| -------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------- |
+| `POST /v2/agent/{agentId}/mcp/add`           | Cria a conexão MCP no agente            | `{ connected, success, id, url }` (`url` só no fluxo OAuth)                     |
+| `POST /v2/mcp/connect`                       | Conclui conexão OAuth (`code`, `state`) | `{ agentId, success, mcpId }`                                                   |
+| `GET /v2/mcp/{mcpId}/tools`                  | Lista as ferramentas descobertas        | `[{ id, agentId, integrationId, active, name, description, inputSchema, ... }]` |
+| `GET /v2/mcp/{mcpId}/tool/{toolId}/active`   | Ativa uma ferramenta                    | `{ success }`                                                                   |
+| `GET /v2/mcp/{mcpId}/tool/{toolId}/inactive` | Desativa uma ferramenta                 | `{ success }`                                                                   |
+| `GET /v2/mcp/{mcpId}/sync-tools`             | Relê as ferramentas do servidor         | `{ success }`                                                                   |
+| `DELETE /v2/mcp/{mcpId}`                     | Remove a conexão                        | `{ success }`                                                                   |
 
 Corpo de `mcp/add` (todos obrigatórios, exceto `headers`):
 

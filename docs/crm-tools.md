@@ -36,17 +36,18 @@ Por que híbrido: o GPTMaker **não envia nenhuma informação da conversa** nas
   4. lista as ferramentas e ativa as inativas; nenhuma ferramenta ⇒ falha.
 
   Falha em qualquer passo desfaz o que foi criado e grava `ERROR` com o motivo resumido (o painel oferece "tentar de novo").
+
 - Desativar apaga a credencial **antes** de remover a intenção e a conexão no GPTMaker. Agente removido: só apaga a credencial (o GPTMaker remove o resto junto com o agente).
 - `CrmAccessGuard` autentica a intenção e o MCP. Recusa (401, sem detalhe) quando a credencial é desconhecida, o acesso está desativado, o agente foi removido ou está inativo, ou o tenant não está ativo.
 - `CrmToolsSync` (worker, ao subir): se o `API_PUBLIC_URL` mudou, atualiza a intenção e recria a conexão MCP dos agentes conectados; se só mudou `TOOLS_VERSION` (`mcp.controller.ts`), chama `sync-tools`. **Mudou nome, descrição ou esquema de uma ferramenta MCP? Incremente `TOOLS_VERSION`**: o GPTMaker só relê as ferramentas assim.
 
 ## Ferramentas
 
-| Ferramenta | Onde | Entrada | Saída |
-| --- | --- | --- | --- |
-| Consultar cliente no CRM | intenção (`POST /gptmaker/crm/client`) | `{ chat }` preenchido pelo GPTMaker | cliente (tipo, referência, nome, empresa, responsável, campos), até 10 negócios em andamento, `ha_mais_negocios` |
-| `negocios_do_cliente` | MCP | `cliente` (referência), `situacao` (`em_andamento`, `ganhos`, `perdidos`, `todos`) | até 10 negócios do mais recente ao mais antigo, `ha_mais`, `total` |
-| `etapas_do_funil` | MCP | `funil` opcional (casamento sem acento e sem caixa) | funis com etapas em ordem e situação; funil inexistente lista os existentes |
+| Ferramenta               | Onde                                   | Entrada                                                                            | Saída                                                                                                            |
+| ------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Consultar cliente no CRM | intenção (`POST /gptmaker/crm/client`) | `{ chat }` preenchido pelo GPTMaker                                                | cliente (tipo, referência, nome, empresa, responsável, campos), até 10 negócios em andamento, `ha_mais_negocios` |
+| `negocios_do_cliente`    | MCP                                    | `cliente` (referência), `situacao` (`em_andamento`, `ganhos`, `perdidos`, `todos`) | até 10 negócios do mais recente ao mais antigo, `ha_mais`, `total`                                               |
+| `etapas_do_funil`        | MCP                                    | `funil` opcional (casamento sem acento e sem caixa)                                | funis com etapas em ordem e situação; funil inexistente lista os existentes                                      |
 
 - O cliente é localizado pelo vínculo da conversa, nesta ordem: contato, lead, empresa. Se só houver negócio vinculado, usa o contato ou a empresa dele. Sem vínculo: "cliente não identificado", sem dados.
 - Referência do cliente: `<c|l|o><id>.<HMAC>`, com chave por tenant derivada (HKDF) de `DATA_ENCRYPTION_KEY`. Se for adulterada, copiada errado ou de outro tenant, a resposta é "não encontrado" e o Bitrix nem é consultado.
