@@ -10,8 +10,8 @@ import {
   STAGE_SEMANTIC_LABELS,
   type StageSemantic,
 } from '@gptmaker/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshIcon } from '@/components/icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PlusIcon, RefreshIcon } from '@/components/icons';
 import {
   Alert,
   Badge,
@@ -20,7 +20,6 @@ import {
   Loading,
   PageHeader,
   Spinner,
-  Switch,
   type Tone,
 } from '@/components/ui';
 import {
@@ -45,6 +44,14 @@ const STAGE_TONES: Record<StageSemantic, Tone> = {
   success: 'green',
   failure: 'amber',
 };
+
+/** Telefone e e-mail: dados pessoais, só se o agente realmente precisar. */
+const PERSONAL_TYPES = new Set(['crm_multifield']);
+
+/** Sem acento e sem caixa, para a busca de campos. */
+function normalize(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
 
 /** "CRM para o agente": o que o agente pode ler do Bitrix24 e o que cada campo significa. */
 export default function CrmPage() {
@@ -123,7 +130,7 @@ export default function CrmPage() {
     }
   }
 
-  /** Atualiza o catálogo com o campo salvo (contadores das abas). */
+  /** Atualiza o catálogo com o campo salvo (move entre adicionados e disponíveis). */
   const onFieldSaved = useCallback((field: CrmFieldView) => {
     setCatalog((current) =>
       current
@@ -140,7 +147,7 @@ export default function CrmPage() {
   const header = (
     <PageHeader
       title="CRM para o agente"
-      description="Escolha o que o agente pode ler do seu Bitrix24 e explique o que cada campo significa no seu negócio."
+      description="Adicione os campos do seu Bitrix24 que o agente pode ler e explique o que cada um significa no seu negócio."
       actions={
         canManage &&
         catalog && (
@@ -194,7 +201,11 @@ export default function CrmPage() {
     );
   }
 
-  const fields = catalog.fields.filter((field) => field.entity === entity);
+  const tabFields = catalog.fields.filter((field) => field.entity === entity);
+  const added = tabFields.filter((field) => field.exposed);
+  // Campo que sumiu do portal não pode ser adicionado de novo.
+  const available = tabFields.filter((field) => !field.exposed && field.available);
+  const entityLabel = CRM_ENTITY_LABELS[entity].toLowerCase();
 
   return (
     <>
@@ -202,15 +213,13 @@ export default function CrmPage() {
 
       <Card className="mb-6 p-5 text-sm text-zinc-600">
         <ul className="list-disc space-y-1 pl-5">
-          <li>O agente só lê os campos marcados em &quot;o agente pode ler&quot;.</li>
+          <li>O agente só lê os campos adicionados aqui.</li>
           <li>
             Descreva o que cada campo significa no seu negócio (ex.: &quot;Plano contratado pelo
             cliente; Ouro dá direito a suporte 24h&quot;). Assim o agente entende e usa a informação
             certa.
           </li>
-          <li>
-            Telefone e e-mail ficam desmarcados por padrão. Marque só se o agente precisar deles.
-          </li>
+          <li>Adicione telefone e e-mail só se o agente realmente precisar deles.</li>
         </ul>
         <p className="mt-3 text-xs text-zinc-500">
           Dados lidos do Bitrix24 em {formatDateTime(catalog.loadedAt)}.
@@ -240,8 +249,9 @@ export default function CrmPage() {
       >
         {CRM_ENTITY_TABS.map((tab) => {
           const active = tab === entity;
-          const tabFields = catalog.fields.filter((field) => field.entity === tab);
-          const exposed = tabFields.filter((field) => field.exposed).length;
+          const count = catalog.fields.filter(
+            (field) => field.entity === tab && field.exposed,
+          ).length;
           return (
             <button
               key={tab}
@@ -256,32 +266,47 @@ export default function CrmPage() {
               }`}
             >
               {CRM_ENTITY_LABELS[tab]}
-              <span className="ml-1.5 text-xs font-normal text-zinc-400">
-                {exposed}/{tabFields.length}
-              </span>
+              <span className="ml-1.5 text-xs font-normal text-zinc-400">{count}</span>
             </button>
           );
         })}
       </nav>
 
-      <Card className="mb-8">
-        {fields.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-zinc-500">
-            Nenhum campo encontrado em {CRM_ENTITY_LABELS[entity].toLowerCase()}.
-          </p>
-        ) : (
-          <ul className="divide-y divide-zinc-100">
-            {fields.map((field) => (
-              <FieldRow
-                key={`${version}:${field.entity}:${field.code}`}
-                field={field}
-                readOnly={!canManage}
-                onSaved={onFieldSaved}
-              />
-            ))}
-          </ul>
-        )}
-      </Card>
+      <section className="mb-8">
+        <h2 className="text-base font-semibold text-zinc-900">Campos que o agente lê</h2>
+        <p className="mt-0.5 mb-3 text-sm text-zinc-500">
+          {added.length === 1 ? '1 campo adicionado' : `${added.length} campos adicionados`} em{' '}
+          {entityLabel}.
+        </p>
+        <Card>
+          {added.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-zinc-500">
+              Nenhum campo adicionado em {entityLabel}.
+              {canManage && ' Escolha abaixo os campos que o agente deve ler.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-zinc-100">
+              {added.map((field) => (
+                <AddedFieldRow
+                  key={`${version}:${field.entity}:${field.code}`}
+                  field={field}
+                  readOnly={!canManage}
+                  onSaved={onFieldSaved}
+                />
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
+
+      {canManage && (
+        <AddFieldsSection
+          key={`${version}:${entity}`}
+          entityLabel={entityLabel}
+          fields={available}
+          onSaved={onFieldSaved}
+        />
+      )}
 
       <section>
         <h2 className="text-lg font-semibold text-zinc-900">Funis e etapas</h2>
@@ -320,14 +345,39 @@ export default function CrmPage() {
   );
 }
 
+/** Rótulo, selos, tipo, código e valores aceitos (igual nas duas listas). */
+function FieldSummary({ field }: { field: CrmFieldView }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium text-zinc-900">{field.label}</p>
+        {field.custom && <Badge tone="brand">Personalizado</Badge>}
+        {PERSONAL_TYPES.has(field.type) && <Badge tone="amber">Dado pessoal</Badge>}
+        {!field.available && <Badge tone="amber">Não existe mais no portal</Badge>}
+      </div>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        {fieldTypeLabel(field.type)}
+        <span className="text-zinc-300"> · </span>
+        <code className="text-[11px]">{field.code}</code>
+      </p>
+      {field.options.length > 0 && (
+        <p className="mt-1 text-xs text-zinc-500" title={field.options.join(', ')}>
+          Valores aceitos: {summarizeOptions(field.options)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 type SaveState =
   { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind: 'error'; message: string };
 
 /**
- * Um campo do CRM. A chave salva na hora; a descrição salva ao sair do campo ou pelo botão.
- * Os salvamentos do mesmo campo vão em fila, sempre com o estado mais recente da linha.
+ * Campo que o agente lê. A descrição salva ao sair do campo ou pelo botão; "Remover" tira o campo
+ * da leitura do agente (a descrição fica guardada para quando for adicionado de novo). Os
+ * salvamentos da mesma linha vão em fila, sempre com o estado mais recente.
  */
-function FieldRow({
+function AddedFieldRow({
   field,
   readOnly,
   onSaved,
@@ -337,10 +387,10 @@ function FieldRow({
   onSaved: (field: CrmFieldView) => void;
 }) {
   const { api } = useAppSession();
-  const [exposed, setExposed] = useState(field.exposed);
   const [description, setDescription] = useState(field.description);
   const [savedDescription, setSavedDescription] = useState(field.description);
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
+  const [removing, setRemoving] = useState(false);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
 
@@ -356,18 +406,20 @@ function FieldRow({
       });
       return;
     }
+    if (!next.exposed) setRemoving(true);
     setState({ kind: 'saving' });
     pending.current += 1;
     queue.current = queue.current.then(async () => {
       try {
         const saved = await saveCrmField(api, field.entity, field.code, parsed.data);
         setSavedDescription(saved.description);
-        onSaved(saved);
         pending.current -= 1;
         if (pending.current === 0) setState({ kind: 'saved' });
+        // Removido: a linha sai da lista quando o catálogo é atualizado.
+        onSaved(saved);
       } catch (e) {
         pending.current -= 1;
-        setExposed(field.exposed);
+        setRemoving(false);
         setState({
           kind: 'error',
           message: crmErrorMessage(e, 'Não foi possível salvar este campo. Tente de novo.'),
@@ -376,48 +428,30 @@ function FieldRow({
     });
   }
 
-  function toggle(value: boolean) {
-    setExposed(value);
-    save({ exposed: value, description });
-  }
-
   function saveDescription() {
     if (!dirty) return;
-    save({ exposed, description });
+    save({ exposed: true, description });
   }
 
-  // Campo removido do portal: só dá para deixar de expor.
-  const switchDisabled = readOnly || (!field.available && !exposed);
+  function remove() {
+    save({ exposed: false, description });
+  }
 
   return (
     <li className="px-5 py-4">
       <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-zinc-900">{field.label}</p>
-            {field.custom && <Badge tone="brand">Personalizado</Badge>}
-            {!field.available && <Badge tone="amber">Não existe mais no portal</Badge>}
-          </div>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {fieldTypeLabel(field.type)}
-            <span className="text-zinc-300"> · </span>
-            <code className="text-[11px]">{field.code}</code>
-          </p>
-          {field.options.length > 0 && (
-            <p className="mt-1 text-xs text-zinc-500" title={field.options.join(', ')}>
-              Valores aceitos: {summarizeOptions(field.options)}
-            </p>
-          )}
-        </div>
-        <label className="flex items-center gap-2 text-xs text-zinc-600">
-          O agente pode ler
-          <Switch
-            checked={exposed}
-            onChange={toggle}
-            disabled={switchDisabled}
-            label={`O agente pode ler ${field.label}`}
-          />
-        </label>
+        <FieldSummary field={field} />
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={removing}
+            className={buttonClass('ghost-danger', 'sm')}
+          >
+            {removing && <Spinner className="size-3.5" />}
+            {removing ? 'Removendo…' : 'Remover'}
+          </button>
+        )}
       </div>
 
       <div className="mt-3">
@@ -428,7 +462,7 @@ function FieldRow({
           id={descriptionId}
           className={`${inputClass} mt-0 min-h-16`}
           maxLength={CRM_FIELD_DESCRIPTION_MAX}
-          disabled={readOnly}
+          disabled={readOnly || removing}
           placeholder={
             readOnly ? 'Sem descrição.' : 'O que este campo significa no seu negócio (opcional)'
           }
@@ -460,6 +494,118 @@ function FieldRow({
           </div>
         </div>
       </div>
+    </li>
+  );
+}
+
+/** Campos do portal ainda não adicionados, com busca por nome ou código. */
+function AddFieldsSection({
+  entityLabel,
+  fields,
+  onSaved,
+}: {
+  entityLabel: string;
+  fields: CrmFieldView[];
+  onSaved: (field: CrmFieldView) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const wanted = normalize(query.trim());
+    if (!wanted) return fields;
+    return fields.filter(
+      (field) => normalize(field.label).includes(wanted) || normalize(field.code).includes(wanted),
+    );
+  }, [fields, query]);
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-base font-semibold text-zinc-900">Adicionar campos</h2>
+      <p className="mt-0.5 mb-3 text-sm text-zinc-500">
+        Campos de {entityLabel} do seu Bitrix24 que o agente ainda não lê.
+      </p>
+      <Card>
+        <div className="border-b border-zinc-100 px-5 py-3">
+          <label htmlFor="crm-field-search" className="sr-only">
+            Buscar campo
+          </label>
+          <input
+            id="crm-field-search"
+            type="search"
+            className={`${inputClass} mt-0`}
+            placeholder="Buscar pelo nome ou código do campo"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-zinc-500">
+            {fields.length === 0
+              ? `Todos os campos de ${entityLabel} já foram adicionados.`
+              : 'Nenhum campo encontrado com essa busca.'}
+          </p>
+        ) : (
+          <ul className="max-h-[28rem] divide-y divide-zinc-100 overflow-y-auto">
+            {filtered.map((field) => (
+              <AvailableFieldRow
+                key={`${field.entity}:${field.code}`}
+                field={field}
+                onSaved={onSaved}
+              />
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function AvailableFieldRow({
+  field,
+  onSaved,
+}: {
+  field: CrmFieldView;
+  onSaved: (field: CrmFieldView) => void;
+}) {
+  const { api } = useAppSession();
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add() {
+    setAdding(true);
+    setError(null);
+    try {
+      // A descrição guardada volta junto quando o campo já foi adicionado antes.
+      onSaved(
+        await saveCrmField(api, field.entity, field.code, {
+          exposed: true,
+          description: field.description,
+        }),
+      );
+    } catch (e) {
+      setError(crmErrorMessage(e, 'Não foi possível adicionar este campo. Tente de novo.'));
+      setAdding(false);
+    }
+  }
+
+  return (
+    <li className="px-5 py-3.5">
+      <div className="flex flex-wrap items-start gap-4">
+        <FieldSummary field={field} />
+        <button
+          type="button"
+          onClick={add}
+          disabled={adding}
+          className={buttonClass('secondary', 'sm')}
+        >
+          {adding ? <Spinner className="size-3.5" /> : <PlusIcon className="size-3.5" />}
+          {adding ? 'Adicionando…' : 'Adicionar'}
+        </button>
+      </div>
+      {error && (
+        <p className="mt-2 text-xs text-red-700" role="alert">
+          {error}
+        </p>
+      )}
     </li>
   );
 }
