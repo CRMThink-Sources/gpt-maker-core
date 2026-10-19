@@ -35,17 +35,14 @@ export function systemIntention(publicUrl: string, token: string): GptMakerWrite
   };
 }
 
-/**
- * Conexão MCP do app no agente (design S4). A credencial vai na URL (`?t=`, como nos webhooks):
- * pela API, o GPTMaker conectou sem repassar o `headers` de `authType: HEADERS` (formato não
- * documentado) e o `/mcp` respondia 401 ("error on connect with mcp server").
- */
+/** Conexão MCP do app no agente (design S4). */
 export function mcpConnection(publicUrl: string, token: string): GptMakerMcpAdd {
   return {
     name: 'CRM Bitrix24',
     description: 'Consultas ao CRM do cliente: histórico de negócios e etapas dos funis',
-    mcpUrl: `${publicUrl}${MCP_PATH}?t=${encodeURIComponent(token)}`,
+    mcpUrl: `${publicUrl}${MCP_PATH}`,
     urlType: 'STREAMABLEHTTP',
-    authType: 'NO_OAUTH',
+    authType: 'HEADERS',
+    headers: { Authorization: `Bearer ${token}` },
   };
 }

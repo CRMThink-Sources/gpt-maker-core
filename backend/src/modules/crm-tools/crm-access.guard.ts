@@ -28,7 +28,7 @@ type CallerRequest = Request & { crmCaller?: CrmCaller };
 
 /**
  * Autentica a intenção de sistema e o servidor MCP pela credencial do agente
- * (`Authorization: Bearer` ou `?t=` na URL, usado pela conexão MCP). Recusa sem revelar o motivo: credencial desconhecida, acesso
+ * (`Authorization: Bearer`). Recusa sem revelar o motivo: credencial desconhecida, acesso
  * desativado, agente removido ou inativo, tenant fora do ar. Com a flag desligada, 404.
  * `CONNECTING` vale: o GPTMaker lista as ferramentas durante a própria conexão.
  */
@@ -44,7 +44,7 @@ export class CrmAccessGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (!this.env.CRM_TOOLS_ENABLED) throw new NotFoundException();
     const request = context.switchToHttp().getRequest<CallerRequest>();
-    const token = bearer(request.headers.authorization) ?? queryToken(request.query?.t);
+    const token = bearer(request.headers.authorization);
     if (!token) throw new UnauthorizedException();
 
     const [row] = await this.db
@@ -81,10 +81,6 @@ export const CurrentCaller = createParamDecorator((_: unknown, context: Executio
   if (!caller) throw new Error('CrmAccessGuard ausente na rota');
   return caller;
 });
-
-function queryToken(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
 
 function bearer(header: string | undefined): string | null {
   const match = /^Bearer\s+(\S+)\s*$/i.exec(header ?? '');
