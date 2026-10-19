@@ -142,6 +142,10 @@ function translateOne(
   if (field.type === 'user') {
     return ctx.users.get(raw) ?? null;
   }
+  if (field.type === 'date') {
+    // Só a data: o Bitrix manda meia-noite com fuso (`2026-10-19T03:00:00+03:00`).
+    return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : raw;
+  }
   if (field.type === 'money') {
     // Campo personalizado monetário: `1500.00|BRL`.
     const [amount, currency] = raw.split('|');

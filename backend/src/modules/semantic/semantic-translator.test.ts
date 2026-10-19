@@ -173,6 +173,30 @@ describe('translateRecord', () => {
   });
 });
 
+describe('campos de data', () => {
+  it('campo só de data perde o horário; data e hora fica igual', () => {
+    const dated: CrmMetadata = {
+      ...metadata,
+      fields: {
+        ...metadata.fields,
+        deal: normalizeCrmFields('deal', {
+          BEGINDATE: { type: 'date', title: 'Data de início' },
+          DATE_CREATE: { type: 'datetime', title: 'Criado em' },
+        }),
+      },
+    };
+    const values = translateRecord(
+      'deal',
+      { BEGINDATE: '2026-10-19T03:00:00+03:00', DATE_CREATE: '2026-10-19T22:19:19+03:00' },
+      { ...context(), metadata: dated },
+    );
+    expect(values).toEqual([
+      { campo: 'Criado em', valor: '2026-10-19T22:19:19+03:00' },
+      { campo: 'Data de início', valor: '2026-10-19' },
+    ]);
+  });
+});
+
 describe('userIdsIn', () => {
   it('lista os responsáveis dos campos expostos, sem repetir', () => {
     expect(

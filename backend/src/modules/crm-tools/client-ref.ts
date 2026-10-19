@@ -30,6 +30,9 @@ export class ClientRefs {
     const [, prefix, id, signature] = match;
     const expected = this.sign(tenantId, `${prefix}${id}`);
     const received = Buffer.from(signature!, 'base64url');
+    // Só a forma canônica: 16 bytes viram 22 caracteres e o último carrega bits de enchimento, que
+    // o decodificador ignora; sem isso, trocar o último caractere às vezes ainda validava.
+    if (received.toString('base64url') !== signature) return null;
     if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
     return { type: TYPE_OF[prefix!]!, id: Number(id) };
   }

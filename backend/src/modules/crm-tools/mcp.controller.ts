@@ -23,7 +23,7 @@ import { MCP_PATH } from './system-intention';
  * Versão das ferramentas publicadas: mudar nome, descrição ou esquema exige incrementar, para o
  * `CrmToolsSync` pedir ao GPTMaker que releia (`sync-tools`).
  */
-export const TOOLS_VERSION = '1';
+export const TOOLS_VERSION = '2';
 
 /** Ferramentas do servidor MCP, ligadas ao agente que chama (design S8). */
 export function buildMcpServer(tools: CrmToolsService, caller: CrmCaller): McpServer {
@@ -37,7 +37,8 @@ export function buildMcpServer(tools: CrmToolsService, caller: CrmCaller): McpSe
         'Lista os negócios do cliente no CRM (até 10, do mais recente para o mais antigo), com ' +
         'funil, etapa, situação e valor. Use para histórico, compras anteriores, negócios ganhos ' +
         'ou perdidos. Precisa da referência do cliente devolvida por "Consultar cliente no CRM"; ' +
-        'sem ela, consulte o cliente primeiro.',
+        'sem ela, consulte o cliente primeiro. Traz só os negócios: não há histórico de atividades ' +
+        'nem documentos.',
       inputSchema: {
         cliente: z
           .string()
