@@ -211,6 +211,27 @@ describe('CrmToolsService.clientDeals', () => {
   });
 });
 
+describe('CrmToolsService: o que o agente recebe', () => {
+  it('valor não informado, fechamento só com a data e o que não está disponível', async () => {
+    const { service, deal } = setup();
+    deal(40, 'C3:WON', 'S', '2026-10-19T22:19:19+03:00', {
+      OPPORTUNITY: '0.00',
+      CLOSEDATE: '2026-10-19T03:00:00+03:00',
+    });
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    const result = await service.clientDeals(caller, ref, 'ganhos');
+    const won = (result.body.negocios as Array<Record<string, unknown>>).find(
+      (item) => item.titulo === 'Negócio 40',
+    );
+    expect(won).toMatchObject({ valor: 'não informado', fechamento_previsto: '2026-10-19' });
+    expect(won!.criado_em).toBe('2026-10-19T22:19:19+03:00');
+    expect(result.body.orientacao).toMatch(/não há acesso a histórico de atividades/i);
+
+    const identified = await service.identifyClient(caller, CHAT);
+    expect(identified.body.orientacao).toMatch(/não ofereça nem prometa/i);
+  });
+});
+
 describe('CrmToolsService.pipelineStages', () => {
   it('etapas de um funil pelo nome, sem acento nem caixa', async () => {
     const { service } = setup();

@@ -78,6 +78,15 @@ const duration = new Histogram({
   registers: [metricsRegistry],
 });
 
+/**
+ * O que o agente tem e o que não tem do CRM: sem isso ele oferece histórico de atividades e
+ * documentos, chama a ferramenta de novo e acaba pedindo desculpas (visto em staging).
+ */
+export const DATA_SCOPE =
+  'Dados disponíveis: o cadastro do cliente (só os campos liberados) e os negócios dele, com funil, etapa, situação, valor e datas. ' +
+  'Não há acesso a histórico de atividades, tarefas, e-mails, documentos nem anexos: não ofereça nem prometa esses dados; se o cliente pedir, diga que a equipe pode ajudar. ' +
+  'Valor "não informado" significa que o negócio não tem valor cadastrado.';
+
 class ToolTimeout extends Error {}
 
 const UNAVAILABLE: ToolResult = {
@@ -157,8 +166,7 @@ export class CrmToolsService {
           },
           negocios_em_andamento: deals.rows.map((deal) => this.dealView(deal, full)),
           ha_mais_negocios: deals.more,
-          orientacao:
-            'Use estes dados para responder ao cliente. Para negócios ganhos, perdidos ou o histórico completo, use a ferramenta negocios_do_cliente com a referência do cliente.',
+          orientacao: `Use estes dados para responder ao cliente. Para negócios ganhos, perdidos ou todos os negócios, use a ferramenta negocios_do_cliente com a referência do cliente. ${DATA_SCOPE}`,
         },
       };
     });
@@ -183,6 +191,7 @@ export class CrmToolsService {
           negocios: deals.rows.map((deal) => this.dealView(deal, full)),
           ha_mais: deals.more,
           ...(deals.more ? { total: deals.total } : {}),
+          orientacao: `Estes são todos os dados destes negócios: responda com eles, sem chamar a ferramenta de novo para buscar outros detalhes. ${DATA_SCOPE}`,
         },
       };
     });
@@ -360,11 +369,15 @@ export class CrmToolsService {
     return {
       titulo: text(deal.TITLE) ?? 'Negócio sem título',
       ...(stage ?? {}),
-      ...(amount && Number(amount) > 0
-        ? { valor: currency ? `${amount} ${currency}` : amount }
-        : {}),
+      // Sem valor, diz isso: omitir fazia o agente prometer buscar o valor.
+      valor:
+        amount && Number(amount) > 0
+          ? currency
+            ? `${amount} ${currency}`
+            : amount
+          : 'não informado',
       ...(text(deal.DATE_CREATE) ? { criado_em: text(deal.DATE_CREATE) } : {}),
-      ...(text(deal.CLOSEDATE) ? { fechamento_previsto: text(deal.CLOSEDATE) } : {}),
+      ...(text(deal.CLOSEDATE) ? { fechamento_previsto: dateOnly(text(deal.CLOSEDATE)!) } : {}),
       campos: translateRecord('deal', deal, ctx, OMIT_DEAL) satisfies SemanticValue[],
     };
   }
@@ -393,6 +406,11 @@ function displayName(type: ClientType, record: Record<string, unknown>): string 
     .join(' ');
   if (type === 'company') return text(record.TITLE) ?? 'Empresa sem nome';
   return person || text(record.TITLE) || 'Cliente sem nome';
+}
+
+/** Campo só de data: o Bitrix manda meia-noite com fuso (`2026-10-19T03:00:00+03:00`); fica `2026-10-19`. */
+function dateOnly(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : value;
 }
 
 function text(value: unknown): string | null {
