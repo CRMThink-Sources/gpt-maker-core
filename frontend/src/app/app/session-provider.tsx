@@ -11,6 +11,8 @@ export interface AppSession {
   user: { id: string; name: string; isAdmin: boolean };
   tenant: { code: string; status: 'ACTIVE' | 'SUSPENDED' | 'AUTH_ERROR' | 'UNINSTALLED' };
   canManage: boolean;
+  /** Recursos ligados no ambiente. */
+  features?: { crmTools?: boolean };
 }
 
 interface SessionContextValue {

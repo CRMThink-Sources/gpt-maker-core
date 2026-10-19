@@ -240,6 +240,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       user: { id: '1', name: 'Usuário 1', isAdmin: true },
       tenant: { code: tenantCode, status: 'ACTIVE' },
       canManage: true,
+      features: { crmTools: false },
     });
     await http()
       .get('/app/session')

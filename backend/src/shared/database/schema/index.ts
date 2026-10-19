@@ -3,6 +3,7 @@
 export * from './agents';
 export * from './backoffice';
 export * from './billing';
+export * from './crm';
 export * from './models';
 export * from './notifications';
 export * from './payments';

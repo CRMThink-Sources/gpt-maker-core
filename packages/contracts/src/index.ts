@@ -1,6 +1,7 @@
 export * from './admin';
 export * from './agents';
 export * from './credits';
+export * from './crm';
 export * from './errors';
 export * from './health';
 export * from './intentions';

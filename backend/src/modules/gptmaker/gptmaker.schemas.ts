@@ -283,6 +283,48 @@ export const intentionWriteAckSchema = z
   .object({ id: z.string().optional(), success: z.boolean().optional() })
   .loose();
 
+// ---- MCP (docs/gptmaker-mcp.md)
+
+/** Corpo de `POST /agent/{agentId}/mcp/add`. */
+export const mcpAddSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  mcpUrl: z.string().min(1),
+  urlType: z.enum(['SSE', 'STREAMABLEHTTP']),
+  authType: z.enum(['NO_OAUTH', 'OAUTH', 'HEADERS']),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+export type GptMakerMcpAdd = z.infer<typeof mcpAddSchema>;
+
+/** Resposta de `mcp/add`: `id` da conexão; `url` só no fluxo OAuth. */
+export const mcpAddAckSchema = z
+  .object({
+    id: z.string().nullish(),
+    success: z.boolean().nullish(),
+    connected: z.boolean().nullish(),
+    url: z.string().nullish(),
+  })
+  .loose();
+
+export const mcpToolSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().nullish(),
+    description: z.string().nullish(),
+    active: z.boolean().nullish(),
+  })
+  .loose();
+export type GptMakerMcpTool = z.infer<typeof mcpToolSchema>;
+
+/** Lista de ferramentas; aceita também o envelope `{ data }` usado nas outras listagens reais. */
+export const mcpToolListSchema = z.union([
+  mcpToolSchema.array(),
+  z
+    .object({ data: mcpToolSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
 // ---- Webhooks
 
 export const WEBHOOK_EVENTS = [

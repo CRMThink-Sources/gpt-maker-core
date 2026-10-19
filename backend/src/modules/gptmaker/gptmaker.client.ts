@@ -18,9 +18,14 @@ import {
   GptMakerCreateTraining,
   GptMakerCreditsSpent,
   GptMakerIntention,
+  GptMakerMcpAdd,
+  GptMakerMcpTool,
   GptMakerWriteIntention,
   intentionListSchema,
   intentionWriteAckSchema,
+  mcpAddAckSchema,
+  mcpAddSchema,
+  mcpToolListSchema,
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
@@ -295,6 +300,49 @@ export class GptMakerClient {
 
   async deleteIntention(intentionId: string): Promise<void> {
     await this.success('intention.delete', 'DELETE', `/intention/${enc(intentionId)}`);
+  }
+
+  // ---- MCP (docs/gptmaker-mcp.md)
+
+  /** Conecta um servidor MCP ao agente; devolve o id da conexão (necessário para remover). */
+  async addMcp(agentId: string, input: GptMakerMcpAdd): Promise<string> {
+    const operation = 'mcp.add';
+    const ack = await this.request({
+      operation,
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/mcp/add`,
+      body: mcpAddSchema.parse(input),
+      response: mcpAddAckSchema,
+    });
+    if (ack.success === false || !ack.id) {
+      throw new GptMakerError('UNKNOWN', operation, 'conexão MCP não criada', {
+        status: 200,
+        body: ack,
+      });
+    }
+    return ack.id;
+  }
+
+  listMcpTools(mcpId: string): Promise<GptMakerMcpTool[]> {
+    return this.request({
+      operation: 'mcp.tools',
+      method: 'GET',
+      path: `/mcp/${enc(mcpId)}/tools`,
+      response: mcpToolListSchema,
+    });
+  }
+
+  async activateMcpTool(mcpId: string, toolId: string): Promise<void> {
+    await this.success('mcp.tool.active', 'GET', `/mcp/${enc(mcpId)}/tool/${enc(toolId)}/active`);
+  }
+
+  /** Relê as ferramentas do servidor (nome, descrição e esquema só mudam assim). */
+  async syncMcpTools(mcpId: string): Promise<void> {
+    await this.success('mcp.sync-tools', 'GET', `/mcp/${enc(mcpId)}/sync-tools`);
+  }
+
+  async deleteMcp(mcpId: string): Promise<void> {
+    await this.success('mcp.delete', 'DELETE', `/mcp/${enc(mcpId)}`);
   }
 
   // ---- Webhooks

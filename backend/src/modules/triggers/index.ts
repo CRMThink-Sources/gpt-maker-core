@@ -7,3 +7,9 @@ export {
   type ExecutableAction,
   TriggerActionExecutor,
 } from './actions/action-executor';
+export {
+  type CrmBinding,
+  type CrmEntityType,
+  parseCrmBinding,
+  primaryEntity,
+} from './actions/crm-binding';

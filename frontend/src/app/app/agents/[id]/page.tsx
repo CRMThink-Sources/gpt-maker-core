@@ -9,6 +9,7 @@ import { useAppSession } from '../../session-provider';
 import { type AgentFormValues, initialValues } from '../agent-fields';
 import { AgentForm, type SectionKey } from '../agent-form';
 import { useAgent } from './agent-context';
+import { CrmAccessCard } from './crm-access-card';
 
 const TEXTS = ['avatarUrl', 'jobName', 'jobSite'] as const;
 /** Obrigatórios: nunca vão como `null` (o formulário não deixa salvar vazio). */
@@ -133,6 +134,7 @@ export default function AgentSettingsPage() {
           onSectionChange={setSection}
         />
       )}
+      <CrmAccessCard />
     </>
   );
 }
