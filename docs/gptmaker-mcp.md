@@ -38,7 +38,8 @@ Corpo de `mcp/add` (todos obrigatórios, exceto `headers`):
 2. Formato de `headers` não especificado (objeto chave → valor presumido). **Confirmado em staging (2026-10-19):** `mcp/add` com `authType: HEADERS` e `headers: { Authorization: "Bearer …" }` conecta, e o cabeçalho chega em `initialize`, `GET` e `tools/list`.
 3. Se as ferramentas já vêm ativas após `mcp/add` ou precisam de `.../active` (o app lista e ativa as que vierem inativas).
 4. Não há rota para listar as conexões MCP de um agente: o app precisa guardar o `id` devolvido por `mcp/add`.
-5. **O que o GPTMaker envia na chamada da ferramenta** (cabeçalhos, `_meta`, identificador do chat ou do contato): não documentado; respondido empiricamente abaixo (nada é enviado).
+5. **Painel do GPTMaker conecta pelo navegador (hipótese, 2026-10-19):** com a conexão criada pela API funcionando, o painel mostrou `Error: error on connect with mcp server` sem nenhuma requisição chegar à API, o que é compatível com bloqueio de CORS no navegador. O `/mcp` passou a aceitar qualquer origem (`backend/src/shared/http/cors.ts`); a autenticação é por token no cabeçalho, sem cookie.
+6. **O que o GPTMaker envia na chamada da ferramenta** (cabeçalhos, `_meta`, identificador do chat ou do contato): não documentado; respondido empiricamente abaixo (nada é enviado).
 
 ## Comparação com as intenções `BITRIX`
 
