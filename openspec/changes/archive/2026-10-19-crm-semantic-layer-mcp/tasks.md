@@ -41,8 +41,8 @@
 
 ## 7. Integração e piloto
 
-- [ ] 7.1 Teste ponta a ponta em staging: tenant com campos personalizados, agente com CRM ativo, conversa na Linha Aberta perguntando sobre o próprio negócio; conferir resposta com funil/etapa pelo nome, ausência de campos não expostos, histórico pelo MCP e registro de uso sem dados pessoais (~3h)
-- [ ] 7.2 Piloto com um tenant interno por uma semana; comparar créditos do agente na reconciliação antes/depois e registrar em `docs/gptmaker-mcp.md` (~2h)
+- [x] 7.1 Teste ponta a ponta em staging: tenant com campos personalizados, agente com CRM ativo, conversa na Linha Aberta perguntando sobre o próprio negócio; conferir resposta com funil/etapa pelo nome, ausência de campos não expostos, histórico pelo MCP e registro de uso sem dados pessoais (~3h)
+- [ ] 7.2 Piloto com um tenant interno por uma semana; comparar créditos do agente na reconciliação antes/depois e registrar em `docs/gptmaker-mcp.md` (~2h) — acompanhamento operacional fora da change: piloto com o agente Bruna em staging; reconciliação corrigida no PR #25
 
 ---
 
