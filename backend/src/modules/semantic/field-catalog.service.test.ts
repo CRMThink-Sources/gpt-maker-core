@@ -36,8 +36,18 @@ describe('FieldCatalogService', () => {
       ['Fechado', 'success'],
       ['Desistiu', 'failure'],
     ]);
-    // Funil e etapa não viram campos: as ferramentas os entregam à parte.
-    expect(metadata.fields.deal.map((field) => field.code)).not.toContain('STAGE_ID');
+    // Funil e etapa viram campos configuráveis, com rótulo próprio e sem lista de ids.
+    expect(metadata.fields.deal.find((field) => field.code === 'CATEGORY_ID')).toMatchObject({
+      label: 'Funil',
+      type: 'crm_category',
+    });
+    expect(metadata.fields.deal.find((field) => field.code === 'STAGE_ID')).toMatchObject({
+      label: 'Etapa',
+      type: 'crm_stage',
+    });
+    expect(
+      metadata.fields.deal.find((field) => field.code === 'STAGE_ID')!.options,
+    ).toBeUndefined();
   });
 
   it('usa o cache e relê após invalidar', async () => {

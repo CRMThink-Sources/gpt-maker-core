@@ -89,6 +89,29 @@ describe('normalizeCrmFields', () => {
   });
 });
 
+describe('funil e etapa do negócio', () => {
+  it('viram campos configuráveis só no negócio e começam liberados', () => {
+    const deal = normalizeCrmFields('deal', {
+      CATEGORY_ID: { type: 'crm_category', title: 'Pipeline' },
+      STAGE_ID: { type: 'crm_status', title: 'Fase', statusType: 'DEAL_STAGE' },
+      TITLE: { type: 'string', title: 'Nome' },
+    });
+    expect(deal.map((field) => [field.code, field.label, field.type])).toEqual(
+      expect.arrayContaining([
+        ['CATEGORY_ID', 'Funil', 'crm_category'],
+        ['STAGE_ID', 'Etapa', 'crm_stage'],
+      ]),
+    );
+    expect(exposedByDefault('deal', 'CATEGORY_ID')).toBe(true);
+    expect(exposedByDefault('deal', 'STAGE_ID')).toBe(true);
+
+    const contact = normalizeCrmFields('contact', {
+      CATEGORY_ID: { type: 'crm_category', title: 'Categoria' },
+    });
+    expect(contact).toEqual([]);
+  });
+});
+
 describe('etapas e funis', () => {
   it('semântica pela letra ou pelo EXTRA', () => {
     expect(stageSemantic({ STATUS_ID: 'WON', NAME: 'Ganho', SEMANTICS: 'S' })).toBe('success');

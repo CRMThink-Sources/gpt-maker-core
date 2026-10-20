@@ -93,6 +93,8 @@ const FIELD_TYPES: Record<string, string> = {
   employee: 'Usuário',
   crm_multifield: 'Telefone, e-mail ou contato',
   crm_currency: 'Moeda',
+  crm_category: 'Funil',
+  crm_stage: 'Etapa do funil',
   url: 'Link',
   address: 'Endereço',
 };
