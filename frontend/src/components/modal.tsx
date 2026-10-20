@@ -14,14 +14,21 @@ export function Modal({
   header,
   footer,
   onRequestClose,
+  size = 'md',
+  bodyClassName = 'overflow-y-auto px-6 py-5',
   children,
 }: {
   title: string;
   description?: string;
   /** Conteúdo abaixo do título (ex.: indicador de passos). */
   header?: ReactNode;
-  footer: ReactNode;
+  /** Rodapé fixo (ex.: botões); sem ele, o modal não mostra a faixa do rodapé. */
+  footer?: ReactNode;
   onRequestClose: () => void;
+  /** `md`: formulários (padrão); `lg`: largo e com altura fixa (ex.: chat). */
+  size?: 'md' | 'lg';
+  /** Classes do corpo; troque para o conteúdo controlar a própria rolagem (ex.: chat). */
+  bodyClassName?: string;
   children: ReactNode;
 }) {
   const close = useRef(onRequestClose);
@@ -53,7 +60,9 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="relative flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className={`relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ${
+          size === 'lg' ? 'h-[85vh] max-w-5xl' : 'max-w-2xl'
+        }`}
       >
         <div className="border-b border-zinc-200 px-6 pt-5 pb-4">
           <div className="flex items-start justify-between gap-4">
@@ -74,8 +83,10 @@ export function Modal({
           </div>
           {header}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        <div className="border-t border-zinc-200 bg-zinc-50 px-6 py-3">{footer}</div>
+        <div className={`min-h-0 flex-1 ${bodyClassName}`}>{children}</div>
+        {footer !== undefined && (
+          <div className="border-t border-zinc-200 bg-zinc-50 px-6 py-3">{footer}</div>
+        )}
       </div>
     </div>
   );

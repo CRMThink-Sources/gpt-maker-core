@@ -152,6 +152,18 @@ describe('webhooks dos agentes', () => {
       ]);
     });
 
+    it('conversa de teste do app: grava o evento, mas não dispara gatilhos', async () => {
+      await newAgent('tok-1');
+      const dialog = 'test-0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d';
+      const outcome = await intake.receive('onFinishInteraction', 'tok-1', {
+        contextId: `public-api-GM-${tenantId}:${dialog}`,
+      });
+      expect(outcome).toMatchObject({ kind: 'accepted' });
+      const [stored] = await db.select().from(agentEvent);
+      expect(stored).toMatchObject({ event: 'onFinishInteraction', dialogId: dialog });
+      expect(published).toEqual([]);
+    });
+
     it('token inválido ou ausente: nada gravado', async () => {
       await newAgent('tok-1');
       await expect(intake.receive('onTransfer', 'outro', {})).resolves.toEqual({

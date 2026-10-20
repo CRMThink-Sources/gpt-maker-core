@@ -4,18 +4,21 @@ import type { AgentView } from '@gptmaker/contracts';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
-import { Alert, Avatar, Badge, Loading, PageHeader } from '@/components/ui';
+import { ChatIcon } from '@/components/icons';
+import { Alert, Avatar, Badge, buttonClass, Loading, PageHeader } from '@/components/ui';
 import { AGENT_TYPES, agentStatus, errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
 import { AgentContext } from './agent-context';
+import { TestChatModal } from './test-chat-modal';
 
 /** Cabeçalho e abas do agente; as páginas recebem o agente já carregado pelo contexto. */
 export default function AgentLayout({ params, children }: LayoutProps<'/app/agents/[id]'>) {
   const { id } = use(params);
-  const { api } = useAppSession();
+  const { api, session } = useAppSession();
   const pathname = usePathname();
   const [agent, setAgent] = useState<AgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +65,7 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
     },
   ];
   const status = agentStatus(agent!);
+  const canTest = session.canManage && agent!.status === 'ACTIVE';
 
   return (
     <AgentContext.Provider value={context}>
@@ -73,7 +77,21 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
             {agent!.name}
           </span>
         }
-        aside={<Badge tone={status.tone}>{status.label}</Badge>}
+        aside={
+          <>
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {canTest && (
+              <button
+                type="button"
+                onClick={() => setTesting(true)}
+                className={buttonClass('secondary', 'sm')}
+              >
+                <ChatIcon className="size-4" />
+                Testar
+              </button>
+            )}
+          </>
+        }
         description={`${AGENT_TYPES[agent!.type]} · criado em ${new Date(agent!.createdAt).toLocaleDateString('pt-BR')}`}
       />
       <nav className="-mt-2 mb-6 flex gap-6 border-b border-zinc-200" aria-label="Seções do agente">
@@ -98,6 +116,7 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
         </Alert>
       )}
       {children}
+      {testing && canTest && <TestChatModal onClose={() => setTesting(false)} />}
     </AgentContext.Provider>
   );
 }

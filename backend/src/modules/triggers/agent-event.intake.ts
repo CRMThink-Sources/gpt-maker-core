@@ -5,6 +5,7 @@ import { enrichContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agent, agentEvent } from '../../shared/database/schema/index';
 import { EXCHANGES } from '../../shared/messaging/topology';
+import { isTestDialog } from '../agent-test';
 import { hashWebhookToken } from '../agents';
 import { type GptMakerWebhookEvent, WEBHOOK_EVENTS } from '../gptmaker';
 
@@ -76,6 +77,14 @@ export class AgentEventIntake {
       event,
       dialogId,
     };
+    // Conversa de teste do app não dispara gatilhos (spec agent-test-chat): só fica registrada.
+    if (isTestDialog(dialogId)) {
+      this.logger.log(
+        { event, agentEventId: message.agentEventId },
+        'webhook de conversa de teste registrado, sem gatilhos',
+      );
+      return { kind: 'accepted', message };
+    }
     await this.amqp.publish(EXCHANGES.triggersEvents, event, message, {
       persistent: true,
       messageId: message.agentEventId,

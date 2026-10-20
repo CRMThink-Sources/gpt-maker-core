@@ -9,6 +9,7 @@ import { DB, type Database } from '../../shared/database/database.module';
 import { agentCrmAccess } from '../../shared/database/schema/index';
 import { metricsRegistry } from '../../shared/metrics/metrics';
 import { REDIS } from '../../shared/redis/redis.module';
+import { isTestDialog, testConversationIdFrom, TestConversations } from '../agent-test';
 import { BitrixClient, BitrixError } from '../bitrix';
 import { dialogFromChat } from '../intentions';
 import {
@@ -125,6 +126,7 @@ export class CrmToolsService {
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(ENV) private readonly env: Env,
+    private readonly testConversations: TestConversations,
   ) {
     this.refs = ClientRefs.fromBase64Key(env.DATA_ENCRYPTION_KEY);
   }
@@ -138,12 +140,7 @@ export class CrmToolsService {
           : null;
       if (!dialogId) return notIdentified();
 
-      const { result } = await this.bitrix.call<{ entity_data_2?: unknown }>(
-        caller.installationId,
-        'imopenlines.dialog.get',
-        { DIALOG_ID: dialogId },
-      );
-      const client = await this.clientOf(caller, parseCrmBinding(result?.entity_data_2));
+      const client = await this.conversationClient(caller, dialogId);
       if (!client) return notIdentified();
 
       const ctx = await this.context(caller);
@@ -311,6 +308,28 @@ export class CrmToolsService {
       this.settings.forTenant(caller.tenantId),
     ]);
     return { metadata, choices };
+  }
+
+  /**
+   * Cliente da conversa: na de teste, o simulado pelo testador (só do tenant da credencial); na
+   * Linha Aberta, o vínculo do diálogo no Bitrix24.
+   */
+  private async conversationClient(
+    caller: CrmCaller,
+    dialogId: string,
+  ): Promise<{ type: ClientType; id: number } | null> {
+    if (isTestDialog(dialogId)) {
+      const conversationId = testConversationIdFrom(dialogId);
+      return conversationId
+        ? this.testConversations.simulatedClient(caller.tenantId, conversationId)
+        : null;
+    }
+    const { result } = await this.bitrix.call<{ entity_data_2?: unknown }>(
+      caller.installationId,
+      'imopenlines.dialog.get',
+      { DIALOG_ID: dialogId },
+    );
+    return this.clientOf(caller, parseCrmBinding(result?.entity_data_2));
   }
 
   /** Contato, depois lead, depois empresa; só negócio vinculado ⇒ contato ou empresa dele. */

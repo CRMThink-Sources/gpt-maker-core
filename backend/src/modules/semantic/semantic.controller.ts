@@ -9,9 +9,11 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import {
   type CrmCatalogView,
+  type CrmClientOption,
   type CrmFieldSettingInput,
   crmFieldSettingInputSchema,
   type CrmFieldView,
@@ -20,6 +22,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
+import { ClientSearchService } from './client-search.service';
 import { SemanticCatalogService } from './semantic-catalog.service';
 
 /** Catálogo do CRM do tenant da sessão (spec crm-semantic-layer). */
@@ -27,8 +30,20 @@ import { SemanticCatalogService } from './semantic-catalog.service';
 export class SemanticController {
   constructor(
     private readonly catalog: SemanticCatalogService,
+    private readonly clients: ClientSearchService,
     @Inject(ENV) private readonly env: Env,
   ) {}
+
+  /** Clientes do CRM para simular numa conversa de teste (spec agent-test-chat). */
+  @Get('clients')
+  @AppAuth('manage')
+  searchClients(
+    @CurrentSession() session: AppSession,
+    @Query('query') query: string | undefined,
+  ): Promise<CrmClientOption[]> {
+    this.assertEnabled();
+    return this.clients.search(portalOf(session), query ?? '');
+  }
 
   @Get('fields')
   @AppAuth()

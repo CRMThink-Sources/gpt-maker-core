@@ -155,6 +155,23 @@ describe('intenção com ações no Bitrix24', () => {
     ]);
   });
 
+  it('conversa de teste do app: ações simuladas, nada executado no portal', async () => {
+    const outcome = await runner.run(
+      intentionId,
+      TOKEN,
+      body({ chat: `public-api-gm-x-${tenantId}:test-0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d` }),
+    );
+    expect(outcome).toMatchObject({
+      kind: 'reply',
+      reply: {
+        ok: true,
+        message: expect.stringContaining('Seriam: lead criado; comentário registrado no CRM'),
+      },
+    });
+    expect(calls).toEqual([]);
+    expect(await executions()).toEqual([expect.objectContaining({ status: 'SUCCESS' })]);
+  });
+
   it('chamada repetida devolve o mesmo resultado sem executar de novo', async () => {
     await runner.run(intentionId, TOKEN, body());
     const again = await runner.run(intentionId, TOKEN, body());

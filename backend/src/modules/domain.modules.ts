@@ -6,6 +6,7 @@ import { SemanticModule } from './semantic';
 import { AgentsModule } from './agents';
 import { TrainingModule } from './training';
 import { IntentionsModule } from './intentions';
+import { AgentTestModule } from './agent-test';
 import { CrmToolsModule } from './crm-tools';
 import { ChannelModule } from './channel';
 import { TriggersModule } from './triggers';
@@ -25,6 +26,7 @@ export const DOMAIN_MODULES = [
   AgentsModule,
   TrainingModule,
   IntentionsModule,
+  AgentTestModule,
   CrmToolsModule,
   ChannelModule,
   TriggersModule,
