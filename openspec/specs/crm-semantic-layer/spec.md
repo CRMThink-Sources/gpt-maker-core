@@ -1,8 +1,9 @@
-## Purpose
+# crm-semantic-layer Specification
 
+## Purpose
 Traduz o CRM do Bitrix24 de cada cliente (campos técnicos, listas, funis e etapas) em conceitos de negócio com nome e significado, e define quais dados o agente de IA pode ler.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Catálogo de campos por tenant
 O sistema MUST manter, por tenant, um catálogo dos campos de lead, negócio, contato e empresa do portal Bitrix24, montado a partir dos metadados do próprio portal. Cada campo MUST ter código, entidade, tipo, rótulo amigável (rótulo do formulário para campos `UF_*`, título para campos padrão), valores aceitos quando for lista ou booleano e uma descrição de significado opcional escrita pelo cliente. Campos de funil e etapa MUST ser resolvidos para os nomes reais dos funis e etapas do portal, com a semântica da etapa (em andamento, ganha, perdida).
@@ -29,6 +30,10 @@ O agente MUST receber apenas os campos que o cliente marcou como expostos. Por p
 #### Scenario: Primeira configuração
 - **WHEN** o cliente abre a configuração do CRM pela primeira vez
 - **THEN** apenas o conjunto mínimo de campos padrão está marcado e os campos personalizados aparecem desmarcados
+
+#### Scenario: Funil e etapa configuráveis
+- **WHEN** o cliente deixa de expor o campo Etapa do negócio
+- **THEN** os negócios entregues ao agente não trazem a etapa nem a situação (em andamento, ganha, perdida), e o funil continua sendo entregue enquanto estiver exposto
 
 ### Requirement: Tradução de valores
 Todo valor entregue ao agente MUST estar traduzido: listas e status pelo nome do item, booleanos como "Sim"/"Não", usuários pelo nome, funis e etapas pelo nome, datas em ISO 8601 e valores monetários com a moeda. Códigos técnicos de campo, de item de lista ou de etapa MUST NOT aparecer na resposta ao agente. Valor que não puder ser traduzido (item de lista inexistente) MUST ser omitido.

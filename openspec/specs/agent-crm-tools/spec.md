@@ -1,8 +1,9 @@
-## Purpose
+# agent-crm-tools Specification
 
+## Purpose
 Dá ao agente do GPTMaker ferramentas somente leitura sobre o CRM do cliente, construídas sobre a camada semântica: uma intenção de sistema que identifica o cliente da conversa e um servidor MCP com consultas complementares, com autenticação por agente e isolamento por tenant.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Ativação do CRM por agente
 O administrador MUST poder ativar e desativar o acesso ao CRM de cada agente no painel. Ao ativar, o sistema MUST gerar uma credencial exclusiva do agente (guardada cifrada e como hash, nunca exibida) e criar no agente do GPTMaker, pela API, a intenção de sistema "Consultar cliente no CRM" e a conexão MCP do app, ambas autenticadas com essa credencial, deixando as ferramentas MCP ativas. Falha no GPTMaker MUST deixar o acesso no estado de erro, com opção de tentar de novo, sem acesso parcial ativo. Ao desativar, a credencial MUST ser invalidada imediatamente e a intenção e a conexão MUST ser removidas do GPTMaker.
@@ -78,6 +79,10 @@ O servidor MCP MUST oferecer a ferramenta `etapas_do_funil`, que devolve os funi
 #### Scenario: Funil inexistente
 - **WHEN** o agente pede um funil que não existe no portal
 - **THEN** a ferramenta responde que o funil não foi encontrado e lista os nomes dos funis existentes
+
+#### Scenario: Funil ou etapa não liberados
+- **WHEN** o cliente deixou de expor o campo Funil ou o campo Etapa do negócio
+- **THEN** a ferramenta responde que os funis e as etapas não estão liberados, sem listar nenhum funil
 
 ### Requirement: Somente leitura e respostas semânticas
 As ferramentas MUST NOT criar, alterar ou remover dados no Bitrix24. Toda resposta MUST seguir a camada semântica: só campos expostos, valores traduzidos, descrição de significado junto de cada campo quando existir, e nenhum código técnico.
