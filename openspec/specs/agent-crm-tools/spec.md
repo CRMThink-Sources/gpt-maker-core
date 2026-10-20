@@ -40,7 +40,7 @@ Toda chamada à intenção de sistema ou ao servidor MCP MUST apresentar a crede
 - **THEN** o cliente é tratado como não identificado
 
 ### Requirement: Identificar o cliente da conversa
-A intenção de sistema MUST localizar o cliente exclusivamente pelo vínculo da conversa da Linha Aberta com o CRM, a partir do identificador de chat preenchido pelo GPTMaker, preferindo contato, depois lead, depois empresa. MUST devolver nome, empresa, responsável, campos expostos traduzidos, até 10 negócios em andamento (do mais recente para o mais antigo, com título, funil, etapa, valor com moeda e campos expostos) e uma referência opaca do cliente para as demais ferramentas. O cliente MUST NOT ser localizado por telefone, e-mail ou nome informados na conversa.
+A intenção de sistema MUST localizar o cliente exclusivamente pelo vínculo da conversa com o CRM, a partir do identificador de chat preenchido pelo GPTMaker, preferindo contato, depois lead, depois empresa. Numa conversa da Linha Aberta, o vínculo é o do diálogo no Bitrix24. Numa conversa de teste do app, o vínculo é o cliente simulado escolhido pelo testador, buscado só entre as conversas de teste do tenant da credencial. MUST devolver nome, empresa, responsável, campos expostos traduzidos, até 10 negócios em andamento (do mais recente para o mais antigo, com título, funil, etapa, valor com moeda e campos expostos) e uma referência opaca do cliente para as demais ferramentas. O cliente MUST NOT ser localizado por telefone, e-mail ou nome informados na conversa.
 
 #### Scenario: Conversa vinculada a um contato
 - **WHEN** o agente usa a intenção numa conversa cujo diálogo está vinculado ao contato "Maria Souza" com 2 negócios em andamento
@@ -53,6 +53,14 @@ A intenção de sistema MUST localizar o cliente exclusivamente pelo vínculo da
 #### Scenario: Cliente informa outro telefone
 - **WHEN** o cliente da conversa digita o telefone de outra pessoa e pede os dados dela
 - **THEN** a intenção continua devolvendo apenas o cliente vinculado à conversa
+
+#### Scenario: Conversa de teste com cliente simulado
+- **WHEN** o agente usa a intenção numa conversa de teste em que o testador escolheu o contato "Maria Souza"
+- **THEN** a intenção devolve os dados de Maria Souza como numa conversa vinculada a ela
+
+#### Scenario: Conversa de teste sem cliente ou de outro tenant
+- **WHEN** a conversa de teste não tem cliente simulado, foi excluída ou pertence a outro tenant
+- **THEN** a intenção responde que o cliente não foi identificado no CRM
 
 ### Requirement: Ferramenta negocios_do_cliente
 O servidor MCP MUST oferecer a ferramenta `negocios_do_cliente`, que recebe a referência devolvida pela identificação do cliente e um filtro de situação (em andamento, ganhos, perdidos ou todos; padrão todos) e devolve no máximo 10 negócios, do mais recente para o mais antigo, com título, funil, etapa, situação, valor com moeda, datas e campos expostos traduzidos. Referência inválida, adulterada ou de outro tenant MUST ser tratada como cliente não encontrado.
