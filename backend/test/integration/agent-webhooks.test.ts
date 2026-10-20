@@ -154,7 +154,7 @@ describe('webhooks dos agentes', () => {
 
     it('conversa de teste do app: grava o evento, mas não dispara gatilhos', async () => {
       await newAgent('tok-1');
-      const dialog = 'test-0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d';
+      const dialog = 't-0a1b2c3d4e';
       const outcome = await intake.receive('onFinishInteraction', 'tok-1', {
         contextId: `public-api-GM-${tenantId}:${dialog}`,
       });

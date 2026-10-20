@@ -29,7 +29,7 @@ import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { BalanceReader, type UsageResponseEvent } from '../billing';
 import { GptMakerClient, GptMakerError } from '../gptmaker';
-import { testContextId, TEST_DIALOG_PREFIX } from './test-dialog';
+import { newTestDialogKey, testContextId, testDialogOf } from './test-dialog';
 
 type Conversation = typeof agentTestConversation.$inferSelect;
 type Message = typeof agentTestMessage.$inferSelect;
@@ -106,7 +106,7 @@ export class AgentTestService {
           id,
           tenantId: tester.tenantId,
           agentId: owner.id,
-          contextId: testContextId(tester.tenantId, id),
+          contextId: testContextId(tester.tenantId, newTestDialogKey()),
           clientType: input.client?.type ?? null,
           clientId: input.client?.id ?? null,
           clientName: input.client?.name ?? null,
@@ -266,7 +266,7 @@ export class AgentTestService {
       messageId: `test:${conversation.id}:${questionId}`,
       tenantId: tester.tenantId,
       agentId: owner.id,
-      dialogId: `${TEST_DIALOG_PREFIX}${conversation.id}`,
+      dialogId: testDialogOf(conversation.contextId),
       modelCode: owner.modelCode,
       replyMessageId: null,
       respondedAt: new Date().toISOString(),

@@ -122,7 +122,7 @@ describe('débito das respostas', () => {
   it('resposta de teste do agente: mesmo custo, lançamento identificado e idempotente', async () => {
     const response = event({
       messageId: `test:conv-1:${Math.floor(Math.random() * 1_000_000)}`,
-      dialogId: 'test-conv-1',
+      dialogId: 't-0a1b2c3d4e',
       replyMessageId: null,
       source: 'test',
     });

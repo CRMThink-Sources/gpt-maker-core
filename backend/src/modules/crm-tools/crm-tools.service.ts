@@ -9,7 +9,7 @@ import { DB, type Database } from '../../shared/database/database.module';
 import { agentCrmAccess } from '../../shared/database/schema/index';
 import { metricsRegistry } from '../../shared/metrics/metrics';
 import { REDIS } from '../../shared/redis/redis.module';
-import { isTestDialog, testConversationIdFrom, TestConversations } from '../agent-test';
+import { isTestDialog, testDialogKeyFrom, TestConversations } from '../agent-test';
 import { BitrixClient, BitrixError } from '../bitrix';
 import { dialogFromChat } from '../intentions';
 import {
@@ -319,10 +319,8 @@ export class CrmToolsService {
     dialogId: string,
   ): Promise<{ type: ClientType; id: number } | null> {
     if (isTestDialog(dialogId)) {
-      const conversationId = testConversationIdFrom(dialogId);
-      return conversationId
-        ? this.testConversations.simulatedClient(caller.tenantId, conversationId)
-        : null;
+      const key = testDialogKeyFrom(dialogId);
+      return key ? this.testConversations.simulatedClient(caller.tenantId, key) : null;
     }
     const { result } = await this.bitrix.call<{ entity_data_2?: unknown }>(
       caller.installationId,

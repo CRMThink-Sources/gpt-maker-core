@@ -9,12 +9,12 @@ Quem gerencia agentes conversa com o agente sem abrir uma Linha Aberta: botão *
 ```
 Modal ─ POST /app/agents/:id/tests/:conv/messages ─▶ AgentTestService
           trava agent-test:<conv> (1 resposta por vez) ─ saldo > 0? ─ grava a pergunta
-          GPTMaker POST /agent/{id}/conversation  contextId = <tenantId>:test-<conv>
+          GPTMaker POST /agent/{id}/conversation  contextId = <tenantId>:t-<chave>
           grava a resposta ─ publica usage.response (source: test) ─▶ débito no ledger
 ```
 
-- **Contexto por conversa**: `contextId = <tenantId>:test-<conversationId>`. O GPTMaker guarda a memória por contexto, então reabrir uma conversa continua de onde parou e uma conversa nova começa do zero. O chat aparece no painel do GPTMaker como "Teste — <usuário>".
-- **Diálogo `test-<id>`**: é o que volta em `{{chat_id}}` e nos webhooks. O prefixo `test-` identifica a conversa de teste em todo o backend (`isTestDialog`, `testConversationIdFrom` em `backend/src/modules/agent-test`).
+- **Contexto por conversa**: `contextId = <tenantId>:t-<chave de 10 hex>` (49 caracteres). Precisa ser curto: o GPTMaker monta o chat como `public-api-<agente>-<contexto>` e, com contexto de 78 caracteres, responde `success: false` ("Transaction silently rolled back"); com 50 funciona (testado em staging em 2026-10-20). O GPTMaker guarda a memória por contexto, então reabrir uma conversa continua de onde parou e uma conversa nova começa do zero. O chat aparece no painel do GPTMaker como "Teste — <usuário>".
+- **Diálogo `t-<chave>`**: é o que volta em `{{chat_id}}` e nos webhooks. O prefixo `t-` identifica a conversa de teste em todo o backend (`isTestDialog`, `testDialogKeyFrom` em `backend/src/modules/agent-test`); a conversa é achada pelo `context_id`, que é único.
 - **Envio síncrono**: a requisição espera a resposta do GPTMaker (até `GPTMAKER_CONVERSATION_TIMEOUT_MS`, 60 s). Falha ou demora deixa a pergunta como `FAILED`, sem débito; o testador reenvia.
 - **Uma resposta por vez**: segunda mensagem na mesma conversa antes da resposta ⇒ 409 `TEST_REPLY_PENDING`.
 
@@ -26,8 +26,8 @@ Modal ─ POST /app/agents/:id/tests/:conv/messages ─▶ AgentTestService
 
 ## Sem efeito no portal
 
-- **Gatilhos**: webhook de diálogo `test-` é gravado em `agent_event` (para consulta), mas não é publicado em `triggers.events`.
-- **Intenções com ações no Bitrix**: em diálogo `test-` as ações não são executadas; o agente recebe "Conversa de teste: as ações não foram executadas no CRM. Seriam: …" e a execução fica registrada como `SUCCESS` com `{ simulated: true }`.
+- **Gatilhos**: webhook de diálogo `t-` é gravado em `agent_event` (para consulta), mas não é publicado em `triggers.events`.
+- **Intenções com ações no Bitrix**: em diálogo `t-` as ações não são executadas; o agente recebe "Conversa de teste: as ações não foram executadas no CRM. Seriam: …" e a execução fica registrada como `SUCCESS` com `{ simulated: true }`.
 - **Consultas ao CRM** (somente leitura) funcionam normalmente.
 
 ## Cliente simulado

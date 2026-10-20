@@ -134,12 +134,14 @@ describe('teste do agente', () => {
 
     const rows = await db.select().from(agentTestConversation);
     expect(new Set(rows.map((row) => row.contextId)).size).toBe(2);
-    expect(rows.every((row) => row.contextId === `${tester.tenantId}:test-${row.id}`)).toBe(true);
-    expect(await simulated.simulatedClient(tester.tenantId, withClient.id)).toEqual({
+    expect(rows.every((row) => /^[\da-f-]{36}:t-[\da-f]{10}$/.test(row.contextId))).toBe(true);
+    expect(rows.every((row) => row.contextId.length <= 50)).toBe(true);
+    const keyOf = (id: string) => rows.find((row) => row.id === id)!.contextId.split(':t-')[1]!;
+    expect(await simulated.simulatedClient(tester.tenantId, keyOf(withClient.id))).toEqual({
       type: 'contact',
       id: 12,
     });
-    expect(await simulated.simulatedClient(randomUUID(), withClient.id)).toBeNull();
+    expect(await simulated.simulatedClient(randomUUID(), keyOf(withClient.id))).toBeNull();
   });
 
   it('conversa: pergunta e resposta gravadas, contexto da conversa e débito publicado', async () => {
@@ -151,8 +153,12 @@ describe('teste do agente', () => {
       message: { role: 'USER', text: 'Quais planos vocês têm?', status: 'ANSWERED' },
       reply: { role: 'AGENT', text: 'Olá! Como posso ajudar?', status: 'DELIVERED' },
     });
+    const [stored] = await db
+      .select()
+      .from(agentTestConversation)
+      .where(eq(agentTestConversation.id, conversation.id));
     expect(sent[0]!.input).toEqual({
-      contextId: `${tester.tenantId}:test-${conversation.id}`,
+      contextId: stored!.contextId,
       chatName: 'Teste — Ana',
       prompt: 'Quais planos vocês têm?',
     });
@@ -164,7 +170,7 @@ describe('teste do agente', () => {
           messageId: `test:${conversation.id}:${exchange.message.id}`,
           tenantId: tester.tenantId,
           agentId,
-          dialogId: `test-${conversation.id}`,
+          dialogId: stored!.contextId.split(':')[1],
           modelCode: 'GPT_5_MINI',
           source: 'test',
         }),
