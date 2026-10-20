@@ -27,7 +27,7 @@
 - Limite de 50 por agente: ao criar, apaga as mais antigas além de 49 na mesma transação.
 
 ### T2. Contexto e identificação
-- `context_id = "<tenantId>:test-<conversationId>"`; o chat no GPTMaker fica `public-api-<agente>-<tenantId>:test-<uuid>`, e `dialogFromChat` devolve `test-<uuid>`. O prefixo `test-` identifica a conversa de teste em todo o backend (função única `testConversationIdFrom(dialogId)` exportada pelo módulo).
+- `context_id = "<tenantId>:t-<chave>"` (chave aleatória de 10 hex, 49 caracteres); o chat no GPTMaker fica `public-api-<agente>-<tenantId>:t-<chave>`, e `dialogFromChat` devolve `t-<chave>`. O prefixo `t-` identifica a conversa de teste em todo o backend (`isTestDialog`/`testDialogKeyFrom` exportadas pelo módulo); a conversa é achada pelo `context_id` (único). O contexto precisa ser curto: com `<tenantId>:test-<uuid>` (78 caracteres) o GPTMaker respondeu `success: false` ("Transaction silently rolled back"); com 50 funcionou (staging, 2026-10-20).
 - `chatName = "Teste — <nome do usuário>"` (aparece no painel do GPTMaker para a equipe distinguir).
 - Excluir não apaga nada no GPTMaker; como o id é um UUID novo por conversa, o contexto nunca é reaproveitado.
 
@@ -40,18 +40,18 @@
 - *Alternativa*: fila RabbitMQ + polling/SSE. Rejeitada no MVP: o canal já é síncrono com 60 s e o modal fica aberto esperando; reavaliar se o tempo de resposta incomodar.
 
 ### T4. Débito pelo caminho do canal
-- Publica `usage.response` com `messageId = "test:<conversationId>:<userMessageId>"`, `dialogId = "test-<uuid>"`, `modelCode` do agente e `source: 'test'`.
+- Publica `usage.response` com `messageId = "test:<conversationId>:<userMessageId>"`, `dialogId = "t-<chave>"`, `modelCode` do agente e `source: 'test'`.
 - `UsageResponseEvent` ganha `source?: 'channel' | 'test'` e `replyMessageId` passa a opcional (teste não tem mensagem no Bitrix). O consumidor grava `refType: 'test_message'` quando `source === 'test'` (o lançamento identifica a resposta de teste); custo e idempotência iguais.
 - A reconciliação continua batendo: o GPTMaker conta as conversas de teste no `credits-spent` e o ledger tem os débitos correspondentes.
 
 ### T5. Cliente simulado
 - Seletor no modal usa `GET /app/crm/clients?query=` (módulo `semantic`, AppAuth `manage`): busca até 10 entre contatos (`crm.contact.list` por `%NAME`/`%LAST_NAME`), leads e empresas (`%TITLE`), e por telefone/e-mail via `crm.duplicate.findbycomm` quando a busca parecer um. Devolve tipo, id, nome e empresa; só nomes, sem campos.
 - A conversa guarda `client_type`, `client_id`, `client_name` (nome só para exibir).
-- `crm-tools.identifyClient`: `dialogId` com prefixo `test-` ⇒ `TestConversations.simulatedClient(tenantId, conversationId)` (exportado pelo `agent-test`, filtra pelo tenant da credencial) em vez de `imopenlines.dialog.get`. Sem cliente, conversa excluída ou de outro tenant ⇒ "não identificado".
+- `crm-tools.identifyClient`: `dialogId` com prefixo `t-` ⇒ `TestConversations.simulatedClient(tenantId, chave)` (exportado pelo `agent-test`, filtra pelo tenant da credencial) em vez de `imopenlines.dialog.get`. Sem cliente, conversa excluída ou de outro tenant ⇒ "não identificado".
 - Dependência `crm-tools → agent-test` (o `agent-test` não importa `crm-tools`).
 
 ### T6. Sem gatilhos e ações simuladas
-- `AgentEventIntake`: `dialogId` com prefixo `test-` ⇒ grava o `agent_event` (consulta) e **não publica** em `triggers.events`.
+- `AgentEventIntake`: `dialogId` com prefixo `t-` ⇒ grava o `agent_event` (consulta) e **não publica** em `triggers.events`.
 - `IntentionRunner`: `dialogId` de teste ⇒ não executa ações; responde `ok: true` com a mensagem "Em teste: as ações não foram executadas. Seriam: <rótulos>." (mesmos rótulos de `ACTION_LABELS`) e registra a execução com status `SUCCESS` e resultado `{ simulated: true }`.
 - Canal: conversas de teste não passam pelo canal (sem `dialog_state`, sem handoff).
 

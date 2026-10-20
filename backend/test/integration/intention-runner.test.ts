@@ -159,7 +159,7 @@ describe('intenção com ações no Bitrix24', () => {
     const outcome = await runner.run(
       intentionId,
       TOKEN,
-      body({ chat: `public-api-gm-x-${tenantId}:test-0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d` }),
+      body({ chat: `public-api-gm-x-${tenantId}:t-0a1b2c3d4e` }),
     );
     expect(outcome).toMatchObject({
       kind: 'reply',

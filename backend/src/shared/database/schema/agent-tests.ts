@@ -8,7 +8,7 @@ export const testClientType = pgEnum('agent_test_client_type', ['contact', 'lead
 
 /**
  * Conversa de teste com o agente (spec agent-test-chat, design T1/T2): contexto próprio no
- * GPTMaker (`<tenantId>:test-<id>`), nunca reutilizado; cliente do CRM simulado opcional.
+ * GPTMaker (`<tenantId>:t-<chave>`, curto: o GPTMaker falha com contexto longo), nunca reutilizado; cliente do CRM simulado opcional.
  */
 export const agentTestConversation = pgTable(
   'agent_test_conversation',

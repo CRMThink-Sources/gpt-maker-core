@@ -3,7 +3,9 @@ export { AgentTestModule } from './agent-test.module';
 export { TestConversations } from './test-conversations';
 export {
   isTestDialog,
+  newTestDialogKey,
   TEST_DIALOG_PREFIX,
   testContextId,
-  testConversationIdFrom,
+  testDialogKeyFrom,
+  testDialogOf,
 } from './test-dialog';

@@ -184,8 +184,8 @@ describe('CrmToolsService.identifyClient', () => {
 });
 
 describe('CrmToolsService.identifyClient em conversa de teste', () => {
-  const conversation = '0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d';
-  const testChat = `public-api-gm1-${caller.tenantId}:test-${conversation}`;
+  const conversation = '0a1b2c3d4e';
+  const testChat = `public-api-gm1-${caller.tenantId}:t-${conversation}`;
 
   it('usa o cliente simulado, sem consultar a Linha Aberta', async () => {
     const { crm, service } = setup();
@@ -200,7 +200,7 @@ describe('CrmToolsService.identifyClient em conversa de teste', () => {
     const { crm, service } = setup();
     simulated.clear();
     simulated.set(`tenant-b:${conversation}`, { type: 'contact', id: 12 });
-    for (const chat of [testChat, `public-api-gm1-${caller.tenantId}:test-nao-e-uuid`]) {
+    for (const chat of [testChat, `public-api-gm1-${caller.tenantId}:t-invalida`]) {
       expect((await service.identifyClient(caller, chat)).outcome).toBe('not_identified');
     }
     expect(crm.count('imopenlines.dialog.get')).toBe(0);
