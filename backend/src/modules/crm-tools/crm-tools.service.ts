@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { DEAL_PIPELINE_FIELD, DEAL_STAGE_FIELD } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { Counter, Histogram } from 'prom-client';
@@ -61,7 +62,15 @@ const CLIENT_TYPE_LABEL: Record<ClientType, string> = {
 /** Campos entregues à parte, fora da lista `campos`. */
 const DEAL_BASE = ['ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID'];
 const DEAL_DATES = ['DATE_CREATE', 'CLOSEDATE'];
-const OMIT_DEAL = new Set(['TITLE', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE', 'CLOSEDATE']);
+const OMIT_DEAL = new Set([
+  'TITLE',
+  'OPPORTUNITY',
+  'CURRENCY_ID',
+  'DATE_CREATE',
+  'CLOSEDATE',
+  DEAL_PIPELINE_FIELD,
+  DEAL_STAGE_FIELD,
+]);
 const OMIT_CLIENT = new Set(['NAME', 'SECOND_NAME', 'LAST_NAME', 'TITLE', 'ASSIGNED_BY_ID']);
 
 const calls = new Counter({
@@ -83,7 +92,8 @@ const duration = new Histogram({
  * documentos, chama a ferramenta de novo e acaba pedindo desculpas (visto em staging).
  */
 export const DATA_SCOPE =
-  'Dados disponíveis: o cadastro do cliente (só os campos liberados) e os negócios dele, com funil, etapa, situação, valor e datas. ' +
+  'Dados disponíveis: o cadastro do cliente e os negócios dele, só com os campos liberados pela empresa (por exemplo funil, etapa, valor e datas). ' +
+  'Dado que não veio não está liberado: não invente nem diga que vai buscar. ' +
   'Não há acesso a histórico de atividades, tarefas, e-mails, documentos nem anexos: não ofereça nem prometa esses dados; se o cliente pedir, diga que a equipe pode ajudar. ' +
   'Valor "não informado" significa que o negócio não tem valor cadastrado.';
 
@@ -199,7 +209,21 @@ export class CrmToolsService {
 
   pipelineStages(caller: CrmCaller, pipelineName?: string) {
     return this.run(caller, 'etapas_do_funil', async () => {
-      const metadata = await this.catalog.load(caller);
+      const [metadata, choices] = await Promise.all([
+        this.catalog.load(caller),
+        this.settings.forTenant(caller.tenantId),
+      ]);
+      // Funil ou etapa escondidos pela empresa: os funis também não são mostrados.
+      if (
+        !choices.exposed('deal', DEAL_PIPELINE_FIELD) ||
+        !choices.exposed('deal', DEAL_STAGE_FIELD)
+      ) {
+        return {
+          outcome: 'not_found',
+          count: 0,
+          body: { erro: 'Os funis e as etapas não estão liberados para consulta.' },
+        };
+      }
       const wanted = pipelineName?.trim() ? normalize(pipelineName) : null;
       const pipelines = wanted
         ? metadata.pipelines.filter((pipeline) => normalize(pipeline.name) === wanted)
@@ -364,11 +388,15 @@ export class CrmToolsService {
 
   private dealView(deal: Record<string, unknown>, ctx: TranslationContext) {
     const stage = stageOf(ctx.metadata.pipelines, deal.CATEGORY_ID, deal.STAGE_ID);
+    // A situação (ganha, perdida, em andamento) vem da etapa: some junto com ela.
+    const showPipeline = ctx.choices.exposed('deal', DEAL_PIPELINE_FIELD);
+    const showStage = ctx.choices.exposed('deal', DEAL_STAGE_FIELD);
     const amount = text(deal.OPPORTUNITY);
     const currency = text(deal.CURRENCY_ID);
     return {
       titulo: text(deal.TITLE) ?? 'Negócio sem título',
-      ...(stage ?? {}),
+      ...(stage && showPipeline ? { funil: stage.funil } : {}),
+      ...(stage && showStage ? { etapa: stage.etapa, situacao: stage.situacao } : {}),
       // Sem valor, diz isso: omitir fazia o agente prometer buscar o valor.
       valor:
         amount && Number(amount) > 0

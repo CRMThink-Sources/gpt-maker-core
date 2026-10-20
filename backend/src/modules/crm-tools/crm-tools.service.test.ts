@@ -232,6 +232,31 @@ describe('CrmToolsService: o que o agente recebe', () => {
   });
 });
 
+describe('CrmToolsService: funil e etapa escondidos', () => {
+  it('etapa escondida some com a situação; funil continua', async () => {
+    const { service } = setup([['deal', 'STAGE_ID', { exposed: false, description: '' }]]);
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    const result = await service.clientDeals(caller, ref, 'em_andamento');
+    const [deal] = result.body.negocios as Array<Record<string, unknown>>;
+    expect(deal).toMatchObject({ funil: 'Vendas B2B' });
+    expect(deal).not.toHaveProperty('etapa');
+    expect(deal).not.toHaveProperty('situacao');
+    expect(JSON.stringify(result.body)).not.toMatch(/Proposta enviada|Primeiro contato/);
+  });
+
+  it('funil escondido: some dos negócios e as etapas dos funis não são mostradas', async () => {
+    const { service } = setup([['deal', 'CATEGORY_ID', { exposed: false, description: '' }]]);
+    const identified = await service.identifyClient(caller, CHAT);
+    const deals = identified.body.negocios_em_andamento as Array<Record<string, unknown>>;
+    expect(deals[0]).not.toHaveProperty('funil');
+    expect(deals[0]).toHaveProperty('etapa');
+
+    const stages = await service.pipelineStages(caller);
+    expect(stages).toMatchObject({ outcome: 'not_found' });
+    expect(JSON.stringify(stages.body)).not.toContain('Vendas B2B');
+  });
+});
+
 describe('CrmToolsService.pipelineStages', () => {
   it('etapas de um funil pelo nome, sem acento nem caixa', async () => {
     const { service } = setup();

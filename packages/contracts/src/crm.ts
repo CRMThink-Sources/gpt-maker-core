@@ -83,9 +83,17 @@ export interface RawCrmCategory {
   isDefault?: string | boolean;
 }
 
+/** Funil e etapa do negócio: campos configuráveis, traduzidos pelos nomes dos funis do portal. */
+export const DEAL_PIPELINE_FIELD = 'CATEGORY_ID';
+export const DEAL_STAGE_FIELD = 'STAGE_ID';
+const DEAL_PIPELINE_FIELDS: Record<string, { label: string; type: string }> = {
+  [DEAL_PIPELINE_FIELD]: { label: 'Funil', type: 'crm_category' },
+  [DEAL_STAGE_FIELD]: { label: 'Etapa', type: 'crm_stage' },
+};
+
 /**
- * Códigos que o app trata à parte (funil, etapa, vínculos) ou que só têm sentido técnico: nunca
- * entram no catálogo como campo.
+ * Códigos que o app trata à parte (vínculos) ou que só têm sentido técnico: nunca entram no
+ * catálogo como campo. Funil e etapa do negócio entram à parte (`DEAL_PIPELINE_FIELDS`).
  */
 const TECHNICAL_FIELDS = new Set([
   'ID',
@@ -172,7 +180,13 @@ export function normalizeCrmFields(
   raw: Record<string, RawCrmField>,
   statusLists: Record<string, CrmOption[]> = {},
 ): SemanticField[] {
-  return Object.entries(raw)
+  const pipelineFields: SemanticField[] =
+    entity === 'deal'
+      ? Object.entries(DEAL_PIPELINE_FIELDS)
+          .filter(([code]) => code in raw)
+          .map(([code, field]) => ({ entity, code, custom: false, multiple: false, ...field }))
+      : [];
+  const fields = Object.entries(raw)
     .filter(([code, field]) => !TECHNICAL_FIELDS.has(code) && !UNSUPPORTED_TYPES.has(field.type))
     .map(([code, field]): SemanticField => {
       const custom = code.startsWith('UF_');
@@ -193,8 +207,10 @@ export function normalizeCrmFields(
         multiple: Boolean(field.isMultiple),
         ...(options ? { options } : {}),
       };
-    })
-    .sort((a, b) => Number(a.custom) - Number(b.custom) || a.label.localeCompare(b.label, 'pt-BR'));
+    });
+  return [...pipelineFields, ...fields].sort(
+    (a, b) => Number(a.custom) - Number(b.custom) || a.label.localeCompare(b.label, 'pt-BR'),
+  );
 }
 
 /** Itens de uma lista de `crm.status.list`, na ordem do portal. */
@@ -268,6 +284,8 @@ export const DEFAULT_EXPOSED_FIELDS: Record<CrmEntity, readonly string[]> = {
     'DATE_CREATE',
   ],
   deal: [
+    DEAL_PIPELINE_FIELD,
+    DEAL_STAGE_FIELD,
     'TITLE',
     'ASSIGNED_BY_ID',
     'OPPORTUNITY',

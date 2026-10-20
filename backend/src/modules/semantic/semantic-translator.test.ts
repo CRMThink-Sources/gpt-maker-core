@@ -197,6 +197,33 @@ describe('campos de data', () => {
   });
 });
 
+describe('funil e etapa', () => {
+  it('traduz pelo nome e nunca entrega o id', () => {
+    const withStage: CrmMetadata = {
+      ...metadata,
+      fields: {
+        ...metadata.fields,
+        deal: normalizeCrmFields('deal', {
+          CATEGORY_ID: { type: 'crm_category', title: 'Pipeline' },
+          STAGE_ID: { type: 'crm_status', title: 'Fase', statusType: 'DEAL_STAGE' },
+        }),
+      },
+    };
+    const values = translateRecord(
+      'deal',
+      { CATEGORY_ID: '3', STAGE_ID: 'C3:PREPARATION' },
+      { ...context(), metadata: withStage },
+    );
+    expect(values).toEqual(
+      expect.arrayContaining([
+        { campo: 'Funil', valor: 'Vendas B2B' },
+        { campo: 'Etapa', valor: 'Proposta enviada' },
+      ]),
+    );
+    expect(JSON.stringify(values)).not.toMatch(/C3:|"3"/);
+  });
+});
+
 describe('userIdsIn', () => {
   it('lista os responsáveis dos campos expostos, sem repetir', () => {
     expect(
