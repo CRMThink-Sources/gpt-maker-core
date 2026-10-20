@@ -18,7 +18,7 @@ import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { LedgerService } from '../billing';
-import { GptMakerClient } from '../gptmaker';
+import { GptMakerClient, GptMakerError } from '../gptmaker';
 
 type Status = (typeof reconciliationAdjustment.$inferSelect)['status'];
 
@@ -26,6 +26,30 @@ type Status = (typeof reconciliationAdjustment.$inferSelect)['status'];
 const PENDING_KEY = 'reconciliation:pending';
 /** Idem para agentes sem vínculo (`<id no GPTMaker>|<dia>`). */
 const PENDING_UNLINKED_KEY = 'reconciliation:pending-unlinked';
+/** Pendência mais velha que isso é abandonada (com aviso): o job não retenta para sempre. */
+export const MAX_PENDING_DAYS = 14;
+
+/**
+ * Agente que não existe mais no GPTMaker: removido lá, o `credits-spent` responde 400 (corpo
+ * vazio, visto em staging) e não vai mudar com nova tentativa.
+ */
+export function agentGone(error: unknown): boolean {
+  return error instanceof GptMakerError && (error.kind === 'NOT_FOUND' || error.status === 400);
+}
+
+/** Primeira falha (ms) além do prazo de retentativa. */
+export function pendingExpired(firstFailedAt: number, now: number = Date.now()): boolean {
+  return now - firstFailedAt > MAX_PENDING_DAYS * 86_400_000;
+}
+
+type AgentRow = {
+  id: string;
+  tenantId: string;
+  gptmakerAgentId: string;
+  /** Removido no app: um 400 do GPTMaker para ele é definitivo. */
+  deletedAt?: Date | null;
+};
+
 /** Decisões do operador: valem enquanto o consumo e o débito do dia não mudarem. */
 const REVIEWED: ReadonlySet<Status> = new Set(['APPROVED', 'DISMISSED']);
 const DAY_MS = 86_400_000;
@@ -132,6 +156,7 @@ export class ReconciliationService {
         id: agent.id,
         tenantId: agent.tenantId,
         gptmakerAgentId: agent.gptmakerAgentId,
+        deletedAt: agent.deletedAt,
       })
       .from(agent)
       .where(
@@ -191,9 +216,22 @@ export class ReconciliationService {
           );
         }
       });
-      await this.redis.srem(PENDING_UNLINKED_KEY, entry);
+      await this.clearPending(PENDING_UNLINKED_KEY, entry);
     } catch (error) {
-      await this.redis.sadd(PENDING_UNLINKED_KEY, entry);
+      // Sem registro local não dá para saber se o 400 (genérico no GPTMaker) é agente removido:
+      // só 404 ou o prazo esgotado tiram o órfão da fila.
+      if (
+        (error instanceof GptMakerError && error.kind === 'NOT_FOUND') ||
+        (await this.pendingTooLong(PENDING_UNLINKED_KEY, entry))
+      ) {
+        await this.clearPending(PENDING_UNLINKED_KEY, entry);
+        this.logger.warn(
+          { err: error, gptmakerAgentId, day },
+          'coleta de consumo de agente sem vínculo abandonada',
+        );
+        return;
+      }
+      await this.markPending(PENDING_UNLINKED_KEY, entry);
       this.logger.warn(
         { err: error, gptmakerAgentId, day },
         'coleta de consumo de agente sem vínculo falhou; pendente',
@@ -210,7 +248,12 @@ export class ReconciliationService {
     if (pending.length === 0) return [];
     const ids = [...new Set(pending.map((entry) => entry.split('|')[0]!))];
     const rows = await this.db
-      .select({ id: agent.id, tenantId: agent.tenantId, gptmakerAgentId: agent.gptmakerAgentId })
+      .select({
+        id: agent.id,
+        tenantId: agent.tenantId,
+        gptmakerAgentId: agent.gptmakerAgentId,
+        deletedAt: agent.deletedAt,
+      })
       .from(agent)
       .where(inArray(agent.id, ids));
     const outcomes: ReconciliationOutcome[] = [];
@@ -218,7 +261,7 @@ export class ReconciliationService {
       const [agentId, day] = entry.split('|') as [string, string];
       const row = rows.find((r) => r.id === agentId);
       if (!row) {
-        await this.redis.srem(PENDING_KEY, entry);
+        await this.clearPending(PENDING_KEY, entry);
         continue;
       }
       const outcome = await this.safely(row, day);
@@ -228,17 +271,46 @@ export class ReconciliationService {
   }
 
   /** Falha num agente vira pendência; os demais seguem. */
-  private async safely(
-    row: { id: string; tenantId: string; gptmakerAgentId: string },
-    day: string,
-  ): Promise<ReconciliationOutcome | null> {
+  /** Entra na fila guardando a primeira falha; a retentativa usa esse horário para o prazo. */
+  private async markPending(key: string, entry: string): Promise<void> {
+    await this.redis.sadd(key, entry);
+    await this.redis.hsetnx(`${key}:since`, entry, String(Date.now()));
+  }
+
+  private async clearPending(key: string, entry: string): Promise<void> {
+    await this.redis.srem(key, entry);
+    await this.redis.hdel(`${key}:since`, entry);
+  }
+
+  private async pendingTooLong(key: string, entry: string): Promise<boolean> {
+    const since = await this.redis.hget(`${key}:since`, entry);
+    return since !== null && pendingExpired(Number(since));
+  }
+
+  private async safely(row: AgentRow, day: string): Promise<ReconciliationOutcome | null> {
     const entry = `${row.id}|${day}`;
     try {
       const outcome = await this.reconcileAgentDay(row, day);
-      await this.redis.srem(PENDING_KEY, entry);
+      await this.clearPending(PENDING_KEY, entry);
       return outcome;
     } catch (error) {
-      await this.redis.sadd(PENDING_KEY, entry);
+      if (row.deletedAt && agentGone(error)) {
+        await this.clearPending(PENDING_KEY, entry);
+        this.logger.log(
+          { agentId: row.id, day },
+          'agente removido não existe mais no GPTMaker: consumo do dia indisponível, sem nova tentativa',
+        );
+        return null;
+      }
+      if (await this.pendingTooLong(PENDING_KEY, entry)) {
+        await this.clearPending(PENDING_KEY, entry);
+        this.logger.warn(
+          { err: error, agentId: row.id, day },
+          `reconciliação do agente abandonada após ${MAX_PENDING_DAYS} dias de tentativas`,
+        );
+        return null;
+      }
+      await this.markPending(PENDING_KEY, entry);
       this.logger.warn(
         { err: error, agentId: row.id, day },
         'reconciliação do agente falhou; pendente',
