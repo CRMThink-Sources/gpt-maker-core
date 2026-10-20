@@ -19,13 +19,13 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 `Modal` com `size: 'lg'`; API em `frontend/src/lib/agent-tests.ts`; verificação: typecheck/lint (~1h)
-- [ ] 4.2 Botão "Testar" no cabeçalho do agente (só gerentes e agente ativo) e modal com lista, nova conversa, conversa (enviar, "digitando…", erro com tentar de novo), excluir com confirmação e aviso de créditos; layout responsivo; verificação: typecheck/lint/build e uso manual no Bitrix (~8h)
-- [ ] 4.3 Passo "Simular cliente do CRM" na nova conversa, com busca e explicação quando o acesso ao CRM do agente está desligado; verificação: typecheck/lint/build e uso manual (~3h)
+- [x] 4.1 `Modal` com `size: 'lg'`; API em `frontend/src/lib/agent-tests.ts`; verificação: typecheck/lint (~1h)
+- [x] 4.2 Botão "Testar" no cabeçalho do agente (só gerentes e agente ativo) e modal com lista, nova conversa, conversa (enviar, "digitando…", erro com tentar de novo), excluir com confirmação e aviso de créditos; layout responsivo; verificação: typecheck/lint/build e uso manual no Bitrix (~8h)
+- [x] 4.3 Passo "Simular cliente do CRM" na nova conversa, com busca e explicação quando o acesso ao CRM do agente está desligado; verificação: typecheck/lint/build e uso manual (~3h)
 
 ## 5. Documentação e integração
 
-- [ ] 5.1 Documentar em `docs/agent-test-chat.md` (contexto por conversa, débito, simulação de ações, cliente simulado, limites); verificação: documento revisado junto do PR (~1h)
+- [x] 5.1 Documentar em `docs/agent-test-chat.md` (contexto por conversa, débito, simulação de ações, cliente simulado, limites); verificação: documento revisado junto do PR (~1h)
 - [ ] 5.2 Teste ponta a ponta em staging: conversa com e sem cliente simulado, débito no saldo, intenção com ação simulada, gatilho não disparado, excluir e criar nova conversa sem memória da anterior (~2h)
 
 ---

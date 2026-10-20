@@ -115,6 +115,10 @@ export const DatabaseIcon = (p: P) => (
 export const RefreshIcon = (p: P) => (
   <Icon {...p} d="M20 11a8 8 0 0 0-14.9-3.9M4 4v4h4m-4 5a8 8 0 0 0 14.9 3.9M20 20v-4h-4" />
 );
+export const TrashIcon = (p: P) => (
+  <Icon {...p} d="M4 7h16M10 11v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+);
+export const SendIcon = (p: P) => <Icon {...p} d="M5 12 3 4l18 8-18 8 2-8Zm0 0h7" />;
 export const ChatIcon = (p: P) => (
   <Icon {...p} d="M8 10h8m-8 4h5m-8 6 1.5-3.5A8 8 0 1 1 9 19.6L5 20Z" />
 );
