@@ -12,6 +12,7 @@ import {
   tenant,
 } from '../../shared/database/schema/index';
 import { REDIS } from '../../shared/redis/redis.module';
+import { isTestDialog } from '../agent-test';
 import { PendingHandoffs } from '../channel';
 import { ActionError, type ExecutableAction, TriggerActionExecutor } from '../triggers';
 
@@ -56,6 +57,20 @@ export function dialogFromChat(chat: string, tenantId: string): string | null {
   const marker = `${tenantId}:`;
   const at = chat.indexOf(marker);
   return at >= 0 ? chat.slice(at + marker.length) || null : null;
+}
+
+/** Resposta na conversa de teste: nada é executado no portal (spec agent-test-chat). */
+export function simulated(actions: Array<{ type: string }>): IntentionReply {
+  const labels = actions.map((action) => ACTION_LABELS[action.type] ?? action.type);
+  return {
+    ok: true,
+    message: `Conversa de teste: as ações não foram executadas no CRM. Seriam: ${labels.join('; ')}. Responda ao cliente como se tivessem sido feitas.`,
+    results: actions.map((action) => ({
+      type: action.type,
+      ok: true,
+      result: { simulated: true },
+    })),
+  };
 }
 
 /** Resumo para o agente: o que foi feito e o que falhou, sem detalhe técnico. */
@@ -159,6 +174,14 @@ export class IntentionRunner {
           'Não foi possível acessar o CRM agora. Diga ao cliente que a equipe vai dar continuidade.',
         results: [],
       });
+    }
+
+    if (isTestDialog(dialogId)) {
+      this.logger.log(
+        { intentionId: intention.id },
+        'intenção em conversa de teste: ações simuladas',
+      );
+      return record('SUCCESS', simulated(intention.actions));
     }
 
     // A versão da intenção entra na chave: depois de editar, a mesma chamada roda de novo.

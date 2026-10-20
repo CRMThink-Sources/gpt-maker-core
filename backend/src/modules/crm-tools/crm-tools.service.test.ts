@@ -12,6 +12,7 @@ import {
   type FieldSettingsService,
   UserNamesService,
 } from '../semantic';
+import type { TestConversations } from '../agent-test';
 import type { CrmCaller } from './crm-access.guard';
 import { CrmToolsService, MAX_DEALS } from './crm-tools.service';
 
@@ -22,6 +23,13 @@ const CHAT = `public-api-gm1-${caller.tenantId}:chat55`;
 const fakeDb = {
   update: () => ({ set: () => ({ where: async () => undefined }) }),
 } as unknown as Database;
+
+/** Conversas de teste: `<tenant>:<conversa>` ⇒ cliente simulado. */
+const simulated = new Map<string, { type: 'contact' | 'lead' | 'company'; id: number }>();
+const testConversations = {
+  simulatedClient: async (tenantId: string, conversationId: string) =>
+    simulated.get(`${tenantId}:${conversationId}`) ?? null,
+} as unknown as TestConversations;
 
 function setup(choices: Array<[string, string, FieldChoice]> = [], ratePerMinute = 60) {
   const crm = new FakeCrmPortal();
@@ -44,6 +52,7 @@ function setup(choices: Array<[string, string, FieldChoice]> = [], ratePerMinute
       DATA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
       CRM_TOOLS_RATE_PER_MINUTE: ratePerMinute,
     } as Env,
+    testConversations,
   );
 
   crm.records.contact['12'] = {
@@ -171,6 +180,30 @@ describe('CrmToolsService.identifyClient', () => {
     expect(third.outcome).toBe('rate_limited');
     // Outro agente tem a própria cota.
     expect((await service.pipelineStages({ ...caller, agentId: 'agent-2' })).outcome).toBe('ok');
+  });
+});
+
+describe('CrmToolsService.identifyClient em conversa de teste', () => {
+  const conversation = '0b7c4f0e-8d1f-4a3b-9c2d-1e2f3a4b5c6d';
+  const testChat = `public-api-gm1-${caller.tenantId}:test-${conversation}`;
+
+  it('usa o cliente simulado, sem consultar a Linha Aberta', async () => {
+    const { crm, service } = setup();
+    simulated.set(`${caller.tenantId}:${conversation}`, { type: 'contact', id: 12 });
+    const result = await service.identifyClient(caller, testChat);
+    expect(result.outcome).toBe('ok');
+    expect(result.body.cliente).toMatchObject({ nome: 'Maria Souza', tipo: 'contato' });
+    expect(crm.count('imopenlines.dialog.get')).toBe(0);
+  });
+
+  it('sem cliente, de outro tenant ou com id inválido: não identificado', async () => {
+    const { crm, service } = setup();
+    simulated.clear();
+    simulated.set(`tenant-b:${conversation}`, { type: 'contact', id: 12 });
+    for (const chat of [testChat, `public-api-gm1-${caller.tenantId}:test-nao-e-uuid`]) {
+      expect((await service.identifyClient(caller, chat)).outcome).toBe('not_identified');
+    }
+    expect(crm.count('imopenlines.dialog.get')).toBe(0);
   });
 });
 

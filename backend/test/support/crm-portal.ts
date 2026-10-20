@@ -164,9 +164,52 @@ export class FakeCrmPortal {
       }
       case 'crm.deal.list':
         return this.listDeals(params);
+      case 'crm.contact.list':
+      case 'crm.lead.list':
+      case 'crm.company.list':
+        return this.listLike(method.split('.')[1] as 'contact' | 'lead' | 'company', params);
+      case 'crm.duplicate.findbycomm':
+        return { result: this.findByComm(params) };
       default:
         throw new Error(`FakeCrmPortal: método não simulado ${method}`);
     }
+  }
+
+  /** Listagem com filtro `%CAMPO` (contém, sem caixa), como a busca de clientes usa. */
+  private listLike(entity: 'contact' | 'lead' | 'company', params: BitrixParams) {
+    const filter = (params.filter ?? {}) as Record<string, string>;
+    const rows = Object.values(this.records[entity]).filter((row) =>
+      Object.entries(filter).every(([key, value]) => {
+        const field = key.replace(/^%/, '');
+        return String(row[field] ?? '')
+          .toLowerCase()
+          .includes(String(value).toLowerCase());
+      }),
+    );
+    return { result: rows.slice(0, 50), total: rows.length };
+  }
+
+  /** `crm.duplicate.findbycomm`: ids por entidade com o telefone (dígitos) ou e-mail. */
+  private findByComm(params: BitrixParams) {
+    const type = String(params.type);
+    const [wanted] = params.values as string[];
+    const values = (row: Row) =>
+      ((row[type] as Array<{ VALUE: string }> | undefined) ?? []).map((item) =>
+        type === 'PHONE' ? item.VALUE.replace(/\D/g, '') : item.VALUE.toLowerCase(),
+      );
+    const found: Record<string, number[]> = {};
+    for (const [entity, key] of [
+      ['contact', 'CONTACT'],
+      ['lead', 'LEAD'],
+      ['company', 'COMPANY'],
+    ] as const) {
+      const ids = Object.values(this.records[entity])
+        .filter((row) => values(row).some((value) => value.endsWith(wanted!)))
+        .map((row) => Number(row.ID));
+      if (ids.length) found[key] = ids;
+    }
+    // O Bitrix devolve `[]` quando não acha nada.
+    return Object.keys(found).length ? found : [];
   }
 
   private listDeals(params: BitrixParams) {

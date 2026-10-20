@@ -23,9 +23,11 @@ export interface UsageResponseEvent {
   agentId: string;
   dialogId: string;
   modelCode: string;
-  /** Id da resposta no Bitrix. */
-  replyMessageId: number;
+  /** Id da resposta no Bitrix (ausente no teste do agente, que não passa pelo Bitrix). */
+  replyMessageId?: number | null;
   respondedAt: string;
+  /** `test`: resposta de conversa de teste do app (spec agent-test-chat); padrão `channel`. */
+  source?: 'channel' | 'test';
 }
 
 export type UsageDebitOutcome = 'debited' | 'duplicate' | 'unknown-model';
@@ -81,7 +83,7 @@ export class UsageDebitConsumer {
       modelCode: event.modelCode,
       unitCost: cost,
       agentId: event.agentId,
-      refType: 'message',
+      refType: event.source === 'test' ? 'test_message' : 'message',
       refId: event.messageId,
       createdBy: 'system:usage',
     });

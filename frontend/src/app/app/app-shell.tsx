@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import {
   BellIcon,
-  BoltIcon,
   BotIcon,
   CloseIcon,
   DatabaseIcon,
@@ -44,8 +43,7 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         match: (path) => path.startsWith('/app/crm'),
         requiresCrm: true,
       },
-      // Treinamentos ficam em cada agente (aba). Seções seguintes (10 e 12) entram quando existirem.
-      { label: 'Gatilhos', icon: BoltIcon },
+      // Treinamentos, intenções e gatilhos ficam em cada agente (abas).
       {
         label: 'Créditos e plano',
         icon: WalletIcon,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AgentTestModule } from '../agent-test';
 import { AgentsModule } from '../agents';
 import { BitrixModule } from '../bitrix';
 import { GptMakerModule } from '../gptmaker';
@@ -13,7 +14,14 @@ import { CrmToolsSync } from './crm-tools.sync';
 import { McpController } from './mcp.controller';
 
 @Module({
-  imports: [TenancyModule, AgentsModule, BitrixModule, GptMakerModule, SemanticModule],
+  imports: [
+    TenancyModule,
+    AgentsModule,
+    AgentTestModule,
+    BitrixModule,
+    GptMakerModule,
+    SemanticModule,
+  ],
   controllers: [CrmAccessController, CrmClientController, McpController],
   providers: [CrmAccessService, CrmAccessGuard, CrmToolsService, CrmToolsSync],
 })

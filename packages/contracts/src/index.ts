@@ -1,4 +1,5 @@
 export * from './admin';
+export * from './agent-tests';
 export * from './agents';
 export * from './credits';
 export * from './crm';

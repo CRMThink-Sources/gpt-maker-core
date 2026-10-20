@@ -119,6 +119,20 @@ describe('débito das respostas', () => {
     expect((await ledger.balance(tenantId)).total).toBe(98);
   });
 
+  it('resposta de teste do agente: mesmo custo, lançamento identificado e idempotente', async () => {
+    const response = event({
+      messageId: `test:conv-1:${Math.floor(Math.random() * 1_000_000)}`,
+      dialogId: 'test-conv-1',
+      replyMessageId: null,
+      source: 'test',
+    });
+    await expect(consumer.debit(response)).resolves.toBe('debited');
+    await expect(consumer.debit(response)).resolves.toBe('duplicate');
+    expect(await debitsOf(response.messageId)).toMatchObject([
+      { type: 'DEBIT', amount: -2, refType: 'test_message', agentId },
+    ]);
+  });
+
   it('reprocessar a mesma mensagem não debita de novo', async () => {
     const response = event({ modelCode: 'CLAUDE_4_5_HAIKU' });
     await consumer.debit(response);
