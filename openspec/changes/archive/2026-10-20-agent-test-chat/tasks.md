@@ -26,7 +26,7 @@
 ## 5. Documentação e integração
 
 - [x] 5.1 Documentar em `docs/agent-test-chat.md` (contexto por conversa, débito, simulação de ações, cliente simulado, limites); verificação: documento revisado junto do PR (~1h)
-- [ ] 5.2 Teste ponta a ponta em staging: conversa com e sem cliente simulado, débito no saldo, intenção com ação simulada, gatilho não disparado, excluir e criar nova conversa sem memória da anterior (~2h)
+- [x] 5.2 Teste ponta a ponta em staging: conversa com e sem cliente simulado, débito no saldo, intenção com ação simulada, gatilho não disparado, excluir e criar nova conversa sem memória da anterior (~2h)
 
 ---
 
