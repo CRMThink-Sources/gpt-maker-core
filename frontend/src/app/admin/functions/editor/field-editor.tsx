@@ -7,9 +7,23 @@ import type {
   MarkerOption,
 } from '@gptmaker/contracts';
 import { useState, type ReactNode } from 'react';
+import { ChevronDownIcon, PlusIcon } from '@/components/icons';
 import { Badge, buttonClass } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useFocusCard } from './focus';
+import {
+  AddPicker,
+  Code,
+  Disclosure,
+  IconButton,
+  Issues,
+  ItemActions,
+  KIND_STYLE,
+  Label,
+  Segmented,
+  TriState,
+  TypeIcon,
+} from './kit';
 import { MarkerText } from './marker-text';
 import {
   allIds,
@@ -43,6 +57,14 @@ export interface FieldContext {
   disabled?: boolean;
 }
 
+/** Tipos de pergunta no seletor "Adicionar pergunta". */
+const KIND_ITEMS = (Object.keys(KIND_LABELS) as FieldKind[]).map((kind) => ({
+  key: kind,
+  label: KIND_LABELS[kind],
+  hint: KIND_HINTS[kind],
+  ...KIND_STYLE[kind],
+}));
+
 function NumberInput({
   label,
   value,
@@ -70,82 +92,29 @@ function NumberInput({
   );
 }
 
-function Issues({ messages }: { messages: string[] }) {
-  if (!messages.length) return null;
-  return (
-    <ul className="mt-2 space-y-0.5 text-xs text-red-600">
-      {messages.map((message) => (
-        <li key={message}>{message}</li>
-      ))}
-    </ul>
-  );
-}
-
-function ItemButtons({
-  onUp,
-  onDown,
-  onRemove,
+/** Caixa de seleção com rótulo ao lado. */
+function Check({
+  label,
+  checked,
+  onChange,
   disabled,
-  removeLabel = 'Remover',
 }: {
-  onUp: () => void;
-  onDown: () => void;
-  onRemove: () => void;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
   disabled?: boolean;
-  removeLabel?: string;
 }) {
   return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        className={buttonClass('ghost', 'sm')}
+    <label className="flex items-center gap-2 text-sm text-zinc-700">
+      <input
+        type="checkbox"
+        className="size-4 rounded accent-brand-600"
+        checked={checked}
         disabled={disabled}
-        onClick={onUp}
-        aria-label="Subir"
-      >
-        ↑
-      </button>
-      <button
-        type="button"
-        className={buttonClass('ghost', 'sm')}
-        disabled={disabled}
-        onClick={onDown}
-        aria-label="Descer"
-      >
-        ↓
-      </button>
-      <button
-        type="button"
-        className={buttonClass('ghost-danger', 'sm')}
-        disabled={disabled}
-        onClick={onRemove}
-      >
-        {removeLabel}
-      </button>
-    </div>
-  );
-}
-
-/** Grupo recolhível que lembra se foi aberto (não fecha sozinho quando o conteúdo muda). */
-function Disclosure({
-  summary,
-  initialOpen,
-  className = '',
-  children,
-}: {
-  summary: ReactNode;
-  initialOpen: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(initialOpen);
-  return (
-    <details className={className} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary className="mb-2 cursor-pointer text-xs font-medium text-zinc-600 select-none">
-        {summary}
-      </summary>
-      {children}
-    </details>
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 
@@ -163,7 +132,6 @@ export function FieldList({
   addLabel?: string;
   empty?: ReactNode;
 }) {
-  const [adding, setAdding] = useState<FieldKind | ''>('');
   // A pergunta recém-criada já abre: o próximo passo é dar o rótulo.
   const [added, setAdded] = useState<number | null>(null);
 
@@ -172,16 +140,16 @@ export function FieldList({
     const id = uniqueId(makeId(ctx.prefix, label), ctx.takenIds);
     onChange([...fields, newField(kind, id, label)]);
     setAdded(fields.length);
-    setAdding('');
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {fields.length === 0 && empty}
       {fields.map((field, index) => (
         <FieldCard
           // Chave por posição: o id muda enquanto o rótulo é digitado.
           key={index}
+          index={index}
           field={field}
           ctx={ctx}
           isNew={index === added}
@@ -198,30 +166,13 @@ export function FieldList({
           }}
         />
       ))}
-      {!ctx.disabled && (
-        <div className="flex items-center gap-2">
-          <select
-            className={`${inputClass} mt-0 w-56`}
-            value={adding}
-            onChange={(e) => {
-              const kind = e.target.value as FieldKind | '';
-              if (kind) add(kind);
-            }}
-          >
-            <option value="">{addLabel}…</option>
-            {Object.entries(KIND_LABELS).map(([kind, label]) => (
-              <option key={kind} value={kind}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <AddPicker label={addLabel} items={KIND_ITEMS} onPick={add} disabled={ctx.disabled} />
     </div>
   );
 }
 
 function FieldCard({
+  index,
   field,
   ctx,
   isNew,
@@ -229,6 +180,7 @@ function FieldCard({
   onMove,
   onRemove,
 }: {
+  index: number;
   field: FunctionField;
   ctx: FieldContext;
   isNew: boolean;
@@ -249,6 +201,8 @@ function FieldCard({
     startOpen: isNew || issues.length > 0 || optionIssues,
   });
   const set = (patch: Partial<FunctionField>) => onChange({ ...field, ...patch } as FunctionField);
+  const style = KIND_STYLE[field.kind];
+  const invalid = issues.length > 0 || optionIssues;
 
   /** Rótulo novo: enquanto não publicado e com id automático, o id acompanha o rótulo. */
   function setLabel(label: string) {
@@ -280,42 +234,80 @@ function FieldCard({
   return (
     <div
       ref={ref}
-      className={`scroll-mt-4 rounded-lg border ${issues.length || optionIssues ? 'border-red-300' : 'border-zinc-200'} bg-white`}
+      className={`group scroll-mt-24 rounded-xl border bg-white transition-shadow ${
+        invalid
+          ? 'border-red-300 ring-1 ring-red-100'
+          : open
+            ? 'border-brand-200 shadow-md ring-1 ring-brand-100'
+            : 'border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
+      }`}
     >
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+      <div className="flex items-center gap-3 px-3 py-2.5">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
-          <span className="text-xs text-zinc-400">{open ? '▾' : '▸'}</span>
-          <span className="truncate text-sm font-medium text-zinc-900">{field.label}</span>
-          <Badge tone="zinc">{KIND_LABELS[field.kind]}</Badge>
-          {published && <Badge tone="amber">publicado</Badge>}
-          {!field.required && <span className="text-xs text-zinc-500">opcional</span>}
-          {(field.kind === 'CHOICE' || field.kind === 'MULTI_CHOICE') && !open && (
-            <span className="truncate text-xs text-zinc-500">
-              {field.options.map((option) => option.label).join(' · ')}
+          <TypeIcon icon={style.icon} tone={style.tone} />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400 tabular-nums">{index + 1}.</span>
+              <span className="truncate text-sm font-medium text-zinc-900">{field.label}</span>
+              {!field.required && <span className="shrink-0 text-xs text-zinc-400">opcional</span>}
+            </span>
+            <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-zinc-500">
+              {KIND_LABELS[field.kind]}
+              {(field.kind === 'CHOICE' || field.kind === 'MULTI_CHOICE') && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="truncate">
+                    {field.options.map((option) => option.label).join(', ')}
+                  </span>
+                </>
+              )}
+            </span>
+          </span>
+          {invalid && (
+            <Badge tone="red">
+              {issues.length === 0
+                ? 'problema nas opções'
+                : issues.length === 1
+                  ? '1 problema'
+                  : `${issues.length} problemas`}
+            </Badge>
+          )}
+          {published && (
+            <span
+              className="hidden shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 sm:inline"
+              title="Já saiu numa versão publicada: o identificador e o tipo ficam travados."
+            >
+              publicada
             </span>
           )}
         </button>
-        <ItemButtons
-          disabled={disabled}
-          onUp={() => onMove(-1)}
-          onDown={() => onMove(1)}
-          onRemove={onRemove}
-        />
+        <div className="opacity-60 transition-opacity group-hover:opacity-100">
+          <ItemActions
+            disabled={disabled}
+            onUp={() => onMove(-1)}
+            onDown={() => onMove(1)}
+            onRemove={onRemove}
+            removeLabel="Remover pergunta"
+          />
+        </div>
+        <IconButton label={open ? 'Recolher' : 'Expandir'} onClick={() => setOpen(!open)}>
+          <ChevronDownIcon className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </IconButton>
       </div>
-      {!open && (
-        <div className="px-4 pb-2">
+      {!open && issues.length > 0 && (
+        <div className="px-3 pb-3">
           <Issues messages={issues} />
         </div>
       )}
       {open && (
-        <div className="space-y-4 border-t border-zinc-100 px-4 py-4">
+        <div className="space-y-5 border-t border-zinc-100 px-4 py-4">
           <Issues messages={issues} />
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem]">
             <Field label="Pergunta (o cliente vê)">
               <input
                 className={inputClass}
@@ -324,14 +316,7 @@ function FieldCard({
                 onChange={(e) => setLabel(e.target.value)}
               />
             </Field>
-            <Field
-              label="Tipo"
-              hint={
-                published
-                  ? `${KIND_HINTS[field.kind]} Publicado: não muda de tipo.`
-                  : KIND_HINTS[field.kind]
-              }
-            >
+            <Field label="Tipo">
               <select
                 className={inputClass}
                 value={field.kind}
@@ -346,6 +331,10 @@ function FieldCard({
               </select>
             </Field>
           </div>
+          <p className="-mt-3 text-xs text-zinc-500">
+            {KIND_HINTS[field.kind]}
+            {published && ' Publicada: não muda de tipo.'}
+          </p>
           <Field label="Ajuda (opcional)" hint="Texto curto abaixo da pergunta.">
             <input
               className={inputClass}
@@ -354,32 +343,31 @@ function FieldCard({
               onChange={(e) => set({ help: e.target.value || undefined })}
             />
           </Field>
-          <div className="flex flex-wrap items-end gap-6">
-            <label className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg bg-zinc-50 px-3 py-2.5">
+            <Check
+              label="Obrigatória"
+              checked={field.required}
+              disabled={disabled}
+              onChange={(required) => set({ required })}
+            />
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-zinc-500">
+              <span className="shrink-0">Identificador</span>
               <input
-                type="checkbox"
-                className="size-4 accent-brand-600"
-                checked={field.required}
-                disabled={disabled}
-                onChange={(e) => set({ required: e.target.checked })}
-              />
-              Obrigatório
-            </label>
-            <Field
-              label="Identificador interno"
-              hint={
-                published
-                  ? 'Travado: as respostas guardadas pelos agentes usam este identificador.'
-                  : `Nasce da pergunta. No texto, entra como {{${field.id}}}.`
-              }
-            >
-              <input
-                className={`${inputClass} w-72 font-mono text-xs`}
+                className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 font-mono text-xs text-zinc-700 focus:border-brand-500 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-500"
                 value={field.id}
+                aria-label="Identificador interno"
+                title={
+                  published
+                    ? 'Travado: as respostas guardadas pelos agentes usam este identificador.'
+                    : 'Nasce da pergunta.'
+                }
                 disabled={disabled || Boolean(published)}
                 onChange={(e) => setId(e.target.value.trim())}
               />
-            </Field>
+              <span className="hidden shrink-0 lg:inline">
+                no texto: <Code>{`{{${field.id}}}`}</Code>
+              </span>
+            </div>
           </div>
           <KindSettings field={field} ctx={ctx} onChange={onChange} />
         </div>
@@ -401,66 +389,70 @@ function KindSettings({
   switch (field.kind) {
     case 'TEXT':
       return (
-        <div className="flex flex-wrap items-end gap-4">
-          <NumberInput
-            label="Máximo de caracteres"
-            value={field.maxLength}
-            min={1}
-            disabled={disabled}
-            onChange={(maxLength) => onChange({ ...field, maxLength })}
-          />
-          <label className="flex items-center gap-2 pb-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-brand-600"
-              checked={field.multiline}
+        <div>
+          <Label>Resposta</Label>
+          <div className="flex flex-wrap items-end gap-4">
+            <NumberInput
+              label="Máximo de caracteres"
+              value={field.maxLength}
+              min={1}
               disabled={disabled}
-              onChange={(e) => onChange({ ...field, multiline: e.target.checked })}
+              onChange={(maxLength) => onChange({ ...field, maxLength })}
             />
-            Várias linhas
-          </label>
-          <Field label="Exemplo (placeholder)">
-            <input
-              className={`${inputClass} w-72`}
-              value={field.placeholder ?? ''}
-              disabled={disabled}
-              onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
-            />
-          </Field>
+            <Field label="Exemplo (placeholder)">
+              <input
+                className={`${inputClass} w-72`}
+                value={field.placeholder ?? ''}
+                disabled={disabled}
+                onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+              />
+            </Field>
+            <div className="pb-2.5">
+              <Check
+                label="Várias linhas"
+                checked={field.multiline}
+                disabled={disabled}
+                onChange={(multiline) => onChange({ ...field, multiline })}
+              />
+            </div>
+          </div>
         </div>
       );
     case 'TEXT_LIST':
       return (
-        <div className="flex flex-wrap items-end gap-4">
-          <NumberInput
-            label="Mínimo de itens"
-            value={field.minItems}
-            min={0}
-            disabled={disabled}
-            onChange={(minItems) => onChange({ ...field, minItems })}
-          />
-          <NumberInput
-            label="Máximo de itens"
-            value={field.maxItems}
-            min={1}
-            disabled={disabled}
-            onChange={(maxItems) => onChange({ ...field, maxItems })}
-          />
-          <NumberInput
-            label="Caracteres por item"
-            value={field.itemMaxLength}
-            min={1}
-            disabled={disabled}
-            onChange={(itemMaxLength) => onChange({ ...field, itemMaxLength })}
-          />
-          <Field label="Exemplo (placeholder)">
-            <input
-              className={`${inputClass} w-64`}
-              value={field.placeholder ?? ''}
+        <div>
+          <Label>Itens</Label>
+          <div className="flex flex-wrap items-end gap-4">
+            <NumberInput
+              label="Mínimo de itens"
+              value={field.minItems}
+              min={0}
               disabled={disabled}
-              onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+              onChange={(minItems) => onChange({ ...field, minItems })}
             />
-          </Field>
+            <NumberInput
+              label="Máximo de itens"
+              value={field.maxItems}
+              min={1}
+              disabled={disabled}
+              onChange={(maxItems) => onChange({ ...field, maxItems })}
+            />
+            <NumberInput
+              label="Caracteres por item"
+              value={field.itemMaxLength}
+              min={1}
+              disabled={disabled}
+              onChange={(itemMaxLength) => onChange({ ...field, itemMaxLength })}
+            />
+            <Field label="Exemplo (placeholder)">
+              <input
+                className={`${inputClass} w-64`}
+                value={field.placeholder ?? ''}
+                disabled={disabled}
+                onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+              />
+            </Field>
+          </div>
         </div>
       );
     case 'URL':
@@ -493,7 +485,7 @@ function KindSettings({
     case 'BITRIX_USER':
     case 'BITRIX_STAGE':
       return (
-        <p className="text-xs text-zinc-500">
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           O cliente escolhe no Bitrix24. Use nas ações (responsável, funil e etapa).
         </p>
       );
@@ -506,7 +498,7 @@ function KindSettings({
 }
 
 const TONES = {
-  '': 'Não muda o tom',
+  '': 'Não muda',
   FORMAL: 'Formal',
   NORMAL: 'Cordial',
   RELAXED: 'Descontraído',
@@ -568,158 +560,175 @@ function OptionsEditor({
 
   return (
     <div className="space-y-3">
-      {field.kind === 'MULTI_CHOICE' && (
-        <Field label="Como juntar os trechos marcados">
-          <select
-            className={`${inputClass} w-72`}
-            value={field.separator === ', ' ? ', ' : '\n\n'}
-            disabled={disabled}
-            onChange={(e) => onChange({ ...field, separator: e.target.value })}
-          >
-            <option value={'\n\n'}>Linha em branco (seções)</option>
-            <option value=", ">Vírgula (itens de uma lista)</option>
-          </select>
-        </Field>
-      )}
-      <p className="text-sm font-medium text-zinc-800">Opções</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <Label
+          hint={`O texto da opção ${field.kind === 'CHOICE' ? 'escolhida' : 'marcada'} entra no lugar de {{${field.id}}} e precisa fazer sentido sozinho.`}
+        >
+          Opções ({field.options.length})
+        </Label>
+        {field.kind === 'MULTI_CHOICE' && (
+          <div className="mb-1.5 flex items-center gap-2 text-xs text-zinc-500">
+            Juntar marcadas com
+            <Segmented
+              label="Como juntar os trechos marcados"
+              disabled={disabled}
+              value={field.separator === ', ' ? 'comma' : 'blank'}
+              options={[
+                { value: 'blank', label: 'Linha em branco' },
+                { value: 'comma', label: 'Vírgula' },
+              ]}
+              onChange={(value) =>
+                onChange({ ...field, separator: value === 'comma' ? ', ' : '\n\n' })
+              }
+            />
+          </div>
+        )}
+      </div>
       {field.options.map((option, index) => {
         const optionIssues = ctx.issues(field.id, option.value);
+        const effects = effectSummary(option);
         return (
           <div
             key={index}
-            className={`rounded-lg border p-3 ${optionIssues.length ? 'border-red-300' : 'border-zinc-200'} bg-zinc-50/50`}
+            className={`rounded-xl border bg-zinc-50/70 p-3 ${optionIssues.length ? 'border-red-300' : 'border-zinc-200'}`}
           >
-            <div className="flex flex-wrap items-end gap-3">
-              <Field label="Rótulo (o cliente vê)">
-                <input
-                  className={`${inputClass} w-72`}
-                  value={option.label}
-                  disabled={disabled}
-                  onChange={(e) => setOptionLabel(index, e.target.value)}
-                />
-              </Field>
+            <div className="flex items-center gap-2">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-zinc-500 ring-1 ring-zinc-200">
+                {String.fromCharCode(65 + (index % 26))}
+              </span>
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 focus:border-brand-500 focus:ring-3 focus:ring-brand-100 focus:outline-none disabled:bg-zinc-50"
+                value={option.label}
+                aria-label="Rótulo da opção (o cliente vê)"
+                placeholder="Rótulo da opção"
+                disabled={disabled}
+                onChange={(e) => setOptionLabel(index, e.target.value)}
+              />
               <span
-                className="pb-2 font-mono text-xs text-zinc-500"
+                className="hidden sm:inline"
                 title="Identificador interno da opção: as condições das ações usam este valor."
               >
-                {option.value}
-                {publishedValues.includes(option.value) && ' · publicado'}
+                <Code>
+                  {option.value}
+                  {publishedValues.includes(option.value) && ' · publicada'}
+                </Code>
               </span>
-              <span className="flex-1" />
-              <ItemButtons
+              <ItemActions
                 disabled={disabled}
                 onUp={() => setOptions(moveItem(field.options, index, -1))}
                 onDown={() => setOptions(moveItem(field.options, index, 1))}
                 onRemove={() => setOptions(field.options.filter((_, i) => i !== index))}
+                removeLabel="Remover opção"
               />
             </div>
-            <div className="mt-3">
-              <p className="text-sm font-medium text-zinc-800">
-                {field.kind === 'CHOICE'
-                  ? 'Texto que entra no agente quando o cliente escolhe esta opção'
-                  : 'Texto que entra no agente quando o cliente marca esta opção'}
-              </p>
-              <p className="text-xs text-zinc-500">
-                Entra no lugar de {`{{${field.id}}}`}. Precisa fazer sentido sozinho.
-              </p>
+            <div className="mt-3 pl-8">
               <MarkerText
                 value={option.snippet}
                 markers={ctx.markers}
                 disabled={disabled}
+                placeholder="Texto que entra no agente com esta opção…"
                 onChange={(snippet) => setOption(index, { ...option, snippet })}
               />
-            </div>
-            <Disclosure
-              className="mt-3"
-              initialOpen={effectSummary(option).length > 0}
-              summary={
-                <>
-                  Efeitos no agente (opcional)
-                  {effectSummary(option).length > 0 && (
-                    <span className="ml-1 font-normal text-zinc-500">
-                      · {effectSummary(option).join(' · ')}
-                    </span>
-                  )}
-                </>
-              }
-            >
-              <div className="mt-2 flex flex-wrap items-end gap-3 text-sm">
-                <Field label="Efeito no tom">
-                  <select
-                    className={`${inputClass} w-44`}
-                    value={option.effects?.communicationType ?? ''}
-                    disabled={disabled}
-                    onChange={(e) => {
-                      const communicationType = (e.target.value || undefined) as
-                        'FORMAL' | 'NORMAL' | 'RELAXED' | undefined;
-                      setOption(index, {
-                        ...option,
-                        effects: { ...option.effects, communicationType },
-                      });
-                    }}
-                  >
-                    {Object.entries(TONES).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {SWITCHES.map(([key, label]) => {
-                  const current = option.effects?.settings?.[key];
-                  return (
-                    <Field key={key} label={label}>
-                      <select
-                        className={`${inputClass} w-36`}
-                        value={current === undefined ? '' : String(current)}
+              <div className="mt-2 space-y-2">
+                <Disclosure
+                  initialOpen={effects.length > 0}
+                  summary={
+                    <>
+                      Efeitos no agente
+                      <span className="ml-1 font-normal text-zinc-500">
+                        {effects.length > 0 ? `· ${effects.join(' · ')}` : '(opcional)'}
+                      </span>
+                    </>
+                  }
+                >
+                  <div className="divide-y divide-zinc-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0">
+                      <span className="text-sm text-zinc-700">Tom</span>
+                      <Segmented
+                        label="Efeito no tom"
                         disabled={disabled}
-                        onChange={(e) => {
-                          const settings = { ...option.effects?.settings };
-                          if (e.target.value === '') delete settings[key];
-                          else settings[key] = e.target.value === 'true';
-                          setOption(index, { ...option, effects: { ...option.effects, settings } });
-                        }}
+                        value={option.effects?.communicationType ?? ''}
+                        options={Object.entries(TONES).map(([value, label]) => ({
+                          value: value as keyof typeof TONES,
+                          label,
+                        }))}
+                        onChange={(value) =>
+                          setOption(index, {
+                            ...option,
+                            effects: {
+                              ...option.effects,
+                              communicationType: (value || undefined) as
+                                'FORMAL' | 'NORMAL' | 'RELAXED' | undefined,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    {SWITCHES.map(([key, label]) => (
+                      <div
+                        key={key}
+                        className="flex flex-wrap items-center justify-between gap-2 py-2 last:pb-0"
                       >
-                        <option value="">Não muda</option>
-                        <option value="true">Liga</option>
-                        <option value="false">Desliga</option>
-                      </select>
-                    </Field>
-                  );
-                })}
+                        <span className="text-sm text-zinc-700">{label}</span>
+                        <TriState
+                          label={label}
+                          disabled={disabled}
+                          unset="Não muda"
+                          on="Liga"
+                          off="Desliga"
+                          value={option.effects?.settings?.[key]}
+                          onChange={(value) => {
+                            const settings = { ...option.effects?.settings };
+                            if (value === undefined) delete settings[key];
+                            else settings[key] = value;
+                            setOption(index, {
+                              ...option,
+                              effects: { ...option.effects, settings },
+                            });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </Disclosure>
+                <Disclosure
+                  initialOpen={(option.dependents?.length ?? 0) > 0}
+                  summary={
+                    <>
+                      Perguntas que só aparecem com esta opção
+                      <span className="ml-1 font-normal text-zinc-500">
+                        {option.dependents?.length ? `(${option.dependents.length})` : '(opcional)'}
+                      </span>
+                    </>
+                  }
+                >
+                  <FieldList
+                    fields={option.dependents ?? []}
+                    ctx={ctx}
+                    addLabel="Adicionar pergunta dependente"
+                    onChange={(dependents, rename) =>
+                      setOption(
+                        index,
+                        { ...option, dependents: dependents.length ? dependents : undefined },
+                        rename,
+                      )
+                    }
+                  />
+                </Disclosure>
               </div>
-            </Disclosure>
-            <Disclosure
-              className="mt-3 border-l-2 border-brand-100 pl-3"
-              initialOpen={(option.dependents?.length ?? 0) > 0}
-              summary={
-                <>
-                  Perguntas que só aparecem com esta opção
-                  {option.dependents?.length ? ` (${option.dependents.length})` : ''}
-                </>
-              }
-            >
-              <FieldList
-                fields={option.dependents ?? []}
-                ctx={ctx}
-                addLabel="Adicionar pergunta dependente"
-                onChange={(dependents, rename) =>
-                  setOption(
-                    index,
-                    { ...option, dependents: dependents.length ? dependents : undefined },
-                    rename,
-                  )
-                }
-              />
-            </Disclosure>
-            <Issues messages={optionIssues} />
+              {optionIssues.length > 0 && (
+                <div className="mt-2">
+                  <Issues messages={optionIssues} />
+                </div>
+              )}
+            </div>
           </div>
         );
       })}
       {!disabled && (
         <button
           type="button"
-          className={buttonClass('secondary', 'sm')}
+          className={buttonClass('ghost', 'sm')}
           onClick={() =>
             setOptions([
               ...field.options,
@@ -730,7 +739,7 @@ function OptionsEditor({
             ])
           }
         >
-          Adicionar opção
+          <PlusIcon className="size-4" /> Adicionar opção
         </button>
       )}
     </div>
@@ -756,7 +765,7 @@ function KnowledgeSettings({
     field.format.replace(/\{\{\s*[a-z0-9_]+\s*\}\}/g, '').length +
     field.subfields.reduce((sum, sub) => sum + sub.maxLength, 0);
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <NumberInput
         label="Máximo de itens"
         value={field.maxItems}
@@ -764,89 +773,88 @@ function KnowledgeSettings({
         disabled={disabled}
         onChange={(maxItems) => onChange({ ...field, maxItems })}
       />
-      <p className="text-sm font-medium text-zinc-800">Campos de cada item</p>
-      {field.subfields.map((sub, index) => (
-        <div key={index} className="flex flex-wrap items-end gap-3">
-          <Field label="Nome">
-            <input
-              className={`${inputClass} w-48`}
-              value={sub.label}
-              disabled={disabled}
-              onChange={(e) => {
-                const auto = sub.id === slug(sub.label);
-                setSub(index, {
-                  label: e.target.value,
-                  ...(auto ? { id: slug(e.target.value) } : {}),
-                });
-              }}
-            />
-          </Field>
-          <span className="pb-2 font-mono text-xs text-zinc-500">{`{{${sub.id}}}`}</span>
-          <NumberInput
-            label="Caracteres"
-            value={sub.maxLength}
-            min={1}
-            disabled={disabled}
-            onChange={(maxLength) => setSub(index, { maxLength })}
-          />
-          <label className="flex items-center gap-2 pb-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-brand-600"
-              checked={sub.required}
-              disabled={disabled}
-              onChange={(e) => setSub(index, { required: e.target.checked })}
-            />
-            Obrigatório
-          </label>
-          <label className="flex items-center gap-2 pb-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-brand-600"
-              checked={sub.multiline}
-              disabled={disabled}
-              onChange={(e) => setSub(index, { multiline: e.target.checked })}
-            />
-            Várias linhas
-          </label>
-          {field.subfields.length > 1 && !disabled && (
-            <button
-              type="button"
-              className={buttonClass('ghost-danger', 'sm')}
-              onClick={() =>
-                onChange({ ...field, subfields: field.subfields.filter((_, i) => i !== index) })
-              }
-            >
-              Remover
-            </button>
-          )}
-        </div>
-      ))}
-      {!disabled && field.subfields.length < 6 && (
-        <button
-          type="button"
-          className={buttonClass('secondary', 'sm')}
-          onClick={() =>
-            onChange({
-              ...field,
-              subfields: [
-                ...field.subfields,
-                {
-                  id: uniqueId('campo', new Set(field.subfields.map((s) => s.id))),
-                  label: 'Campo',
-                  required: false,
-                  maxLength: 100,
-                  multiline: false,
-                },
-              ],
-            })
-          }
-        >
-          Adicionar campo do item
-        </button>
-      )}
       <div>
-        <p className="text-sm font-medium text-zinc-800">Texto do treinamento de cada item</p>
+        <Label>Campos de cada item</Label>
+        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+          {field.subfields.map((sub, index) => (
+            <div key={index} className="flex flex-wrap items-center gap-3 px-3 py-2">
+              <input
+                className="w-44 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                value={sub.label}
+                aria-label="Nome do campo"
+                disabled={disabled}
+                onChange={(e) => {
+                  const auto = sub.id === slug(sub.label);
+                  setSub(index, {
+                    label: e.target.value,
+                    ...(auto ? { id: slug(e.target.value) } : {}),
+                  });
+                }}
+              />
+              <Code>{`{{${sub.id}}}`}</Code>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                até
+                <input
+                  type="number"
+                  className="w-20 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                  value={sub.maxLength}
+                  min={1}
+                  disabled={disabled}
+                  onChange={(e) => setSub(index, { maxLength: Math.trunc(Number(e.target.value)) })}
+                />
+                caracteres
+              </label>
+              <span className="flex-1" />
+              <Check
+                label="Obrigatório"
+                checked={sub.required}
+                disabled={disabled}
+                onChange={(required) => setSub(index, { required })}
+              />
+              <Check
+                label="Várias linhas"
+                checked={sub.multiline}
+                disabled={disabled}
+                onChange={(multiline) => setSub(index, { multiline })}
+              />
+              {field.subfields.length > 1 && (
+                <ItemActions
+                  disabled={disabled}
+                  removeLabel="Remover campo"
+                  onRemove={() =>
+                    onChange({ ...field, subfields: field.subfields.filter((_, i) => i !== index) })
+                  }
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        {!disabled && field.subfields.length < 6 && (
+          <button
+            type="button"
+            className={`${buttonClass('ghost', 'sm')} mt-1`}
+            onClick={() =>
+              onChange({
+                ...field,
+                subfields: [
+                  ...field.subfields,
+                  {
+                    id: uniqueId('campo', new Set(field.subfields.map((s) => s.id))),
+                    label: 'Campo',
+                    required: false,
+                    maxLength: 100,
+                    multiline: false,
+                  },
+                ],
+              })
+            }
+          >
+            <PlusIcon className="size-4" /> Adicionar campo do item
+          </button>
+        )}
+      </div>
+      <div>
+        <Label>Texto do treinamento de cada item</Label>
         <MarkerText
           value={field.format}
           rows={3}

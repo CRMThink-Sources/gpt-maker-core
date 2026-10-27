@@ -18,7 +18,7 @@ import { errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
-import { BehaviorMeter, FunctionForm } from '../../function-form';
+import { BehaviorMeter, FunctionForm, FunctionFormOutline } from '../../function-form';
 import { BehaviorDiff, FunctionPreviewView } from '../../function-preview';
 import { useAgent } from '../agent-context';
 
@@ -426,22 +426,42 @@ export default function AgentFunctionPage() {
         </Card>
       )}
 
-      {mode !== 'TAKEN_OVER' && (
-        <BehaviorMeter
-          form={config.form}
-          answers={answers}
-          agentName={agent.name}
-          mode={mode}
-          additionalInstructions={additional}
-        />
-      )}
-      <FunctionForm
-        form={config.form}
-        answers={answers}
-        onChange={setAnswers}
-        issues={issues}
-        disabled={locked || busy}
-      />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="min-w-0 space-y-4">
+          {mode !== 'TAKEN_OVER' && (
+            <div className="xl:hidden">
+              <BehaviorMeter
+                form={config.form}
+                answers={answers}
+                agentName={agent.name}
+                mode={mode}
+                additionalInstructions={additional}
+              />
+            </div>
+          )}
+          <FunctionForm
+            form={config.form}
+            answers={answers}
+            onChange={setAnswers}
+            issues={issues}
+            disabled={locked || busy}
+          />
+        </div>
+        <aside className="hidden space-y-4 xl:sticky xl:top-6 xl:block xl:self-start">
+          {mode !== 'TAKEN_OVER' && (
+            <BehaviorMeter
+              form={config.form}
+              answers={answers}
+              agentName={agent.name}
+              mode={mode}
+              additionalInstructions={additional}
+            />
+          )}
+          <div className="rounded-2xl border border-zinc-200/80 bg-white p-3 shadow-xs">
+            <FunctionFormOutline form={config.form} answers={answers} issues={issues} />
+          </div>
+        </aside>
+      </div>
 
       {!readOnly && (
         <div className="sticky bottom-4 z-10 flex items-center justify-end gap-2 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">

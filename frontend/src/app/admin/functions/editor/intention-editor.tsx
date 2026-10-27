@@ -8,9 +8,30 @@ import {
   intentionFieldTypeSchema,
 } from '@gptmaker/contracts';
 import { useState } from 'react';
+import {
+  BoltIcon,
+  ChatIcon,
+  ChevronDownIcon,
+  PlusIcon,
+  RefreshIcon,
+  SparkIcon,
+  UserIcon,
+  UsersIcon,
+  CheckSquareIcon,
+} from '@/components/icons';
 import { Badge, buttonClass } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useFocusCard } from './focus';
+import {
+  AddPicker,
+  Code,
+  IconButton,
+  Issues,
+  ItemActions,
+  Label,
+  Segmented,
+  TypeIcon,
+} from './kit';
 import { MarkerText } from './marker-text';
 import { type DraftAction, type DraftIntention, moveItem, slug, uniqueId } from './model';
 
@@ -22,6 +43,46 @@ export const ACTION_TYPES: Record<string, string> = {
   START_BIZPROC: 'Iniciar processo de negócio',
   TRANSFER_TO_HUMAN: 'Transferir para atendente',
 };
+
+/** Ícone, cor e explicação de cada passo no seletor. */
+const ACTION_STYLE: Record<string, { icon: typeof BoltIcon; tone: string; hint: string }> = {
+  TIMELINE_COMMENT: {
+    icon: ChatIcon,
+    tone: 'bg-sky-50 text-sky-600',
+    hint: 'Registra um comentário na timeline do CRM.',
+  },
+  CREATE_LEAD: {
+    icon: SparkIcon,
+    tone: 'bg-emerald-50 text-emerald-600',
+    hint: 'Cria um lead com os campos que você mapear.',
+  },
+  UPSERT_DEAL: {
+    icon: RefreshIcon,
+    tone: 'bg-emerald-50 text-emerald-600',
+    hint: 'Cria ou move um negócio no funil e etapa.',
+  },
+  CREATE_TASK: {
+    icon: CheckSquareIcon,
+    tone: 'bg-amber-50 text-amber-600',
+    hint: 'Cria uma tarefa para um responsável.',
+  },
+  START_BIZPROC: {
+    icon: BoltIcon,
+    tone: 'bg-brand-50 text-brand-600',
+    hint: 'Dispara um processo de negócio do Bitrix24.',
+  },
+  TRANSFER_TO_HUMAN: {
+    icon: UsersIcon,
+    tone: 'bg-rose-50 text-rose-600',
+    hint: 'Passa a conversa para um atendente.',
+  },
+};
+
+const ACTION_ITEMS = Object.entries(ACTION_TYPES).map(([key, label]) => ({
+  key,
+  label,
+  ...ACTION_STYLE[key]!,
+}));
 
 /** Campos comuns de lead e negócio no Bitrix24: sugestões do código, que continua livre. */
 const CRM_FIELDS: Record<string, string> = {
@@ -92,11 +153,17 @@ export function IntentionList({
   // A ação recém-criada já abre: o próximo passo é dar o nome.
   const [added, setAdded] = useState<number | null>(null);
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {intentions.length === 0 && (
-        <p className="text-sm text-zinc-500">
-          Nenhuma ação própria. As dos blocos incluídos entram sozinhas.
-        </p>
+        <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-8 text-center">
+          <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+            <BoltIcon className="size-5" />
+          </span>
+          <p className="mt-3 text-sm font-medium text-zinc-800">Nenhuma ação própria</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            As ações dos blocos incluídos entram sozinhas.
+          </p>
+        </div>
       )}
       {intentions.map((intention, index) => (
         <IntentionCard
@@ -118,7 +185,7 @@ export function IntentionList({
       {!disabled && (
         <button
           type="button"
-          className={buttonClass('secondary', 'sm')}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700"
           onClick={() => {
             const key = uniqueId('nova_acao', new Set(intentions.map((item) => item.key)));
             setAdded(intentions.length);
@@ -136,7 +203,7 @@ export function IntentionList({
             ]);
           }}
         >
-          Adicionar ação
+          <PlusIcon className="size-4" /> Adicionar ação
         </button>
       )}
     </div>
@@ -182,225 +249,233 @@ function IntentionCard({
     startOpen: isNew || own.length > 0 || actionIssues,
   });
   const set = (patch: Partial<DraftIntention>) => onChange({ ...intention, ...patch });
+  const invalid = own.length > 0 || actionIssues;
 
   return (
     <div
       ref={ref}
-      className={`scroll-mt-4 rounded-lg border ${own.length || actionIssues ? 'border-red-300' : 'border-zinc-200'} bg-white`}
+      className={`group scroll-mt-24 rounded-xl border bg-white transition-shadow ${
+        invalid
+          ? 'border-red-300 ring-1 ring-red-100'
+          : open
+            ? 'border-brand-200 shadow-md ring-1 ring-brand-100'
+            : 'border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
+      }`}
     >
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+      <div className="flex items-center gap-3 px-3 py-2.5">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
-          <span className="text-xs text-zinc-400">{open ? '▾' : '▸'}</span>
-          <span className="truncate text-sm font-medium text-zinc-900">{intention.name}</span>
-          {intention.when && <Badge tone="zinc">condicional</Badge>}
-          {published && <Badge tone="amber">publicada</Badge>}
-          {!open && (
-            <span className="truncate text-xs text-zinc-500">
-              {intention.actions
-                .map((action) => ACTION_TYPES[action.type] ?? action.type)
-                .join(' → ')}
+          <TypeIcon icon={BoltIcon} tone="bg-brand-50 text-brand-600" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium text-zinc-900">{intention.name}</span>
+              {intention.when && <Badge tone="brand">condicional</Badge>}
+            </span>
+            <span className="mt-1 flex flex-wrap items-center gap-1">
+              {intention.actions.map((action, index) => {
+                const style = ACTION_STYLE[action.type];
+                return (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600"
+                  >
+                    {style && <style.icon className="size-3" />}
+                    {ACTION_TYPES[action.type] ?? action.type}
+                  </span>
+                );
+              })}
+            </span>
+          </span>
+          {invalid && <Badge tone="red">com problema</Badge>}
+          {published && (
+            <span
+              className="hidden shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 sm:inline"
+              title="Já saiu numa versão publicada: o identificador fica travado."
+            >
+              publicada
             </span>
           )}
         </button>
-        {!disabled && (
-          <div className="flex gap-1">
-            <button
-              type="button"
-              className={buttonClass('ghost', 'sm')}
-              onClick={() => onMove(-1)}
-              aria-label="Subir"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className={buttonClass('ghost', 'sm')}
-              onClick={() => onMove(1)}
-              aria-label="Descer"
-            >
-              ↓
-            </button>
-            <button type="button" className={buttonClass('ghost-danger', 'sm')} onClick={onRemove}>
-              Remover
-            </button>
-          </div>
-        )}
+        <div className="opacity-60 transition-opacity group-hover:opacity-100">
+          <ItemActions
+            disabled={disabled}
+            onUp={() => onMove(-1)}
+            onDown={() => onMove(1)}
+            onRemove={onRemove}
+            removeLabel="Remover ação"
+          />
+        </div>
+        <IconButton label={open ? 'Recolher' : 'Expandir'} onClick={() => setOpen(!open)}>
+          <ChevronDownIcon className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </IconButton>
       </div>
       {own.length > 0 && (
-        <ul className="px-4 pb-2 text-xs text-red-600">
-          {own.map((message) => (
-            <li key={message}>{message}</li>
-          ))}
-        </ul>
+        <div className="px-3 pb-3">
+          <Issues messages={own} />
+        </div>
       )}
       {open && (
-        <div className="space-y-4 border-t border-zinc-100 px-4 py-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nome (o agente cita pelo nome)">
-              <input
-                className={inputClass}
-                value={intention.name}
-                disabled={disabled}
-                onChange={(e) => {
-                  set({
-                    name: e.target.value,
-                    ...(autoKey && !published && e.target.value
-                      ? { key: slug(e.target.value) }
-                      : {}),
-                  });
-                }}
-              />
-            </Field>
-            <Field
-              label="Identificador interno"
-              hint={
-                published
-                  ? 'Travado: liga esta ação à que os agentes já têm.'
-                  : 'Nasce do nome. Depois de publicar, fica travado.'
-              }
-            >
-              <input
-                className={`${inputClass} font-mono text-xs`}
-                value={intention.key}
-                disabled={disabled || published}
-                onChange={(e) => {
-                  setAutoKey(false);
-                  set({ key: slug(e.target.value) });
-                }}
-              />
-            </Field>
-          </div>
-          <Field
-            label="Quando o agente usa"
-            hint="Descreva a situação, ex.: quando o cliente pedir um orçamento."
-          >
-            <MarkerText
-              value={intention.whenToUse}
-              markers={markers}
-              allowRuntime
-              disabled={disabled}
-              onChange={(whenToUse) => set({ whenToUse })}
-            />
-          </Field>
-          <ConditionInput
-            label="Só existe quando o cliente escolhe"
-            value={intention.when}
-            choices={choices}
-            disabled={disabled}
-            onChange={(when) => set({ when })}
-          />
-          <div>
-            <p className="text-sm font-medium text-zinc-800">O que o agente coleta</p>
-            <Field
-              label="Perguntas de uma lista do formulário"
-              hint="Cada item vira um campo coletado; {{intencao.respostas}} lista pergunta e resposta."
-            >
-              <select
-                className={`${inputClass} w-72`}
-                value={intention.collectFrom ?? ''}
-                disabled={disabled}
-                onChange={(e) => set({ collectFrom: e.target.value || undefined })}
+        <div className="space-y-6 border-t border-zinc-100 px-4 py-4">
+          <div className="space-y-4">
+            <Label>Quando</Label>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_16rem]">
+              <Field label="Nome (o agente cita pelo nome)">
+                <input
+                  className={inputClass}
+                  value={intention.name}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    set({
+                      name: e.target.value,
+                      ...(autoKey && !published && e.target.value
+                        ? { key: slug(e.target.value) }
+                        : {}),
+                    });
+                  }}
+                />
+              </Field>
+              <Field
+                label="Identificador interno"
+                hint={
+                  published
+                    ? 'Travado: liga esta ação à que os agentes já têm.'
+                    : 'Nasce do nome. Depois de publicar, fica travado.'
+                }
               >
-                <option value="">Nenhuma</option>
-                {lists.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
+                <input
+                  className={`${inputClass} font-mono text-xs`}
+                  value={intention.key}
+                  disabled={disabled || published}
+                  onChange={(e) => {
+                    setAutoKey(false);
+                    set({ key: slug(e.target.value) });
+                  }}
+                />
+              </Field>
+            </div>
+            <Field
+              label="Quando o agente usa"
+              hint="Descreva a situação, ex.: quando o cliente pedir um orçamento."
+            >
+              <MarkerText
+                value={intention.whenToUse}
+                markers={markers}
+                allowRuntime
+                disabled={disabled}
+                onChange={(whenToUse) => set({ whenToUse })}
+              />
             </Field>
-            <div className="mt-3 space-y-2">
-              {intention.fields.map((field, index) => (
-                <div key={index} className="flex flex-wrap items-end gap-2">
-                  <Field label="Campo">
-                    <input
-                      className={`${inputClass} w-44`}
-                      value={field.name}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        set({
-                          fields: intention.fields.map((f, i) =>
-                            i === index ? { ...f, name: e.target.value } : f,
-                          ),
-                        })
-                      }
-                    />
-                  </Field>
-                  <span className="pb-2 font-mono text-xs text-zinc-500">{`{{fields.${slug(field.name)}}}`}</span>
-                  <Field label="Descrição">
-                    <input
-                      className={`${inputClass} w-72`}
-                      value={field.description}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        set({
-                          fields: intention.fields.map((f, i) =>
-                            i === index ? { ...f, description: e.target.value } : f,
-                          ),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Tipo">
-                    <select
-                      className={`${inputClass} w-32`}
-                      value={field.type}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        set({
-                          fields: intention.fields.map((f, i) =>
-                            i === index
-                              ? { ...f, type: intentionFieldTypeSchema.parse(e.target.value) }
-                              : f,
-                          ),
-                        })
-                      }
-                    >
-                      {Object.entries(FIELD_TYPES).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <label className="flex items-center gap-2 pb-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-brand-600"
-                      checked={field.required}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        set({
-                          fields: intention.fields.map((f, i) =>
-                            i === index ? { ...f, required: e.target.checked } : f,
-                          ),
-                        })
-                      }
-                    />
-                    Obrigatório
-                  </label>
-                  {!disabled && (
-                    <button
-                      type="button"
-                      className={buttonClass('ghost-danger', 'sm')}
-                      onClick={() =>
-                        set({ fields: intention.fields.filter((_, i) => i !== index) })
-                      }
-                    >
-                      Remover
-                    </button>
-                  )}
+            <ConditionInput
+              label="Só existe quando o cliente escolhe"
+              value={intention.when}
+              choices={choices}
+              disabled={disabled}
+              onChange={(when) => set({ when })}
+            />
+          </div>
+
+          <div>
+            <Label hint="Dados que o agente pede ao cliente antes de executar.">
+              O que o agente coleta
+            </Label>
+            <div className="space-y-3">
+              <Field
+                label="Perguntas de uma lista do formulário"
+                hint="Cada item vira um campo coletado; {{intencao.respostas}} lista pergunta e resposta."
+              >
+                <select
+                  className={`${inputClass} w-72`}
+                  value={intention.collectFrom ?? ''}
+                  disabled={disabled}
+                  onChange={(e) => set({ collectFrom: e.target.value || undefined })}
+                >
+                  <option value="">Nenhuma</option>
+                  {lists.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {intention.fields.length > 0 && (
+                <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+                  {intention.fields.map((field, index) => {
+                    const setField = (patch: Partial<typeof field>) =>
+                      set({
+                        fields: intention.fields.map((f, i) =>
+                          i === index ? { ...f, ...patch } : f,
+                        ),
+                      });
+                    return (
+                      <div
+                        key={index}
+                        className="grid items-center gap-2 px-3 py-2 sm:grid-cols-[11rem_minmax(0,1fr)_8rem_auto_auto]"
+                      >
+                        <div className="min-w-0">
+                          <input
+                            className="w-full rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                            value={field.name}
+                            aria-label="Nome do campo"
+                            disabled={disabled}
+                            onChange={(e) => setField({ name: e.target.value })}
+                          />
+                          <span className="mt-0.5 block truncate">
+                            <Code>{`{{fields.${slug(field.name)}}}`}</Code>
+                          </span>
+                        </div>
+                        <input
+                          className="min-w-0 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                          value={field.description}
+                          placeholder="Descrição para o agente"
+                          aria-label="Descrição"
+                          disabled={disabled}
+                          onChange={(e) => setField({ description: e.target.value })}
+                        />
+                        <select
+                          className="rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                          value={field.type}
+                          aria-label="Tipo"
+                          disabled={disabled}
+                          onChange={(e) =>
+                            setField({ type: intentionFieldTypeSchema.parse(e.target.value) })
+                          }
+                        >
+                          {Object.entries(FIELD_TYPES).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-brand-600"
+                            checked={field.required}
+                            disabled={disabled}
+                            onChange={(e) => setField({ required: e.target.checked })}
+                          />
+                          Obrigatório
+                        </label>
+                        <ItemActions
+                          disabled={disabled}
+                          removeLabel="Remover campo"
+                          onRemove={() =>
+                            set({ fields: intention.fields.filter((_, i) => i !== index) })
+                          }
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
               {!disabled && (
                 <button
                   type="button"
-                  className={buttonClass('secondary', 'sm')}
+                  className={buttonClass('ghost', 'sm')}
                   onClick={() =>
                     set({
                       fields: [
@@ -410,74 +485,85 @@ function IntentionCard({
                     })
                   }
                 >
-                  Adicionar campo coletado
+                  <PlusIcon className="size-4" /> Adicionar campo coletado
                 </button>
               )}
             </div>
           </div>
+
           <div>
-            <p className="text-sm font-medium text-zinc-800">O que acontece no Bitrix24</p>
-            <div className="mt-2 space-y-3">
+            <Label hint="Executados em ordem, de cima para baixo.">
+              O que acontece no Bitrix24
+            </Label>
+            <ol className="relative space-y-3">
               {intention.actions.map((action, index) => (
-                <ActionCard
-                  key={index}
-                  action={action}
-                  fields={fields}
-                  choices={choices}
-                  markers={markers}
-                  issues={issues(intention.key, index)}
-                  disabled={disabled}
-                  onChange={(next) =>
-                    set({ actions: intention.actions.map((a, i) => (i === index ? next : a)) })
-                  }
-                  onMove={(delta) => set({ actions: moveItem(intention.actions, index, delta) })}
-                  onRemove={() => set({ actions: intention.actions.filter((_, i) => i !== index) })}
-                />
+                <li key={index} className="relative flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">
+                      {index + 1}
+                    </span>
+                    {index < intention.actions.length - 1 && (
+                      <span className="mt-1 w-px flex-1 bg-zinc-200" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <ActionCard
+                      action={action}
+                      fields={fields}
+                      choices={choices}
+                      markers={markers}
+                      issues={issues(intention.key, index)}
+                      disabled={disabled}
+                      onChange={(next) =>
+                        set({ actions: intention.actions.map((a, i) => (i === index ? next : a)) })
+                      }
+                      onMove={(delta) =>
+                        set({ actions: moveItem(intention.actions, index, delta) })
+                      }
+                      onRemove={() =>
+                        set({ actions: intention.actions.filter((_, i) => i !== index) })
+                      }
+                    />
+                  </div>
+                </li>
               ))}
-              {!disabled && intention.actions.length < 10 && (
-                <select
-                  className={`${inputClass} mt-0 w-72`}
-                  value=""
-                  onChange={(e) =>
-                    e.target.value &&
-                    set({ actions: [...intention.actions, newAction(e.target.value)] })
-                  }
-                >
-                  <option value="">Adicionar passo…</option>
-                  {Object.entries(ACTION_TYPES).map(([type, label]) => (
-                    <option key={type} value={type}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            </ol>
+            {intention.actions.length < 10 && (
+              <div className="mt-3 pl-9">
+                <AddPicker
+                  label="Adicionar passo"
+                  items={ACTION_ITEMS}
+                  disabled={disabled}
+                  onPick={(type) => set({ actions: [...intention.actions, newAction(type)] })}
+                />
+              </div>
+            )}
           </div>
-          <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
-            <Field label="Resposta do agente">
-              <select
-                className={inputClass}
-                value={intention.responseMode}
+
+          <div>
+            <Label>Depois da ação</Label>
+            <div className="space-y-3">
+              <Segmented
+                label="Resposta do agente"
                 disabled={disabled}
-                onChange={(e) =>
-                  set({ responseMode: e.target.value as DraftIntention['responseMode'] })
-                }
-              >
-                <option value="INSTRUCTIONS">Segue a instrução</option>
-                <option value="API">Usa o resultado da ação</option>
-              </select>
-            </Field>
-            {intention.responseMode === 'INSTRUCTIONS' && (
-              <Field label="Instrução depois da ação">
+                value={intention.responseMode}
+                options={[
+                  { value: 'INSTRUCTIONS', label: 'Segue uma instrução' },
+                  { value: 'API', label: 'Usa o resultado da ação' },
+                ]}
+                onChange={(responseMode) => set({ responseMode })}
+              />
+              {intention.responseMode === 'INSTRUCTIONS' && (
                 <MarkerText
                   value={intention.instructions ?? ''}
                   markers={markers}
                   allowRuntime
                   disabled={disabled}
+                  placeholder="O que o agente diz ou faz depois da ação…"
                   onChange={(instructions) => set({ instructions: instructions || null })}
                 />
-              </Field>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -501,10 +587,12 @@ function ConditionInput({
   const field = choices.find((f) => f.id === value?.field) as
     Extract<FunctionField, { kind: 'CHOICE' | 'MULTI_CHOICE' }> | undefined;
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <Field label={label}>
+    <div className="rounded-lg bg-zinc-50 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-zinc-600">{label}</span>
         <select
-          className={`${inputClass} w-72`}
+          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+          aria-label={label}
           value={value?.field ?? ''}
           disabled={disabled}
           onChange={(e) => {
@@ -513,33 +601,40 @@ function ConditionInput({
             onChange(next ? { field: next.id, in: [next.options[0]!.value] } : undefined);
           }}
         >
-          <option value="">Sempre</option>
+          <option value="">Sempre (sem condição)</option>
           {choices.map((f) => (
             <option key={f.id} value={f.id}>
               {f.label}
             </option>
           ))}
         </select>
-      </Field>
+      </div>
       {field && value && (
-        <div className="flex flex-wrap gap-3 pb-2 text-sm">
-          {field.options.map((option) => (
-            <label key={option.value} className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                className="size-4 accent-brand-600"
-                checked={value.in.includes(option.value)}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {field.options.map((option) => {
+            const checked = value.in.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={checked}
                 disabled={disabled}
-                onChange={(e) => {
-                  const next = e.target.checked
-                    ? [...value.in, option.value]
-                    : value.in.filter((v) => v !== option.value);
+                onClick={() => {
+                  const next = checked
+                    ? value.in.filter((v) => v !== option.value)
+                    : [...value.in, option.value];
                   if (next.length) onChange({ ...value, in: next });
                 }}
-              />
-              {option.label}
-            </label>
-          ))}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition-colors ring-inset disabled:cursor-not-allowed ${
+                  checked
+                    ? 'bg-brand-600 text-white ring-brand-600'
+                    : 'bg-white text-zinc-600 ring-zinc-200 hover:ring-zinc-300'
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -614,8 +709,8 @@ function FieldMap({
   const setRow = (index: number, key: string, text: string) =>
     onChange(Object.fromEntries(rows.map(([k, v], i) => (i === index ? [key, text] : [k, v]))));
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-zinc-600">
+    <div>
+      <p className="mb-1.5 text-xs text-zinc-500">
         Campos do CRM: escolha da lista ou digite o código (UF_CRM_… para os personalizados)
       </p>
       <datalist id="crm-fields">
@@ -625,47 +720,47 @@ function FieldMap({
           </option>
         ))}
       </datalist>
-      {rows.map(([key, text], index) => (
-        <div key={index} className="grid gap-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
-          <div>
-            <input
-              className={`${inputClass} mt-0 font-mono text-xs`}
-              list="crm-fields"
-              value={key}
+      <div className="space-y-2">
+        {rows.map(([key, text], index) => (
+          <div key={index} className="grid gap-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
+            <div>
+              <input
+                className={`${inputClass} mt-0 font-mono text-xs`}
+                list="crm-fields"
+                value={key}
+                disabled={disabled}
+                onChange={(e) => setRow(index, e.target.value.toUpperCase(), text)}
+              />
+              {CRM_FIELDS[key] && <p className="mt-0.5 text-xs text-zinc-500">{CRM_FIELDS[key]}</p>}
+            </div>
+            <MarkerText
+              value={text}
+              rows={1}
+              markers={markers}
+              allowRuntime
               disabled={disabled}
-              onChange={(e) => setRow(index, e.target.value.toUpperCase(), text)}
+              onChange={(next) => setRow(index, key, next)}
             />
-            {CRM_FIELDS[key] && <p className="mt-0.5 text-xs text-zinc-500">{CRM_FIELDS[key]}</p>}
+            <div className="pt-1">
+              <ItemActions
+                disabled={disabled}
+                removeLabel="Remover campo do CRM"
+                onRemove={() => onChange(Object.fromEntries(rows.filter((_, i) => i !== index)))}
+              />
+            </div>
           </div>
-          <MarkerText
-            value={text}
-            rows={1}
-            markers={markers}
-            allowRuntime
-            disabled={disabled}
-            onChange={(next) => setRow(index, key, next)}
-          />
-          {!disabled && (
-            <button
-              type="button"
-              className={buttonClass('ghost-danger', 'sm')}
-              onClick={() => onChange(Object.fromEntries(rows.filter((_, i) => i !== index)))}
-            >
-              Remover
-            </button>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
       {!disabled && (
         <button
           type="button"
-          className={buttonClass('secondary', 'sm')}
+          className={`${buttonClass('ghost', 'sm')} mt-1`}
           onClick={() => {
             const free = Object.keys(CRM_FIELDS).find((code) => !(code in value));
             onChange({ ...value, [free ?? `UF_CRM_${rows.length + 1}`]: '' });
           }}
         >
-          Adicionar campo do CRM
+          <PlusIcon className="size-4" /> Adicionar campo do CRM
         </button>
       )}
     </div>
@@ -700,41 +795,26 @@ function ActionCard({
   const text = (key: string) => (typeof config[key] === 'string' ? (config[key] as string) : '');
   const map = (key: string) =>
     config[key] && typeof config[key] === 'object' ? (config[key] as Record<string, string>) : {};
+  const style = ACTION_STYLE[action.type];
 
   return (
     <div
-      className={`rounded-lg border p-3 ${issues.length ? 'border-red-300' : 'border-zinc-200'} bg-zinc-50/50`}
+      className={`rounded-xl border bg-zinc-50/60 ${issues.length ? 'border-red-300' : 'border-zinc-200'}`}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-zinc-800">
+      <div className="flex items-center gap-2.5 border-b border-zinc-200/70 px-3 py-2">
+        {style && <TypeIcon icon={style.icon} tone={style.tone} size="sm" />}
+        <span className="flex-1 text-sm font-medium text-zinc-800">
           {ACTION_TYPES[action.type] ?? action.type}
         </span>
-        <span className="flex-1" />
-        {!disabled && (
-          <>
-            <button
-              type="button"
-              className={buttonClass('ghost', 'sm')}
-              onClick={() => onMove(-1)}
-              aria-label="Subir"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className={buttonClass('ghost', 'sm')}
-              onClick={() => onMove(1)}
-              aria-label="Descer"
-            >
-              ↓
-            </button>
-            <button type="button" className={buttonClass('ghost-danger', 'sm')} onClick={onRemove}>
-              Remover
-            </button>
-          </>
-        )}
+        <ItemActions
+          disabled={disabled}
+          onUp={() => onMove(-1)}
+          onDown={() => onMove(1)}
+          onRemove={onRemove}
+          removeLabel="Remover passo"
+        />
       </div>
-      <div className="mt-3 space-y-3">
+      <div className="space-y-3 p-3">
         <ConditionInput
           label="Este passo só roda quando o cliente escolhe"
           value={action.when}
@@ -847,24 +927,26 @@ function ActionCard({
           </div>
         )}
         {action.type === 'TRANSFER_TO_HUMAN' && (
-          <div className="flex flex-wrap gap-4">
-            <Field label="Para quem">
-              <select
-                className={`${inputClass} w-56`}
-                value={text('target') || 'OPERATOR'}
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-zinc-800">Para quem</p>
+              <Segmented
+                label="Para quem"
                 disabled={disabled}
-                onChange={(e) =>
+                value={text('target') === 'USER' ? 'USER' : 'OPERATOR'}
+                options={[
+                  { value: 'OPERATOR', label: 'Atendente livre da Linha Aberta' },
+                  { value: 'USER', label: 'Um usuário' },
+                ]}
+                onChange={(target) =>
                   setConfig(
-                    e.target.value === 'USER'
+                    target === 'USER'
                       ? { target: 'USER', userId: config.userId ?? 1 }
                       : { target: 'OPERATOR', userId: undefined },
                   )
                 }
-              >
-                <option value="OPERATOR">Atendente livre da Linha Aberta</option>
-                <option value="USER">Um usuário</option>
-              </select>
-            </Field>
+              />
+            </div>
             {config.target === 'USER' && (
               <RefInput
                 label="Usuário"
@@ -879,14 +961,19 @@ function ActionCard({
         {!ACTION_TYPES[action.type] && (
           <p className="text-xs text-zinc-500">Tipo sem formulário: edite pela seção JSON.</p>
         )}
-        {issues.length > 0 && (
-          <ul className="text-xs text-red-600">
-            {issues.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        )}
+        <Issues messages={issues} />
       </div>
     </div>
+  );
+}
+
+/** Ícone pequeno de um passo, na cor do tipo (para listas fora do editor). */
+export function ActionTypeIcon({ type }: { type: string }) {
+  const style = ACTION_STYLE[type];
+  const Icon = style?.icon ?? UserIcon;
+  return (
+    <Icon
+      className={`size-3.5 ${style?.tone.split(' ').find((c) => c.startsWith('text-')) ?? 'text-zinc-400'}`}
+    />
   );
 }

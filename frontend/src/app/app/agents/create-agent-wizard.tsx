@@ -12,6 +12,7 @@ import {
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
+import { BotIcon, CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
 import { Alert, buttonClass, Loading } from '@/components/ui';
@@ -19,7 +20,7 @@ import { credits, errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
 import { type AgentFormValues, IdentityFields, initialValues, ModelFields } from './agent-fields';
-import { BehaviorMeter, FunctionForm } from './function-form';
+import { BehaviorMeter, FunctionForm, FunctionFormOutline } from './function-form';
 import { FunctionPreviewView } from './function-preview';
 
 const STEPS = [
@@ -221,6 +222,10 @@ export function CreateAgentWizard({
     </div>
   );
 
+  // Formulário e prévia são longos: modal largo, com índice das perguntas ao lado do formulário.
+  const wide = step >= 2;
+  const ready = values && models && functions;
+
   return (
     <Modal
       title="Novo agente"
@@ -228,41 +233,67 @@ export function CreateAgentWizard({
       header={<Stepper steps={STEPS} current={step} />}
       footer={footer}
       onRequestClose={requestClose}
+      size={wide ? 'lg' : 'md'}
+      bodyClassName={
+        step === 2 && ready && form ? 'flex overflow-hidden' : 'overflow-y-auto px-6 py-5'
+      }
     >
-      {error && (
+      {error && step !== 2 && (
         <Alert tone="error" className="mb-5">
           {error}
         </Alert>
       )}
-      {!values || !models || !functions ? (
+      {!ready ? (
         !error && <Loading />
       ) : (
-        <form id="create-agent-step" key={step} onSubmit={submit}>
-          <fieldset disabled={busy} className="space-y-5">
+        <form id="create-agent-step" key={step} onSubmit={submit} className="contents">
+          <fieldset disabled={busy} className="contents">
             {step === 0 && (
               <div className="grid gap-3 sm:grid-cols-2">
-                {functions.map((fn) => (
-                  <button
-                    key={fn.code}
-                    type="button"
-                    onClick={() => choose(fn.code)}
-                    className={`rounded-xl border p-4 text-left transition-colors ${
-                      chosen === fn.code
-                        ? 'border-brand-500 bg-brand-50/50 ring-2 ring-brand-100'
-                        : 'border-zinc-200 hover:border-zinc-300'
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold text-zinc-900">{fn.name}</span>
-                    <span className="mt-1 block text-xs text-zinc-600">{fn.description}</span>
-                  </button>
-                ))}
+                {functions.map((fn) => {
+                  const active = chosen === fn.code;
+                  return (
+                    <button
+                      key={fn.code}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => choose(fn.code)}
+                      className={`flex gap-3 rounded-2xl border p-4 text-left transition-all ${
+                        active
+                          ? 'border-brand-500 bg-brand-50/50 ring-1 ring-brand-500'
+                          : 'border-zinc-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm'
+                      }`}
+                    >
+                      <span
+                        className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+                          active ? 'bg-brand-600 text-white' : 'bg-brand-50 text-brand-600'
+                        }`}
+                      >
+                        <BotIcon className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-zinc-900">{fn.name}</span>
+                          {active && (
+                            <span className="flex size-5 items-center justify-center rounded-full bg-brand-600 text-white">
+                              <CheckIcon className="size-3.5" />
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-1 block text-xs leading-relaxed text-zinc-600">
+                          {fn.description}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
                 {functions.length === 0 && (
                   <Alert tone="warning">Nenhuma função disponível no momento.</Alert>
                 )}
               </div>
             )}
             {step === 1 && (
-              <>
+              <div className="space-y-5">
                 <IdentityFields values={values} set={set} autoFocus />
                 <ModelFields values={values} set={set} models={models} />
                 {models.length === 1 && (
@@ -270,12 +301,26 @@ export function CreateAgentWizard({
                     Seu plano libera só este modelo ({credits(models[0]!.creditsPerResponse)}).
                   </p>
                 )}
-              </>
+              </div>
             )}
             {step === 2 && form && (
               <>
-                <BehaviorMeter form={form} answers={answers} agentName={values.name} />
-                <FunctionForm form={form} answers={answers} onChange={setAnswers} issues={issues} />
+                <aside className="hidden w-64 shrink-0 space-y-4 overflow-y-auto border-r border-zinc-200 bg-zinc-50/70 p-4 md:block">
+                  <BehaviorMeter form={form} answers={answers} agentName={values.name} />
+                  <FunctionFormOutline form={form} answers={answers} issues={issues} />
+                </aside>
+                <div className="min-w-0 flex-1 space-y-5 overflow-y-auto bg-zinc-50/40 px-4 py-5 sm:px-6">
+                  {error && <Alert tone="error">{error}</Alert>}
+                  <div className="md:hidden">
+                    <BehaviorMeter form={form} answers={answers} agentName={values.name} />
+                  </div>
+                  <FunctionForm
+                    form={form}
+                    answers={answers}
+                    onChange={setAnswers}
+                    issues={issues}
+                  />
+                </div>
               </>
             )}
             {step === 3 && preview && <FunctionPreviewView preview={preview} />}
