@@ -17,6 +17,7 @@ import { Alert, Badge, buttonClass, Card, Loading } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../../../session-provider';
+import { useTransferAgents } from '../../use-transfer-agents';
 import { Field, inputClass } from '../../agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from '../../function-form';
 import { BehaviorDiff, FunctionPreviewView } from '../../function-preview';
@@ -55,6 +56,7 @@ function CreatedNotice() {
 export default function AgentFunctionPage() {
   const { session, api } = useAppSession();
   const { agent, setAgent } = useAgent();
+  const transferAgents = useTransferAgents(agent.id);
   const [config, setConfig] = useState<AgentFunctionConfigView | null>(null);
   const [answers, setAnswers] = useState<FunctionAnswers>({});
   const [mode, setMode] = useState<FunctionMode>('SIMPLE');
@@ -445,6 +447,7 @@ export default function AgentFunctionPage() {
             onChange={setAnswers}
             issues={issues}
             disabled={locked || busy}
+            agents={transferAgents}
           />
         </div>
         <aside className="hidden space-y-4 xl:sticky xl:top-6 xl:block xl:self-start">
