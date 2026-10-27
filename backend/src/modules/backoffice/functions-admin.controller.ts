@@ -22,6 +22,7 @@ import {
   previewFunctionDraftSchema,
   saveFunctionBlockSchema,
   saveFunctionTemplateSchema,
+  setFunctionTenantsSchema,
 } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { FunctionCatalog, type SandboxResult } from '../agent-functions';
@@ -34,6 +35,7 @@ class SaveTemplateDto extends createZodDto(saveFunctionTemplateSchema) {}
 class PreviewDraftDto extends createZodDto(previewFunctionDraftSchema) {}
 class CreateBlockDto extends createZodDto(createFunctionBlockSchema) {}
 class SaveBlockDto extends createZodDto(saveFunctionBlockSchema) {}
+class SetTenantsDto extends createZodDto(setFunctionTenantsSchema) {}
 
 /** Templates de função: consulta para todos os operadores; alterações só ADMIN (auditadas). */
 @Controller('admin/functions')
@@ -112,6 +114,17 @@ export class FunctionsAdminController {
     @Param('code') code: string,
   ): Promise<AdminFunctionTemplateView> {
     return this.admin.setActive(code, true, actor.id);
+  }
+
+  /** Portais em que a função aparece na criação de agentes; lista vazia = todos. */
+  @Put(':code/tenants')
+  @AdminAuth('ADMIN')
+  setTenants(
+    @CurrentOperator() actor: Operator,
+    @Param('code') code: string,
+    @Body() body: SetTenantsDto,
+  ): Promise<AdminFunctionTemplateView> {
+    return this.admin.setTenants(code, body, actor.id);
   }
 
   @Delete(':code')

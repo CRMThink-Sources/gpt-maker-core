@@ -71,12 +71,15 @@ export class AgentFunctionService {
     @Inject(DB) private readonly db: Database,
   ) {}
 
-  listFunctions(): Promise<AgentFunctionView[]> {
-    return this.catalog.listPublished();
+  listFunctions(tenantId: string): Promise<AgentFunctionView[]> {
+    return this.catalog.listPublished(tenantId);
   }
 
-  async functionForm(code: string): Promise<AgentFunctionView & { form: FunctionTemplateContent }> {
-    const fn = await this.catalog.latestPublished(code);
+  async functionForm(
+    tenantId: string,
+    code: string,
+  ): Promise<AgentFunctionView & { form: FunctionTemplateContent }> {
+    const fn = await this.catalog.latestPublished(code, tenantId);
     return {
       code: fn.code,
       name: fn.name,
@@ -87,9 +90,9 @@ export class AgentFunctionService {
   }
 
   /** Prévia antes de criar o agente: plano contra o estado vazio (design D6). */
-  async previewNew(raw: PreviewNewAgentInput): Promise<FunctionPreview> {
+  async previewNew(tenantId: string, raw: PreviewNewAgentInput): Promise<FunctionPreview> {
     const input = previewNewAgentSchema.parse(raw);
-    const fn = await this.catalog.latestPublished(input.functionCode);
+    const fn = await this.catalog.latestPublished(input.functionCode, tenantId);
     const { answers, issues } = validateFunctionAnswers(
       fn.content,
       input.answers as FunctionAnswers,
@@ -117,7 +120,7 @@ export class AgentFunctionService {
    */
   async create(owner: AgentOwner, raw: CreateAgentInput): Promise<AgentView> {
     const input = createAgentSchema.parse(raw);
-    const fn = await this.catalog.latestPublished(input.functionCode);
+    const fn = await this.catalog.latestPublished(input.functionCode, owner.tenantId);
     const answers = this.validAnswers(fn.content, input.answers as FunctionAnswers);
     const compiled = compileOrFail({
       content: fn.content,

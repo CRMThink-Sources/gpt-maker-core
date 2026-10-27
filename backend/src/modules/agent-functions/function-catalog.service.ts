@@ -28,25 +28,42 @@ import {
   saveFunctionBlockSchema,
   type SaveFunctionTemplateInput,
   saveFunctionTemplateSchema,
+  type SetFunctionTenantsInput,
+  setFunctionTenantsSchema,
   stableStringify,
   type TemplateCheck,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import {
   agent,
   agentFunctionBlock,
   agentFunctionConfig,
   agentFunctionTemplate,
+  agentFunctionTemplateTenant,
   agentFunctionTemplateVersion,
   backofficeUser,
+  tenant,
 } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 
 type TemplateRow = typeof agentFunctionTemplate.$inferSelect;
 type VersionRow = typeof agentFunctionTemplateVersion.$inferSelect;
 type BlockRow = typeof agentFunctionBlock.$inferSelect;
+type TenantRef = AdminFunctionTemplateSummary['tenants'][number];
 
 /** Versão publicada que o app usa para compilar um agente. */
 export interface PublishedFunction {
@@ -75,27 +92,29 @@ export class FunctionCatalog {
   // Templates --------------------------------------------------------------------------------
 
   async listTemplates(): Promise<AdminFunctionTemplateSummary[]> {
-    const [rows, counts] = await Promise.all([
+    const [rows, counts, tenants] = await Promise.all([
       this.db
         .select()
         .from(agentFunctionTemplate)
         .where(isNull(agentFunctionTemplate.deletedAt))
         .orderBy(agentFunctionTemplate.code),
       this.agentsByTemplate(),
+      this.tenantsByTemplate(),
     ]);
-    return rows.map((row) => summary(row, counts.get(row.id) ?? 0));
+    return rows.map((row) => summary(row, counts.get(row.id) ?? 0, tenants.get(row.id) ?? []));
   }
 
   async getTemplate(code: string): Promise<AdminFunctionTemplateView> {
     const row = await this.template(code);
-    const [versions, counts, published, publishedIntentions] = await Promise.all([
+    const [versions, counts, tenants, published, publishedIntentions] = await Promise.all([
       this.versions(row.id),
       this.agentsByTemplate(),
+      this.tenantsByTemplate(row.id),
       this.publishedFields(row.id),
       this.publishedIntentions(row.id),
     ]);
     return {
-      ...summary(row, counts.get(row.id) ?? 0),
+      ...summary(row, counts.get(row.id) ?? 0, tenants.get(row.id) ?? []),
       draft: row.draft,
       versions,
       published: Object.fromEntries(published),
@@ -245,8 +264,11 @@ export class FunctionCatalog {
     };
   }
 
-  /** Funções que o cliente pode escolher: as que têm versão publicada. */
-  async listPublished(): Promise<AgentFunctionView[]> {
+  /**
+   * Funções que o portal pode escolher: publicadas, ativas e liberadas para ele (sem restrição
+   * de portais, ou com o portal na lista; design D14).
+   */
+  async listPublished(tenantId: string): Promise<AgentFunctionView[]> {
     const rows = await this.db
       .select()
       .from(agentFunctionTemplate)
@@ -255,6 +277,7 @@ export class FunctionCatalog {
           isNotNull(agentFunctionTemplate.latestVersion),
           eq(agentFunctionTemplate.active, true),
           isNull(agentFunctionTemplate.deletedAt),
+          this.availableTo(tenantId),
         ),
       )
       .orderBy(agentFunctionTemplate.code);
@@ -266,13 +289,16 @@ export class FunctionCatalog {
     }));
   }
 
-  /** Última versão publicada da função; recusa função sem versão. */
-  async latestPublished(code: string): Promise<PublishedFunction> {
+  /**
+   * Última versão publicada da função para criar um agente no portal; recusa função sem versão,
+   * inativa, excluída ou restrita a outros portais.
+   */
+  async latestPublished(code: string, tenantId: string): Promise<PublishedFunction> {
     const [row] = await this.db
       .select()
       .from(agentFunctionTemplate)
-      .where(eq(agentFunctionTemplate.code, code));
-    // Inativa ou excluída: fora da criação de agentes (design D13).
+      .where(and(eq(agentFunctionTemplate.code, code), this.availableTo(tenantId)));
+    // Inativa, excluída (design D13) ou de outros portais (design D14): fora da criação de agentes.
     if (!row?.latestVersion || !row.active || row.deletedAt) {
       throw new DomainError(
         'FUNCTION_NOT_AVAILABLE',
@@ -312,6 +338,42 @@ export class FunctionCatalog {
       .update(agentFunctionTemplate)
       .set({ active })
       .where(eq(agentFunctionTemplate.id, row.id));
+    return this.getTemplate(code);
+  }
+
+  /**
+   * Troca os portais da função (vazio = todos); muda na hora, sem nova versão. Os agentes que já
+   * usam a função seguem normais em qualquer portal (design D14).
+   */
+  async setTenants(code: string, raw: SetFunctionTenantsInput): Promise<AdminFunctionTemplateView> {
+    const { tenantIds } = setFunctionTenantsSchema.parse(raw);
+    const row = await this.template(code);
+    const ids = [...new Set(tenantIds)];
+    if (ids.length) {
+      const found = await this.db
+        .select({ id: tenant.id })
+        .from(tenant)
+        .where(inArray(tenant.id, ids));
+      const missing = ids.filter((id) => !found.some((t) => t.id === id));
+      if (missing.length) {
+        throw new DomainError(
+          'TENANT_NOT_FOUND',
+          'Portal não encontrado',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          { tenantIds: missing },
+        );
+      }
+    }
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(agentFunctionTemplateTenant)
+        .where(eq(agentFunctionTemplateTenant.templateId, row.id));
+      if (ids.length) {
+        await tx
+          .insert(agentFunctionTemplateTenant)
+          .values(ids.map((tenantId) => ({ templateId: row.id, tenantId })));
+      }
+    });
     return this.getTemplate(code);
   }
 
@@ -589,6 +651,40 @@ export class FunctionCatalog {
     }));
   }
 
+  /** Função sem restrição de portais, ou com este portal na lista. */
+  private availableTo(tenantId: string) {
+    const restriction = (onlyTenant: boolean) =>
+      this.db
+        .select({ one: sql`1` })
+        .from(agentFunctionTemplateTenant)
+        .where(
+          and(
+            eq(agentFunctionTemplateTenant.templateId, agentFunctionTemplate.id),
+            onlyTenant ? eq(agentFunctionTemplateTenant.tenantId, tenantId) : undefined,
+          ),
+        );
+    return or(notExists(restriction(false)), exists(restriction(true)))!;
+  }
+
+  /** Portais de cada função restrita (ou só de uma); função sem entrada vale para todos. */
+  private async tenantsByTemplate(templateId?: string): Promise<Map<string, TenantRef[]>> {
+    const rows = await this.db
+      .select({
+        templateId: agentFunctionTemplateTenant.templateId,
+        id: tenant.id,
+        domain: tenant.domain,
+      })
+      .from(agentFunctionTemplateTenant)
+      .innerJoin(tenant, eq(tenant.id, agentFunctionTemplateTenant.tenantId))
+      .where(templateId ? eq(agentFunctionTemplateTenant.templateId, templateId) : undefined)
+      .orderBy(tenant.domain);
+    const map = new Map<string, TenantRef[]>();
+    for (const { templateId: id, ...ref } of rows) {
+      map.set(id, [...(map.get(id) ?? []), ref]);
+    }
+    return map;
+  }
+
   private async agentsByTemplate(): Promise<Map<string, number>> {
     const rows = await this.db
       .select({ templateId: agentFunctionConfig.templateId, total: sql<number>`count(*)::int` })
@@ -600,13 +696,18 @@ export class FunctionCatalog {
   }
 }
 
-function summary(row: TemplateRow, agents: number): AdminFunctionTemplateSummary {
+function summary(
+  row: TemplateRow,
+  agents: number,
+  tenants: TenantRef[],
+): AdminFunctionTemplateSummary {
   return {
     code: row.code,
     name: row.name,
     description: row.description,
     latestVersion: row.latestVersion,
     active: row.active,
+    tenants,
     agents,
     updatedAt: row.updatedAt.toISOString(),
   };

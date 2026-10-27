@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import {
   BotIcon,
   ChevronRightIcon,
+  GlobeIcon,
   HistoryIcon,
   LayersIcon,
   PlusIcon,
@@ -205,6 +206,15 @@ function FunctionCard({ fn }: { fn: AdminFunctionTemplateSummary }) {
           <HistoryIcon className="size-3.5" />
           alterada {relative(fn.updatedAt)}
         </span>
+        {fn.tenants.length > 0 && (
+          <span
+            className="flex items-center gap-1.5 font-medium text-brand-700"
+            title={fn.tenants.map((t) => t.domain).join(', ')}
+          >
+            <GlobeIcon className="size-3.5" />
+            {fn.tenants.length === 1 ? '1 portal' : `${fn.tenants.length} portais`}
+          </span>
+        )}
         <ChevronRightIcon className="ml-auto size-4 text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-500" />
       </div>
     </Link>

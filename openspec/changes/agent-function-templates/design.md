@@ -93,6 +93,11 @@ O editor do backoffice trabalha sobre um único objeto `FunctionTemplateDraft` e
 `agent_function_template` ganha `active` e `deleted_at`. A lista de funções do app e a criação de agente consideram só as ativas e não excluídas; a republicação de agentes existentes usa `latestOfTemplate`, que ignora as duas marcas, então agentes de função inativa seguem normais. Excluir é lógico e exige zero agentes não removidos: as configurações dos agentes removidos e as versões continuam referenciando o template, e o código fica reservado para o seed (que só cria códigos inexistentes) não ressuscitar a função.
 - *Alternativa:* exclusão física. Rejeitada: as chaves estrangeiras das configurações de agentes removidos e das versões exigiriam apagar histórico, e o seed recriaria as funções padrão.
 
+### D14. Portais da função
+Tabela `agent_function_template_tenant` (template, portal). Sem linhas, a função vale para todos os portais; com linhas, só para eles. A restrição fica fora das versões: muda na hora pelo backoffice (`PUT /admin/functions/:code/tenants`, lista vazia = todos) e é auditada como `function.tenants`. `listPublished` e `latestPublished` recebem o portal e filtram por "sem restrição ou com o portal na lista"; a republicação usa `latestOfTemplate`, que não filtra, então os agentes existentes seguem normais (mesma regra de D13).
+- *Alternativa:* lista de portais dentro da versão publicada. Rejeitada: liberar um portal exigiria publicar uma versão nova e avisaria todos os agentes sem mudança de conteúdo.
+- *Alternativa:* bloquear a remoção de portal com agentes. Rejeitada: a restrição é sobre oferecer a função em novos agentes, não sobre os existentes.
+
 ## Risks / Trade-offs
 
 - [Associar treinamento por texto falhar, por exemplo se o GPT Maker normalizar espaços] → comparar por texto normalizado; o prefixo de título deixa cada item único; em último caso o passo fica pendente e a repetição remove e recria só aquele item.

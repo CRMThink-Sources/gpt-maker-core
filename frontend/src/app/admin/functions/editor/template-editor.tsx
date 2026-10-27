@@ -520,6 +520,7 @@ export function TemplateEditor({
   agentName,
   onAgentName,
   identity,
+  availability,
   versions,
   progress,
 }: {
@@ -540,6 +541,8 @@ export function TemplateEditor({
   onAgentName: (name: string) => void;
   /** Nome e descrição da função: primeira seção de Geral. */
   identity: ReactNode;
+  /** Portais em que a função aparece: seção de Geral logo após a identidade (só funções). */
+  availability?: ReactNode;
   /** Lista de versões publicadas (seção Versões). */
   versions: { count: number; content: ReactNode };
   /** Andamento editar → testar → publicar, no topo do painel lateral. */
@@ -665,6 +668,8 @@ export function TemplateEditor({
               <Section title="Identidade" description="Como a função aparece para o cliente.">
                 {identity}
               </Section>
+
+              {availability}
 
               <Section title="Tipo do agente no GPTMaker">
                 <div role="radiogroup" className="grid gap-2 sm:grid-cols-3">

@@ -7,6 +7,7 @@ import type {
   CreateFunctionTemplateInput,
   SaveFunctionBlockInput,
   SaveFunctionTemplateInput,
+  SetFunctionTenantsInput,
 } from '@gptmaker/contracts';
 import { FunctionCatalog, FunctionSandbox, type SandboxResult } from '../agent-functions';
 import { AuditService } from './audit.service';
@@ -99,6 +100,27 @@ export class FunctionsAdminService {
         { active },
       );
     }
+    return view;
+  }
+
+  async setTenants(
+    code: string,
+    input: SetFunctionTenantsInput,
+    actorId: string,
+  ): Promise<AdminFunctionTemplateView> {
+    const before = await this.catalog.getTemplate(code);
+    const view = await this.catalog.setTenants(code, input);
+    // Domínio junto do id: a auditoria continua legível se o portal for desinstalado.
+    const tenants = (list: AdminFunctionTemplateView['tenants']) =>
+      list.map((t) => `${t.domain} (${t.id})`);
+    await this.record(
+      actorId,
+      'function.tenants',
+      'function_template',
+      code,
+      { tenants: tenants(before.tenants) },
+      { tenants: tenants(view.tenants) },
+    );
     return view;
   }
 

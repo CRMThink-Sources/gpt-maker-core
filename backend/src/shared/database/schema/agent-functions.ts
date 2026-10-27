@@ -13,6 +13,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   uniqueIndex,
   uuid,
@@ -60,6 +61,27 @@ export const agentFunctionTemplate = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex('agent_function_template_code_uq').on(t.code)],
+);
+
+/**
+ * Portais em que a função aparece na criação de agentes (design D14). Sem linhas, vale para todos;
+ * com linhas, só para estes. Fica fora das versões: muda na hora, sem publicar.
+ */
+export const agentFunctionTemplateTenant = pgTable(
+  'agent_function_template_tenant',
+  {
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => agentFunctionTemplate.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.templateId, t.tenantId] }),
+    index('agent_function_template_tenant_tenant_idx').on(t.tenantId),
+  ],
 );
 
 /** Versão publicada, imutável, com os blocos já expandidos. */

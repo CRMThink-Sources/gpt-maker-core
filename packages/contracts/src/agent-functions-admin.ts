@@ -62,6 +62,12 @@ export const previewFunctionDraftSchema = z.object({
 });
 export type PreviewFunctionDraftInput = z.input<typeof previewFunctionDraftSchema>;
 
+/** Portais em que a função aparece na criação de agentes; lista vazia = todos os portais. */
+export const setFunctionTenantsSchema = z.object({
+  tenantIds: z.array(z.uuid()).max(500),
+});
+export type SetFunctionTenantsInput = z.input<typeof setFunctionTenantsSchema>;
+
 export interface AdminFunctionTemplateSummary {
   code: string;
   name: string;
@@ -69,6 +75,11 @@ export interface AdminFunctionTemplateSummary {
   latestVersion: number | null;
   /** Inativa: fora da criação de agentes; os agentes existentes seguem normais. */
   active: boolean;
+  /**
+   * Portais em que a função aparece na criação de agentes; vazio = todos. Fora deles a função
+   * some da criação, mas os agentes que já a usam seguem normais.
+   */
+  tenants: Array<{ id: string; domain: string }>;
   /** Agentes (não removidos) com esta função, em qualquer versão. */
   agents: number;
   updatedAt: string;
