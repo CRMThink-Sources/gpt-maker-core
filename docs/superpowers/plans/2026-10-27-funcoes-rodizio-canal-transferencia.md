@@ -35,11 +35,13 @@
 ### Task 1: Contratos — tipos e schemas novos
 
 **Files:**
+
 - Modify: `packages/contracts/src/agent-functions.ts` (tipos `FunctionField`, `functionFieldSchema`, `functionTemplateContentSchema`, `functionBlockContentSchema`, `expandBlocks`, `collapseBlocks`)
 - Modify: `packages/contracts/src/triggers.ts` (`CREATE_TASK.responsibleId`, `TRANSFER_TO_HUMAN`)
 - Test: `packages/contracts/src/agent-functions.test.ts`, `packages/contracts/src/triggers.test.ts` (criar se não existir)
 
 **Interfaces:**
+
 - Produces:
   - `FunctionField` ganha `{ kind: 'BITRIX_USER'; …; multiple: boolean }` (default `false`), `{ kind: 'BITRIX_OPENLINE'; id; label; help?; required }` e `{ kind: 'AGENT'; id; label; help?; required }`.
   - `functionTransferSchema = z.object({ key, when?: conditionSchema, agent: string /* "{{id}}" */, instructions: z.string().trim().min(1).max(1000), returnOnFinish: z.boolean().default(false) })`; `export type FunctionTransfer = z.input<typeof functionTransferSchema>`.
@@ -56,6 +58,7 @@
 ### Task 2: Contratos — respostas, checagem e compilação
 
 **Files:**
+
 - Modify: `packages/contracts/src/agent-function-answers.ts` (`checkField`)
 - Modify: `packages/contracts/src/agent-functions.ts` (`templateIssues`)
 - Modify: `packages/contracts/src/agent-function-compiler.ts` (`Renderer.fieldText`, `renderConfig`, `maxValue`, `compileAgent`)
@@ -64,6 +67,7 @@
 - Test: `agent-function-answers.test.ts`, `agent-functions.test.ts`, `agent-function-compiler.test.ts`, `agent-function-check.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1.
 - Produces:
   - Respostas: `BITRIX_USER` múltiplo ⇒ `number[]` (1–20, positivos, sem repetir; mensagem `'escolha ao menos um usuário'`); `BITRIX_OPENLINE` ⇒ `number > 0` (`'escolha um canal aberto'`); `AGENT` ⇒ uuid string (`'escolha um agente'`).
@@ -84,6 +88,7 @@
 ### Task 3: Backend — rodízio, canal aberto, handoff pelo chat de origem e `onTransfer`
 
 **Files:**
+
 - Create: `backend/src/modules/triggers/actions/action-rotation.ts`
 - Modify: `backend/src/modules/triggers/actions/action-executor.ts` (`CREATE_TASK`)
 - Modify: `backend/src/modules/intentions/intention-runner.ts` (passo `TRANSFER_TO_HUMAN`)
@@ -91,6 +96,7 @@
 - Test: `backend/test/integration/intention-runner.test.ts`, `channel-handoff.test.ts`, `backend/src/modules/triggers/actions/action-rotation.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 (`isUserList`, `target: 'LINE'`).
 - Produces:
   - `@Injectable() class ActionRotation { constructor(@Inject(REDIS) redis); next(actionId: string, ids: readonly number[]): Promise<number> }` — um id só devolve sem tocar no Redis.
@@ -111,12 +117,14 @@
 ### Task 4: Backend — canais abertos do portal e regras de transferência no cliente do GPT Maker
 
 **Files:**
+
 - Create: `backend/src/modules/bitrix/openlines.controller.ts` (ou o controller de recursos do Bitrix existente para o app, se houver) — `GET /bitrix/openlines`
 - Modify: `backend/src/modules/gptmaker/gptmaker.client.ts`, `gptmaker.schemas.ts`, `backend/test/support/fake-gptmaker.ts`, `docs/gptmaker-api.md`
 - Modify: `packages/contracts/src/` (tipo `OpenLineView { id: number; name: string }` junto dos tipos do app)
 - Test: `backend/test/integration/gptmaker-client.test.ts` (ou o teste do cliente existente), teste de integração do controller
 
 **Interfaces:**
+
 - Produces:
   - `GET /bitrix/openlines` (sessão do app, portal da sessão) ⇒ `OpenLineView[]` a partir de `imopenlines.config.list.get` (`ID`, `LINE_NAME`), ordenado por nome.
   - `GptMakerClient.listTransferRules(agentId): Promise<GptMakerTransferRule[]>`, `createTransferRule(agentId, input: GptMakerWriteTransferRule): Promise<string>` (id da resposta), `updateTransferRule(agentId, ruleId, input): Promise<void>`, `deleteTransferRule(agentId, ruleId): Promise<void>`. `GptMakerWriteTransferRule = { type: 'AGENT'; agentId: string; instructions: string; returnOnFinish: boolean }` (o cliente manda `userId: null`).
@@ -131,6 +139,7 @@
 ### Task 5: Backend — publicação das regras e travas
 
 **Files:**
+
 - Modify: `backend/src/shared/database/schema/agent-functions.ts` (`managedResourceKind` + `'TRANSFER_RULE'`, coluna `transferRuleId: text('transfer_rule_id')`)
 - Create: `backend/drizzle/0018_transfer_rules.sql` (gerado)
 - Modify: `backend/src/modules/agent-functions/function-publisher.ts` (passo `applyTransfers` depois de `applyIntentions`)
@@ -139,6 +148,7 @@
 - Test: `backend/test/integration/agent-function-publication.test.ts`, `backoffice-functions.test.ts`, `agent-service.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2 (`compiled.transfers`, `transferHash`), Task 4 (cliente).
 - Produces:
   - `applyTransfers(config, compiled)`: para cada `CompiledTransfer`, busca o agente local (mesmo `tenantId`, não removido, `id !== config.agentId`); senão lança `DomainError('FUNCTION_TRANSFER_AGENT_INVALID', 'Escolha outro agente em "<label do campo>"', 422)`. Sincroniza pela chave e pelo hash: cria (adotando órfã da lista com mesmo `agentId` de destino e mesmas `instructions`), atualiza, remove o que sumiu (404 ignorado).
@@ -154,11 +164,13 @@
 ### Task 6: Frontend — formulário do app
 
 **Files:**
+
 - Modify: `frontend/src/app/app/agents/bitrix-pickers.tsx` (`ResponsiblePicker` múltiplo, `OpenLinePicker`, `AgentPicker`)
 - Modify: `frontend/src/app/app/agents/function-form.tsx` (casos dos tipos novos e `multiple`)
 - Modify: telas manuais de intenções e gatilhos do app que exibem `userId`/`responsibleId` (exibir "N usuários, em rodízio" e "Canal aberto <id>" sem editar a lista)
 
 **Interfaces:**
+
 - Consumes: Task 1/2 (tipos), Task 4 (`GET /bitrix/openlines`), lista de agentes já usada no app.
 - Produces: `ResponsiblePicker({ value: number | number[]; multiple?: boolean; onChange })`; `OpenLinePicker({ value: number; onChange })`; `AgentPicker({ value: string; exclude?: string; onChange })` (sem removidos, sem o próprio).
 
@@ -169,9 +181,11 @@
 ### Task 7: Frontend — editor do backoffice
 
 **Files:**
+
 - Modify: `frontend/src/app/admin/functions/editor/model.ts`, `field-editor.tsx`, `intention-editor.tsx`, `template-editor.tsx` (seção nova no painel de Ações: "Transferências entre agentes"), `kit.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 1/2.
 - Produces: tipos novos no seletor de tipo de campo ("Canal aberto do Bitrix24", "Agente"), chave "Permitir vários usuários" no `BITRIX_USER` (desabilitada se publicado), destino "Canal aberto" em "Transferir para atendente" com o campo de canal, editor de transferência (chave travada depois de publicada, condição, campo de agente, instruções com "Inserir campo", "Voltar ao agente de origem ao terminar"); problemas de `transfers` levam à seção certa (`where.section: 'actions'`, `intentionKey` = chave da transferência).
 
@@ -182,12 +196,14 @@
 ### Task 8: Skill no repositório
 
 **Files:**
+
 - Create: `.claude/skills/gptthink-criar-funcao/` copiada de `C:\Users\JOAOVI~1\AppData\Local\Temp\claude\C--Users-Joao-Vitor-projects-gpt-maker-core\b64d5dae-93a2-4f62-9b5f-b35193ef8c01\scratchpad\gptthink-criar-funcao` (SKILL.md, `referencia/`, `exemplos/`, `scripts/validar.mjs`)
 - Create: `.claude/skills/gptthink-criar-funcao/scripts/gerar-referencia.ts` (rodar com `npx tsx`)
 - Create: `packages/contracts/src/skill-validator.test.ts`
 - Modify: `.claude/skills/gptthink-function-templates/SKILL.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1–2 (formato final).
 - Produces: `npx tsx .claude/skills/gptthink-criar-funcao/scripts/gerar-referencia.ts` reescreve `referencia/blocos.json`, `exemplos/suporte.json` e `exemplos/sdr.json` a partir de `backend/src/modules/agent-functions/seed`; `validar.mjs` cobre `multiple`, `BITRIX_OPENLINE`, `AGENT`, `target: 'LINE'` e `transfers` (mesmas mensagens de `templateIssues`).
 
@@ -200,6 +216,7 @@
 ### Task 9: OpenSpec e verificação final
 
 **Files:**
+
 - Modify: `openspec/changes/agent-function-templates/tasks.md` (marcar 11.1–11.4 e 11.6; 9.3 já marcada)
 
 - [ ] **Step 1:** Rodar a suíte: `cd backend && npx vitest run --project unit && npx vitest run --project integration`; `cd packages/contracts && npx vitest run`; `npx openspec validate agent-function-templates` ⇒ tudo verde.

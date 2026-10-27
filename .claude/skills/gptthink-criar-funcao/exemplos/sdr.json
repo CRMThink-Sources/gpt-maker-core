@@ -1,0 +1,278 @@
+{
+  "code": "SDR",
+  "name": "SDR / Qualificação",
+  "description": "Atende quem chega interessado, faz as perguntas de qualificação e encaminha os leads qualificados para o time comercial.",
+  "draft": {
+    "agentType": "SALE",
+    "settings": {
+      "enabledHumanTransfer": true,
+      "limitSubjects": true
+    },
+    "profile": {
+      "jobName": "{{empresa.nome}}",
+      "jobDescription": "{{empresa.descricao}}"
+    },
+    "blocks": [
+      "comum",
+      "registro",
+      "duvida",
+      "transferir"
+    ],
+    "fields": [
+      {
+        "kind": "TEXT",
+        "id": "sdr.perfil_ideal",
+        "label": "Para quem vocês vendem",
+        "help": "O cliente ideal: porte, segmento, momento.",
+        "required": true,
+        "maxLength": 220,
+        "multiline": true,
+        "placeholder": "Empresas com time comercial que usam ou querem usar CRM"
+      },
+      {
+        "kind": "TEXT_LIST",
+        "id": "sdr.perguntas",
+        "label": "Perguntas de qualificação",
+        "help": "O agente faz uma por vez, no ritmo da conversa. As respostas vão para o Bitrix24.",
+        "required": true,
+        "minItems": 1,
+        "maxItems": 5,
+        "itemMaxLength": 90,
+        "placeholder": "Quantos vendedores tem o time?"
+      },
+      {
+        "kind": "TEXT",
+        "id": "sdr.criterio",
+        "label": "Quando o lead está qualificado",
+        "required": true,
+        "maxLength": 200,
+        "multiline": true,
+        "placeholder": "5 vendedores ou mais e intenção de implantar em até 3 meses"
+      },
+      {
+        "kind": "CHOICE",
+        "id": "sdr.qualificado",
+        "label": "Lead qualificado",
+        "required": true,
+        "options": [
+          {
+            "value": "transferir",
+            "label": "Transferir para um consultor",
+            "snippet": "Qualificado: use a ação \"Registrar qualificação\" e avise que um consultor continua o atendimento agora."
+          },
+          {
+            "value": "registrar",
+            "label": "Registrar e avisar que entraremos em contato",
+            "snippet": "Qualificado: use a ação \"Registrar qualificação\" e avise que um consultor vai entrar em contato em breve."
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "sdr.nao_qualificado",
+        "label": "Lead não qualificado",
+        "required": true,
+        "options": [
+          {
+            "value": "encerrar",
+            "label": "Agradecer e encerrar com cordialidade",
+            "snippet": "Agradeça o contato e encerre, sem insistir."
+          },
+          {
+            "value": "material",
+            "label": "Indicar um material",
+            "snippet": "Agradeça e indique este material: {{sdr.material}}",
+            "dependents": [
+              {
+                "kind": "URL",
+                "id": "sdr.material",
+                "label": "Link do material",
+                "required": true,
+                "maxLength": 150
+              }
+            ]
+          },
+          {
+            "value": "transferir",
+            "label": "Transferir mesmo assim",
+            "snippet": "Use a ação \"Transferir para atendente\"."
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "sdr.preco",
+        "label": "O agente pode falar de preço?",
+        "required": true,
+        "options": [
+          {
+            "value": "nao",
+            "label": "Não, encaminha ao consultor",
+            "snippet": "Não informe preços nem faixas. Explique que o valor depende do cenário e que o consultor apresenta a proposta."
+          },
+          {
+            "value": "a_partir",
+            "label": "Só o \"a partir de\"",
+            "snippet": "Informe só o valor inicial que está na base de conhecimento. Propostas, só com o consultor."
+          },
+          {
+            "value": "base",
+            "label": "Sim, usando a base de conhecimento",
+            "snippet": "Informe preços conforme a base de conhecimento. Nunca ofereça desconto ou condição fora dela."
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "sdr.cliente_atual",
+        "label": "Cliente atual pedindo suporte",
+        "required": true,
+        "options": [
+          {
+            "value": "transferir",
+            "label": "Transferir para um atendente",
+            "snippet": "Quem já é cliente e precisa de suporte: use a ação \"Transferir para atendente\"."
+          },
+          {
+            "value": "canal",
+            "label": "Informar o canal de suporte",
+            "snippet": "Quem já é cliente e precisa de suporte: oriente a falar pelo {{sdr.canal_suporte}}.",
+            "dependents": [
+              {
+                "kind": "TEXT",
+                "id": "sdr.canal_suporte",
+                "label": "Canal de suporte",
+                "required": true,
+                "maxLength": 80,
+                "placeholder": "WhatsApp (11) 4000-0000"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.produtos",
+        "label": "Produtos e serviços",
+        "required": false,
+        "maxItems": 15,
+        "subfields": [
+          {
+            "id": "nome",
+            "label": "Nome",
+            "required": true,
+            "maxLength": 60
+          },
+          {
+            "id": "descricao",
+            "label": "Descrição",
+            "required": true,
+            "maxLength": 900,
+            "multiline": true
+          }
+        ],
+        "format": "Produto ou serviço: {{nome}}\n{{descricao}}"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.objecoes",
+        "label": "Objeções frequentes",
+        "required": false,
+        "maxItems": 15,
+        "subfields": [
+          {
+            "id": "objecao",
+            "label": "Objeção",
+            "required": true,
+            "maxLength": 150
+          },
+          {
+            "id": "resposta",
+            "label": "Como responder",
+            "required": true,
+            "maxLength": 800,
+            "multiline": true
+          }
+        ],
+        "format": "Objeção: {{objecao}}\nComo responder: {{resposta}}"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.faq",
+        "label": "Perguntas frequentes",
+        "required": false,
+        "maxItems": 20,
+        "subfields": [
+          {
+            "id": "pergunta",
+            "label": "Pergunta",
+            "required": true,
+            "maxLength": 200
+          },
+          {
+            "id": "resposta",
+            "label": "Resposta",
+            "required": true,
+            "maxLength": 800,
+            "multiline": true
+          }
+        ],
+        "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}"
+      }
+    ],
+    "behavior": "Você é {{agente.nome}}, da {{empresa.nome}}. {{empresa.descricao}}\nSua função é pré-venda: entender se a pessoa tem perfil e encaminhá-la ao próximo passo. Você não fecha vendas e não dá suporte técnico.\n\nPARA QUEM VENDEMOS\n{{sdr.perfil_ideal}}\n\nCOMO CONDUZIR\n- Entenda o que a pessoa procura antes de qualificar.\n- Faça uma pergunta por vez, no ritmo da conversa:\n{{sdr.perguntas}}\n- Não repita o que já foi respondido.\n- Dúvidas sobre produtos e objeções: use a base de conhecimento.\n\nQUALIFICAÇÃO\nQualificado quando: {{sdr.criterio}}\n{{sdr.qualificado}}\nNão qualificado: {{sdr.nao_qualificado}}\n\nPREÇO\n{{sdr.preco}}\n\n{{sdr.cliente_atual}}\n\n{{bloco.duvida}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas de até 3 frases.\n\n{{avancado.instrucoes_adicionais}}",
+    "intentions": [
+      {
+        "key": "qualificacao",
+        "name": "Registrar qualificação",
+        "whenToUse": "Quando o lead atender aos critérios de qualificação, depois de responder às perguntas de qualificação.",
+        "collectFrom": "sdr.perguntas",
+        "actions": [
+          {
+            "when": {
+              "field": "registro.onde",
+              "in": [
+                "conversa"
+              ]
+            },
+            "type": "TIMELINE_COMMENT",
+            "config": {
+              "text": "Lead qualificado pelo agente.\n{{intencao.respostas}}"
+            }
+          },
+          {
+            "when": {
+              "field": "registro.onde",
+              "in": [
+                "funil"
+              ]
+            },
+            "type": "UPSERT_DEAL",
+            "config": {
+              "categoryId": "{{registro.funil.categoryId}}",
+              "stageId": "{{registro.funil.stageId}}",
+              "fields": {
+                "TITLE": "Lead qualificado: {{contact.name}}",
+                "COMMENTS": "{{intencao.respostas}}"
+              }
+            }
+          },
+          {
+            "when": {
+              "field": "sdr.qualificado",
+              "in": [
+                "transferir"
+              ]
+            },
+            "type": "TRANSFER_TO_HUMAN",
+            "config": {
+              "target": "OPERATOR"
+            }
+          }
+        ],
+        "responseMode": "INSTRUCTIONS",
+        "instructions": "Agradeça as respostas e diga o próximo passo, como nas suas instruções de qualificação."
+      }
+    ]
+  }
+}

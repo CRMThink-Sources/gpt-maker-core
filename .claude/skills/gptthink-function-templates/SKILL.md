@@ -14,6 +14,8 @@ O cliente não escreve prompt. Ele escolhe a função do agente e responde um fo
 
 Código de referência: `packages/contracts/src/agent-functions.ts` (schema), `agent-function-compiler.ts` (compilação), `agent-function-check.ts` (checagem de publicação). Templates reais: `backend/src/modules/agent-functions/seed/`. Desenho completo: `openspec/changes/agent-function-templates/`.
 
+Para gerar o JSON completo de uma função nova (inclusive fora deste repositório), use a skill `gptthink-criar-funcao`.
+
 ## Editor visual (backoffice)
 
 Em `/admin/functions`, cada função abre num editor em abas. O JSON é a última aba, só para o que o visual não cobrir.
@@ -23,7 +25,7 @@ Em `/admin/functions`, cada função abre num editor em abas. O JSON é a últim
 | **Geral** | tipo no GPT Maker, configurações derivadas (transferência, assuntos, busca inteligente, mensagem de "não sei"), blocos incluídos, "Exige acesso ao CRM", dados da empresa |
 | **Formulário** | perguntas, na ordem do cliente. Cada escolha tem opções com rótulo, **texto da opção** (o trecho) e efeitos recolhidos (tom, emojis…); dependentes ficam dentro da opção |
 | **Texto do agente** | o comportamento; "Inserir campo" coloca o marcador no cursor e mostra só os que existem. "Ver como fica ao lado" mostra o texto compilado com as respostas da aba Testar |
-| **Ações** | intenções: quando usar, condição, o que coletar e os passos no Bitrix24 (comentário, lead, negócio, tarefa, processo, transferência). Campos do CRM têm sugestões (`TITLE`, `COMMENTS`…) e aceitam `UF_CRM_…` |
+| **Ações** | intenções: quando usar, condição, o que coletar e os passos no Bitrix24 (comentário, lead, negócio, tarefa, processo, transferência para operador, usuário ou canal aberto). Campos do CRM têm sugestões (`TITLE`, `COMMENTS`…) e aceitam `UF_CRM_…`. Abaixo, **Transferências entre agentes**: quando transferir, para qual campo Agente, condição e se a conversa volta ao terminar |
 | **Testar** | o formulário como o cliente vê e o agente que sai, compilado no navegador sem salvar. "Preencher com exemplo" e "Maior texto possível" (pior caso) |
 | **JSON** | o mesmo conteúdo; JSON inválido não altera as outras abas |
 
@@ -68,6 +70,9 @@ Em `/admin/functions`, cada função abre num editor em abas. O JSON é a últim
 | `MULTI_CHOICE` | trechos das marcadas, unidos pelo `separator` (`'\n\n'` para seções, `', '` para itens) |
 | `INTEGER`, `BITRIX_USER` | o número (útil em ações) |
 | `BITRIX_STAGE` | use `{{campo.categoryId}}` e `{{campo.stageId}}` nas ações |
+| `BITRIX_USER` com "vários usuários" | lista de ids: nas ações (`responsibleId`, `userId`) cada execução vai para o próximo, em rodízio. Travado depois de publicado |
+| `BITRIX_OPENLINE` (canal aberto) | não entra: use em "Transferir para atendente", destino Canal aberto (`lineId`) |
+| `AGENT` | não entra: destino de uma transferência entre agentes (`transfers`) |
 | `KNOWLEDGE` | não entra: cada item vira um treinamento pelo `format` |
 
 ### Regras que a checagem impõe
