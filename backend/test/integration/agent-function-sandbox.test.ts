@@ -116,6 +116,16 @@ describe('sandbox dos templates de função', () => {
     expect(await db.select().from(agent)).toEqual([]);
   });
 
+  it('resposta faltando na aba Testar: a recusa diz quais campos preencher', async () => {
+    const answers: Record<string, unknown> = { ...ANSWERS };
+    delete answers['registro.onde'];
+    delete answers['duvida.depois'];
+    // Sem as duas, "Registrar dúvida" fica sem passo e sem instrução: a prévia não compila.
+    await expect(sandbox.publish('SUPPORT', { answers, agentName: 'Ana' })).rejects.toThrow(
+      'Preencha na aba Testar: Onde registrar no Bitrix24 e Quando o agente não souber responder. Ou use "Preencher com exemplo".',
+    );
+  });
+
   it('a sincronização do workspace não aponta o sandbox como órfão', async () => {
     const summary = await sync.sync();
     expect(summary.remoteAgents).toBe(1);

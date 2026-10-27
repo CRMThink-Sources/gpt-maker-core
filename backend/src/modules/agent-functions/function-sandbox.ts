@@ -11,8 +11,12 @@ import {
 } from '@nestjs/common';
 import {
   type CompiledAgent,
+  type FunctionAnswers,
+  type FunctionTemplateContent,
+  flattenFields,
   intentionJsonName,
   type PreviewFunctionDraftInput,
+  validateFunctionAnswers,
 } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import { ENV } from '../../config/config.module';
@@ -31,6 +35,23 @@ import { FunctionCatalog } from './function-catalog.service';
 
 const PURPOSE = 'function-sandbox';
 const SANDBOX_NAME = '[SANDBOX] Templates de função';
+
+/** Rótulos dos campos obrigatórios visíveis que ficaram sem resposta. */
+function missingAnswers(content: FunctionTemplateContent, answers: FunctionAnswers): string[] {
+  const labels = new Map(flattenFields(content.fields).map((field) => [field.id, field.label]));
+  const { issues } = validateFunctionAnswers(content, answers);
+  return issues.flatMap((issue) => {
+    const label = labels.get(issue.field);
+    return label && issue.message === 'campo obrigatório' ? [label] : [];
+  });
+}
+
+/** "A", "A e B", "A, B e C". */
+function listLabels(labels: string[]): string {
+  return labels.length > 1
+    ? `${labels.slice(0, -1).join(', ')} e ${labels[labels.length - 1]}`
+    : labels.join('');
+}
 
 export interface SandboxResult {
   gptmakerAgentId: string;
@@ -59,9 +80,14 @@ export class FunctionSandbox {
     const preview = await this.catalog.previewDraft(code, input);
     const { compiled } = preview;
     if (compiled.errors.length || preview.blockErrors.length) {
+      // Quase sempre a causa é resposta faltando na aba Testar (usuário vazio vira texto, ação sem
+      // passo): diga quais campos preencher antes dos erros da compilação.
+      const missing = missingAnswers(preview.content, (input.answers ?? {}) as FunctionAnswers);
       throw new DomainError(
         'FUNCTION_SANDBOX_INVALID',
-        'A prévia tem problemas; corrija antes de testar no sandbox',
+        missing.length
+          ? `Preencha na aba Testar: ${listLabels(missing)}. Ou use "Preencher com exemplo".`
+          : 'A prévia tem problemas; corrija antes de testar no sandbox',
         HttpStatus.UNPROCESSABLE_ENTITY,
         { errors: [...preview.blockErrors, ...compiled.errors] },
       );
