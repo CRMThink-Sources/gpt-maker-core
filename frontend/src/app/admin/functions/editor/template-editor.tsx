@@ -48,6 +48,7 @@ import { FocusContext, type FocusTarget } from './focus';
 import { IntentionList } from './intention-editor';
 import { KIND_STYLE, Section, Segmented, SettingRow, TriState, TypeIcon } from './kit';
 import { MarkerText } from './marker-text';
+import { TransferList } from './transfer-editor';
 import { allIds, KIND_LABELS, type Published, renameId, renameOption } from './model';
 import { CompiledBehavior, PreviewTab } from './preview-tab';
 
@@ -919,14 +920,23 @@ export function TemplateEditor({
           )}
 
           {tab === 'actions' && (
-            <IntentionList
-              content={{ fields: live.content.fields, intentions: draft.intentions }}
-              intentions={draft.intentions}
-              issues={find.intention}
-              published={publishedIntentions}
-              disabled={disabled}
-              onChange={(intentions) => set({ intentions })}
-            />
+            <div className="space-y-8">
+              <IntentionList
+                content={{ fields: live.content.fields, intentions: draft.intentions }}
+                intentions={draft.intentions}
+                issues={find.intention}
+                published={publishedIntentions}
+                disabled={disabled}
+                onChange={(intentions) => set({ intentions })}
+              />
+              <TransferList
+                content={{ fields: live.content.fields, intentions: draft.intentions }}
+                transfers={draft.transfers}
+                issues={(key) => find.intention(key)}
+                disabled={disabled}
+                onChange={(transfers) => set({ transfers })}
+              />
+            </div>
           )}
 
           {tab === 'preview' && (
@@ -1047,13 +1057,22 @@ export function BlockEditor({
         </div>
       )}
       {tab === 'actions' && (
-        <IntentionList
-          content={content}
-          intentions={value.intentions}
-          issues={() => []}
-          disabled={disabled}
-          onChange={(intentions) => onChange({ ...value, intentions })}
-        />
+        <div className="space-y-8">
+          <IntentionList
+            content={content}
+            intentions={value.intentions}
+            issues={() => []}
+            disabled={disabled}
+            onChange={(intentions) => onChange({ ...value, intentions })}
+          />
+          <TransferList
+            content={content}
+            transfers={value.transfers}
+            issues={() => []}
+            disabled={disabled}
+            onChange={(transfers) => onChange({ ...value, transfers })}
+          />
+        </div>
       )}
       {tab === 'json' && (
         <JsonTab

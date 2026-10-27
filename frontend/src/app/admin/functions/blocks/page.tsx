@@ -20,6 +20,7 @@ const EMPTY_BLOCK: FunctionBlockContent = {
   fields: [],
   behavior: '',
   intentions: [],
+  transfers: [],
   crmAccess: false,
 };
 

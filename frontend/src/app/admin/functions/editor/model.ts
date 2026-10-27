@@ -13,6 +13,7 @@ import {
 export type FieldKind = FunctionField['kind'];
 export type DraftIntention = FunctionTemplateContent['intentions'][number];
 export type DraftAction = DraftIntention['actions'][number];
+export type DraftTransfer = FunctionTemplateContent['transfers'][number];
 
 export const KIND_LABELS: Record<FieldKind, string> = {
   TEXT: 'Texto',
@@ -21,6 +22,8 @@ export const KIND_LABELS: Record<FieldKind, string> = {
   INTEGER: 'Número',
   BITRIX_USER: 'Usuário do Bitrix24',
   BITRIX_STAGE: 'Funil e etapa',
+  BITRIX_OPENLINE: 'Canal aberto do Bitrix24',
+  AGENT: 'Agente',
   CHOICE: 'Escolha única',
   MULTI_CHOICE: 'Múltipla escolha',
   KNOWLEDGE: 'Itens da base de conhecimento',
@@ -32,15 +35,19 @@ export const KIND_HINTS: Record<FieldKind, string> = {
   TEXT_LIST: 'Cada item entra como um tópico (- item) no texto do agente.',
   URL: 'O link entra no texto do agente onde estiver o marcador.',
   INTEGER: 'Um número, útil nas ações (prazo, id de processo).',
-  BITRIX_USER: 'O cliente escolhe um usuário do Bitrix24. Use nas ações (responsável).',
+  BITRIX_USER:
+    'O cliente escolhe um usuário do Bitrix24 (ou vários, em rodízio). Use nas ações (responsável, atendente).',
   BITRIX_STAGE: 'O cliente escolhe funil e etapa. Use nas ações de negócio.',
+  BITRIX_OPENLINE:
+    'O cliente escolhe um canal aberto do portal. Use em "Transferir para atendente" com destino Canal aberto.',
+  AGENT: 'O cliente escolhe outro agente do portal. Use numa transferência entre agentes.',
   CHOICE: 'O cliente escolhe uma opção; o texto da opção entra no agente.',
   MULTI_CHOICE: 'O cliente marca várias; os textos das marcadas entram juntos.',
   KNOWLEDGE: 'Não entra no texto: cada item vira um treinamento na base.',
 };
 
 /** Campos já publicados: tipo e valores das opções (visão do template). */
-export type Published = Record<string, { kind: FieldKind; options: string[] }>;
+export type Published = Record<string, { kind: FieldKind; options: string[]; multiple?: boolean }>;
 
 /** Parte de id a partir de um rótulo: `Canal de vendas` ⇒ `canal_de_vendas`. */
 export function slug(label: string): string {
@@ -70,7 +77,10 @@ export function newField(kind: FieldKind, id: string, label: string): FunctionFi
     case 'INTEGER':
       return { kind, ...base, min: 0, max: 30 };
     case 'BITRIX_USER':
+      return { kind, ...base, multiple: false };
     case 'BITRIX_STAGE':
+    case 'BITRIX_OPENLINE':
+    case 'AGENT':
       return { kind, ...base };
     case 'CHOICE':
       return {

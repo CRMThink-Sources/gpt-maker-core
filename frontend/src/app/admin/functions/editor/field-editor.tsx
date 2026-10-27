@@ -482,11 +482,45 @@ function KindSettings({
           />
         </div>
       );
-    case 'BITRIX_USER':
+    case 'BITRIX_USER': {
+      // Número ou lista nas respostas guardadas: travado depois de publicado (D15).
+      const locked = ctx.published[field.id] !== undefined;
+      return (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-zinc-700">
+            <input
+              type="checkbox"
+              checked={field.multiple}
+              disabled={disabled || locked}
+              onChange={(e) => onChange({ ...field, multiple: e.target.checked })}
+            />
+            Permitir vários usuários (as ações usam um de cada vez, em rodízio)
+            {locked && <span className="text-xs text-zinc-500">· publicado: não muda</span>}
+          </label>
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            O cliente escolhe no Bitrix24. Use nas ações (responsável, atendente).
+          </p>
+        </div>
+      );
+    }
     case 'BITRIX_STAGE':
       return (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          O cliente escolhe no Bitrix24. Use nas ações (responsável, funil e etapa).
+          O cliente escolhe no Bitrix24. Use nas ações de negócio (funil e etapa).
+        </p>
+      );
+    case 'BITRIX_OPENLINE':
+      return (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          O cliente escolhe um canal aberto do portal. Use em “Transferir para atendente”, destino
+          Canal aberto.
+        </p>
+      );
+    case 'AGENT':
+      return (
+        <p className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+          O cliente escolhe outro agente do portal. Use numa transferência entre agentes (aba
+          Ações).
         </p>
       );
     case 'CHOICE':
