@@ -11,6 +11,8 @@ import {
 
 /** Item de exemplo da base nas compilações de checagem. */
 const SAMPLE_ITEM_KEY = '00000000-0000-4000-8000-000000000000';
+/** Agente de exemplo nas compilações de checagem (campo `AGENT`). */
+const SAMPLE_AGENT = '00000000-0000-4000-8000-000000000001';
 
 function sampleValue(field: FunctionField): FunctionAnswerValue | undefined {
   switch (field.kind) {
@@ -23,7 +25,11 @@ function sampleValue(field: FunctionField): FunctionAnswerValue | undefined {
     case 'INTEGER':
       return field.min;
     case 'BITRIX_USER':
+      return field.multiple ? [1] : 1;
+    case 'BITRIX_OPENLINE':
       return 1;
+    case 'AGENT':
+      return SAMPLE_AGENT;
     case 'BITRIX_STAGE':
       return { categoryId: 1, stageId: 'C1:NEW' };
     case 'CHOICE':

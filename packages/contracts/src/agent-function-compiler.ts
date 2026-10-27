@@ -50,6 +50,17 @@ export interface CompiledIntention {
   input: z.output<typeof intentionInputSchema>;
 }
 
+/** Regra de transferência para outro agente (design D17), com o agente local escolhido. */
+export interface CompiledTransfer {
+  key: string;
+  /** Id local do agente de destino; o publicador traduz para o do GPTMaker. */
+  agentId: string;
+  /** Campo `AGENT` de onde veio o destino (a mensagem de erro da publicação o nomeia). */
+  fieldId: string;
+  instructions: string;
+  returnOnFinish: boolean;
+}
+
 export interface CompiledAgent {
   behavior: string;
   /** Caracteres de cada parte do comportamento: texto fixo e cada marcador do template. */
@@ -60,6 +71,7 @@ export interface CompiledAgent {
   settings: AgentSettings;
   trainings: CompiledTraining[];
   intentions: CompiledIntention[];
+  transfers: CompiledTransfer[];
   /** O agente precisa do acesso ao CRM (`crmAccess` do template ou de um bloco incluído). */
   crmAccess: boolean;
   /** Vazio ⇒ publicável. */
@@ -137,6 +149,8 @@ class Renderer {
         return typeof value === 'string' ? value : '';
       case 'INTEGER':
       case 'BITRIX_USER':
+        // Vários usuários: os ids, para as ações (D15).
+        if (Array.isArray(value)) return value.join(', ');
         return typeof value === 'number' ? String(value) : '';
       case 'BITRIX_STAGE':
         return typeof value === 'object' && !Array.isArray(value)
@@ -186,20 +200,32 @@ function chosenOptions(fields: readonly FunctionField[], answers: FunctionAnswer
 }
 
 /** Troca marcadores em todos os textos de uma configuração de ação. */
-function renderConfig(value: unknown, render: (text: string) => string): unknown {
+function renderConfig(
+  value: unknown,
+  render: (text: string) => string,
+  /** Lista de usuários de um marcador (campo de vários usuários, D15). */
+  list: (path: string) => number[] | undefined = () => undefined,
+): unknown {
   if (typeof value === 'string') {
+    const path = singleMarker(value);
+    const ids = path ? list(path) : undefined;
+    if (ids) return ids;
     const rendered = render(value);
     // Só um marcador que vira número (funil, usuário, prazo) ⇒ número.
-    const single = new RegExp(`^${FUNCTION_MARKER.source}$`).test(value.trim());
-    return single && /^\d+$/.test(rendered) ? Number(rendered) : rendered;
+    return path && /^\d+$/.test(rendered) ? Number(rendered) : rendered;
   }
-  if (Array.isArray(value)) return value.map((item) => renderConfig(item, render));
+  if (Array.isArray(value)) return value.map((item) => renderConfig(item, render, list));
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, renderConfig(item, render)]),
+      Object.entries(value).map(([key, item]) => [key, renderConfig(item, render, list)]),
     );
   }
   return value;
+}
+
+/** Caminho de um texto que é só um marcador (`{{campo}}`). */
+export function singleMarker(text: string): string | undefined {
+  return new RegExp(`^${FUNCTION_MARKER.source}$`).exec(text.trim())?.[1];
 }
 
 /** Nome do agente no limite do cadastro (`createAgentSchema`). */
@@ -216,6 +242,8 @@ function maxValue(field: FunctionField): FunctionAnswerValue | undefined {
     case 'INTEGER':
       return String(field.min).length > String(field.max).length ? field.min : field.max;
     case 'BITRIX_USER':
+      return field.multiple ? Array.from({ length: 20 }, () => 9_999_999) : 9_999_999;
+    case 'BITRIX_OPENLINE':
       return 9_999_999;
     case 'BITRIX_STAGE':
       return { categoryId: 9_999, stageId: 'C9999:XXXXXXXXXXXX' };
@@ -330,6 +358,16 @@ export function compileAgent(input: CompileInput): CompiledAgent {
   const texts = trainings.map((training) => training.text);
   if (new Set(texts).size !== texts.length) errors.push('há itens da base com o mesmo texto');
 
+  // Marcador sozinho de campo de vários usuários vira a lista (D15).
+  const fields = new Map(flattenFields(content.fields).map((field) => [field.id, field]));
+  const userList = (path: string): number[] | undefined => {
+    const field = fields.get(path);
+    const value = answers[path];
+    return field?.kind === 'BITRIX_USER' && field.multiple && Array.isArray(value)
+      ? (value as number[])
+      : undefined;
+  };
+
   // Intenções ativadas pelas escolhas.
   const intentions: CompiledIntention[] = [];
   for (const intention of content.intentions) {
@@ -360,7 +398,10 @@ export function compileAgent(input: CompileInput): CompiledAgent {
       httpMethod: 'POST',
       actions: intention.actions
         .filter((action) => conditionMet(action.when, answers))
-        .map((action) => ({ type: action.type, config: renderConfig(action.config, render) })),
+        .map((action) => ({
+          type: action.type,
+          config: renderConfig(action.config, render, userList),
+        })),
       autoGenerateParams: false,
       autoGenerateBody: false,
       responseMode: intention.responseMode ?? 'INSTRUCTIONS',
@@ -373,6 +414,22 @@ export function compileAgent(input: CompileInput): CompiledAgent {
         `intenção ${intention.key}: ${parsed.error.issues.map((issue) => `${issue.path.join('.')} ${issue.message}`).join('; ')}`,
       );
     }
+  }
+
+  // Transferências entre agentes ativadas pelas escolhas (D17); sem agente respondido, não há regra.
+  const transfers: CompiledTransfer[] = [];
+  for (const transfer of content.transfers ?? []) {
+    if (!conditionMet(transfer.when, answers)) continue;
+    const fieldId = singleMarker(transfer.agent);
+    const agentId = fieldId ? answers[fieldId] : undefined;
+    if (!fieldId || typeof agentId !== 'string') continue;
+    transfers.push({
+      key: transfer.key,
+      agentId,
+      fieldId,
+      instructions: renderer.render(transfer.instructions).trim(),
+      returnOnFinish: transfer.returnOnFinish ?? false,
+    });
   }
 
   return {
@@ -388,6 +445,7 @@ export function compileAgent(input: CompileInput): CompiledAgent {
     settings,
     trainings,
     intentions,
+    transfers,
     // Versões gravadas antes do campo não o têm.
     crmAccess: content.crmAccess === true,
     errors,

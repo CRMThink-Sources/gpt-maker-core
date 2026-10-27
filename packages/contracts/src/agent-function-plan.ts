@@ -1,4 +1,9 @@
-import type { CompiledAgent, CompiledIntention, CompiledTraining } from './agent-function-compiler';
+import type {
+  CompiledAgent,
+  CompiledIntention,
+  CompiledTraining,
+  CompiledTransfer,
+} from './agent-function-compiler';
 import type { AgentSettings } from './agents';
 
 /**
@@ -15,6 +20,8 @@ export interface PublishedFunctionState {
   settings: AgentSettings;
   trainings: Array<{ key: string; hash: string }>;
   intentions: Array<{ key: string; hash: string }>;
+  /** Regras de transferência entre agentes (design D17); estados antigos não têm. */
+  transfers?: Array<{ key: string; hash: string }>;
 }
 
 export type DiffLine = { op: 'equal' | 'add' | 'remove'; text: string };
@@ -96,6 +103,10 @@ export function intentionHash(intention: CompiledIntention): string {
   return contentHash(intention.input);
 }
 
+export function transferHash(transfer: CompiledTransfer): string {
+  return contentHash(transfer);
+}
+
 /** Estado a guardar depois de publicar o compilado. */
 export function publishedStateOf(compiled: CompiledAgent): PublishedFunctionState {
   return {
@@ -111,6 +122,10 @@ export function publishedStateOf(compiled: CompiledAgent): PublishedFunctionStat
     intentions: compiled.intentions.map((intention) => ({
       key: intention.key,
       hash: intentionHash(intention),
+    })),
+    transfers: compiled.transfers.map((transfer) => ({
+      key: transfer.key,
+      hash: transferHash(transfer),
     })),
   };
 }

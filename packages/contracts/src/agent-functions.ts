@@ -466,6 +466,11 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
         condition ? [condition.field] : [],
       ),
     ]),
+    ...(content.transfers ?? []).flatMap((transfer) => [
+      ...functionMarkers(transfer.agent),
+      ...functionMarkers(transfer.instructions),
+      ...(transfer.when ? [transfer.when.field] : []),
+    ]),
   ]);
   for (const field of all) {
     if (field.kind !== 'CHOICE' && field.kind !== 'MULTI_CHOICE') continue;
@@ -565,6 +570,55 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
         );
       }
     });
+  }
+
+  // Transferências entre agentes (D17): como as intenções, endereçadas pela chave.
+  const transferKeys = new Set<string>();
+  for (const transfer of content.transfers ?? []) {
+    const at: TemplateIssueWhere = { section: 'actions', intentionKey: transfer.key };
+    const label = `transferência ${transfer.key}`;
+    if (transferKeys.has(transfer.key)) add(at, `transferência repetida: ${transfer.key}`);
+    transferKeys.add(transfer.key);
+    const agentField = /^\{\{\s*([^{}|\s]+)\s*\}\}$/.exec(transfer.agent.trim())?.[1];
+    if (!agentField || byId.get(agentField)?.kind !== 'AGENT') {
+      add(at, `${label}: escolha um campo de agente`);
+    }
+    check(transfer.instructions, label, at);
+    if (transfer.when) {
+      const field = byId.get(transfer.when.field);
+      if (!field || (field.kind !== 'CHOICE' && field.kind !== 'MULTI_CHOICE')) {
+        add(at, `condição da ${label} cita campo que não é escolha: ${transfer.when.field}`);
+      } else {
+        for (const value of transfer.when.in) {
+          if (!field.options.some((option) => option.value === value)) {
+            add(at, `condição da ${label} cita opção inexistente: ${transfer.when.field}=${value}`);
+          }
+        }
+      }
+    }
+    // Dependente sem a condição dele: sem a opção escolhida, a regra ficaria sem agente.
+    for (const id of new Set([
+      ...functionMarkers(transfer.agent),
+      ...functionMarkers(transfer.instructions),
+    ])) {
+      const parent = parents.get(id);
+      if (!parent) continue;
+      const condition = transfer.when;
+      if (
+        condition?.field === parent.field.id &&
+        condition.in.every((value) => parent.options.includes(value))
+      ) {
+        continue;
+      }
+      const labels = parent.field.options
+        .filter((option) => parent.options.includes(option.value))
+        .map((option) => option.label)
+        .join(' ou ');
+      add(
+        at,
+        `Transferência ${transfer.key} usa "${byId.get(id)!.label}", que só existe com "${parent.field.label}" = ${labels}: ponha essa condição na transferência`,
+      );
+    }
   }
   return issues;
 }
