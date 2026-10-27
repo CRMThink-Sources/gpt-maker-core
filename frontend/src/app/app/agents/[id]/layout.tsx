@@ -47,6 +47,11 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
 
   const base = `/app/agents/${agent!.id}`;
   const tabs = [
+    {
+      href: `${base}/function`,
+      label: 'Função',
+      active: pathname.startsWith(`${base}/function`),
+    },
     { href: base, label: 'Configurações', active: pathname === base },
     {
       href: `${base}/trainings`,

@@ -1,11 +1,12 @@
 'use client';
 
-import { TRAINING_TEXT_MAX, type TrainingUsage, type TrainingView } from '@gptmaker/contracts';
+import type { AgentFunctionConfigView, TrainingUsage, TrainingView } from '@gptmaker/contracts';
+import Link from 'next/link';
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { BookIcon, FileIcon, GlobeIcon, PlusIcon, TextIcon, VideoIcon } from '@/components/icons';
-import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading, Spinner } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
+import { ApiRequestError } from '@/lib/platform-session';
 import {
   formatBytes,
   TRAINING_INTERVALS,
@@ -14,7 +15,6 @@ import {
   trainingTitle,
 } from '@/lib/trainings';
 import { useAppSession } from '../../../session-provider';
-import { inputClass } from '../../agent-fields';
 import { useAgent } from '../agent-context';
 import { AddTrainingModal } from './add-training-modal';
 
@@ -85,7 +85,10 @@ export default function AgentTrainingsPage() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<TrainingView | null>(null);
+  // Site e vídeo só no modo avançado; agente sem função (anterior às funções) segue livre.
+  const [mediaAllowed, setMediaAllowed] = useState<boolean | null>(null);
+  // No controle assumido não há botão de modo avançado: o caminho é voltar ao formulário.
+  const [takenOver, setTakenOver] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -101,6 +104,25 @@ export default function AgentTrainingsPage() {
       setError(errorMessage(e, 'Não foi possível carregar os treinamentos.'));
     }
   }, [fetchListing]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<AgentFunctionConfigView>(`/app/agents/${agent.id}/function`)
+      .then((config) => {
+        if (cancelled) return;
+        setMediaAllowed(config.mode === 'ADVANCED');
+        setTakenOver(config.mode === 'TAKEN_OVER');
+      })
+      // Outra falha não libera: a API recusaria e o cliente veria o erro só depois de preencher.
+      .catch(
+        (e: unknown) =>
+          !cancelled &&
+          setMediaAllowed(e instanceof ApiRequestError && e.code === 'FUNCTION_NOT_CONFIGURED'),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, agent.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,10 +165,10 @@ export default function AgentTrainingsPage() {
     }
   }
 
-  const add = canManage && (
+  const add = canManage && mediaAllowed && (
     <button type="button" onClick={() => setAdding(true)} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Adicionar treinamento
+      Adicionar site ou vídeo
     </button>
   );
 
@@ -156,8 +178,17 @@ export default function AgentTrainingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-zinc-900">O que o agente sabe</h2>
           <p className="mt-0.5 text-sm text-zinc-500">
-            Textos, sites, documentos e vídeos que o agente usa para responder. Treinar não consome
-            créditos.
+            Os itens da base vêm do formulário, na aba{' '}
+            <Link href={`/app/agents/${agent.id}/function`} className="text-brand-700 underline">
+              Função
+            </Link>
+            .{' '}
+            {mediaAllowed === false
+              ? takenOver
+                ? 'Para treinar com sites e vídeos, volte ao formulário no modo avançado lá.'
+                : 'Para treinar com sites e vídeos, ligue o modo avançado lá.'
+              : 'No modo avançado, sites e vídeos entram por aqui.'}{' '}
+            Treinar não consome créditos.
           </p>
         </div>
         {add}
@@ -179,12 +210,6 @@ export default function AgentTrainingsPage() {
               used={listing.usage.trainings.used}
               limit={listing.usage.trainings.limit}
             />
-            <UsageMeter
-              label="Espaço em documentos"
-              used={listing.usage.documentBytes.used}
-              limit={listing.usage.documentBytes.limit}
-              format={formatBytes}
-            />
           </div>
 
           <Card>
@@ -192,7 +217,7 @@ export default function AgentTrainingsPage() {
               <EmptyState
                 icon={<BookIcon className="size-6" />}
                 title="Nenhum treinamento ainda"
-                description="Sem treinamento o agente só conhece o que está no comportamento. Comece pelas perguntas mais frequentes dos seus clientes."
+                description="Preencha a base de conhecimento no formulário da aba Função e publique."
                 action={add}
               />
             ) : (
@@ -214,6 +239,7 @@ export default function AgentTrainingsPage() {
                           >
                             {trainingTitle(training)}
                           </p>
+                          {training.managed && <Badge tone="brand">da função</Badge>}
                           <Badge tone={status.tone}>
                             {training.status === 'PROCESSING' && (
                               <Spinner className="-ml-0.5 size-3" />
@@ -228,7 +254,22 @@ export default function AgentTrainingsPage() {
                       </div>
 
                       {canManage &&
-                        (confirmingId === training.id ? (
+                        (training.managed ? (
+                          training.status === 'FAILED' && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                run(training.id, () =>
+                                  api(`${base}/${training.id}/retry`, { method: 'POST' }),
+                                )
+                              }
+                              disabled={busyId !== null}
+                              className={buttonClass('secondary', 'sm')}
+                            >
+                              {busy ? 'Reenviando…' : 'Reenviar'}
+                            </button>
+                          )
+                        ) : confirmingId === training.id ? (
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-zinc-600">Remover?</span>
                             <button
@@ -268,16 +309,6 @@ export default function AgentTrainingsPage() {
                                 {busy ? 'Reenviando…' : 'Reenviar'}
                               </button>
                             )}
-                            {training.type === 'TEXT' && (
-                              <button
-                                type="button"
-                                onClick={() => setEditing(training)}
-                                disabled={busyId !== null}
-                                className={buttonClass('ghost', 'sm')}
-                              >
-                                Editar
-                              </button>
-                            )}
                             <button
                               type="button"
                               onClick={() => setConfirmingId(training.id)}
@@ -307,91 +338,6 @@ export default function AgentTrainingsPage() {
           }}
         />
       )}
-      {editing && (
-        <EditTextModal
-          training={editing}
-          onClose={() => setEditing(null)}
-          onSave={async (text) => {
-            await api(`${base}/${editing.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify({ text }),
-            });
-            setEditing(null);
-            await reload();
-          }}
-        />
-      )}
     </>
-  );
-}
-
-function EditTextModal({
-  training,
-  onClose,
-  onSave,
-}: {
-  training: TrainingView;
-  onClose: () => void;
-  onSave: (text: string) => Promise<void>;
-}) {
-  const [text, setText] = useState(training.text ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    setSaving(true);
-    setError(null);
-    try {
-      await onSave(text);
-    } catch (e) {
-      setError(errorMessage(e, 'Não foi possível salvar. Tente de novo.'));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      title="Editar texto"
-      onRequestClose={() => !saving && onClose()}
-      footer={
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className={buttonClass('secondary')}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || text.trim() === ''}
-            className={buttonClass('primary')}
-          >
-            {saving ? 'Salvando…' : 'Salvar'}
-          </button>
-        </div>
-      }
-    >
-      {error && (
-        <Alert tone="error" className="mb-4">
-          {error}
-        </Alert>
-      )}
-      <textarea
-        className={`${inputClass} mt-0 min-h-64`}
-        maxLength={TRAINING_TEXT_MAX}
-        autoFocus
-        disabled={saving}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        aria-label="Conteúdo do treinamento"
-      />
-      <p className="mt-1.5 text-xs text-zinc-500">
-        {text.length.toLocaleString('pt-BR')}/{TRAINING_TEXT_MAX.toLocaleString('pt-BR')}{' '}
-        caracteres.
-      </p>
-    </Modal>
   );
 }

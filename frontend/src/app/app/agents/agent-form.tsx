@@ -11,11 +11,10 @@ import {
   type SyntheticEvent,
   type SVGProps,
 } from 'react';
-import { BuildingIcon, ChatIcon, SparkIcon, UserIcon } from '@/components/icons';
+import { ChatIcon, SparkIcon, UserIcon } from '@/components/icons';
 import { buttonClass, Card } from '@/components/ui';
 import {
   type AgentFormValues,
-  CompanyFields,
   Field,
   IdentityFields,
   inputClass,
@@ -42,21 +41,10 @@ const LIMIT_ACTIONS: Record<NonNullable<AgentSettings['maxDailyMessagesLimitActi
   TRANSFER: 'Transferir para um atendente',
 };
 
-type Toggle =
-  | 'enabledHumanTransfer'
-  | 'enabledReminder'
-  | 'splitMessages'
-  | 'enabledEmoji'
-  | 'limitSubjects'
-  | 'signMessages'
-  | 'knowledgeByFunction';
+/** Settings operacionais; os gerenciados pela função (transferência, emojis...) ficam na aba Função. */
+type Toggle = 'enabledReminder' | 'splitMessages' | 'signMessages';
 
 const TOGGLES: Array<{ key: Toggle; label: string; hint: string }> = [
-  {
-    key: 'enabledHumanTransfer',
-    label: 'Transferir para um atendente',
-    hint: 'Quando o cliente pedir para falar com uma pessoa, o diálogo vai para a fila da Linha Aberta.',
-  },
   {
     key: 'enabledReminder',
     label: 'Lembrar o cliente',
@@ -67,25 +55,14 @@ const TOGGLES: Array<{ key: Toggle; label: string; hint: string }> = [
     label: 'Dividir respostas longas',
     hint: 'Respostas grandes chegam em várias mensagens curtas, como uma pessoa escreveria.',
   },
-  { key: 'enabledEmoji', label: 'Usar emojis', hint: 'Deixa as respostas mais leves.' },
-  {
-    key: 'limitSubjects',
-    label: 'Falar só dos assuntos do treinamento',
-    hint: 'Evita que o agente responda sobre temas fora do seu negócio.',
-  },
   {
     key: 'signMessages',
     label: 'Assinar as mensagens',
     hint: 'Inclui o nome do agente em cada resposta.',
   },
-  {
-    key: 'knowledgeByFunction',
-    label: 'Consultar o treinamento só quando precisar',
-    hint: 'O agente busca no treinamento apenas quando a pergunta exige.',
-  },
 ];
 
-export type SectionKey = 'identity' | 'company' | 'model' | 'service';
+export type SectionKey = 'identity' | 'model' | 'service';
 
 /** Seções da edição, uma por vez na tela; a navegação lateral alterna entre elas. */
 const SECTIONS: Array<{
@@ -101,14 +78,7 @@ const SECTIONS: Array<{
     icon: UserIcon,
     title: 'Identidade',
     description: 'Como o agente se apresenta aos clientes no chat.',
-    fields: ['name', 'avatarUrl', 'behavior', 'type', 'communicationType'],
-  },
-  {
-    key: 'company',
-    icon: BuildingIcon,
-    title: 'Empresa',
-    description: 'Contexto que o agente usa para falar em nome do seu negócio.',
-    fields: ['jobName', 'jobSite', 'jobDescription'],
+    fields: ['name', 'avatarUrl'],
   },
   {
     key: 'model',
@@ -121,7 +91,8 @@ const SECTIONS: Array<{
     key: 'service',
     icon: ChatIcon,
     title: 'Atendimento',
-    description: 'Como o agente conduz a conversa. Campos sem escolha seguem o padrão.',
+    description:
+      'Ajustes da conversa. Transferência, emojis e assuntos vêm da função do agente (aba Função).',
     fields: ['settings'],
   },
 ];
@@ -334,10 +305,6 @@ export function AgentForm({
           <IdentityFields values={values} set={set} />
         </Section>
 
-        <Section section={sectionOf('company')} active={active === 'company'} disabled={disabled}>
-          <CompanyFields values={values} set={set} />
-        </Section>
-
         <Section section={sectionOf('model')} active={active === 'model'} disabled={disabled}>
           <ModelFields values={values} set={set} models={models} currentModel={currentModel} />
         </Section>
@@ -435,17 +402,6 @@ export function AgentForm({
                 </select>
               </Field>
             </div>
-            <Field
-              label="Quando o agente não souber responder"
-              hint="Ex.: “Vou verificar com a equipe e já retorno.”"
-            >
-              <textarea
-                className={`${inputClass} min-h-20`}
-                maxLength={2000}
-                value={settings.onLackKnowLedge ?? ''}
-                onChange={(e) => setSetting('onLackKnowLedge', e.target.value)}
-              />
-            </Field>
           </div>
         </Section>
 
