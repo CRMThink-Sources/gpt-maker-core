@@ -104,6 +104,29 @@ export class CrmAccessService implements OnModuleInit, AgentChangeListener {
     return this.toView(outcome.result);
   }
 
+  /**
+   * Publicação de uma função que exige o CRM (`crmAccess` do template ou de um bloco): ativa o
+   * acesso se ainda não estiver conectado. Sem conectar, a publicação falha (o comportamento cita a
+   * intenção de sistema) e pode ser repetida.
+   */
+  async ensureEnabled(tenantId: string, agentId: string): Promise<void> {
+    if (!this.env.CRM_TOOLS_ENABLED) {
+      throw new DomainError(
+        'CRM_TOOLS_UNAVAILABLE',
+        'A função exige o acesso ao CRM, que não está disponível neste ambiente',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const view = await this.update(tenantId, agentId, { enabled: true });
+    if (view.status !== 'CONNECTED') {
+      throw new DomainError(
+        'CRM_ACCESS_FAILED',
+        `Não foi possível ativar o acesso ao CRM: ${view.lastError ?? 'erro desconhecido'}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
   private async enable(owner: Agent): Promise<Access> {
     const current = await this.rowOf(owner.id);
     if (current?.status === 'CONNECTED') return current;

@@ -57,7 +57,9 @@ Publicar faz: (1) compila; (2) calcula o **plano** comparando o resultado com `a
 - *Alternativa:* publicar síncrono na requisição HTTP. Rejeitada: dezenas de treinamentos e listagens podem passar do tempo de requisição e não há como retomar.
 
 ### D6. Primeira publicação cria o agente
-O fluxo de criação vira: escolher função → formulário (respostas em rascunho, ainda sem agente no GPT Maker) → prévia → publicar. A publicação inicial reaproveita a criação atual (`agent_creation_attempt`, webhooks, `prefferModel`), passando o comportamento compilado. Enquanto o agente não foi publicado, ele existe só localmente, sem chatbot.
+O fluxo de criação vira: escolher função → formulário (rascunho no navegador) → prévia calculada sem agente (`POST /app/agent-functions/{code}/preview`, plano contra estado vazio) → publicar. Publicar envia função + respostas a `POST /app/agents`, que compila, cria o agente pela criação atual (`agent_creation_attempt`, webhooks, `prefferModel`) já com comportamento, tipo, tom, dados da empresa e settings compilados, grava a configuração da função e enfileira a publicação dos treinamentos e intenções (D5). O rascunho no servidor (`agent_function_config.draft_answers`) só existe para agentes já criados.
+- *Alternativa descartada na implementação:* agente só local antes da primeira publicação. `agent.gptmaker_agent_id` é obrigatório e único, e chatbot, assinatura e limites dependem do agente existir no GPTMaker; afrouxar isso espalharia casos especiais por todos os módulos.
+- O schema da criação antiga (com comportamento livre) vira o schema interno `agentProvisionSchema`, usado só pelo backend para aplicar o resultado compilado.
 
 ### D7. "Não sei" via intenção, não via evento
 A intenção gerenciada "Registrar dúvida" é uma intenção `BITRIX` (comentário na timeline ou negócio + ação de escalonamento), e o comportamento de toda função instrui o uso dela. O gatilho `onLackKnowLedge` não é gerado. Em staging, testar `knowledgeByFunction` ligado; se reduzir respostas inventadas, ele passa a fazer parte dos settings derivados das funções (mudança de template, sem código).
@@ -75,6 +77,21 @@ Os templates iniciais (SDR, Suporte, Agendamento, Pós-venda) e os blocos são c
 
 ### D11. Remoção do treinamento por documento
 `DOCUMENT` sai dos schemas de entrada, da rota de upload e da tela. O valor permanece no enum do Postgres (remover valor de enum é custoso e não há dados) e o storage de objetos deixa de ser usado para treinamentos.
+
+### D12. Editor visual sobre o rascunho em memória
+O editor do backoffice trabalha sobre um único objeto `FunctionTemplateDraft` em memória. As seções (geral, formulário, texto do agente, ações) são formulários que alteram esse objeto. A seção JSON é só outra visão dele: texto válido substitui o objeto, texto inválido não altera nada e mostra o erro. Salvar envia o objeto, como hoje. O mesmo editor, sem a seção geral, serve para os blocos.
+- **Checagem ao vivo no navegador:** o editor busca os blocos publicados e roda `expandBlocks` + `checkTemplate` dos contratos a cada alteração (com atraso curto). É o mesmo código da publicação (D1), então o que o editor aprova o backend aprova.
+- **Problemas com endereço:** `functionTemplateErrors` e `checkTemplate` passam a devolver também problemas estruturados (`{ where: { section, fieldId?, option?, intentionKey?, actionIndex? }, message }`). As mensagens de texto atuais continuam, derivadas desses problemas, para a API e os testes existentes.
+- **Ids gerados:** o id do campo nasce do rótulo, com o prefixo da função (`suporte.canal_de_vendas`), e o valor da opção nasce do rótulo dela. Os dois ficam editáveis só enquanto não aparecem em nenhuma versão publicada: as respostas dos agentes são guardadas por id, e trocar um id publicado faria os agentes perderem a resposta.
+- **Marcadores por contexto:** uma função dos contratos lista os marcadores válidos em cada ponto (texto do agente, trecho de opção, textos de intenção), e o editor só oferece esses. Nos textos de intenção entram também as variáveis de execução (`contact.*`, `fields.*` dos campos coletados) e `intencao.respostas` quando há `collectFrom`.
+- **Ações por tipo:** comentário na timeline, lead, negócio, tarefa, processo de negócio e transferência têm formulário próprio. Funil, etapa, responsável e prazo são escolhidos entre os campos do formulário do tipo certo (`BITRIX_STAGE`, `BITRIX_USER`, `INTEGER`) ou informados como valor fixo. O que o formulário da ação não cobrir fica pela seção JSON.
+- **Reordenar** campos, opções e ações com botões subir/descer, sem biblioteca de arrastar.
+- **Nova função a partir de outra:** `POST /admin/functions` aceita `copyFrom` (código de uma função). O backend copia o rascunho daquela função; a nova nasce sem versões.
+- *Alternativa:* um construtor guiado em passos ("qual a missão? quais perguntas?") que gera o template. Rejeitada por ora: o operador ainda precisaria ajustar o resultado num editor completo, e as funções novas tendem a nascer de uma existente.
+
+### D13. Inativar e excluir função
+`agent_function_template` ganha `active` e `deleted_at`. A lista de funções do app e a criação de agente consideram só as ativas e não excluídas; a republicação de agentes existentes usa `latestOfTemplate`, que ignora as duas marcas, então agentes de função inativa seguem normais. Excluir é lógico e exige zero agentes não removidos: as configurações dos agentes removidos e as versões continuam referenciando o template, e o código fica reservado para o seed (que só cria códigos inexistentes) não ressuscitar a função.
+- *Alternativa:* exclusão física. Rejeitada: as chaves estrangeiras das configurações de agentes removidos e das versões exigiriam apagar histórico, e o seed recriaria as funções padrão.
 
 ## Risks / Trade-offs
 

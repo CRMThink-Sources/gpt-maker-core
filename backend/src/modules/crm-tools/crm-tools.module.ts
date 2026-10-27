@@ -24,5 +24,6 @@ import { McpController } from './mcp.controller';
   ],
   controllers: [CrmAccessController, CrmClientController, McpController],
   providers: [CrmAccessService, CrmAccessGuard, CrmToolsService, CrmToolsSync],
+  exports: [CrmAccessService],
 })
 export class CrmToolsModule {}

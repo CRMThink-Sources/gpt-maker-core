@@ -139,6 +139,8 @@ export const training = pgTable(
     documentMimetype: text('document_mimetype'),
     documentSizeBytes: integer('document_size_bytes'),
     status: trainingStatus('status').notNull().default('PROCESSING'),
+    /** Gerado pela função do agente: só a publicação dela altera (spec agent-training). */
+    managed: boolean('managed').notNull().default(false),
     /** Hash do token do `callbackUrl` de status. */
     callbackTokenHash: text('callback_token_hash'),
     error: text('error'),
@@ -202,6 +204,8 @@ export const agentIntention = pgTable(
     responseMode: intentionResponseMode('response_mode').notNull().default('API'),
     instructions: text('instructions'),
     active: boolean('active').notNull().default(true),
+    /** Gerada pela função do agente: só a publicação dela altera (spec agent-intentions). */
+    managed: boolean('managed').notNull().default(false),
     /** Ações no portal (intenção `BITRIX`), como as dos gatilhos; textos aceitam `{{fields.x}}`. */
     actions: jsonb('actions')
       .$type<Array<{ type: string; config: Record<string, unknown> }>>()

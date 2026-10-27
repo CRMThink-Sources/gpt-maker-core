@@ -56,6 +56,15 @@ describe('GptMakerClient', () => {
     ]);
   });
 
+  it('lista de treinamentos no envelope { data, count } da API real', async () => {
+    const { c } = client([
+      { status: 200, body: { data: [{ id: 't1', type: 'TEXT', text: 'Oi' }], count: 1 } },
+    ]);
+    await expect(c.listTrainings('a1', 'TEXT')).resolves.toEqual([
+      { id: 't1', type: 'TEXT', text: 'Oi' },
+    ]);
+  });
+
   it('envia corpo JSON validado', async () => {
     const { c, calls } = client([{ status: 200, body: { id: 'a1', name: '[t1] Bot' } }]);
     await c.createAgent({ name: '[t1] Bot', type: 'SUPPORT', communicationType: 'NORMAL' });

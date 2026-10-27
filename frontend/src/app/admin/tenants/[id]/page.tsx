@@ -153,6 +153,7 @@ export default function AdminTenantPage() {
   const isAdmin = operator.role === 'ADMIN';
   const [tenant, setTenant] = useState<AdminTenantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
   const [action, setAction] = useState<'suspend' | 'reactivate' | 'grant' | null>(null);
   // Um id por abertura do modal: reenviar depois de uma resposta perdida não concede duas vezes.
   const [grantRequestId, setGrantRequestId] = useState('');
@@ -191,7 +192,12 @@ export default function AdminTenantPage() {
       <PageHeader
         back={{ href: '/admin/tenants', label: 'Portais' }}
         title={tenant.domain}
-        aside={<TenantStatusBadge status={tenant.status} />}
+        aside={
+          <span className="flex items-center gap-2">
+            <TenantStatusBadge status={tenant.status} />
+            {tenant.isPartner && <Badge tone="brand">Parceiro</Badge>}
+          </span>
+        }
         description={`Código ${tenant.tenantCode} · instalação ${tenant.installationId} · instalado em ${dateTime(tenant.installedAt)}`}
         actions={
           isAdmin && (
@@ -208,6 +214,19 @@ export default function AdminTenantPage() {
                 className={buttonClass('secondary')}
               >
                 Conceder créditos
+              </button>
+              <button
+                type="button"
+                title="Parceiros podem assumir o controle do texto dos agentes"
+                onClick={() => {
+                  setPartnerError(null);
+                  post('partner', { partner: !tenant.isPartner }).catch((e: Error) =>
+                    setPartnerError(e.message),
+                  );
+                }}
+                className={buttonClass('secondary')}
+              >
+                {tenant.isPartner ? 'Desmarcar parceiro' : 'Marcar como parceiro'}
               </button>
               {tenant.status === 'SUSPENDED' ? (
                 <button
@@ -233,6 +252,11 @@ export default function AdminTenantPage() {
         }
       />
 
+      {partnerError && (
+        <Alert tone="error" className="mb-4">
+          {partnerError}
+        </Alert>
+      )}
       {tenant.status === 'SUSPENDED' && (
         <Alert tone="warning" className="mb-4">
           Suspenso{tenant.suspendedReason ? `: ${tenant.suspendedReason}` : ''}. Os agentes estão

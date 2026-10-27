@@ -118,6 +118,7 @@ export default function AgentIntentionsPage() {
                         <Badge tone={intention.active ? 'green' : 'zinc'}>
                           {intention.active ? 'Ativa' : 'Desativada'}
                         </Badge>
+                        {intention.managed && <Badge tone="brand">da função</Badge>}
                         {!intention.synced && <Badge tone="amber">Sincronizando</Badge>}
                       </div>
                       {intention.kind === 'BITRIX' ? (
@@ -175,7 +176,7 @@ export default function AgentIntentionsPage() {
                             Histórico
                           </button>
                         )}
-                        {canManage && (
+                        {canManage && !intention.managed && (
                           <>
                             <button
                               type="button"

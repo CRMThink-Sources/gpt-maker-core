@@ -1,72 +1,41 @@
 'use client';
 
-import type { AgentView, AvailableModel, CreateAgentInput } from '@gptmaker/contracts';
+import {
+  type AgentFunctionView,
+  type AgentView,
+  type AnswerIssue,
+  type AvailableModel,
+  type CreateAgentInput,
+  type FunctionAnswers,
+  type FunctionPreview,
+  type FunctionTemplateContent,
+  validateFunctionAnswers,
+} from '@gptmaker/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
-import { Alert, Avatar, buttonClass, Loading } from '@/components/ui';
-import { AGENT_TYPES, COMMUNICATION_TYPES, credits, errorMessage } from '@/lib/agents';
+import { Alert, buttonClass, Loading } from '@/components/ui';
+import { credits, errorMessage } from '@/lib/agents';
+import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
-import {
-  type AgentFormValues,
-  CompanyFields,
-  IdentityFields,
-  initialValues,
-  ModelFields,
-} from './agent-fields';
+import { type AgentFormValues, IdentityFields, initialValues, ModelFields } from './agent-fields';
+import { BehaviorMeter, FunctionForm } from './function-form';
+import { FunctionPreviewView } from './function-preview';
 
 const STEPS = [
-  { title: 'Identidade', description: 'Quem é o agente e como ele se apresenta.' },
-  { title: 'Empresa', description: 'O contexto do seu negócio, para o agente falar por você.' },
-  { title: 'Modelo de IA', description: 'O modelo define a qualidade e o custo de cada resposta.' },
+  { title: 'Função', description: 'O que o agente vai fazer. Cada agente tem uma função.' },
+  { title: 'Identidade', description: 'Como o agente se apresenta e qual modelo de IA usa.' },
+  { title: 'Formulário', description: 'Conte sobre o seu negócio; o texto do agente é nosso.' },
+  { title: 'Prévia', description: 'Confira o que será criado antes de confirmar.' },
 ] as const;
 
-const optional = (value: string) => value.trim() || undefined;
-
-function createBody(values: AgentFormValues): CreateAgentInput {
-  return {
-    name: values.name.trim(),
-    avatarUrl: optional(values.avatarUrl),
-    behavior: values.behavior.trim(),
-    type: values.type,
-    communicationType: values.communicationType,
-    jobName: optional(values.jobName),
-    jobSite: optional(values.jobSite),
-    jobDescription: values.jobDescription.trim(),
-    modelId: values.modelId || undefined,
-  };
+/** Problemas das respostas devolvidos pela API (`FUNCTION_ANSWERS_INVALID`). */
+function issuesOf(error: unknown): AnswerIssue[] | null {
+  if (!(error instanceof ApiRequestError) || error.code !== 'FUNCTION_ANSWERS_INVALID') return null;
+  return (error.details as { issues?: AnswerIssue[] } | undefined)?.issues ?? null;
 }
 
-/** O que o usuário digitou nos passos (modelo escolhido não conta: ele vem pré-selecionado). */
-function hasTyped(values: AgentFormValues): boolean {
-  const texts = [
-    values.name,
-    values.avatarUrl,
-    values.behavior,
-    values.jobName,
-    values.jobSite,
-    values.jobDescription,
-  ];
-  return texts.some((text) => text.trim() !== '');
-}
-
-function Summary({ values }: { values: AgentFormValues }) {
-  return (
-    <div className="mb-5 flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-      <Avatar name={values.name} src={values.avatarUrl || null} />
-      <div className="min-w-0 text-sm">
-        <p className="truncate font-medium text-zinc-900">{values.name}</p>
-        <p className="truncate text-xs text-zinc-500">
-          {AGENT_TYPES[values.type]} · tom{' '}
-          {COMMUNICATION_TYPES[values.communicationType].toLowerCase()}
-          {values.jobName.trim() && ` · ${values.jobName.trim()}`}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** Criação de agente em passos, num modal sobre a lista. */
+/** Criação de agente por função (design D6), num modal sobre a lista. */
 export function CreateAgentWizard({
   onClose,
   onCreated,
@@ -75,24 +44,34 @@ export function CreateAgentWizard({
   onCreated: (agent: AgentView) => void;
 }) {
   const { api } = useAppSession();
+  const [functions, setFunctions] = useState<AgentFunctionView[] | null>(null);
   const [models, setModels] = useState<AvailableModel[] | null>(null);
   const [values, setValues] = useState<AgentFormValues | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [form, setForm] = useState<FunctionTemplateContent | null>(null);
+  const [answers, setAnswers] = useState<FunctionAnswers>({});
+  const [issues, setIssues] = useState<AnswerIssue[]>([]);
+  const [preview, setPreview] = useState<FunctionPreview | null>(null);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    api<{ models: AvailableModel[] }>('/app/models')
-      .then(({ models: list }) => {
+    Promise.all([
+      api<{ functions: AgentFunctionView[] }>('/app/agent-functions'),
+      api<{ models: AvailableModel[] }>('/app/models'),
+    ])
+      .then(([fn, md]) => {
         if (cancelled) return;
-        setModels(list);
-        setValues(initialValues(undefined, list));
+        setFunctions(fn.functions);
+        setModels(md.models);
+        setValues(initialValues(undefined, md.models));
       })
       .catch(
         (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os modelos.')),
+          !cancelled && setError(errorMessage(e, 'Não foi possível carregar as funções.')),
       );
     return () => {
       cancelled = true;
@@ -102,31 +81,89 @@ export function CreateAgentWizard({
   const set = <K extends keyof AgentFormValues>(key: K, value: AgentFormValues[K]) =>
     setValues((current) => (current ? { ...current, [key]: value } : current));
 
+  async function choose(code: string) {
+    if (code === chosen && form) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const fn = await api<AgentFunctionView & { form: FunctionTemplateContent }>(
+        `/app/agent-functions/${encodeURIComponent(code)}`,
+      );
+      setChosen(code);
+      setForm(fn.form);
+      setAnswers({});
+      setIssues([]);
+    } catch (e) {
+      setError(errorMessage(e, 'Não foi possível carregar o formulário da função.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function requestClose() {
-    if (creating) return;
-    if (values && hasTyped(values)) setConfirmingClose(true);
+    if (busy) return;
+    if (chosen || values?.name.trim()) setConfirmingClose(true);
     else onClose();
+  }
+
+  function body(): CreateAgentInput {
+    return {
+      name: values!.name.trim(),
+      avatarUrl: values!.avatarUrl.trim() || undefined,
+      modelId: values!.modelId || undefined,
+      functionCode: chosen!,
+      answers,
+    };
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!values) return;
+    if (!values || !form || !chosen) {
+      if (step === 0 && !chosen) setError('Escolha a função do agente.');
+      return;
+    }
+    setError(null);
+    if (step === 2) {
+      // Valida aqui o mesmo que a API valida: o cliente vê o campo antes de ir à prévia.
+      const result = validateFunctionAnswers(form, answers);
+      setIssues(result.issues);
+      if (result.issues.length) {
+        setError('Revise os campos destacados no formulário.');
+        return;
+      }
+      setBusy(true);
+      try {
+        setPreview(
+          await api<FunctionPreview>('/app/agent-functions/preview', {
+            method: 'POST',
+            body: JSON.stringify({ functionCode: chosen, agentName: values.name, answers }),
+          }),
+        );
+        setStep(3);
+      } catch (e) {
+        setError(errorMessage(e, 'Não foi possível montar a prévia.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (step < STEPS.length - 1) {
       setStep(step + 1);
       return;
     }
-    setError(null);
-    setCreating(true);
+    setBusy(true);
     try {
       onCreated(
-        await api<AgentView>('/app/agents', {
-          method: 'POST',
-          body: JSON.stringify(createBody(values)),
-        }),
+        await api<AgentView>('/app/agents', { method: 'POST', body: JSON.stringify(body()) }),
       );
     } catch (e) {
+      const found = issuesOf(e);
+      if (found) {
+        setIssues(found);
+        setStep(2);
+      }
       setError(errorMessage(e, 'Não foi possível criar o agente. Tente de novo.'));
-      setCreating(false);
+      setBusy(false);
     }
   }
 
@@ -157,7 +194,7 @@ export function CreateAgentWizard({
           <button
             type="button"
             onClick={() => setStep(step - 1)}
-            disabled={creating}
+            disabled={busy}
             className={buttonClass('secondary')}
           >
             Voltar
@@ -170,10 +207,15 @@ export function CreateAgentWizard({
         <button
           type="submit"
           form="create-agent-step"
-          disabled={!values || creating || (last && !values.modelId)}
+          disabled={
+            !values ||
+            busy ||
+            (step === 0 && !chosen) ||
+            (last && preview?.compiled.errors.length !== 0)
+          }
           className={buttonClass('primary')}
         >
-          {creating ? 'Criando…' : last ? 'Criar agente' : 'Avançar'}
+          {busy ? 'Aguarde…' : last ? 'Criar agente' : step === 2 ? 'Ver prévia' : 'Avançar'}
         </button>
       </div>
     </div>
@@ -192,27 +234,51 @@ export function CreateAgentWizard({
           {error}
         </Alert>
       )}
-      {!values || !models ? (
+      {!values || !models || !functions ? (
         !error && <Loading />
       ) : (
-        // Um form por passo: "Avançar" valida só os campos visíveis (obrigatório, URL).
         <form id="create-agent-step" key={step} onSubmit={submit}>
-          <fieldset disabled={creating} className="space-y-5">
-            {step === 0 && <IdentityFields values={values} set={set} autoFocus />}
-            {step === 1 && <CompanyFields values={values} set={set} autoFocus />}
-            {step === 2 && (
+          <fieldset disabled={busy} className="space-y-5">
+            {step === 0 && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {functions.map((fn) => (
+                  <button
+                    key={fn.code}
+                    type="button"
+                    onClick={() => choose(fn.code)}
+                    className={`rounded-xl border p-4 text-left transition-colors ${
+                      chosen === fn.code
+                        ? 'border-brand-500 bg-brand-50/50 ring-2 ring-brand-100'
+                        : 'border-zinc-200 hover:border-zinc-300'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-zinc-900">{fn.name}</span>
+                    <span className="mt-1 block text-xs text-zinc-600">{fn.description}</span>
+                  </button>
+                ))}
+                {functions.length === 0 && (
+                  <Alert tone="warning">Nenhuma função disponível no momento.</Alert>
+                )}
+              </div>
+            )}
+            {step === 1 && (
               <>
-                <Summary values={values} />
+                <IdentityFields values={values} set={set} autoFocus />
                 <ModelFields values={values} set={set} models={models} />
-                {models.length > 0 && (
+                {models.length === 1 && (
                   <p className="text-xs text-zinc-500">
-                    Você pode trocar o modelo depois, na página do agente.
-                    {models.length === 1 &&
-                      ` Seu plano libera só este modelo (${credits(models[0]!.creditsPerResponse)}).`}
+                    Seu plano libera só este modelo ({credits(models[0]!.creditsPerResponse)}).
                   </p>
                 )}
               </>
             )}
+            {step === 2 && form && (
+              <>
+                <BehaviorMeter form={form} answers={answers} agentName={values.name} />
+                <FunctionForm form={form} answers={answers} onChange={setAnswers} issues={issues} />
+              </>
+            )}
+            {step === 3 && preview && <FunctionPreviewView preview={preview} />}
           </fieldset>
         </form>
       )}

@@ -352,6 +352,36 @@ describe('serviço de intenções', () => {
     expect(updated.fields).toEqual([]);
   });
 
+  it('intenção gerada pela função: tela não edita nem remove; nome não se repete', async () => {
+    const [row] = await db
+      .insert(agentIntention)
+      .values({
+        tenantId,
+        agentId,
+        gptmakerIntentionId: 'int-func',
+        kind: 'WEBHOOK',
+        name: 'Registrar dúvida',
+        whenToUse: 'Quando não souber',
+        httpMethod: 'POST',
+        url: 'https://app.exemplo.com/x',
+        responseMode: 'API',
+        managed: true,
+      })
+      .returning();
+
+    expect(await errorOf(service.update(tenantId, agentId, row!.id, form()))).toBe(
+      'INTENTION_MANAGED_BY_FUNCTION',
+    );
+    expect(await errorOf(service.remove(tenantId, agentId, row!.id))).toBe(
+      'INTENTION_MANAGED_BY_FUNCTION',
+    );
+    expect(
+      await errorOf(service.create(tenantId, agentId, form({ name: 'registrar dúvida' }))),
+    ).toBe('INTENTION_NAME_TAKEN');
+    expect((await service.list(tenantId, agentId))[0]).toMatchObject({ managed: true });
+    expect(await wiremock.unmatched()).toEqual([]);
+  });
+
   it('agente de outro tenant responde como inexistente', async () => {
     expect(await errorOf(service.list(randomUUID(), agentId))).toBe('AGENT_NOT_FOUND');
   });

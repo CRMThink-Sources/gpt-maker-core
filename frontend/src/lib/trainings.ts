@@ -1,6 +1,4 @@
 import {
-  TRAINING_DOCUMENT_MAX_BYTES,
-  TRAINING_DOCUMENT_TYPES,
   type TrainingInterval,
   type TrainingView,
 } from '@gptmaker/contracts';
@@ -44,19 +42,4 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
-}
-
-export const ACCEPTED_EXTENSIONS = Object.keys(TRAINING_DOCUMENT_TYPES);
-
-/** Mesma checagem rápida do servidor (extensão e tamanho), antes de enviar. */
-export function documentProblem(file: File): string | null {
-  const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
-  if (!extension || !ACCEPTED_EXTENSIONS.includes(extension)) {
-    return `Formato não aceito. Envie ${ACCEPTED_EXTENSIONS.join(', ')}.`;
-  }
-  if (file.size === 0) return 'O arquivo está vazio.';
-  if (file.size > TRAINING_DOCUMENT_MAX_BYTES) {
-    return `O arquivo passa do limite de ${formatBytes(TRAINING_DOCUMENT_MAX_BYTES)}.`;
-  }
-  return null;
 }

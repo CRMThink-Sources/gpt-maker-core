@@ -46,24 +46,6 @@ export const updateTrainingSchema = z.object({
 });
 export type UpdateTrainingInput = z.input<typeof updateTrainingSchema>;
 
-/**
- * Documentos aceitos, por extensão. O GPTMaker não documenta formatos nem tamanho; a lista cobre
- * os formatos de texto comuns e deve ser confirmada em staging.
- */
-export const TRAINING_DOCUMENT_TYPES = {
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  doc: 'application/msword',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  txt: 'text/plain',
-  md: 'text/markdown',
-  csv: 'text/csv',
-} as const;
-
-/** Tamanho máximo de um documento de treinamento. */
-export const TRAINING_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
-
 /** Uso dos limites de treinamento do plano, somando todos os agentes do tenant. */
 export interface TrainingUsage {
   /** `limit` nulo: sem limite no plano. */
@@ -75,6 +57,8 @@ export interface TrainingView {
   id: string;
   type: z.infer<typeof trainingTypeSchema>;
   status: z.infer<typeof trainingStatusSchema>;
+  /** Gerado pela função do agente: só muda pelo formulário dela. */
+  managed: boolean;
   /** Texto do `TEXT`. */
   text: string | null;
   /** Endereço do `WEBSITE` ou do `VIDEO`. */

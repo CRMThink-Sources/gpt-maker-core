@@ -139,3 +139,19 @@ curl -fsSI https://thinkflow-staging.crmthink.com.br/app | head -n1
 3. Instalar o app no portal de teste e criar um agente. O backoffice → Workspace deve mostrar
    status ativo e nenhum órfão.
 4. Ver logs: `docker compose -f docker-compose.prod.yml --env-file .env logs -f backend-api backend-worker`.
+
+## 9. Funções do agente: descarte dos agentes de teste
+
+Os agentes criados antes das funções (sem configuração de função) são de teste e saem antes do
+lançamento do novo fluxo de criação. O script passa pela mesma remoção da tela: apaga no
+GPTMaker, marca `DELETED`, espelha na assinatura e avisa chatbot e intenções. Agentes com função
+nunca entram na lista, então rodar de novo não afeta agentes reais.
+
+```sh
+# Só lista o que seria removido
+ssh deploy@<IP> 'cd /opt/gptmaker && docker compose -f docker-compose.prod.yml --env-file .env exec backend-api node dist/cli/discard-legacy-agents.js'
+# Remove
+ssh deploy@<IP> 'cd /opt/gptmaker && docker compose -f docker-compose.prod.yml --env-file .env exec backend-api node dist/cli/discard-legacy-agents.js --apply'
+```
+
+Falhas (GPTMaker fora, por exemplo) aparecem por agente e o comando sai com código 1; rode de novo.

@@ -117,10 +117,27 @@ export function toRemote(row: Intention, publicUrl: string): GptMakerWriteIntent
   };
 }
 
+/** Acesso da publicação da função: só ela cria, edita e remove as intenções geradas. */
+export interface ManagedAccess {
+  managed?: boolean;
+}
+
+/** Intenção gerada pela função só muda pela publicação dela (spec agent-intentions). */
+function assertAccess(row: Intention, access: ManagedAccess): void {
+  if (row.managed && access.managed !== true) {
+    throw new DomainError(
+      'INTENTION_MANAGED_BY_FUNCTION',
+      'Esta intenção vem da função do agente; altere pelo formulário da função',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 function toView(row: Intention): IntentionView {
   return {
     id: row.id,
     kind: row.kind,
+    managed: row.managed,
     actions: row.actions as IntentionView['actions'],
     name: row.name,
     whenToUse: row.whenToUse,
@@ -199,7 +216,12 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
     return rows.map(toView);
   }
 
-  async create(tenantId: string, agentId: string, raw: IntentionInput): Promise<IntentionView> {
+  async create(
+    tenantId: string,
+    agentId: string,
+    raw: IntentionInput,
+    access: ManagedAccess = {},
+  ): Promise<IntentionView> {
     const input = intentionInputSchema.parse(raw);
     const owner = await this.editableAgent(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
@@ -225,7 +247,14 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       }
       const [row] = await this.db
         .insert(agentIntention)
-        .values({ ...values, id, tenantId: owner.tenantId, agentId: owner.id, gptmakerIntentionId })
+        .values({
+          ...values,
+          id,
+          tenantId: owner.tenantId,
+          agentId: owner.id,
+          gptmakerIntentionId,
+          managed: access.managed === true,
+        })
         .returning();
       return toView(row!);
     });
@@ -236,11 +265,13 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
     agentId: string,
     id: string,
     raw: IntentionInput,
+    access: ManagedAccess = {},
   ): Promise<IntentionView> {
     const input = intentionInputSchema.parse(raw);
     const owner = await this.editableAgent(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
       const current = await this.rowOf(owner, id);
+      assertAccess(current, access);
       if (!sameName(current.name, input.name)) await this.assertUniqueName(owner, input.name, id);
       const gptmakerIntentionId = await this.remoteIdOf(owner, current);
       const values = this.values(input, current.headers, current.tokenEncrypted);
@@ -283,10 +314,16 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
   }
 
   /** Ausente no GPTMaker conta como removida. */
-  async remove(tenantId: string, agentId: string, id: string): Promise<void> {
+  async remove(
+    tenantId: string,
+    agentId: string,
+    id: string,
+    access: ManagedAccess = {},
+  ): Promise<void> {
     const owner = await this.agents.getById(tenantId, agentId);
     await this.withAgentLock(owner.id, async () => {
       const current = await this.rowOf(owner, id);
+      assertAccess(current, access);
       const remoteId =
         current.gptmakerIntentionId ??
         (owner.status === 'OUT_OF_SYNC'
@@ -362,6 +399,7 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       kind: 'WEBHOOK',
       actions: [],
       tokenEncrypted: null,
+      managed: false,
       name: '',
       whenToUse: '',
       fields: [],

@@ -1,8 +1,12 @@
 'use client';
 
-import type { AgentView, AvailableModel, UpdateAgentInput } from '@gptmaker/contracts';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import {
+  type AgentView,
+  type AvailableModel,
+  FUNCTION_MANAGED_SETTINGS,
+  type UpdateAgentInput,
+} from '@gptmaker/contracts';
+import { useEffect, useState } from 'react';
 import { Alert, Loading } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
@@ -11,47 +15,29 @@ import { AgentForm, type SectionKey } from '../agent-form';
 import { useAgent } from './agent-context';
 import { CrmAccessCard } from './crm-access-card';
 
-const TEXTS = ['avatarUrl', 'jobName', 'jobSite'] as const;
-/** Obrigatórios: nunca vão como `null` (o formulário não deixa salvar vazio). */
-const REQUIRED_TEXTS = ['behavior', 'jobDescription'] as const;
+const MANAGED = new Set<string>(FUNCTION_MANAGED_SETTINGS);
 
-/** Só o que mudou; texto opcional apagado vai como `null` para limpar no servidor. */
+/**
+ * Só o que mudou e só o que a edição direta aceita: nome, avatar, modelo e settings operacionais.
+ * Comportamento, tipo, tom e dados da empresa vêm da função do agente.
+ */
 function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput {
   const body: UpdateAgentInput = {};
   const name = values.name.trim();
   if (name !== agent.name) body.name = name;
-  if (values.type !== agent.type) body.type = values.type;
-  if (values.communicationType !== agent.communicationType) {
-    body.communicationType = values.communicationType;
-  }
-  for (const key of TEXTS) {
-    const value = values[key].trim() || null;
-    if (value !== agent[key]) body[key] = value;
-  }
-  for (const key of REQUIRED_TEXTS) {
-    const value = values[key].trim();
-    if (value !== (agent[key] ?? '')) body[key] = value;
-  }
+  const avatarUrl = values.avatarUrl.trim() || null;
+  if (avatarUrl !== agent.avatarUrl) body.avatarUrl = avatarUrl;
   if (values.modelId !== agent.model.id) body.modelId = values.modelId;
   const settings = Object.fromEntries(
     Object.entries(values.settings).filter(
       ([key, value]) =>
-        value !== undefined && value !== agent.settings[key as keyof AgentView['settings']],
+        !MANAGED.has(key) &&
+        value !== undefined &&
+        value !== agent.settings[key as keyof AgentView['settings']],
     ),
   );
   if (Object.keys(settings).length) body.settings = settings;
   return body;
-}
-
-function Notice() {
-  const created = useSearchParams().get('created');
-  if (!created) return null;
-  return (
-    <Alert tone="success" className="mb-6">
-      Agente criado e já ativo. Ajuste o atendimento abaixo e, na aba Treinamentos, ensine o que ele
-      precisa saber.
-    </Alert>
-  );
 }
 
 /** Aba Configurações: dados, modelo e regras de atendimento do agente. */
@@ -102,9 +88,6 @@ export default function AgentSettingsPage() {
 
   return (
     <>
-      <Suspense>
-        <Notice />
-      </Suspense>
       {!session.canManage && (
         <Alert tone="warning" className="mb-6">
           Você pode consultar este agente. Para alterá-lo, peça acesso a um administrador.

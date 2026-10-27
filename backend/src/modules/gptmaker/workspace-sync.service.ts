@@ -9,6 +9,7 @@ import {
   agent,
   agentCreationAttempt,
   tenant,
+  workspaceReservedAgent,
   workspaceSyncFinding,
 } from '../../shared/database/schema/index';
 import { metricsRegistry } from '../../shared/metrics/metrics';
@@ -116,6 +117,14 @@ export class WorkspaceSyncService {
       })
       .from(agent);
     const localByRemoteId = new Map(local.map((row) => [row.gptmakerAgentId, row]));
+    // Agentes do próprio app (sandbox dos templates) não têm dono por desenho.
+    const reserved = new Set(
+      (
+        await this.db
+          .select({ id: workspaceReservedAgent.gptmakerAgentId })
+          .from(workspaceReservedAgent)
+      ).map((row) => row.id),
+    );
 
     const summary: SyncSummary = {
       remoteAgents: remote.length,
@@ -129,6 +138,7 @@ export class WorkspaceSyncService {
     };
 
     for (const item of remote) {
+      if (reserved.has(item.id)) continue;
       const owner = localByRemoteId.get(item.id);
       if (owner && owner.status !== 'DELETED') continue;
       if (await this.recordOrphan(item, owner?.id)) summary.orphansFound++;

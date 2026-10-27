@@ -51,7 +51,7 @@ O sistema MUST oferecer blocos reutilizáveis que os templates incluem em vez de
 - **THEN** os agentes dessas funções recebem a correção na próxima republicação, e nenhum agente muda antes disso
 
 ### Requirement: Rascunho e versões imutáveis
-Cada template MUST ter no máximo um rascunho editável e uma sequência de versões publicadas imutáveis. Publicar o rascunho MUST criar uma nova versão sem alterar as anteriores. Restaurar uma versão antiga MUST ser feito publicando seu conteúdo como nova versão. Toda publicação MUST ser registrada na auditoria do backoffice.
+Cada template MUST ter no máximo um rascunho editável e uma sequência de versões publicadas imutáveis. Publicar o rascunho MUST criar uma nova versão sem alterar as anteriores. Restaurar uma versão antiga MUST ser feito publicando seu conteúdo como nova versão, e MUST trocar o rascunho pelo dessa versão, mantendo os blocos que o rascunho usa como referência a eles. Se não der para montar esse rascunho, por exemplo porque um bloco mudou depois da versão, o rascunho MUST ficar como está e o backoffice MUST avisar que publicá-lo levaria diferenças em relação à versão restaurada. Toda publicação e toda restauração MUST ser registradas na auditoria do backoffice, com o rascunho anterior quando ele for trocado.
 
 #### Scenario: Publicar nova versão
 - **WHEN** o backoffice publica o rascunho do template SDR que está na versão 3
@@ -60,6 +60,14 @@ Cada template MUST ter no máximo um rascunho editável e uma sequência de vers
 #### Scenario: Rollback
 - **WHEN** o backoffice restaura a versão 2 do template
 - **THEN** o conteúdo da versão 2 é publicado como uma nova versão, e o histórico mantém todas as anteriores
+
+#### Scenario: Rollback volta o rascunho
+- **WHEN** o template está na versão 5, o rascunho tem edições ainda não publicadas e o backoffice restaura a versão 4
+- **THEN** a versão 6 é criada com o conteúdo da 4, o rascunho passa a ser o da versão 4, e publicar o rascunho em seguida cria uma versão igual à 4, sem as edições da 5 nem as não publicadas
+
+#### Scenario: Rollback com bloco alterado depois da versão
+- **WHEN** o bloco "registrar dúvida" foi alterado e publicado depois da versão 2, e o backoffice restaura a versão 2
+- **THEN** a nova versão é criada com o conteúdo da 2, o rascunho continua como estava, e o backoffice avisa que publicar o rascunho levaria diferenças em relação à versão 2
 
 ### Requirement: Validação de orçamento
 Ao publicar, o sistema MUST calcular o tamanho do comportamento no pior caso — texto fixo, todos os campos livres e listas no limite, a opção de trecho mais longo de cada escolha, todas as opções de múltipla escolha marcadas e instruções adicionais no limite — e MUST recusar a publicação se ultrapassar 3000 caracteres, informando o total e a contribuição de cada campo.
@@ -82,3 +90,22 @@ O backoffice MUST permitir compilar o rascunho com respostas de exemplo, ver o c
 #### Scenario: Conversa no sandbox
 - **WHEN** o backoffice publica a prévia no agente de sandbox
 - **THEN** o agente de sandbox é atualizado no GPT Maker com o resultado compilado e pode ser testado, sem relação com nenhum tenant
+
+### Requirement: Inativar e excluir função
+O backoffice MUST permitir inativar, reativar e excluir uma função. Função inativa MUST sumir da escolha de função na criação de agentes, mas os agentes que já a usam MUST continuar funcionando, editando o formulário, republicando e recebendo versões novas. Excluir MUST ser permitido só quando nenhum agente não removido usa a função; a exclusão é lógica: a função some do backoffice e do app, o código continua reservado (o seed não a recria) e as versões ficam guardadas. Inativar, reativar e excluir MUST ser registrados na auditoria.
+
+#### Scenario: Inativar função em uso
+- **WHEN** o operador inativa a função Agendamento, que tem agentes
+- **THEN** Agendamento deixa de aparecer na criação de agentes, a criação por ela é recusada, e os agentes existentes continuam publicando normalmente
+
+#### Scenario: Reativar
+- **WHEN** o operador reativa uma função inativa
+- **THEN** ela volta a aparecer na criação de agentes
+
+#### Scenario: Excluir função sem agentes
+- **WHEN** o operador exclui uma função que nenhum agente usa
+- **THEN** ela some da lista do backoffice e do app, e a próxima subida da API não a recria pelo seed
+
+#### Scenario: Excluir função com agentes
+- **WHEN** o operador tenta excluir uma função usada por algum agente não removido
+- **THEN** o sistema recusa, informa quantos agentes a usam e orienta a inativar

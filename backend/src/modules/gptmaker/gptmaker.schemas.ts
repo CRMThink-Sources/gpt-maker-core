@@ -167,6 +167,15 @@ export const trainingSchema = z
   .loose();
 export type GptMakerTraining = z.infer<typeof trainingSchema>;
 
+/** Lista no envelope `{ data, count }` (o OpenAPI promete array); aceita os dois. */
+export const trainingListSchema = z.union([
+  trainingSchema.array(),
+  z
+    .object({ data: trainingSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
 const callbackUrl = z.url().optional();
 
 export const createTrainingSchema = z.discriminatedUnion('type', [
