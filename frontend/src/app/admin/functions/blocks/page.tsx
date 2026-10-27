@@ -6,12 +6,13 @@ import {
   functionBlockContentSchema,
 } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
-import { PlusIcon } from '@/components/icons';
+import { LayersIcon, PlusIcon, RocketIcon, SaveIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
-import { Alert, Badge, buttonClass, Card, Loading, PageHeader } from '@/components/ui';
+import { Alert, Badge, buttonClass, Card, EmptyState, Loading, PageHeader } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../../admin-provider';
 import { BlockEditor } from '../editor/template-editor';
+import { Menu } from '../editor/kit';
 import { allIds, renameId, slug, uniqueId } from '../editor/model';
 import { message } from '../shared';
 
@@ -281,7 +282,9 @@ export default function FunctionBlocksPage() {
     setBlocks((list) => [...(list ?? []), block].sort((a, b) => a.code.localeCompare(b.code)));
     setCreating(false);
     select(block);
-    setNotice('Bloco criado. Edite, salve e publique; depois inclua-o nas funções pela aba Geral.');
+    setNotice(
+      'Bloco criado. Edite, salve e publique; depois inclua-o nas funções pela seção Geral.',
+    );
   }
 
   return (
@@ -316,85 +319,142 @@ export default function FunctionBlocksPage() {
       {!blocks ? (
         !error && <Loading />
       ) : blocks.length === 0 ? (
-        <Card className="p-5 text-sm text-zinc-500">Nenhum bloco. Crie o primeiro.</Card>
+        <Card>
+          <EmptyState
+            icon={<LayersIcon className="size-5" />}
+            title="Nenhum bloco"
+            description="Blocos guardam perguntas, texto e ações que várias funções usam."
+          />
+        </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)]">
-          <nav className="space-y-1">
-            {blocks.map((block) => (
-              <button
-                key={block.code}
-                type="button"
-                onClick={() => select(block)}
-                className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                  block.code === selected
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-zinc-700 hover:bg-zinc-100'
-                }`}
-              >
-                <span className="font-medium">{block.name}</span>
-                <span className="block font-mono text-xs text-zinc-500">{block.code}</span>
-              </button>
-            ))}
+        <div className="grid gap-6 md:grid-cols-[17rem_minmax(0,1fr)]">
+          <nav className="space-y-1.5 md:sticky md:top-6 md:self-start">
+            {blocks.map((block) => {
+              const active = block.code === selected;
+              return (
+                <button
+                  key={block.code}
+                  type="button"
+                  onClick={() => select(block)}
+                  className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                    active
+                      ? 'border-brand-200 bg-white shadow-sm ring-1 ring-brand-100'
+                      : 'border-transparent hover:border-zinc-200 hover:bg-white'
+                  }`}
+                >
+                  <span
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                      active ? 'bg-brand-600 text-white' : 'bg-zinc-100 text-zinc-500'
+                    }`}
+                  >
+                    <LayersIcon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-zinc-900">
+                        {block.name}
+                      </span>
+                      <span
+                        className={`size-1.5 shrink-0 rounded-full ${block.publishedAt ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        title={block.publishedAt ? 'Publicado' : 'Nunca publicado'}
+                      />
+                    </span>
+                    <span className="block font-mono text-xs text-zinc-400">{block.code}</span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">
+                      {block.usedBy.length === 0
+                        ? 'Nenhuma função usa'
+                        : block.usedBy.length === 1
+                          ? 'Usado por 1 função'
+                          : `Usado por ${block.usedBy.length} funções`}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
           </nav>
           {current && (
-            <Card className="space-y-4 p-5">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold text-zinc-900">{current.name}</span>
-                {current.publishedAt ? (
-                  <Badge tone="green">
-                    publicado em {new Date(current.publishedAt).toLocaleDateString('pt-BR')}
-                  </Badge>
-                ) : (
-                  <Badge tone="amber">nunca publicado</Badge>
-                )}
-                <span className="text-xs text-zinc-500">
-                  Usado por: {current.usedBy.length ? current.usedBy.join(', ') : 'nenhum template'}
-                </span>
-              </div>
-              {draft && (
-                <BlockEditor
-                  key={current.code}
-                  value={draft}
-                  onChange={setDraft}
-                  prefix={current.code}
-                  disabled={!isAdmin}
-                />
-              )}
-              {isAdmin && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={buttonClass('secondary')}
-                    disabled={busy}
-                    onClick={() => act('draft')}
-                  >
-                    Salvar rascunho
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonClass('primary')}
-                    disabled={busy}
-                    onClick={() => act('publish')}
-                  >
-                    Publicar bloco
-                  </button>
-                  <span className="flex-1" />
-                  <button
-                    type="button"
-                    className={buttonClass('ghost-danger')}
-                    disabled={busy || current.usedBy.length > 0}
-                    title={
-                      current.usedBy.length > 0
-                        ? `Usado por ${current.usedBy.join(', ')}: tire o bloco dessas funções (aba Geral) antes de excluir`
-                        : undefined
-                    }
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    Excluir bloco
-                  </button>
+            <div className="min-w-0 rounded-2xl border border-zinc-200/80 bg-white shadow-xs">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight text-zinc-900">
+                      {current.name}
+                    </h2>
+                    {current.publishedAt ? (
+                      <Badge tone="green">
+                        publicado em {new Date(current.publishedAt).toLocaleDateString('pt-BR')}
+                      </Badge>
+                    ) : (
+                      <Badge tone="amber">nunca publicado</Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                    <span className="font-mono">{`{{bloco.${current.code}}}`}</span>
+                    <span aria-hidden>·</span>
+                    {current.usedBy.length ? (
+                      <>
+                        Usado por
+                        {current.usedBy.map((name) => (
+                          <span
+                            key={name}
+                            className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-zinc-600"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      'Nenhuma função usa'
+                    )}
+                  </p>
                 </div>
-              )}
-            </Card>
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={buttonClass('secondary')}
+                      disabled={busy}
+                      onClick={() => act('draft')}
+                    >
+                      <SaveIcon className="size-4" /> Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass('primary')}
+                      disabled={busy}
+                      onClick={() => act('publish')}
+                    >
+                      <RocketIcon className="size-4" /> Publicar bloco
+                    </button>
+                    <Menu
+                      items={[
+                        {
+                          label: 'Excluir bloco',
+                          danger: true,
+                          disabled: busy || current.usedBy.length > 0,
+                          title:
+                            current.usedBy.length > 0
+                              ? `Usado por ${current.usedBy.join(', ')}: tire o bloco dessas funções (seção Geral) antes de excluir`
+                              : undefined,
+                          onClick: () => setConfirmDelete(true),
+                        },
+                      ]}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="p-5">
+                {draft && (
+                  <BlockEditor
+                    key={current.code}
+                    value={draft}
+                    onChange={setDraft}
+                    prefix={current.code}
+                    disabled={!isAdmin}
+                  />
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

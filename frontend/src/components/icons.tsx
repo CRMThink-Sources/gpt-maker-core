@@ -122,3 +122,74 @@ export const SendIcon = (p: P) => <Icon {...p} d="M5 12 3 4l18 8-18 8 2-8Zm0 0h7
 export const ChatIcon = (p: P) => (
   <Icon {...p} d="M8 10h8m-8 4h5m-8 6 1.5-3.5A8 8 0 1 1 9 19.6L5 20Z" />
 );
+export const ChevronRightIcon = (p: P) => <Icon {...p} d="m9 5 7 7-7 7" />;
+export const ChevronDownIcon = (p: P) => <Icon {...p} d="m5 9 7 7 7-7" />;
+export const ArrowUpIcon = (p: P) => <Icon {...p} d="M12 19V5m-6 6 6-6 6 6" />;
+export const ArrowDownIcon = (p: P) => <Icon {...p} d="M12 5v14m6-6-6 6-6-6" />;
+export const DotsIcon = (p: P) => <Icon {...p} d="M6 12h.01M12 12h.01M18 12h.01" strokeWidth={3} />;
+export const UndoIcon = (p: P) => <Icon {...p} d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />;
+export const RedoIcon = (p: P) => <Icon {...p} d="m15 14 5-5-5-5m5 5H9a5 5 0 0 0 0 10h3" />;
+export const FlaskIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M9 3h6m-5 0v6L4.5 18.5A1.6 1.6 0 0 0 5.9 21h12.2a1.6 1.6 0 0 0 1.4-2.5L14 9V3M7 15h10"
+  />
+);
+export const CodeIcon = (p: P) => <Icon {...p} d="m8 8-4 4 4 4m8-8 4 4-4 4m-6 3 4-14" />;
+export const ListIcon = (p: P) => (
+  <Icon {...p} d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" strokeWidth={2} />
+);
+export const SlidersIcon = (p: P) => (
+  <Icon {...p} d="M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4m8 2v4" />
+);
+export const HistoryIcon = (p: P) => (
+  <Icon {...p} d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5m4-1v5l3 2" />
+);
+export const LayersIcon = (p: P) => (
+  <Icon {...p} d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
+);
+export const SearchIcon = (p: P) => (
+  <Icon {...p} d="m20 20-4.2-4.2M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+);
+export const HashIcon = (p: P) => <Icon {...p} d="M5 9h14M5 15h14M10 3 8 21m8-18-2 18" />;
+export const LinkIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"
+  />
+);
+export const CircleDotIcon = (p: P) => (
+  <Icon {...p} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-6a3 3 0 1 0 0-6 3 3 0 0 1 0 6Z" />
+);
+export const CheckSquareIcon = (p: P) => (
+  <Icon {...p} d="m9 11.5 2.5 2.5L20 5.5M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+);
+export const FunnelIcon = (p: P) => <Icon {...p} d="M3 4h18l-7 8.5V19l-4 2v-8.5L3 4Z" />;
+export const EyeIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+  />
+);
+export const SaveIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v5h8V3M7 21v-7h10v7"
+  />
+);
+export const RocketIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2m6-11a2 2 0 1 0 0 .01M9 12l3 3m-5 0 2.5-6.5C11.5 4 15 2.5 21 3c.5 6-1 9.5-5.5 11.5L9 17l-2-2Z"
+  />
+);
+export const HomeIcon = (p: P) => (
+  <Icon {...p} d="M3 10.5 12 3l9 7.5M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9" />
+);
+export const ChartIcon = (p: P) => <Icon {...p} d="M4 20V10m6 10V4m6 16v-7m4 7H3" />;
+export const LogoutIcon = (p: P) => (
+  <Icon {...p} d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5m5 5H3" />
+);
+export const ShieldIcon = (p: P) => (
+  <Icon {...p} d="M12 3 4.5 6v5.5c0 4.6 3.2 8.3 7.5 9.5 4.3-1.2 7.5-4.9 7.5-9.5V6L12 3Z" />
+);

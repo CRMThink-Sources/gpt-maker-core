@@ -9,9 +9,9 @@ import {
   sampleAnswerSets,
 } from '@gptmaker/contracts';
 import { Alert, Badge, buttonClass } from '@/components/ui';
-import { Field, inputClass } from '../../../app/agents/agent-fields';
+import { inputClass } from '../../../app/agents/agent-fields';
 import { FunctionForm } from '../../../app/agents/function-form';
-import { ACTION_TYPES } from './intention-editor';
+import { ACTION_TYPES, ActionTypeIcon } from './intention-editor';
 
 const TONE_LABELS: Record<CompiledAgent['communicationType'], string> = {
   FORMAL: 'Formal',
@@ -75,14 +75,16 @@ export function PreviewTab({
     : [];
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Nome do agente">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200/80 bg-white p-3 shadow-xs">
+        <label className="flex items-center gap-2 text-sm whitespace-nowrap text-zinc-600">
+          Nome do agente
           <input
-            className={`${inputClass} w-48`}
+            className={`${inputClass} mt-0 w-40 py-1.5`}
             value={agentName}
             onChange={(e) => onAgentName(e.target.value)}
           />
-        </Field>
+        </label>
+        <span className="mx-1 hidden h-6 w-px bg-zinc-200 sm:block" />
         <button
           type="button"
           className={buttonClass('secondary', 'sm')}
@@ -103,71 +105,85 @@ export function PreviewTab({
           Limpar
         </button>
       </div>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <div className="min-w-0">
-          <FunctionForm
-            form={content}
-            answers={answers}
-            onChange={onAnswers}
-            issues={answerIssues}
-          />
-        </div>
-        {compiled ? (
-          <div className="min-w-0 space-y-4">
-            {compiled.errors.map((item) => (
-              <Alert key={item} tone="error">
-                {item}
-              </Alert>
-            ))}
-            <CompiledBehavior behavior={compiled.behavior} />
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge tone="zinc">Tom: {TONE_LABELS[compiled.communicationType]}</Badge>
-              {enabled.map(([key, value]) => (
-                <Badge key={key} tone={value ? 'green' : 'zinc'}>
-                  {SETTING_LABELS[key]}: {value ? 'ligado' : 'desligado'}
-                </Badge>
-              ))}
-            </div>
-            <div>
-              <p className="text-xs font-medium text-zinc-500">
-                Ações que o agente terá ({compiled.intentions.length})
-              </p>
-              <ul className="mt-1 space-y-1 text-sm text-zinc-700">
-                {compiled.intentions.map((intention) => (
-                  <li key={intention.key}>
-                    {intention.input.name}{' '}
-                    <span className="text-xs text-zinc-500">
-                      (
-                      {intention.input.actions
-                        .map((action) => ACTION_TYPES[action.type] ?? action.type)
-                        .join(' → ')}
-                      )
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-zinc-500">
-                Itens da base ({compiled.trainings.length})
-              </p>
-              <ul className="mt-1 space-y-2 text-xs text-zinc-700">
-                {compiled.trainings.map((item) => (
-                  <li
-                    key={item.key}
-                    className="rounded border border-zinc-200 bg-zinc-50 p-2 whitespace-pre-wrap"
-                  >
-                    {item.text}
-                  </li>
-                ))}
-              </ul>
-            </div>
+      <div className="grid gap-4 2xl:grid-cols-2">
+        <div className="min-w-0 rounded-2xl border border-zinc-200/80 bg-white shadow-xs">
+          <p className="border-b border-zinc-100 px-5 py-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Como o cliente vê
+          </p>
+          <div className="p-5">
+            <FunctionForm
+              form={content}
+              answers={answers}
+              onChange={onAnswers}
+              issues={answerIssues}
+            />
           </div>
-        ) : (
-          <Alert tone="error">
-            O rascunho ainda não compila. Corrija os problemas do painel ao lado.
-          </Alert>
-        )}
+        </div>
+        <div className="min-w-0 rounded-2xl border border-zinc-200/80 bg-white shadow-xs">
+          <p className="border-b border-zinc-100 px-5 py-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Agente gerado
+          </p>
+          {compiled ? (
+            <div className="space-y-5 p-5">
+              {compiled.errors.map((item) => (
+                <Alert key={item} tone="error">
+                  {item}
+                </Alert>
+              ))}
+              <CompiledBehavior behavior={compiled.behavior} />
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                <Badge tone="brand">Tom: {TONE_LABELS[compiled.communicationType]}</Badge>
+                {enabled.map(([key, value]) => (
+                  <Badge key={key} tone={value ? 'green' : 'zinc'}>
+                    {SETTING_LABELS[key]}: {value ? 'ligado' : 'desligado'}
+                  </Badge>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                  Ações que o agente terá ({compiled.intentions.length})
+                </p>
+                <ul className="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+                  {compiled.intentions.map((intention) => (
+                    <li key={intention.key} className="px-3 py-2">
+                      <p className="text-sm font-medium text-zinc-800">{intention.input.name}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                        {intention.input.actions.map((action, index) => (
+                          <span key={index} className="flex items-center gap-1">
+                            {index > 0 && <span className="text-zinc-300">→</span>}
+                            <ActionTypeIcon type={action.type} />
+                            {ACTION_TYPES[action.type] ?? action.type}
+                          </span>
+                        ))}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                  Itens da base ({compiled.trainings.length})
+                </p>
+                <ul className="mt-2 space-y-2 text-xs text-zinc-700">
+                  {compiled.trainings.map((item) => (
+                    <li
+                      key={item.key}
+                      className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 whitespace-pre-wrap"
+                    >
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="p-5">
+              <Alert tone="error">
+                O rascunho ainda não compila. Corrija os problemas do painel ao lado.
+              </Alert>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

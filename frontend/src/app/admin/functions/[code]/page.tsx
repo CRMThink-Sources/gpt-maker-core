@@ -17,14 +17,25 @@ import {
   flattenFields,
   stableStringify,
 } from '@gptmaker/contracts';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckIcon } from '@/components/icons';
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  FlaskIcon,
+  HistoryIcon,
+  RedoIcon,
+  RocketIcon,
+  SaveIcon,
+  UndoIcon,
+} from '@/components/icons';
 import { Modal } from '@/components/modal';
-import { Alert, Badge, buttonClass, Card, Loading, PageHeader } from '@/components/ui';
+import { Alert, Badge, buttonClass, Loading } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { BehaviorDiff } from '../../../app/agents/function-preview';
 import { useAdmin, useOperator } from '../../admin-provider';
+import { Menu } from '../editor/kit';
 import { TemplateEditor, templateProblems, useLiveTemplate } from '../editor/template-editor';
 import { message } from '../shared';
 
@@ -97,30 +108,44 @@ function Steps({
     {
       label: 'Testar',
       done: tested,
-      detail: tested ? 'testado no sandbox' : 'aba Testar e sandbox',
+      detail: tested ? 'testado no sandbox' : 'seção Testar e sandbox',
     },
     { label: 'Publicar', done: false, detail: `cria a v${nextVersion}` },
   ];
   return (
-    <ol className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-      {steps.map((step, index) => (
-        <li key={step.label} className="flex items-center gap-1.5">
-          <span
-            className={`flex size-5 items-center justify-center rounded-full text-[0.65rem] font-semibold ${
-              step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'
-            }`}
-          >
-            {step.done ? <CheckIcon className="size-3" /> : index + 1}
-          </span>
-          <span className="font-medium text-zinc-800">{step.label}</span>
-          <span
-            className={step.label === 'Editar' && !step.done ? 'text-red-600' : 'text-zinc-500'}
-          >
-            {step.detail}
-          </span>
-        </li>
-      ))}
-    </ol>
+    <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-xs">
+      <p className="text-xs font-medium text-zinc-500">Caminho até publicar</p>
+      <ol className="mt-3 space-y-0">
+        {steps.map((step, index) => (
+          <li key={step.label} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <span
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                  step.done
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-white text-zinc-500 ring-1 ring-zinc-300'
+                }`}
+              >
+                {step.done ? <CheckIcon className="size-3.5" /> : index + 1}
+              </span>
+              {index < steps.length - 1 && (
+                <span
+                  className={`my-1 w-px flex-1 ${step.done ? 'bg-emerald-300' : 'bg-zinc-200'}`}
+                />
+              )}
+            </div>
+            <div className={index < steps.length - 1 ? 'pb-4' : ''}>
+              <p className="text-sm font-medium text-zinc-900">{step.label}</p>
+              <p
+                className={`text-xs ${step.label === 'Editar' && !step.done ? 'text-red-600' : 'text-zinc-500'}`}
+              >
+                {step.detail}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -452,188 +477,47 @@ function FunctionEditor({
 
   const publishBlocked = problems > 0 || !live.check;
 
-  return (
-    <>
-      <PageHeader
-        back={{ href: '/admin/functions', label: 'Funções' }}
-        title={view.name}
-        description={`${view.code} · ${view.agents} agente(s) · ${view.latestVersion ? `versão publicada v${view.latestVersion}` : 'nunca publicada'}`}
-        aside={!view.active ? <Badge tone="zinc">inativa</Badge> : undefined}
-        actions={
-          isAdmin && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className={buttonClass('secondary')}
-                disabled={busy}
-                onClick={toggleActive}
+  const versionList =
+    view.versions.length === 0 ? (
+      <div className="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center">
+        <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+          <HistoryIcon className="size-5" />
+        </span>
+        <p className="mt-3 text-sm font-medium text-zinc-800">Nenhuma versão publicada</p>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Publique a função para os clientes poderem usá-la.
+        </p>
+      </div>
+    ) : (
+      <ol className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs">
+        {view.versions.map((version, index) => {
+          const current = version.version === view.latestVersion;
+          return (
+            <li key={version.version} className="flex gap-4">
+              <div className="flex flex-col items-center">
+                <span
+                  className={`mt-1 size-3 shrink-0 rounded-full ring-4 ${
+                    current ? 'bg-brand-600 ring-brand-100' : 'bg-zinc-300 ring-zinc-100'
+                  }`}
+                />
+                {index < view.versions.length - 1 && (
+                  <span className="my-1 w-px flex-1 bg-zinc-200" />
+                )}
+              </div>
+              <div
+                className={`flex min-w-0 flex-1 flex-wrap items-start gap-3 ${index < view.versions.length - 1 ? 'pb-6' : ''}`}
               >
-                {view.active ? 'Inativar' : 'Reativar'}
-              </button>
-              <button
-                type="button"
-                className={buttonClass('ghost-danger')}
-                disabled={busy || view.agents > 0}
-                title={view.agents > 0 ? 'Usada por agentes: inative em vez de excluir' : undefined}
-                onClick={() => setConfirmDelete(true)}
-              >
-                Excluir
-              </button>
-            </div>
-          )
-        }
-      />
-      <div className="space-y-6">
-        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur">
-          <Steps problems={problems} tested={tested === current} nextVersion={nextVersion} />
-          {isAdmin && (
-            <div className="flex flex-wrap items-center gap-2">
-              {dirty && <span className="text-xs text-amber-700">Alterações não salvas</span>}
-              <button
-                type="button"
-                className={buttonClass('ghost', 'sm')}
-                disabled={!history.past.length}
-                title="Desfazer (Ctrl+Z)"
-                onClick={undo}
-              >
-                Desfazer
-              </button>
-              <button
-                type="button"
-                className={buttonClass('ghost', 'sm')}
-                disabled={!history.future.length}
-                title="Refazer (Ctrl+Shift+Z)"
-                onClick={redo}
-              >
-                Refazer
-              </button>
-              <button
-                type="button"
-                className={buttonClass('secondary', 'sm')}
-                disabled={busy || !dirty}
-                title="Ctrl+S"
-                onClick={saveDraft}
-              >
-                Salvar rascunho
-              </button>
-              <button
-                type="button"
-                className={buttonClass('secondary', 'sm')}
-                disabled={busy || publishBlocked}
-                title={
-                  publishBlocked
-                    ? 'Resolva os problemas antes de testar'
-                    : 'Publica no agente de sandbox com as respostas da aba Testar'
-                }
-                onClick={sandbox}
-              >
-                Testar no sandbox
-              </button>
-              <button
-                type="button"
-                className={buttonClass('primary', 'sm')}
-                disabled={busy || publishBlocked}
-                title={
-                  publishBlocked ? 'Resolva os problemas do painel antes de publicar' : undefined
-                }
-                onClick={reviewPublish}
-              >
-                Publicar v{nextVersion}…
-              </button>
-            </div>
-          )}
-        </div>
-
-        {error && <Alert tone="error">{error}</Alert>}
-        {errors.length > 0 && (
-          <Alert tone="error">
-            <ul className="list-disc space-y-0.5 pl-4">
-              {errors.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </Alert>
-        )}
-        {notice && <Alert tone="success">{notice}</Alert>}
-        {restored && (
-          <Alert tone="warning">
-            <p>
-              O rascunho continua com alterações que não estão na v{restored.version}. Publicar
-              agora colocaria essas alterações no ar.
-            </p>
-            {restored.draft ? (
-              <button
-                type="button"
-                className={`${buttonClass('secondary', 'sm')} mt-2`}
-                disabled={busy || !isAdmin}
-                onClick={() => discardDraft(restored.draft!)}
-              >
-                Descartar rascunho e ficar igual à v{restored.version}
-              </button>
-            ) : (
-              <p className="mt-1">
-                Não dá para montar o rascunho da v{restored.version} automaticamente (um bloco mudou
-                depois dela). Ajuste o rascunho à mão comparando em &quot;Mudanças&quot;.
-              </p>
-            )}
-          </Alert>
-        )}
-
-        <Card className="space-y-4 p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nome (o cliente vê ao escolher a função)">
-              <input
-                className={inputClass}
-                value={name}
-                disabled={!isAdmin}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <Field label="Descrição (aparece abaixo do nome)">
-              <input
-                className={inputClass}
-                value={description}
-                disabled={!isAdmin}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </Field>
-          </div>
-          <TemplateEditor
-            draft={draft}
-            live={live}
-            onChange={edit}
-            published={view.published}
-            publishedIntentions={view.publishedIntentions}
-            blocks={blocks}
-            prefix={view.code.toLowerCase()}
-            disabled={!isAdmin}
-            answers={answers}
-            onAnswers={setAnswers}
-            agentName={agentName}
-            onAgentName={setAgentName}
-          />
-        </Card>
-
-        <Card>
-          <h3 className="border-b border-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-900">
-            Versões
-          </h3>
-          {view.versions.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-zinc-500">Nenhuma versão publicada.</p>
-          ) : (
-            <ul className="divide-y divide-zinc-100">
-              {view.versions.map((version) => (
-                <li
-                  key={version.version}
-                  className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm"
-                >
-                  <span className="font-medium text-zinc-900">v{version.version}</span>
-                  {version.version === view.latestVersion && <Badge tone="green">atual</Badge>}
-                  <span className="text-zinc-500">
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                    Versão {version.version}
+                    {current && <Badge tone="brand">atual</Badge>}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
                     {dateTime(version.publishedAt)} · {version.publishedBy ?? 'seed'} ·{' '}
-                    {version.agents} agente(s)
-                  </span>
-                  <span className="flex-1" />
+                    {version.agents === 1 ? '1 agente' : `${version.agents} agentes`}
+                  </p>
+                </div>
+                <div className="flex gap-1.5">
                   {version.version > 1 && (
                     <button
                       type="button"
@@ -641,10 +525,10 @@ function FunctionEditor({
                       disabled={busy}
                       onClick={() => openDiff(version.version)}
                     >
-                      Mudanças
+                      Ver mudanças
                     </button>
                   )}
-                  {isAdmin && version.version !== view.latestVersion && (
+                  {isAdmin && !current && (
                     <button
                       type="button"
                       className={buttonClass('secondary', 'sm')}
@@ -654,11 +538,206 @@ function FunctionEditor({
                       Restaurar
                     </button>
                   )}
-                </li>
-              ))}
-            </ul>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    );
+
+  return (
+    <>
+      <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-zinc-200/80 bg-zinc-50/85 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="min-w-0 flex-1">
+            <nav className="flex items-center gap-1 text-xs text-zinc-500">
+              <Link href="/admin/functions" className="hover:text-zinc-800">
+                Funções
+              </Link>
+              <ChevronRightIcon className="size-3" />
+              <span className="font-mono">{view.code}</span>
+            </nav>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-900">
+                {name || view.name}
+              </h1>
+              {view.latestVersion ? (
+                <Badge tone="green">v{view.latestVersion} publicada</Badge>
+              ) : (
+                <Badge tone="amber">nunca publicada</Badge>
+              )}
+              {!view.active && <Badge tone="zinc">inativa</Badge>}
+              <span className="text-xs text-zinc-500">
+                {view.agents === 1 ? '1 agente usa' : `${view.agents} agentes usam`}
+              </span>
+              {dirty && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                  <span className="size-1.5 rounded-full bg-amber-500" />
+                  Não salvo
+                </span>
+              )}
+            </div>
+          </div>
+          {isAdmin && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-lg border border-zinc-200 bg-white shadow-xs">
+                <button
+                  type="button"
+                  className="inline-flex size-9 items-center justify-center rounded-l-lg text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
+                  disabled={!history.past.length}
+                  title="Desfazer (Ctrl+Z)"
+                  aria-label="Desfazer"
+                  onClick={undo}
+                >
+                  <UndoIcon className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex size-9 items-center justify-center rounded-r-lg border-l border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
+                  disabled={!history.future.length}
+                  title="Refazer (Ctrl+Shift+Z)"
+                  aria-label="Refazer"
+                  onClick={redo}
+                >
+                  <RedoIcon className="size-4" />
+                </button>
+              </div>
+              <button
+                type="button"
+                className={buttonClass('secondary')}
+                disabled={busy || !dirty}
+                title="Ctrl+S"
+                onClick={saveDraft}
+              >
+                <SaveIcon className="size-4" />
+                Salvar
+              </button>
+              <button
+                type="button"
+                className={buttonClass('secondary')}
+                disabled={busy || publishBlocked}
+                title={
+                  publishBlocked
+                    ? 'Resolva os problemas antes de testar'
+                    : 'Publica no agente de sandbox com as respostas da seção Testar'
+                }
+                onClick={sandbox}
+              >
+                <FlaskIcon className="size-4" />
+                Testar no sandbox
+              </button>
+              <button
+                type="button"
+                className={buttonClass('primary')}
+                disabled={busy || publishBlocked}
+                title={publishBlocked ? 'Resolva os problemas antes de publicar' : undefined}
+                onClick={reviewPublish}
+              >
+                <RocketIcon className="size-4" />
+                Publicar v{nextVersion}
+              </button>
+              <Menu
+                items={[
+                  {
+                    label: view.active ? 'Inativar função' : 'Reativar função',
+                    onClick: toggleActive,
+                    disabled: busy,
+                  },
+                  {
+                    label: 'Excluir função',
+                    danger: true,
+                    disabled: busy || view.agents > 0,
+                    title:
+                      view.agents > 0 ? 'Usada por agentes: inative em vez de excluir' : undefined,
+                    onClick: () => setConfirmDelete(true),
+                  },
+                ]}
+              />
+            </div>
           )}
-        </Card>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {(error || errors.length > 0 || notice || restored) && (
+          <div className="space-y-3">
+            {error && <Alert tone="error">{error}</Alert>}
+            {errors.length > 0 && (
+              <Alert tone="error">
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {errors.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
+            {notice && <Alert tone="success">{notice}</Alert>}
+            {restored && (
+              <Alert tone="warning">
+                <p>
+                  O rascunho continua com alterações que não estão na v{restored.version}. Publicar
+                  agora colocaria essas alterações no ar.
+                </p>
+                {restored.draft ? (
+                  <button
+                    type="button"
+                    className={`${buttonClass('secondary', 'sm')} mt-2`}
+                    disabled={busy || !isAdmin}
+                    onClick={() => discardDraft(restored.draft!)}
+                  >
+                    Descartar rascunho e ficar igual à v{restored.version}
+                  </button>
+                ) : (
+                  <p className="mt-1">
+                    Não dá para montar o rascunho da v{restored.version} automaticamente (um bloco
+                    mudou depois dela). Ajuste o rascunho à mão comparando em &quot;Ver
+                    mudanças&quot;.
+                  </p>
+                )}
+              </Alert>
+            )}
+          </div>
+        )}
+
+        <TemplateEditor
+          draft={draft}
+          live={live}
+          onChange={edit}
+          published={view.published}
+          publishedIntentions={view.publishedIntentions}
+          blocks={blocks}
+          prefix={view.code.toLowerCase()}
+          disabled={!isAdmin}
+          answers={answers}
+          onAnswers={setAnswers}
+          agentName={agentName}
+          onAgentName={setAgentName}
+          progress={
+            <Steps problems={problems} tested={tested === current} nextVersion={nextVersion} />
+          }
+          versions={{ count: view.versions.length, content: versionList }}
+          identity={
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nome" hint="O cliente vê ao escolher a função.">
+                <input
+                  className={inputClass}
+                  value={name}
+                  disabled={!isAdmin}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </Field>
+              <Field label="Descrição" hint="Aparece abaixo do nome.">
+                <input
+                  className={inputClass}
+                  value={description}
+                  disabled={!isAdmin}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </Field>
+            </div>
+          }
+        />
       </div>
 
       {publishing && (

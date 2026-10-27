@@ -70,6 +70,7 @@ const TONES = {
   zinc: 'bg-zinc-100 text-zinc-600 ring-zinc-500/20',
   amber: 'bg-amber-50 text-amber-800 ring-amber-600/20',
   brand: 'bg-brand-50 text-brand-700 ring-brand-600/20',
+  red: 'bg-red-50 text-red-700 ring-red-600/20',
 } as const;
 
 const DOTS = {
@@ -77,6 +78,7 @@ const DOTS = {
   zinc: 'bg-zinc-400',
   amber: 'bg-amber-500',
   brand: 'bg-brand-500',
+  red: 'bg-red-500',
 } as const;
 
 export type Tone = keyof typeof TONES;
