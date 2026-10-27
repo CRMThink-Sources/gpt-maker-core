@@ -31,6 +31,8 @@ const keys = {
   challenge: (hash: string) => `backoffice:challenge:${hash}`,
   failures: (email: string) => `backoffice:login-failures:${email.trim().toLowerCase()}`,
   lastStep: (operatorId: string) => `backoffice:totp-last-step:${operatorId}`,
+  device: (hash: string) => `backoffice:trusted-device:${hash}`,
+  devicesOf: (operatorId: string) => `backoffice:operator-devices:${operatorId}`,
 };
 
 interface Challenge {
@@ -49,7 +51,13 @@ export interface SessionUser {
   operator: Operator;
   /** Token em claro, só na criação (vai para o cookie). */
   token?: string;
+  /** Token do navegador lembrado, em claro, só quando o operador pediu para lembrar. */
+  deviceToken?: string;
 }
+
+/** Senha conferida: ou falta o código (`challenge`), ou o navegador lembrado já abriu a sessão. */
+export type LoginResult =
+  { challenge: AdminLoginStep } | { session: SessionUser & { token: string } };
 
 const invalid = () =>
   new DomainError(
@@ -62,6 +70,10 @@ const invalid = () =>
  * Login do backoffice em duas etapas (senha, depois TOTP) e sessões no Redis (design D17). O
  * token da sessão é aleatório e só o hash fica no Redis; expira por inatividade e por duração
  * máxima, e é revogado ao trocar a senha, ao desativar o operador e ao zerar o TOTP.
+ *
+ * "Lembrar este navegador": depois de um código válido, um segundo token (só o hash no Redis,
+ * com validade fixa de `BACKOFFICE_TRUSTED_DEVICE_DAYS`) dispensa o código nos próximos logins
+ * daquele navegador. A senha continua obrigatória, e o token cai junto com as sessões.
  */
 @Injectable()
 export class AdminAuthService {
@@ -74,7 +86,12 @@ export class AdminAuthService {
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
-  async login(email: string, password: string): Promise<AdminLoginStep> {
+  async login(
+    email: string,
+    password: string,
+    deviceToken?: string,
+    now = Date.now(),
+  ): Promise<LoginResult> {
     const failuresKey = keys.failures(email);
     if (Number(await this.redis.get(failuresKey)) >= LOGIN_MAX_FAILURES) {
       throw new DomainError(
@@ -96,10 +113,15 @@ export class AdminAuthService {
     }
     await this.redis.del(failuresKey);
 
+    if (operator.totpSecret && (await this.trusts(deviceToken, operator.id))) {
+      const token = await this.openSession(operator, now, 'Navegador lembrado: sem código');
+      return { session: { operator, token } };
+    }
+
     const challenge = randomBytes(32).toString('base64url');
     if (operator.totpSecret) {
       await this.saveChallenge(challenge, { operatorId: operator.id, attempts: 0 });
-      return { step: 'totp', challenge };
+      return { challenge: { step: 'totp', challenge } };
     }
     const secret = newTotpSecret();
     await this.saveChallenge(challenge, {
@@ -108,15 +130,22 @@ export class AdminAuthService {
       setupSecret: secret,
     });
     return {
-      step: 'totp-setup',
-      challenge,
-      secret,
-      otpauthUrl: otpauthUrl(this.env.BACKOFFICE_TOTP_ISSUER, operator.email, secret),
+      challenge: {
+        step: 'totp-setup',
+        challenge,
+        secret,
+        otpauthUrl: otpauthUrl(this.env.BACKOFFICE_TOTP_ISSUER, operator.email, secret),
+      },
     };
   }
 
-  /** Confere o código do desafio e abre a sessão. */
-  async verify(challenge: string, code: string, now = Date.now()): Promise<SessionUser> {
+  /** Confere o código do desafio e abre a sessão; `rememberDevice` lembra este navegador. */
+  async verify(
+    challenge: string,
+    code: string,
+    rememberDevice = false,
+    now = Date.now(),
+  ): Promise<SessionUser & { token: string }> {
     const key = keys.challenge(sha256(challenge));
     const raw = await this.redis.get(key);
     if (!raw) throw expired();
@@ -148,28 +177,15 @@ export class AdminAuthService {
       });
     }
 
-    const token = randomBytes(32).toString('base64url');
-    const hash = sha256(token);
-    const session: Session = { operatorId: operator.id, createdAt: now };
-    await this.redis
-      .multi()
-      .set(
-        keys.session(hash),
-        JSON.stringify(session),
-        'EX',
-        this.env.BACKOFFICE_SESSION_IDLE_MINUTES * 60,
-      )
-      .sadd(keys.sessionsOf(operator.id), hash)
-      .expire(keys.sessionsOf(operator.id), this.env.BACKOFFICE_SESSION_MAX_HOURS * 3600)
-      .exec();
-    await this.operators.touchLogin(operator.id);
-    await this.audit.record({
-      actorId: operator.id,
-      action: 'operator.login',
-      entityType: 'backoffice_user',
-      entityId: operator.id,
-    });
-    return { operator, token };
+    const deviceToken = rememberDevice ? await this.trustDevice(operator.id) : undefined;
+    const token = await this.openSession(
+      operator,
+      now,
+      deviceToken
+        ? `Navegador lembrado por ${this.env.BACKOFFICE_TRUSTED_DEVICE_DAYS} dias`
+        : undefined,
+    );
+    return { operator, token, deviceToken };
   }
 
   /** Sessão do cookie, renovando a inatividade; `null` se expirada, revogada ou inativa. */
@@ -208,11 +224,16 @@ export class AdminAuthService {
     });
   }
 
-  /** Encerra todas as sessões do operador (troca de senha, desativação, TOTP zerado). */
+  /**
+   * Encerra todas as sessões do operador e esquece os navegadores lembrados (troca de senha,
+   * desativação, TOTP zerado).
+   */
   async revokeAll(operatorId: string): Promise<void> {
     const hashes = await this.redis.smembers(keys.sessionsOf(operatorId));
     if (hashes.length) await this.redis.del(...hashes.map(keys.session));
-    await this.redis.del(keys.sessionsOf(operatorId));
+    const devices = await this.redis.smembers(keys.devicesOf(operatorId));
+    if (devices.length) await this.redis.del(...devices.map(keys.device));
+    await this.redis.del(keys.sessionsOf(operatorId), keys.devicesOf(operatorId));
   }
 
   async changePassword(operator: Operator, current: string, next: string): Promise<void> {
@@ -231,6 +252,53 @@ export class AdminAuthService {
       entityType: 'backoffice_user',
       entityId: operator.id,
     });
+  }
+
+  /** Cria a sessão, marca o último login e audita; devolve o token em claro. */
+  private async openSession(operator: Operator, now: number, reason?: string): Promise<string> {
+    const token = randomBytes(32).toString('base64url');
+    const hash = sha256(token);
+    const session: Session = { operatorId: operator.id, createdAt: now };
+    await this.redis
+      .multi()
+      .set(
+        keys.session(hash),
+        JSON.stringify(session),
+        'EX',
+        this.env.BACKOFFICE_SESSION_IDLE_MINUTES * 60,
+      )
+      .sadd(keys.sessionsOf(operator.id), hash)
+      .expire(keys.sessionsOf(operator.id), this.env.BACKOFFICE_SESSION_MAX_HOURS * 3600)
+      .exec();
+    await this.operators.touchLogin(operator.id);
+    await this.audit.record({
+      actorId: operator.id,
+      action: 'operator.login',
+      entityType: 'backoffice_user',
+      entityId: operator.id,
+      reason,
+    });
+    return token;
+  }
+
+  /** Lembra o navegador por `BACKOFFICE_TRUSTED_DEVICE_DAYS`; devolve o token em claro. */
+  private async trustDevice(operatorId: string): Promise<string> {
+    const token = randomBytes(32).toString('base64url');
+    const hash = sha256(token);
+    const ttl = this.env.BACKOFFICE_TRUSTED_DEVICE_DAYS * 86_400;
+    await this.redis
+      .multi()
+      .set(keys.device(hash), operatorId, 'EX', ttl)
+      .sadd(keys.devicesOf(operatorId), hash)
+      .expire(keys.devicesOf(operatorId), ttl)
+      .exec();
+    return token;
+  }
+
+  /** O token do navegador lembrado vale e é deste operador (o cookie é por navegador). */
+  private async trusts(deviceToken: string | undefined, operatorId: string): Promise<boolean> {
+    if (!deviceToken) return false;
+    return (await this.redis.get(keys.device(sha256(deviceToken)))) === operatorId;
   }
 
   private async saveChallenge(challenge: string, state: Challenge): Promise<void> {

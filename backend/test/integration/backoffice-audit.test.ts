@@ -116,6 +116,7 @@ describe('backoffice: auditoria', () => {
     const env = {
       BACKOFFICE_SESSION_IDLE_MINUTES: 120,
       BACKOFFICE_SESSION_MAX_HOURS: 12,
+      BACKOFFICE_TRUSTED_DEVICE_DAYS: 30,
       BACKOFFICE_COOKIE_SECURE: false,
       BACKOFFICE_TOTP_ISSUER: 'ThinkFlow AI Backoffice',
     } as Env;
