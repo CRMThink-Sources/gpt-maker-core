@@ -36,7 +36,7 @@ import {
   GptMakerWorkspaceCredits,
   newAssistantSchema,
   successSchema,
-  trainingSchema,
+  trainingListSchema,
   updateAgentSettingsSchema,
   writeIntentionSchema,
   updateTextTrainingSchema,
@@ -198,7 +198,7 @@ export class GptMakerClient {
       method: 'GET',
       path: `/agent/${enc(agentId)}/trainings`,
       query: { type, page: page.page, pageSize: page.pageSize, query: page.query },
-      response: trainingSchema.array(),
+      response: trainingListSchema,
     });
   }
 

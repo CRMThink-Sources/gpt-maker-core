@@ -16,7 +16,17 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import { DomainError } from '../../src/shared/http/api-exception.filter';
 import * as schema from '../../src/shared/database/schema/index';
 
-const { agent, aiModel, auditLog, creditLedger, messageLog, subscriptionState, tenant } = schema;
+const {
+  agent,
+  agentFunctionConfig,
+  agentFunctionTemplate,
+  aiModel,
+  auditLog,
+  creditLedger,
+  messageLog,
+  subscriptionState,
+  tenant,
+} = schema;
 
 // Gestão de tenants no backoffice (spec admin-backoffice, "Gestão de tenants"; tarefa 15.4).
 describe('backoffice: tenants', () => {
@@ -233,6 +243,55 @@ describe('backoffice: tenants', () => {
     expect((await rejection(service.reactivate(row.id, actor))).code).toBe(
       'TENANT_STATUS_CONFLICT',
     );
+  });
+
+  it('parceiro: marcar e desmarcar com auditoria; repetir não grava de novo', async () => {
+    const row = await newTenant();
+    expect((await service.detail(row.id)).isPartner).toBe(false);
+
+    expect((await service.setPartner(row.id, true, actor)).isPartner).toBe(true);
+    await service.setPartner(row.id, true, actor);
+    expect((await service.list(row.tenantCode))[0]?.isPartner).toBe(true);
+
+    expect((await service.setPartner(row.id, false, actor)).isPartner).toBe(false);
+    const audits = await db
+      .select({ action: auditLog.action, before: auditLog.before, after: auditLog.after })
+      .from(auditLog)
+      .where(eq(auditLog.tenantId, row.id));
+    expect(audits).toEqual([
+      { action: 'tenant.partner_set', before: { isPartner: false }, after: { isPartner: true } },
+      { action: 'tenant.partner_unset', before: { isPartner: true }, after: { isPartner: false } },
+    ]);
+  });
+
+  it('desmarcar parceiro não mexe nos agentes em controle assumido', async () => {
+    const row = await newTenant();
+    await service.setPartner(row.id, true, actor);
+    const taken = await newAgent(row.id);
+    const [template] = await db
+      .insert(agentFunctionTemplate)
+      .values({
+        code: `T_${randomBytes(3).toString('hex').toUpperCase()}`,
+        name: 'T',
+        description: 'd',
+        draft: {} as never,
+      })
+      .returning();
+    await db.insert(agentFunctionConfig).values({
+      agentId: taken.id,
+      tenantId: row.id,
+      templateId: template!.id,
+      mode: 'TAKEN_OVER',
+      takenOverBehavior: 'Texto do parceiro',
+    });
+
+    await service.setPartner(row.id, false, actor);
+
+    const [config] = await db
+      .select()
+      .from(agentFunctionConfig)
+      .where(eq(agentFunctionConfig.agentId, taken.id));
+    expect(config).toMatchObject({ mode: 'TAKEN_OVER', takenOverBehavior: 'Texto do parceiro' });
   });
 
   it('portal desinstalado não é suspenso', async () => {

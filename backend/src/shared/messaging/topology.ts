@@ -35,6 +35,11 @@ export const QUEUES = {
   channelTransfer: 'channel.transfer',
   /** Transferências que falharam (inspeção manual; falha transitória já foi retentada pelos clientes). */
   channelTransferDeadLetter: 'channel.transfer.dlq',
+  /**
+   * Publicações da função do agente (design D5), pela exchange padrão. Uma mensagem por agente; o
+   * estado fica no banco, então mensagem perdida é retomada pela varredura do worker.
+   */
+  functionPublication: 'agent-functions.publication',
 } as const;
 
 /** Routing keys de `usage.events`. */

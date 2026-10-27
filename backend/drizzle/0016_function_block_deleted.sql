@@ -1,0 +1,1 @@
+ALTER TABLE "agent_function_block" ADD COLUMN "deleted_at" timestamp with time zone;

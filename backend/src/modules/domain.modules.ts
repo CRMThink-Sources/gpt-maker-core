@@ -8,6 +8,7 @@ import { TrainingModule } from './training';
 import { IntentionsModule } from './intentions';
 import { AgentTestModule } from './agent-test';
 import { CrmToolsModule } from './crm-tools';
+import { AgentFunctionsModule } from './agent-functions';
 import { ChannelModule } from './channel';
 import { TriggersModule } from './triggers';
 import { NotificationsModule } from './notifications';
@@ -28,6 +29,7 @@ export const DOMAIN_MODULES = [
   IntentionsModule,
   AgentTestModule,
   CrmToolsModule,
+  AgentFunctionsModule,
   ChannelModule,
   TriggersModule,
   NotificationsModule,

@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js",
-    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js"
+    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js",
+    "agents:discard-legacy": "node --env-file=.env dist/src/cli/discard-legacy-agents.js"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",

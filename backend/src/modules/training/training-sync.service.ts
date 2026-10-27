@@ -53,6 +53,11 @@ const emptySummary = (): TrainingSyncSummary => ({
   lost: 0,
 });
 
+/** Recebe os treinamentos gerados que sumiram do GPTMaker (spec agent-training). */
+export interface ManagedTrainingGoneListener {
+  onManagedTrainingGone(event: { agentId: string; trainingId: string }): Promise<void>;
+}
+
 /**
  * Sincronização dos treinamentos com o GPTMaker, a fonte da verdade (spec agent-training). Por
  * agente: completa ids que a criação não identificou, importa treinamentos que só existem lá,
@@ -63,6 +68,8 @@ const emptySummary = (): TrainingSyncSummary => ({
 export class TrainingSyncService {
   private readonly logger = new Logger(TrainingSyncService.name);
   private readonly lock: DistributedLock;
+
+  private goneListeners: ManagedTrainingGoneListener[] = [];
 
   constructor(
     private readonly gptmaker: GptMakerClient,
@@ -196,6 +203,11 @@ export class TrainingSyncService {
     return marked !== 'OK';
   }
 
+  /** Avisado quando some do GPTMaker um treinamento gerado pela função do agente. */
+  registerManagedGoneListener(listener: ManagedTrainingGoneListener): void {
+    this.goneListeners.push(listener);
+  }
+
   private async markRemoved(row: Training): Promise<void> {
     await this.db.update(training).set({ deletedAt: new Date() }).where(eq(training.id, row.id));
     await this.redis.del(missingKey(row.id));
@@ -203,6 +215,18 @@ export class TrainingSyncService {
       { trainingId: row.id, gptmakerTrainingId: row.gptmakerTrainingId },
       'treinamento ausente no GPTMaker; removido localmente',
     );
+    if (row.managed) {
+      for (const listener of this.goneListeners) {
+        try {
+          await listener.onManagedTrainingGone({ agentId: row.agentId, trainingId: row.id });
+        } catch (error) {
+          this.logger.error(
+            { trainingId: row.id, err: error },
+            'aviso de treinamento gerado ausente falhou',
+          );
+        }
+      }
+    }
     if (!row.documentKey) return;
     try {
       await this.storage.delete(row.documentKey);

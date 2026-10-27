@@ -87,6 +87,7 @@ export class TenantsAdminService {
       tenantCode: row.tenant.tenantCode,
       installationId: row.tenant.installationId,
       status: row.tenant.status,
+      isPartner: row.tenant.isPartner,
       subscription: row.subscription
         ? {
             status: row.subscription.status,
@@ -218,6 +219,28 @@ export class TenantsAdminService {
       after: { status: after.status },
       reason,
     });
+    return this.detail(tenantId);
+  }
+
+  /**
+   * Marca ou desmarca o portal como parceiro: só parceiros assumem o controle do comportamento.
+   * Desmarcar não mexe nos agentes já assumidos (spec admin-backoffice, "Tenant parceiro").
+   */
+  async setPartner(tenantId: string, partner: boolean, actor: string): Promise<AdminTenantDetail> {
+    const before = await this.tenants.findById(tenantId);
+    if (!before) throw notFound();
+    if (before.isPartner !== partner) {
+      await this.db.update(tenant).set({ isPartner: partner }).where(eq(tenant.id, tenantId));
+      await this.audit.record({
+        actorId: actor,
+        tenantId,
+        action: partner ? 'tenant.partner_set' : 'tenant.partner_unset',
+        entityType: 'tenant',
+        entityId: tenantId,
+        before: { isPartner: before.isPartner },
+        after: { isPartner: partner },
+      });
+    }
     return this.detail(tenantId);
   }
 

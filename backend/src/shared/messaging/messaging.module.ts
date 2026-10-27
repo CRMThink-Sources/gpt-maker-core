@@ -95,6 +95,11 @@ function channelTopology(env: Env) {
               routingKey: '#',
             },
             {
+              name: QUEUES.functionPublication,
+              createQueueIfNotExists: true,
+              options: { durable: true },
+            },
+            {
               name: QUEUES.channelTransferDeadLetter,
               createQueueIfNotExists: true,
               options: { durable: true },

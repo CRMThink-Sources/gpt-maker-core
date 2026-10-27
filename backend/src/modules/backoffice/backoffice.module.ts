@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AgentFunctionsModule } from '../agent-functions';
 import { AgentsModule } from '../agents';
 import { BillingModule } from '../billing';
 import { GptMakerModule } from '../gptmaker';
@@ -25,6 +26,11 @@ import { ReconciliationAdminService } from './reconciliation-admin.service';
 import { SubscriptionAdminService } from './subscription-admin.service';
 import { DeadLetterInspector } from './dead-letter-inspector';
 import { FailuresService } from './failures.service';
+import {
+  FunctionBlocksAdminController,
+  FunctionsAdminController,
+} from './functions-admin.controller';
+import { FunctionsAdminService } from './functions-admin.service';
 import { OperationsAdminController } from './operations-admin.controller';
 import { OperationsAdminService } from './operations-admin.service';
 import { TenantsAdminController } from './tenants-admin.controller';
@@ -34,6 +40,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
 
 @Module({
   imports: [
+    AgentFunctionsModule,
     AgentsModule,
     BillingModule,
     GptMakerModule,
@@ -52,6 +59,8 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     ReconciliationAdminController,
     AuditController,
     OperationsAdminController,
+    FunctionsAdminController,
+    FunctionBlocksAdminController,
   ],
   providers: [
     AdminAuthService,
@@ -70,6 +79,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     DeadLetterInspector,
     FailuresService,
     OperationsAdminService,
+    FunctionsAdminService,
   ],
   exports: [AdminAuthService, AdminAuthGuard, AuditService, OperatorService],
 })

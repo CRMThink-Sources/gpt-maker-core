@@ -213,6 +213,19 @@ describe('acesso do agente ao CRM', () => {
     expect(await authenticate(intention!.headers[0]!.value.replace('Bearer ', ''))).toBe(401);
   });
 
+  it('exigido pela função: ativa uma vez e falha se não conectar', async () => {
+    await stubHappyPath();
+    await service.ensureEnabled(tenantId, agentId);
+    await service.ensureEnabled(tenantId, agentId);
+    expect(await wiremock.count('POST', MCP_ADD)).toBe(1);
+
+    await service.update(tenantId, agentId, { enabled: false });
+    await stub('POST', MCP_ADD, 400, { error: 'url inacessível' });
+    await expect(service.ensureEnabled(tenantId, agentId)).rejects.toMatchObject({
+      code: 'CRM_ACCESS_FAILED',
+    });
+  });
+
   it('nenhuma ferramenta descoberta pelo GPTMaker é falha', async () => {
     await stubHappyPath();
     await stub('GET', '/v2/mcp/mcp-1/tools', 200, []);

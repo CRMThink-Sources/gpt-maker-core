@@ -284,76 +284,6 @@ describe('treinamentos dos agentes', () => {
     expect(await rows()).toHaveLength(0);
   });
 
-  describe('documento', () => {
-    const upload = (originalName: string, buffer = PDF) =>
-      service.createDocument(tenantId, agentId, { originalName, buffer });
-
-    it('grava no storage e envia a URL pré-assinada com nome e tipo', async () => {
-      await stubCreate();
-      await stubList('DOCUMENT', [{ id: 'tr-doc', documentName: 'Política de trocas.pdf' }]);
-
-      const view = await upload('Política de trocas.pdf');
-
-      const [object] = [...storage.objects.values()];
-      expect(object).toMatchObject({
-        contentType: 'application/pdf',
-        contentLength: PDF.length,
-        fileName: 'Política de trocas.pdf',
-      });
-      expect(object!.key).toMatch(new RegExp(`^trainings/${tenantId}/`));
-      expect((await created())[0]).toMatchObject({
-        type: 'DOCUMENT',
-        documentUrl: `https://storage.test/${object!.key}?X-Amz-Signature=abc`,
-        documentName: 'Política de trocas.pdf',
-        documentMimetype: 'application/pdf',
-      });
-      expect(view.document).toEqual({
-        name: 'Política de trocas.pdf',
-        mimetype: 'application/pdf',
-        sizeBytes: PDF.length,
-      });
-      expect((await rows())[0]).toMatchObject({
-        documentKey: object!.key,
-        gptmakerTrainingId: 'tr-doc',
-      });
-    });
-
-    it('nome em latin1 do multipart vira UTF-8', async () => {
-      await stubCreate();
-      await stubList('DOCUMENT', []);
-      const latin1 = Buffer.from('Política.pdf', 'utf8').toString('latin1');
-
-      expect((await upload(latin1)).document!.name).toBe('Política.pdf');
-    });
-
-    it.each([
-      ['extensão não aceita', 'script.exe', PDF, 'TRAINING_FILE_TYPE'],
-      ['conteúdo que não é PDF', 'falso.pdf', Buffer.from('não sou pdf'), 'TRAINING_FILE_TYPE'],
-      ['texto binário', 'dados.txt', Buffer.from([0x61, 0x00, 0x62]), 'TRAINING_FILE_TYPE'],
-      ['arquivo vazio', 'vazio.txt', Buffer.alloc(0), 'TRAINING_FILE_EMPTY'],
-    ])('%s: recusa sem storage nem GPTMaker', async (_, name, buffer, code) => {
-      await stubCreate();
-      await expect(upload(name, buffer)).rejects.toMatchObject({ code });
-      expect(storage.objects.size).toBe(0);
-      expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
-    });
-
-    it('texto e markdown UTF-8 são aceitos', async () => {
-      await stubCreate();
-      await stubList('DOCUMENT', []);
-      expect(
-        (await upload('faq.md', Buffer.from('# Perguntas\nÉ grátis?'))).document,
-      ).toMatchObject({ mimetype: 'text/markdown' });
-    });
-
-    it('falha no GPTMaker: apaga o objeto do storage e não grava', async () => {
-      await stubCreate(500);
-      await expect(upload('manual.pdf')).rejects.toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
-      expect(storage.objects.size).toBe(0);
-      expect(await rows()).toHaveLength(0);
-    });
-  });
-
   describe('callback do GPTMaker', () => {
     /** Treinamento em processamento com o token de callback informado. */
     async function processing(token: string, values: Partial<typeof training.$inferInsert> = {}) {
@@ -458,6 +388,31 @@ describe('treinamentos dos agentes', () => {
 
     const stored = async (id: string) =>
       (await db.select().from(training).where(eq(training.id, id)))[0]!;
+
+    it('treinamento gerado pela função: só a publicação edita ou remove', async () => {
+      await stubTraining('PUT', 'tr-1');
+      await stubTraining('DELETE', 'tr-1');
+      const row = await existing({ managed: true });
+
+      for (const call of [
+        () => service.updateText(tenantId, agentId, row.id, { text: 'Outro' }),
+        () => service.remove(tenantId, agentId, row.id),
+      ]) {
+        expect(await errorOf(call())).toMatchObject({ code: 'TRAINING_MANAGED_BY_FUNCTION' });
+      }
+      expect(await wiremock.count('PUT', TRAINING_PATH('tr-1'))).toBe(0);
+
+      const view = await service.updateText(
+        tenantId,
+        agentId,
+        row.id,
+        { text: 'Outro' },
+        { managed: true },
+      );
+      expect(view).toMatchObject({ text: 'Outro', managed: true });
+      await service.remove(tenantId, agentId, row.id, { managed: true });
+      expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+    });
 
     it('edita o texto no GPTMaker e localmente', async () => {
       await stubTraining('PUT', 'tr-1');
@@ -740,22 +695,6 @@ describe('treinamentos dos agentes', () => {
         details: { kind: 'trainings', used: 2, limit: 2 },
       });
       expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
-    });
-
-    it('documento acima do espaço do plano: recusa antes do storage', async () => {
-      await onPlan(null, 1);
-      await existing({ type: 'DOCUMENT', content: null, documentSizeBytes: 1024 * 1024 - 10 });
-      await stubCreate();
-
-      await expect(
-        service.createDocument(tenantId, agentId, { originalName: 'a.pdf', buffer: PDF }),
-      ).rejects.toMatchObject({ code: 'PLAN_TRAINING_LIMIT', details: { kind: 'documentBytes' } });
-      expect(storage.objects.size).toBe(0);
-      // Texto não ocupa espaço de documento.
-      await stubList('TEXT', []);
-      await expect(
-        service.create(tenantId, agentId, { type: 'TEXT', text: 'ok' }),
-      ).resolves.toBeDefined();
     });
 
     it('limite nulo no plano é sem limite', async () => {

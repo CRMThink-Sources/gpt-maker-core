@@ -16,6 +16,7 @@ import {
   type AdminTenantFailures,
   type AdminTenantRow,
   grantCreditsSchema,
+  setTenantPartnerSchema,
   suspendTenantSchema,
 } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
@@ -27,6 +28,7 @@ import { TenantsAdminService } from './tenants-admin.service';
 
 class SuspendDto extends createZodDto(suspendTenantSchema) {}
 class GrantCreditsDto extends createZodDto(grantCreditsSchema) {}
+class SetPartnerDto extends createZodDto(setTenantPartnerSchema) {}
 
 /** Tenants no backoffice: consulta para todos; suspender, reativar e conceder créditos só ADMIN. */
 @Controller('admin/tenants')
@@ -82,6 +84,17 @@ export class TenantsAdminController {
     @Body() body: SuspendDto,
   ): Promise<AdminTenantDetail> {
     return this.tenants.suspend(id, body.reason, actor.id);
+  }
+
+  @Post(':id/partner')
+  @AdminAuth('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  setPartner(
+    @CurrentOperator() actor: Operator,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: SetPartnerDto,
+  ): Promise<AdminTenantDetail> {
+    return this.tenants.setPartner(id, body.partner, actor.id);
   }
 
   @Post(':id/reactivate')
