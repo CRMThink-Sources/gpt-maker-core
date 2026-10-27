@@ -64,6 +64,11 @@ const NAV: Array<{
     match: (path: string) => path.startsWith('/admin/plans'),
   },
   {
+    href: '/admin/functions',
+    label: 'Funções',
+    match: (path: string) => path.startsWith('/admin/functions'),
+  },
+  {
     href: '/admin/workspace',
     label: 'Workspace',
     match: (path: string) => path.startsWith('/admin/workspace'),
