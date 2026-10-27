@@ -6,7 +6,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Tenant } from '../../src/modules/tenancy/tenant.service';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
@@ -20,6 +20,7 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, agentBot, aiModel, dialogState, tenant } = schema;
 const GM_AGENT = 'GM-AGENT-1';
@@ -69,7 +70,7 @@ describe('atendimento humano', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const bitrix = new BitrixClient(

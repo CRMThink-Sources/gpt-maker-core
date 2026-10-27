@@ -1,13 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FieldSettingsService } from '../../src/modules/semantic/field-settings.service';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import type { Database } from '../../src/shared/database/database.module';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const { tenant } = schema;
 
@@ -36,7 +37,7 @@ describe('camada semântica: escolhas por tenant', () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(container.getConnectionUri());
-    pool = new Pool({ connectionString: container.getConnectionUri() });
+    pool = testPool(container.getConnectionUri());
     db = drizzle(pool, { schema });
     settings = new FieldSettingsService(db as unknown as Database);
   });

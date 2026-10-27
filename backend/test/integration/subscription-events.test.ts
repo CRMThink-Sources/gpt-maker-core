@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CreditCycleService, TRIAL_CREDITS } from '../../src/modules/billing/credit-cycle.service';
 import { LedgerService } from '../../src/modules/billing/ledger.service';
@@ -16,6 +16,7 @@ import { TenantService, type Tenant } from '../../src/modules/tenancy/tenant.ser
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const {
   agent,
@@ -90,7 +91,7 @@ describe('ciclo de vida da assinatura', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     const redis = new Redis(redisContainer.getConnectionUrl());
     ledger = new LedgerService(db, redis);

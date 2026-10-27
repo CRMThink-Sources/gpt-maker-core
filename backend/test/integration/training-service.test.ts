@@ -4,7 +4,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
@@ -16,6 +16,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import type { ObjectStorage, PutObjectInput } from '../../src/shared/storage/object-storage';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, planEntitlement, subscriptionState, tenant, training } = schema;
 const WS = 'ws-test';
@@ -132,7 +133,7 @@ describe('treinamentos dos agentes', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     client = new GptMakerClient(

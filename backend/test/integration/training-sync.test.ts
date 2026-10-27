@@ -4,7 +4,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
 import { GptMakerResilience } from '../../src/modules/gptmaker/gptmaker.resilience';
@@ -14,6 +14,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import type { ObjectStorage } from '../../src/shared/storage/object-storage';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, tenant, training } = schema;
 const REMOTE_AGENT = 'gm-agent-1';
@@ -82,7 +83,7 @@ describe('sincronização dos treinamentos com o GPTMaker', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const client = new GptMakerClient(

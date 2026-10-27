@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AgentTestService, type Tester } from '../../src/modules/agent-test/agent-test.service';
 import { TestConversations } from '../../src/modules/agent-test/test-conversations';
@@ -18,6 +18,7 @@ import type { Database } from '../../src/shared/database/database.module';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { EXCHANGES, USAGE_EVENTS } from '../../src/shared/messaging/topology';
+import { testPool } from '../support/postgres';
 
 const { agent, agentTestConversation, agentTestMessage, aiModel, tenant } = schema;
 
@@ -55,7 +56,7 @@ describe('teste do agente', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const gptmaker = {
