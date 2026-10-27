@@ -8,6 +8,7 @@ O cliente configura o agente numa folha em branco: escreve o comportamento (prom
 
 - O agente passa a ter uma **função** (SDR/Qualificação, Suporte, Agendamento, Pós-venda). O cliente escolhe a função e responde a um **formulário** sobre o negócio; ele não escreve mais instruções.
 - **Templates de função no backoffice**: cada função é um template com o texto do comportamento (escrito pela CRMThink) e a definição do formulário. Templates têm rascunho, versões publicadas imutáveis, teste em agente de sandbox, validação de orçamento (pior caso ≤ 3000 caracteres) e rollback.
+- **Editor visual de templates e blocos**: quem mantém as funções edita sem JSON, com checagem e pior caso ao vivo, inserção de marcadores e criação de função nova a partir de outra. O JSON fica como seção avançada.
 - **Compilação**: o sistema monta comportamento, treinamentos de texto, intenções e settings a partir do template + respostas, mostra o diff e só então grava no GPT Maker. Cada agente fixa a versão do template; uma versão nova só entra quando o cliente republica.
 - **Escolha carrega o texto**: opções do formulário trazem o trecho que vai para o comportamento; sem lógica condicional no texto. Campos dependentes aparecem só quando a opção é escolhida.
 - **Blocos compartilhados** entre funções: bloco comum do formulário, "onde registrar", "abrir chamado / registrar dúvida" e "transferir para atendente".

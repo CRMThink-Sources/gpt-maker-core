@@ -19,3 +19,33 @@ O backoffice MUST oferecer uma área de templates de função para editar o rasc
 #### Scenario: Agentes por versão
 - **WHEN** o operador abre o template Suporte
 - **THEN** o backoffice lista as versões publicadas com a quantidade de agentes em cada uma
+
+### Requirement: Editor visual de templates e blocos
+O backoffice MUST permitir criar e editar o rascunho de um template e de um bloco sem escrever JSON, em seções: geral (nome, descrição, tipo no GPTMaker, settings derivados, blocos incluídos, dados da empresa), formulário (campos, opções com trecho, campos dependentes, itens da base), texto do agente e ações (intenções). O editor JSON MUST continuar disponível como seção avançada, sincronizado com as demais: o que é editado numa aparece na outra. O editor MUST mostrar, enquanto o operador edita e sem salvar, o tamanho do comportamento no pior caso e os problemas que impedem a publicação (spec agent-function-templates, "Validação de orçamento" e "Texto do comportamento sem lógica"), apontando o campo, a opção ou a ação com problema.
+
+#### Scenario: Criar campo de escolha sem JSON
+- **WHEN** o operador adiciona um campo de escolha, escreve o rótulo, adiciona duas opções com rótulo e trecho e salva
+- **THEN** o rascunho é gravado com o campo, o id gerado a partir do rótulo e os valores das opções gerados, e o JSON da seção avançada mostra o mesmo conteúdo
+
+#### Scenario: Campo dependente
+- **WHEN** o operador adiciona um campo dependente dentro de uma opção
+- **THEN** o campo aparece aninhado sob a opção no editor e só é exigido no formulário do cliente quando a opção é escolhida
+
+#### Scenario: Marcador pelo editor
+- **WHEN** o operador edita o texto do agente ou o trecho de uma opção
+- **THEN** o editor oferece para inserir só marcadores que existem naquele ponto (campos do formulário, marcadores do sistema, blocos incluídos) e destaca marcador que não existe
+
+#### Scenario: Problema visto antes de publicar
+- **WHEN** uma alteração deixa o pior caso acima de 3000 caracteres ou um dependente sem uso
+- **THEN** o editor mostra o problema e a contribuição de cada campo antes de o operador salvar ou publicar
+
+#### Scenario: JSON inválido na seção avançada
+- **WHEN** o operador deixa o JSON da seção avançada inválido
+- **THEN** as demais seções não são alteradas até o JSON voltar a ser válido, e o erro aparece com o caminho do campo
+
+### Requirement: Nova função a partir de outra
+O backoffice MUST permitir criar uma função nova copiando o rascunho de uma função existente, informando só código, nome e descrição. A cópia MUST ser independente: alterar uma não muda a outra.
+
+#### Scenario: Duplicar Suporte
+- **WHEN** o operador cria a função "Suporte técnico" a partir de Suporte
+- **THEN** a nova função nasce com o rascunho de Suporte, sem versões publicadas, e editar o rascunho dela não altera Suporte
