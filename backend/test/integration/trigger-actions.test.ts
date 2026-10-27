@@ -2,6 +2,7 @@ import type { TemplateContext } from '@gptmaker/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
 import { ActionError } from '../../src/modules/triggers/actions/action-error';
+import type { ActionRotation } from '../../src/modules/triggers/actions/action-rotation';
 import {
   type ActionContext,
   type ExecutableAction,
@@ -65,7 +66,16 @@ describe('ações dos gatilhos', () => {
       },
       { timeoutMs: 5000, maxAttempts: 1, acquire: async () => {} },
     );
-    executor = new TriggerActionExecutor(bitrix);
+    // Rodízio em memória: a contagem no Redis tem teste próprio (action-rotation.test.ts).
+    const turns = new Map<string, number>();
+    const rotation = {
+      next: async (actionId: string, ids: readonly number[]) => {
+        const turn = turns.get(actionId) ?? 0;
+        turns.set(actionId, turn + 1);
+        return ids[turn % ids.length]!;
+      },
+    } as ActionRotation;
+    executor = new TriggerActionExecutor(bitrix, rotation);
   }, 180_000);
 
   beforeEach(async () => {
@@ -204,6 +214,20 @@ describe('ações dos gatilhos', () => {
     });
     const deadline = Date.parse((sent!.fields as { DEADLINE: string }).DEADLINE);
     expect(deadline - before).toBeGreaterThanOrEqual(2 * 86_400_000 - 1000);
+  });
+
+  it('tarefa com vários responsáveis: um por vez, em rodízio (D15)', async () => {
+    await stub('tasks.task.add', { task: { id: 903 } });
+    const task = action({
+      type: 'CREATE_TASK',
+      config: { title: 'x', responsibleId: [4, 6] },
+    } as Omit<ExecutableAction, 'id' | 'secret'>);
+    await executor.execute({ ...task, id: 'rodizio' }, context({ dialogId: null }));
+    await executor.execute({ ...task, id: 'rodizio' }, context({ dialogId: null }));
+    expect((await bodies('tasks.task.add')).map((body) => body.fields)).toMatchObject([
+      { RESPONSIBLE_ID: 4 },
+      { RESPONSIBLE_ID: 6 },
+    ]);
   });
 
   it('tarefa sem diálogo: sem vínculo, sem consultar o CRM', async () => {

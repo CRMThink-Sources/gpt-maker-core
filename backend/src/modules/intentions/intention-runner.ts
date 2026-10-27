@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { TemplateContext } from '@gptmaker/contracts';
+import { isUserList, type TemplateContext } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { fieldCipher } from '../../shared/crypto/field-cipher';
@@ -14,7 +14,12 @@ import {
 import { REDIS } from '../../shared/redis/redis.module';
 import { isTestDialog } from '../agent-test';
 import { PendingHandoffs } from '../channel';
-import { ActionError, type ExecutableAction, TriggerActionExecutor } from '../triggers';
+import {
+  ActionError,
+  ActionRotation,
+  type ExecutableAction,
+  TriggerActionExecutor,
+} from '../triggers';
 
 /** Repetição da mesma chamada (GPTMaker refazendo após demora) devolve o resultado guardado. */
 const DEDUPE_SECONDS = 5 * 60;
@@ -100,6 +105,7 @@ export class IntentionRunner {
   constructor(
     private readonly executor: TriggerActionExecutor,
     private readonly handoffs: PendingHandoffs,
+    private readonly rotation: ActionRotation,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
@@ -220,10 +226,16 @@ export class IntentionRunner {
         if (action.type === 'TRANSFER_TO_HUMAN') {
           // Agendada: o canal transfere depois de entregar a resposta que o agente está montando.
           if (!dialogId) throw new Error('conversa do Bitrix não identificada na chamada');
-          const userId = (action.config as { userId?: number }).userId;
+          const config = action.config as { userId?: number | number[]; lineId?: number };
+          // Vários usuários: o próximo da lista (D15); a deduplicação acima não deixa girar duas vezes.
+          const userId = isUserList(config.userId)
+            ? await this.rotation.next(`${intention.id}:${index}`, config.userId)
+            : config.userId;
           await this.handoffs.schedule(intention.tenantId, dialogId, {
             agentId: intention.agentId,
+            gptmakerChatId: chat,
             ...(userId ? { userId } : {}),
+            ...(config.lineId ? { lineId: config.lineId } : {}),
           });
           results.push({ type: action.type, ok: true, result: { scheduled: true } });
           continue;

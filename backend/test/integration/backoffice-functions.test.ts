@@ -79,6 +79,7 @@ const draft = (overrides: Partial<FunctionTemplateDraft> = {}): FunctionTemplate
   ],
   behavior: 'Você atende pela {{empresa.nome}}.\n{{suporte.tom}}\n{{bloco.duvida}}',
   intentions: [],
+  transfers: [],
   ...overrides,
 });
 
