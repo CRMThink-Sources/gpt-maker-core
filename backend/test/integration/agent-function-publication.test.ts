@@ -590,7 +590,9 @@ describe('publicação da função do agente', () => {
       const view = await createAgent();
       await catalog.setActive('SDR', false);
       try {
-        expect((await functions.listFunctions()).map((fn) => fn.code)).not.toContain('SDR');
+        expect((await functions.listFunctions(owner.tenantId)).map((fn) => fn.code)).not.toContain(
+          'SDR',
+        );
         const refused = await rejection(
           functions.create(owner, { name: 'Bia', functionCode: 'SDR', answers: sdrAnswers() }),
         );
@@ -607,7 +609,54 @@ describe('publicação da função do agente', () => {
       } finally {
         await catalog.setActive('SDR', true);
       }
-      expect((await functions.listFunctions()).map((fn) => fn.code)).toContain('SDR');
+      expect((await functions.listFunctions(owner.tenantId)).map((fn) => fn.code)).toContain('SDR');
+    });
+  });
+
+  describe('função restrita a portais', () => {
+    it('só os portais da lista a escolhem; os agentes existentes seguem em qualquer portal', async () => {
+      const view = await createAgent();
+      const code = randomBytes(3).toString('hex');
+      const [other] = await db
+        .insert(tenant)
+        .values({
+          installationId: code,
+          memberId: code,
+          domain: `${code}.b24.com`,
+          tenantCode: code,
+        })
+        .returning();
+      const codes = async (tenantId: string) =>
+        (await functions.listFunctions(tenantId)).map((fn) => fn.code);
+
+      const restricted = await catalog.setTenants('SDR', { tenantIds: [other!.id] });
+      try {
+        expect(restricted.tenants).toEqual([{ id: other!.id, domain: other!.domain }]);
+        expect(await codes(other!.id)).toContain('SDR');
+        expect(await codes(owner.tenantId)).not.toContain('SDR');
+        // As outras funções continuam para todos.
+        expect(await codes(owner.tenantId)).toContain('SUPPORT');
+        const refused = await rejection(
+          functions.create(owner, { name: 'Bia', functionCode: 'SDR', answers: sdrAnswers() }),
+        );
+        expect(refused.code).toBe('FUNCTION_NOT_AVAILABLE');
+        expect((await rejection(functions.functionForm(owner.tenantId, 'SDR'))).code).toBe(
+          'FUNCTION_NOT_AVAILABLE',
+        );
+
+        // O agente deste portal, criado antes da restrição, continua publicando.
+        await functions.publish(owner.tenantId, view.id, {
+          answers: sdrAnswers({ 'sdr.preco': 'base' }),
+        });
+        expect(await publisher.run(view.id)).toBe('DONE');
+
+        const unknown = await rejection(catalog.setTenants('SDR', { tenantIds: [randomUUID()] }));
+        expect(unknown.code).toBe('TENANT_NOT_FOUND');
+      } finally {
+        await catalog.setTenants('SDR', { tenantIds: [] });
+      }
+      expect((await catalog.getTemplate('SDR')).tenants).toEqual([]);
+      expect(await codes(owner.tenantId)).toContain('SDR');
     });
   });
 

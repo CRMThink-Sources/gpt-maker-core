@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -36,7 +36,7 @@ describe('seed das funções do agente', () => {
   it('publica as quatro funções como versão 1 e não sobrescreve na segunda vez', async () => {
     // comum, crm, duvida, registro e transferir.
     expect(await seedAgentFunctions(db, catalog)).toEqual({ blocks: 5, templates: 4 });
-    const published = await catalog.listPublished();
+    const published = await catalog.listPublished(randomUUID());
     expect(published.map((fn) => [fn.code, fn.version])).toEqual([
       ['POST_SALES', 1],
       ['SCHEDULING', 1],
@@ -64,7 +64,7 @@ describe('seed das funções do agente', () => {
   });
 
   it('a versão do seed traz os blocos expandidos', async () => {
-    const support = await catalog.latestPublished('SUPPORT');
+    const support = await catalog.latestPublished('SUPPORT', randomUUID());
     expect(support.content.fields[0]?.id).toBe('empresa.nome');
     expect(support.content.behavior).toContain('QUANDO NÃO SOUBER');
     expect(support.content.intentions.map((intention) => intention.key)).toEqual([

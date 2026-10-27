@@ -109,3 +109,22 @@ O backoffice MUST permitir inativar, reativar e excluir uma função. Função i
 #### Scenario: Excluir função com agentes
 - **WHEN** o operador tenta excluir uma função usada por algum agente não removido
 - **THEN** o sistema recusa, informa quantos agentes a usam e orienta a inativar
+
+### Requirement: Portais da função
+Por padrão uma função MUST valer para todos os portais. O backoffice MUST permitir restringi-la a um ou mais portais escolhidos e voltar para todos. A restrição MUST valer na hora, sem publicar versão. Fora dos portais escolhidos a função MUST sumir da escolha de função e a criação de agente por ela MUST ser recusada; os agentes que já a usam MUST continuar funcionando, editando o formulário, republicando e recebendo versões novas, como na função inativa. Só operador `ADMIN` MUST poder alterar os portais, e a alteração MUST ser registrada na auditoria com os portais de antes e de depois.
+
+#### Scenario: Função restrita a um portal
+- **WHEN** o operador restringe a função SDR ao portal `loja.bitrix24.com.br`
+- **THEN** só esse portal vê SDR na criação de agentes, a criação por SDR em outro portal é recusada, e as demais funções continuam para todos
+
+#### Scenario: Agente existente em portal fora da lista
+- **WHEN** um portal que já tem agente SDR fica fora da lista
+- **THEN** o agente continua publicando e recebendo versões novas normalmente
+
+#### Scenario: Voltar para todos os portais
+- **WHEN** o operador escolhe "Todos os portais" e salva
+- **THEN** a função volta a aparecer na criação de agentes de todos os portais
+
+#### Scenario: Portal inexistente
+- **WHEN** a lista enviada tem um portal que não existe
+- **THEN** o sistema recusa sem alterar a lista atual

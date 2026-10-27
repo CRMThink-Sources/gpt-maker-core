@@ -69,7 +69,13 @@
 - [x] 8.7 Editor de blocos (mesmas seções, sem a Geral) e "Nova função a partir de outra" na lista de funções; verificar no navegador (~4h)
 - [x] 8.8 Atualizar a skill `gptthink-function-templates` para o editor visual (onde fica cada parte, quando usar o JSON); revisar contra o editor (~1h)
 
-## 9. Validação integrada
+## 9. Portais da função
 
-- [ ] 9.1 Em staging: criar um agente de cada função, conversar e verificar comportamento, base, intenções ("Registrar dúvida", qualificação, link de agenda, avaliação) e registros no Bitrix24; registrar os resultados em `docs/staging.md` (~6h)
-- [ ] 9.2 Em staging: comparar respostas com `knowledgeByFunction` ligado e desligado em perguntas fora da base; registrar o resultado e, se favorável, publicar nova versão dos templates com o setting ligado (~3h)
+- [x] 9.1 Migração `agent_function_template_tenant`, filtro por portal em `listPublished`/`latestPublished` (app recebe o portal da sessão), `PUT /admin/functions/:code/tenants` só ADMIN com auditoria `function.tenants`; testes de integração (restrição, portal inexistente, agente existente segue, SUPPORT 403) (~4h)
+- [x] 9.2 Backoffice: seção Portais na aba Geral (todos / só os escolhidos, busca de portal), indicador de portais no cabeçalho e no card da lista (~3h)
+- [ ] 9.3 Verificar no navegador: restringir uma função, conferir que some na criação de agente de outro portal e voltar para todos (~1h)
+
+## 10. Validação integrada
+
+- [ ] 10.1 Em staging: criar um agente de cada função, conversar e verificar comportamento, base, intenções ("Registrar dúvida", qualificação, link de agenda, avaliação) e registros no Bitrix24; registrar os resultados em `docs/staging.md` (~6h)
+- [ ] 10.2 Em staging: comparar respostas com `knowledgeByFunction` ligado e desligado em perguntas fora da base; registrar o resultado e, se favorável, publicar nova versão dos templates com o setting ligado (~3h)

@@ -35,6 +35,7 @@ import { Alert, Badge, buttonClass, Loading } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { BehaviorDiff } from '../../../app/agents/function-preview';
 import { useAdmin, useOperator } from '../../admin-provider';
+import { FunctionTenants } from '../editor/function-tenants';
 import { Menu } from '../editor/kit';
 import { TemplateEditor, templateProblems, useLiveTemplate } from '../editor/template-editor';
 import { message } from '../shared';
@@ -568,6 +569,11 @@ function FunctionEditor({
                 <Badge tone="amber">nunca publicada</Badge>
               )}
               {!view.active && <Badge tone="zinc">inativa</Badge>}
+              {view.tenants.length > 0 && (
+                <Badge tone="brand">
+                  {view.tenants.length === 1 ? '1 portal' : `${view.tenants.length} portais`}
+                </Badge>
+              )}
               <span className="text-xs text-zinc-500">
                 {view.agents === 1 ? '1 agente usa' : `${view.agents} agentes usam`}
               </span>
@@ -717,6 +723,14 @@ function FunctionEditor({
             <Steps problems={problems} tested={tested === current} nextVersion={nextVersion} />
           }
           versions={{ count: view.versions.length, content: versionList }}
+          availability={
+            <FunctionTenants
+              base={base}
+              tenants={view.tenants}
+              disabled={!isAdmin}
+              onSaved={(next) => setView(next)}
+            />
+          }
           identity={
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Nome" hint="O cliente vê ao escolher a função.">

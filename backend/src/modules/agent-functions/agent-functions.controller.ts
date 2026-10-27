@@ -26,23 +26,27 @@ export class AgentFunctionsController {
 
   @Get('agent-functions')
   @AppAuth()
-  async list(): Promise<{ functions: AgentFunctionView[] }> {
-    return { functions: await this.functions.listFunctions() };
+  async list(@CurrentSession() session: AppSession): Promise<{ functions: AgentFunctionView[] }> {
+    return { functions: await this.functions.listFunctions(session.tenantId) };
   }
 
   @Get('agent-functions/:code')
   @AppAuth()
   form(
+    @CurrentSession() session: AppSession,
     @Param('code') code: string,
   ): Promise<AgentFunctionView & { form: FunctionTemplateContent }> {
-    return this.functions.functionForm(code);
+    return this.functions.functionForm(session.tenantId, code);
   }
 
   @Post('agent-functions/preview')
   @AppAuth('manage')
   @HttpCode(HttpStatus.OK)
-  previewNew(@Body() body: PreviewNewDto): Promise<FunctionPreview> {
-    return this.functions.previewNew(body);
+  previewNew(
+    @CurrentSession() session: AppSession,
+    @Body() body: PreviewNewDto,
+  ): Promise<FunctionPreview> {
+    return this.functions.previewNew(session.tenantId, body);
   }
 
   @Post('agents')

@@ -120,6 +120,13 @@
       "when": 1793019721944,
       "tag": "0016_function_block_deleted",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793111416079,
+      "tag": "0017_function_template_tenants",
+      "breakpoints": true
     }
   ]
 }

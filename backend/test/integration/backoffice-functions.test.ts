@@ -533,6 +533,42 @@ describe('backoffice: templates de função', () => {
       );
     });
 
+    it('restringir a portais: só ADMIN, valida o portal e audita', async () => {
+      await createBlock();
+      await createTemplate();
+      const hex = randomBytes(3).toString('hex');
+      const [portal] = await db
+        .insert(tenant)
+        .values({ installationId: hex, memberId: hex, domain: `${hex}.b24.com`, tenantCode: hex })
+        .returning();
+
+      const support = await signIn('SUPPORT');
+      await http(support.cookie)
+        .put(`/admin/functions/${code}/tenants`, { tenantIds: [portal!.id] })
+        .expect(403);
+
+      const restricted = await http()
+        .put(`/admin/functions/${code}/tenants`, { tenantIds: [portal!.id] })
+        .expect(200);
+      expect(restricted.body.tenants).toEqual([{ id: portal!.id, domain: portal!.domain }]);
+      const list = await http().get('/admin/functions').expect(200);
+      expect(list.body.find((row: { code: string }) => row.code === code).tenants).toHaveLength(1);
+
+      const unknown = await http()
+        .put(`/admin/functions/${code}/tenants`, { tenantIds: [randomUUID()] })
+        .expect(422);
+      expect(unknown.body.error.code).toBe('TENANT_NOT_FOUND');
+
+      const all = await http()
+        .put(`/admin/functions/${code}/tenants`, { tenantIds: [] })
+        .expect(200);
+      expect(all.body.tenants).toEqual([]);
+      const actions = (await db.select({ action: auditLog.action }).from(auditLog)).map(
+        (r) => r.action,
+      );
+      expect(actions).toContain('function.tenants');
+    });
+
     it('nova função a partir de outra: cópia independente, sem versões', async () => {
       await createBlock();
       await createTemplate();
