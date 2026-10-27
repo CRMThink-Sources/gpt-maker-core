@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/modules/backoffice/audit.service';
 import { OperatorService } from '../../src/modules/backoffice/operator.service';
@@ -13,6 +13,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import { DomainError } from '../../src/shared/http/api-exception.filter';
 import { PlatformApiClient } from '../../src/shared/platform/platform-api.client';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const { aiModel, auditLog, planAllowedModel, planEntitlement, subscriptionState, tenant } = schema;
 
@@ -84,7 +85,7 @@ describe('backoffice: direitos dos planos', () => {
     postgres = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     const platform = new PlatformApiClient(
       { baseUrl: 'https://platform.test', apiKey: 'k', timeoutMs: 1000, maxAttempts: 1 },

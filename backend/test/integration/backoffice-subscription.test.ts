@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AuditService } from '../../src/modules/backoffice/audit.service';
@@ -16,6 +16,7 @@ import {
   type PlatformApiClient,
   PlatformError,
 } from '../../src/shared/platform/platform-api.client';
+import { testPool } from '../support/postgres';
 
 const { auditLog, paymentEvent, subscriptionState, tenant } = schema;
 
@@ -36,7 +37,7 @@ describe('backoffice: assinatura do portal', () => {
     postgres = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     const platform = {
       listPlans: async () => {

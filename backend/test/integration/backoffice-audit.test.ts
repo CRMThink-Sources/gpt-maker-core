@@ -15,7 +15,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ENV } from '../../src/config/config.module';
@@ -36,6 +36,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { ApiExceptionFilter } from '../../src/shared/http/api-exception.filter';
 import { REDIS } from '../../src/shared/redis/redis.module';
+import { testPool } from '../support/postgres';
 
 const H = { 'X-Backoffice': '1' };
 const currentStep = () => Math.floor(Date.now() / 30_000);
@@ -110,7 +111,7 @@ describe('backoffice: auditoria', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const env = {

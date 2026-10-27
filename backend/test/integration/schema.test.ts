@@ -2,11 +2,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq, sql } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const {
   aiModel,
@@ -52,7 +53,7 @@ describe('schema e migrações', () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(container.getConnectionUri());
-    pool = new Pool({ connectionString: container.getConnectionUri() });
+    pool = testPool(container.getConnectionUri());
     db = drizzle(pool, { schema });
   });
 

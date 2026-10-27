@@ -3,7 +3,7 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { FunctionCatalog } from '../../src/modules/agent-functions/function-catalog.service';
@@ -19,6 +19,7 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { FakeGptMaker } from '../support/fake-gptmaker';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, workspaceReservedAgent } = schema;
 
@@ -59,7 +60,7 @@ describe('sandbox dos templates de função', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const client = fake as unknown as GptMakerClient;

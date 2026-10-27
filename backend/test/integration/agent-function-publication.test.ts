@@ -6,7 +6,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq, isNull } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentFunctionService } from '../../src/modules/agent-functions/agent-function.service';
@@ -33,6 +33,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { DomainError } from '../../src/shared/http/api-exception.filter';
 import { FakeGptMaker } from '../support/fake-gptmaker';
+import { testPool } from '../support/postgres';
 
 const {
   agent,
@@ -126,7 +127,7 @@ describe('publicação da função do agente', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
 
