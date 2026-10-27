@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   collapseBlocks,
   expandBlocks,
+  type FunctionBlockContent,
   type FunctionTemplateContent,
+  type FunctionTemplateDraft,
   functionBlockContentSchema,
   functionTemplateContentSchema,
   functionTemplateDraftSchema,
@@ -329,3 +331,22 @@ describe('vários usuários, canal aberto, agente e transferências (D15–D17)'
 });
 
 const names = (list: Array<{ marker: string }>) => list.map((item) => item.marker);
+
+describe('rascunho e bloco gravados antes das transferências', () => {
+  it('expandBlocks aceita rascunho e bloco sem transfers', () => {
+    const draft = {
+      ...functionTemplateDraftSchema.parse({
+        ...sdrFixtureInput,
+        blocks: ['antigo'],
+      }),
+      transfers: undefined,
+    };
+    const block = { ...functionBlockContentSchema.parse({}), transfers: undefined };
+    const { content } = expandBlocks(
+      draft as unknown as FunctionTemplateDraft,
+      new Map([['antigo', block as unknown as FunctionBlockContent]]),
+    );
+    expect(content.transfers).toEqual([]);
+    expect(() => templateIssues(content)).not.toThrow();
+  });
+});

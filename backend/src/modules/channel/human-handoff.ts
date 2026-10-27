@@ -68,9 +68,11 @@ export class HumanHandoff {
       this.logger.warn(input, 'transferência para humano de agente desconhecido; ignorada');
       return 'skipped';
     }
+    // Só o chat de um agente reconhecido: formato inesperado volta ao chat calculado.
     const gptmakerChatId =
-      input.gptmakerChatId ??
-      gptmakerChatIdFor(owner.gptmakerAgentId, input.tenantId, input.dialogId);
+      origin && input.gptmakerChatId
+        ? input.gptmakerChatId
+        : gptmakerChatIdFor(owner.gptmakerAgentId, input.tenantId, input.dialogId);
     await this.human.set({
       tenantId: input.tenantId,
       agentId,

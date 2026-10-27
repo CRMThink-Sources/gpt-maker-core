@@ -157,6 +157,19 @@ describe('vários usuários, canal aberto e agente (D15–D17)', () => {
     expect(last['teste.agente']).toBe(AGENT_B);
   });
 
+  it('agente escolhido que foi removido aparece como removido', () => {
+    render(
+      <FunctionForm
+        form={extra}
+        answers={{ 'teste.agente': '1c7f8b5f-2d3e-4f60-9b0c-1d2e3f4a5b6c' }}
+        agents={[{ id: AGENT_B, name: 'Bia' }]}
+        onChange={() => undefined}
+      />,
+    );
+    const select = screen.getByRole('combobox', { name: /^Agente de vendas/ }) as HTMLSelectElement;
+    expect(select.selectedOptions[0]?.textContent).toBe('Agente removido: escolha outro');
+  });
+
   it('lista de usuários respondida conta como respondida', () => {
     expect(isAnswered(extra.fields[0]!, { 'teste.vendedores': [3] })).toBe(true);
     expect(isAnswered(extra.fields[0]!, { 'teste.vendedores': [] })).toBe(false);

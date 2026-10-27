@@ -742,7 +742,8 @@ export function expandBlocks(
         instructions: intention.instructions ? replaceBlocks(intention.instructions) : null,
       }),
     ),
-    transfers: [...draft.transfers, ...included.flatMap((block) => block.transfers)],
+    // Rascunhos e blocos gravados antes das transferências (D17) não têm a lista.
+    transfers: [...(draft.transfers ?? []), ...included.flatMap((block) => block.transfers ?? [])],
     crmAccess: draft.crmAccess || included.some((block) => block.crmAccess),
   };
   return { content, errors };

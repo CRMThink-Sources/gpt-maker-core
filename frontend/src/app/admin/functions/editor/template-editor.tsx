@@ -931,7 +931,7 @@ export function TemplateEditor({
               />
               <TransferList
                 content={{ fields: live.content.fields, intentions: draft.intentions }}
-                transfers={draft.transfers}
+                transfers={draft.transfers ?? []}
                 issues={(key) => find.intention(key)}
                 disabled={disabled}
                 onChange={(transfers) => set({ transfers })}
@@ -1067,7 +1067,7 @@ export function BlockEditor({
           />
           <TransferList
             content={content}
-            transfers={value.transfers}
+            transfers={value.transfers ?? []}
             issues={() => []}
             disabled={disabled}
             onChange={(transfers) => onChange({ ...value, transfers })}

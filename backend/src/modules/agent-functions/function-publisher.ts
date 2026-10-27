@@ -1,9 +1,7 @@
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type CompiledAgent,
   compileAgent,
-  type FunctionTemplateContent,
-  flattenFields,
   intentionHash,
   planPublication,
   publishedStateOf,
@@ -15,7 +13,6 @@ import type Redis from 'ioredis';
 import { currentContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
 import {
-  agent,
   agentFunctionConfig,
   agentIntention,
   agentManagedResource,
@@ -37,6 +34,7 @@ import {
   type ManagedResource,
 } from './function-state';
 import { mediaTrainings } from './function-training-policy';
+import { transferTargets } from './function-transfer-targets';
 
 // Dezenas de treinamentos, cada um com criação e listagem no GPTMaker.
 const LOCK_TTL_MS = 10 * 60_000;
@@ -95,11 +93,13 @@ export class FunctionPublisher {
         takenOverBehavior: target.takenOverBehavior,
       });
       if (compiled.errors.length) throw new Error(compiled.errors.join('; '));
+      // Destinos conferidos antes de qualquer chamada: falha não deixa a publicação pela metade.
+      const targets = await transferTargets(this.db, config.tenantId, agentId, compiled, content);
 
       await this.applyProfile(config, compiled);
       await this.applyTrainings(config, compiled);
       await this.applyIntentions(config, compiled);
-      await this.applyTransfers(config, compiled, content, owner.gptmakerAgentId);
+      await this.applyTransfers(config, compiled, targets, owner.gptmakerAgentId);
       // Exigido pela função; tirar o bloco depois não desliga (o cliente pode ter ligado à mão).
       if (compiled.crmAccess) await this.crmAccess.ensureEnabled(config.tenantId, agentId);
       // Fora do modo avançado, site e vídeo saem (spec "Desligar o modo avançado").
@@ -247,39 +247,16 @@ export class FunctionPublisher {
   }
 
   /**
-   * Regras de transferência para outros agentes (design D17), pela chave e pelo hash. Todos os
-   * destinos são conferidos antes de mexer no GPTMaker: do mesmo portal, não removidos e
-   * diferentes do próprio agente.
+   * Regras de transferência para outros agentes (design D17), pela chave e pelo hash. Os destinos
+   * (`gptmakerAgentId` por chave) já vêm conferidos por `transferTargets`.
    */
   private async applyTransfers(
     config: FunctionConfig,
     compiled: CompiledAgent,
-    content: FunctionTemplateContent,
+    targets: ReadonlyMap<string, string>,
     sourceAgentId: string,
   ): Promise<void> {
-    const { tenantId, agentId } = config;
-    const labels = new Map(flattenFields(content.fields).map((field) => [field.id, field.label]));
-    const targets = new Map<string, string>();
-    for (const transfer of compiled.transfers) {
-      const [row] = await this.db
-        .select({ gptmakerAgentId: agent.gptmakerAgentId })
-        .from(agent)
-        .where(
-          and(
-            eq(agent.id, transfer.agentId),
-            eq(agent.tenantId, tenantId),
-            isNull(agent.deletedAt),
-          ),
-        );
-      if (!row || transfer.agentId === agentId) {
-        throw new DomainError(
-          'FUNCTION_TRANSFER_AGENT_INVALID',
-          `Escolha outro agente em "${labels.get(transfer.fieldId) ?? transfer.fieldId}"`,
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
-      targets.set(transfer.key, row.gptmakerAgentId);
-    }
+    const { agentId } = config;
 
     const resources = await this.resources(agentId, 'TRANSFER_RULE');
     const wanted = new Set(compiled.transfers.map((transfer) => transfer.key));

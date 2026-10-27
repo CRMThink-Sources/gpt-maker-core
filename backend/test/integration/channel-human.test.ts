@@ -224,6 +224,21 @@ describe('atendimento humano', () => {
     expect(await wiremock.count('PUT', chatPath('chat11', 'start-human'))).toBe(1);
   });
 
+  it('chat recebido de agente desconhecido: usa o chat do agente da intenção', async () => {
+    await stubAll();
+    await handoff.start({
+      tenantId: owner.id,
+      agentId,
+      dialogId: 'chat12',
+      gptmakerChatId: 'formato-inesperado:chat12',
+    });
+    expect(await stateOf('chat12')).toMatchObject({
+      agentId,
+      gptmakerChatId: gptmakerChatIdFor(GM_AGENT, owner.id, 'chat12'),
+    });
+    expect(await wiremock.count('PUT', chatPath('chat12', 'start-human'))).toBe(1);
+  });
+
   describe('consumidor do onTransfer', () => {
     const consumer = () => new TransferConsumer();
     const event = (dialogId: string | null) => ({

@@ -318,6 +318,10 @@ export function AgentPicker({
         onChange={(e) => onChange(e.target.value)}
       >
         <option value="">Escolha um agente</option>
+        {/* Escolhido antes e removido depois: aparece até o cliente trocar (D17). */}
+        {value && !agents.some((item) => item.id === value) && (
+          <option value={value}>Agente removido: escolha outro</option>
+        )}
         {agents.map((item) => (
           <option key={item.id} value={item.id}>
             {item.name}

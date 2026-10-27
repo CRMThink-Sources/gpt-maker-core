@@ -776,18 +776,45 @@ describe('publicação da função do agente', () => {
       expect((await configOf(target.id)).needsRepublishReason).toBeNull();
     });
 
-    it('destino removido: a publicação falha nomeando o campo e não cria regra', async () => {
+    it('criar com destino removido: recusa na hora, nomeando o campo', async () => {
       const target = await createAgent();
       await db.update(agent).set({ deletedAt: new Date() }).where(eq(agent.id, target.id));
-      const { view, outcome } = await createWithTransfer({
+      const error = await rejection(
+        functions.create(owner, {
+          name: 'Bia',
+          functionCode: 'TRANSF',
+          answers: { 'transf.orcamento': 'agente', 'transf.agente': target.id },
+        }),
+      );
+      expect(error.code).toBe('FUNCTION_TRANSFER_AGENT_INVALID');
+      expect(error.message).toBe('Escolha outro agente em "Agente"');
+    });
+
+    it('republicar depois que o destino foi removido: recusa na hora, mesmo sem outra mudança', async () => {
+      const target = await createAgent();
+      const { view } = await createWithTransfer({
         'transf.orcamento': 'agente',
         'transf.agente': target.id,
       });
-      expect(outcome).toBe('FAILED');
+      await db.update(agent).set({ deletedAt: new Date() }).where(eq(agent.id, target.id));
+      const error = await rejection(functions.publish(owner.tenantId, view.id, {}));
+      expect(error.code).toBe('FUNCTION_TRANSFER_AGENT_INVALID');
+    });
+
+    it('destino removido entre o pedido e o worker: falha sem aplicar nada no GPTMaker', async () => {
+      const target = await createAgent();
+      const { view } = await createWithTransfer({ 'transf.orcamento': 'aqui' });
+      // Republicação que muda o comportamento e liga a transferência.
+      await functions.publish(owner.tenantId, view.id, {
+        answers: { 'transf.orcamento': 'agente', 'transf.agente': target.id },
+      });
+      await db.update(agent).set({ deletedAt: new Date() }).where(eq(agent.id, target.id));
+      fake.calls = [];
+      expect(await publisher.run(view.id)).toBe('FAILED');
       expect((await configOf(view.id)).publicationError).toContain(
         'FUNCTION_TRANSFER_AGENT_INVALID: Escolha outro agente em "Agente"',
       );
-      expect(fake.transferRules.size).toBe(0);
+      expect(fake.calls).toEqual([]);
     });
 
     it('destino de outro portal é recusado', async () => {
@@ -803,11 +830,14 @@ describe('publicação da função do agente', () => {
         })
         .returning();
       await db.update(agent).set({ tenantId: other!.id }).where(eq(agent.id, target.id));
-      const { outcome } = await createWithTransfer({
-        'transf.orcamento': 'agente',
-        'transf.agente': target.id,
-      });
-      expect(outcome).toBe('FAILED');
+      const error = await rejection(
+        functions.create(owner, {
+          name: 'Bia',
+          functionCode: 'TRANSF',
+          answers: { 'transf.orcamento': 'agente', 'transf.agente': target.id },
+        }),
+      );
+      expect(error.code).toBe('FUNCTION_TRANSFER_AGENT_INVALID');
       expect(fake.transferRules.size).toBe(0);
     });
   });
