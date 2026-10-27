@@ -29,6 +29,11 @@ import {
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
+  GptMakerTransferRule,
+  GptMakerWriteTransferRule,
+  transferRuleListSchema,
+  transferRuleSchema,
+  writeTransferRuleSchema,
   GptMakerUpdateAgentSettings,
   GptMakerUpdateTextTraining,
   GptMakerWebhooks,
@@ -302,6 +307,53 @@ export class GptMakerClient {
     await this.success('intention.delete', 'DELETE', `/intention/${enc(intentionId)}`);
   }
 
+  // ---- Regras de transferência entre agentes (design D17)
+
+  listTransferRules(agentId: string): Promise<GptMakerTransferRule[]> {
+    return this.request({
+      operation: 'transferRule.list',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/transfer-rules`,
+      response: transferRuleListSchema,
+    });
+  }
+
+  /** Id da regra criada (a resposta traz a regra inteira). */
+  async createTransferRule(agentId: string, input: GptMakerWriteTransferRule): Promise<string> {
+    const rule = await this.request({
+      operation: 'transferRule.create',
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/transfer-rules`,
+      body: transferRuleBody(input),
+      response: transferRuleSchema,
+    });
+    return rule.id;
+  }
+
+  /** Responde 204 sem corpo. */
+  async updateTransferRule(
+    agentId: string,
+    ruleId: string,
+    input: GptMakerWriteTransferRule,
+  ): Promise<void> {
+    await this.request({
+      operation: 'transferRule.update',
+      method: 'PUT',
+      path: `/agent/${enc(agentId)}/transfer-rules/${enc(ruleId)}`,
+      body: transferRuleBody(input),
+      response: z.unknown(),
+    });
+  }
+
+  async deleteTransferRule(agentId: string, ruleId: string): Promise<void> {
+    await this.request({
+      operation: 'transferRule.delete',
+      method: 'DELETE',
+      path: `/agent/${enc(agentId)}/transfer-rules/${enc(ruleId)}`,
+      response: z.unknown(),
+    });
+  }
+
   // ---- MCP (docs/gptmaker-mcp.md)
 
   /** Conecta um servidor MCP ao agente; devolve o id da conexão (necessário para remover). */
@@ -499,6 +551,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function truncated(payload: unknown): unknown {
   const json = JSON.stringify(payload ?? null) ?? 'null';
   return json.length > 2000 ? `${json.slice(0, 2000)}…` : payload;
+}
+
+/** Regra para outro agente: `userId` vai nulo, como a API documenta. */
+function transferRuleBody(input: GptMakerWriteTransferRule) {
+  return { ...writeTransferRuleSchema.parse(input), userId: null };
 }
 
 function enc(value: string): string {

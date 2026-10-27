@@ -91,8 +91,20 @@ export type FunctionField =
       min: number;
       max: number;
     }
-  | { kind: 'BITRIX_USER'; id: string; label: string; help?: string; required: boolean }
+  | {
+      kind: 'BITRIX_USER';
+      id: string;
+      label: string;
+      help?: string;
+      required: boolean;
+      /** Vários usuários: nas ações, cada execução vai para o próximo da lista (design D15). */
+      multiple: boolean;
+    }
   | { kind: 'BITRIX_STAGE'; id: string; label: string; help?: string; required: boolean }
+  /** Canal aberto do Bitrix24 (id da configuração da Linha Aberta), para transferir (D16). */
+  | { kind: 'BITRIX_OPENLINE'; id: string; label: string; help?: string; required: boolean }
+  /** Outro agente do portal, destino de uma transferência entre agentes (D17). */
+  | { kind: 'AGENT'; id: string; label: string; help?: string; required: boolean }
   | {
       kind: 'CHOICE';
       id: string;
@@ -200,8 +212,10 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
     z
       .object({ kind: z.literal('INTEGER'), ...base, min: z.number().int(), max: z.number().int() })
       .refine((field) => field.min <= field.max, 'min maior que max'),
-    z.object({ kind: z.literal('BITRIX_USER'), ...base }),
+    z.object({ kind: z.literal('BITRIX_USER'), ...base, multiple: z.boolean().default(false) }),
     z.object({ kind: z.literal('BITRIX_STAGE'), ...base }),
+    z.object({ kind: z.literal('BITRIX_OPENLINE'), ...base }),
+    z.object({ kind: z.literal('AGENT'), ...base }),
     z.object({ kind: z.literal('CHOICE'), ...base, options }),
     z.object({
       kind: z.literal('MULTI_CHOICE'),
@@ -263,6 +277,21 @@ export const functionIntentionSchema = z.object({
 });
 export type FunctionIntention = z.input<typeof functionIntentionSchema>;
 
+/**
+ * Transferência para outro agente (design D17): vira uma regra de transferência do agente no
+ * GPTMaker. `agent` é o marcador sozinho de um campo `AGENT`; `instructions` diz quando transferir.
+ */
+export const functionTransferSchema = z.object({
+  /** Chave estável: liga a regra gerada ao registro local entre publicações. */
+  key: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  when: conditionSchema.optional(),
+  agent: z.string().trim().min(1).max(200),
+  instructions: z.string().trim().min(1).max(1000),
+  /** A conversa volta ao agente de origem quando o atendimento do destino termina. */
+  returnOnFinish: z.boolean().default(false),
+});
+export type FunctionTransfer = z.input<typeof functionTransferSchema>;
+
 /** Conteúdo de uma versão publicada: blocos já expandidos (design D3). */
 export const functionTemplateContentSchema = z.object({
   agentType: agentTypeSchema,
@@ -277,6 +306,7 @@ export const functionTemplateContentSchema = z.object({
   fields: z.array(functionFieldSchema).min(1).max(40),
   behavior: z.string().min(1).max(FUNCTION_BEHAVIOR_MAX),
   intentions: z.array(functionIntentionSchema).max(10).default([]),
+  transfers: z.array(functionTransferSchema).max(5).default([]),
   /**
    * Exige o acesso ao CRM do agente (intenção de sistema "Consultar cliente no CRM" e servidor
    * MCP, spec agent-crm-tools): a publicação no agente o ativa, se ainda não estiver ativo.
@@ -291,6 +321,7 @@ export const functionBlockContentSchema = z.object({
   fields: z.array(functionFieldSchema).max(20).default([]),
   behavior: z.string().max(FUNCTION_BEHAVIOR_MAX).default(''),
   intentions: z.array(functionIntentionSchema).max(5).default([]),
+  transfers: z.array(functionTransferSchema).max(5).default([]),
   /** Template que inclui o bloco passa a exigir o acesso ao CRM (`crmAccess` do template). */
   crmAccess: z.boolean().default(false),
 });
@@ -435,6 +466,11 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
         condition ? [condition.field] : [],
       ),
     ]),
+    ...(content.transfers ?? []).flatMap((transfer) => [
+      ...functionMarkers(transfer.agent),
+      ...functionMarkers(transfer.instructions),
+      ...(transfer.when ? [transfer.when.field] : []),
+    ]),
   ]);
   for (const field of all) {
     if (field.kind !== 'CHOICE' && field.kind !== 'MULTI_CHOICE') continue;
@@ -535,6 +571,55 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
       }
     });
   }
+
+  // Transferências entre agentes (D17): como as intenções, endereçadas pela chave.
+  const transferKeys = new Set<string>();
+  for (const transfer of content.transfers ?? []) {
+    const at: TemplateIssueWhere = { section: 'actions', intentionKey: transfer.key };
+    const label = `transferência ${transfer.key}`;
+    if (transferKeys.has(transfer.key)) add(at, `transferência repetida: ${transfer.key}`);
+    transferKeys.add(transfer.key);
+    const agentField = /^\{\{\s*([^{}|\s]+)\s*\}\}$/.exec(transfer.agent.trim())?.[1];
+    if (!agentField || byId.get(agentField)?.kind !== 'AGENT') {
+      add(at, `${label}: escolha um campo de agente`);
+    }
+    check(transfer.instructions, label, at);
+    if (transfer.when) {
+      const field = byId.get(transfer.when.field);
+      if (!field || (field.kind !== 'CHOICE' && field.kind !== 'MULTI_CHOICE')) {
+        add(at, `condição da ${label} cita campo que não é escolha: ${transfer.when.field}`);
+      } else {
+        for (const value of transfer.when.in) {
+          if (!field.options.some((option) => option.value === value)) {
+            add(at, `condição da ${label} cita opção inexistente: ${transfer.when.field}=${value}`);
+          }
+        }
+      }
+    }
+    // Dependente sem a condição dele: sem a opção escolhida, a regra ficaria sem agente.
+    for (const id of new Set([
+      ...functionMarkers(transfer.agent),
+      ...functionMarkers(transfer.instructions),
+    ])) {
+      const parent = parents.get(id);
+      if (!parent) continue;
+      const condition = transfer.when;
+      if (
+        condition?.field === parent.field.id &&
+        condition.in.every((value) => parent.options.includes(value))
+      ) {
+        continue;
+      }
+      const labels = parent.field.options
+        .filter((option) => parent.options.includes(option.value))
+        .map((option) => option.label)
+        .join(' ou ');
+      add(
+        at,
+        `Transferência ${transfer.key} usa "${byId.get(id)!.label}", que só existe com "${parent.field.label}" = ${labels}: ponha essa condição na transferência`,
+      );
+    }
+  }
   return issues;
 }
 
@@ -549,6 +634,11 @@ function configTexts(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(configTexts);
   if (value && typeof value === 'object') return Object.values(value).flatMap(configTexts);
   return [];
+}
+
+/** Campo que só faz sentido nas ações: canal aberto e usuários em rodízio. */
+function actionOnly(field: FunctionField): boolean {
+  return field.kind === 'BITRIX_OPENLINE' || (field.kind === 'BITRIX_USER' && field.multiple);
 }
 
 /** Ponto do template onde um texto com marcadores é escrito (design D12). */
@@ -578,6 +668,9 @@ export function availableMarkers(
   const markers: MarkerOption[] = [];
   for (const field of flattenFields(content.fields)) {
     if (field.kind === 'KNOWLEDGE') continue;
+    // Agente, canal e vários usuários servem às ações, não ao texto (D15–D17).
+    if (field.kind === 'AGENT') continue;
+    if (context.kind !== 'intention' && actionOnly(field)) continue;
     if (field.kind === 'BITRIX_STAGE') {
       markers.push({ marker: `${field.id}.categoryId`, label: `${field.label} (funil)` });
       markers.push({ marker: `${field.id}.stageId`, label: `${field.label} (etapa)` });
@@ -649,6 +742,8 @@ export function expandBlocks(
         instructions: intention.instructions ? replaceBlocks(intention.instructions) : null,
       }),
     ),
+    // Rascunhos e blocos gravados antes das transferências (D17) não têm a lista.
+    transfers: [...(draft.transfers ?? []), ...included.flatMap((block) => block.transfers ?? [])],
     crmAccess: draft.crmAccess || included.some((block) => block.crmAccess),
   };
   return { content, errors };
@@ -671,6 +766,7 @@ export function collapseBlocks(
   if (included.some((block) => !block)) return null;
   const blockFields = included.flatMap((block) => block!.fields).length;
   const blockIntentions = included.flatMap((block) => block!.intentions).length;
+  const blockTransfers = included.flatMap((block) => block!.transfers ?? []).length;
   const collapse = (text: string) =>
     blockCodes.reduce((acc, code) => {
       const behavior = blocks.get(code)!.behavior;
@@ -690,6 +786,10 @@ export function collapseBlocks(
         whenToUse: collapse(intention.whenToUse),
         instructions: intention.instructions ? collapse(intention.instructions) : null,
       })),
+    transfers: (content.transfers ?? []).slice(
+      0,
+      (content.transfers ?? []).length - blockTransfers,
+    ),
     // Bloco que exige o CRM já liga o acesso na expansão: o rascunho não precisa marcar.
     crmAccess: included.some((block) => block!.crmAccess) ? false : content.crmAccess,
   };

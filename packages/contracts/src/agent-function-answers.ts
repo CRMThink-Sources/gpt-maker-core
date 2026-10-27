@@ -21,6 +21,8 @@ export const bitrixStageValueSchema = z.object({
 export const functionAnswerValueSchema = z.union([
   z.string().max(5000),
   z.array(z.string().max(5000)).max(50),
+  /** Vários usuários do Bitrix24 (design D15). */
+  z.array(z.number().int()).max(50),
   z.number().int(),
   bitrixStageValueSchema,
   z.array(knowledgeItemSchema).max(50),
@@ -147,7 +149,29 @@ function checkField(
       return value;
     }
     case 'BITRIX_USER': {
+      if (field.multiple) {
+        const ids = Array.isArray(value) ? value : [value];
+        if (ids.some((id) => typeof id !== 'number' || !Number.isInteger(id) || id <= 0)) {
+          return fail('escolha usuários do Bitrix24');
+        }
+        const list = ids as number[];
+        if (list.length > 20) issue('escolha no máximo 20 usuários');
+        if (new Set(list).size !== list.length) issue('usuário repetido');
+        return list;
+      }
       if (typeof value !== 'number' || value <= 0) return fail('escolha um usuário');
+      return value;
+    }
+    case 'BITRIX_OPENLINE': {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+        return fail('escolha um canal aberto');
+      }
+      return value;
+    }
+    case 'AGENT': {
+      if (typeof value !== 'string' || !z.uuid().safeParse(value).success) {
+        return fail('escolha um agente');
+      }
       return value;
     }
     case 'BITRIX_STAGE': {

@@ -15,11 +15,17 @@ import {
   TRAINING_TEXT_MAX,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { type ReactNode, useMemo } from 'react';
+import { createContext, type ReactNode, useContext, useMemo } from 'react';
 import { BookIcon, CheckIcon, CloseIcon, PlusIcon, TextIcon, TrashIcon } from '@/components/icons';
 import { buttonClass } from '@/components/ui';
 import { inputClass } from './agent-fields';
-import { PipelineStageFields, ResponsiblePicker } from './bitrix-pickers';
+import {
+  AgentPicker,
+  OpenLinePicker,
+  PipelineStageFields,
+  ResponsiblePicker,
+  UsersPicker,
+} from './bitrix-pickers';
 
 /**
  * Formulário da função do agente (spec agent-function-configuration), montado a partir da versão
@@ -32,6 +38,8 @@ type Props = {
   onChange: (answers: FunctionAnswers) => void;
   issues?: AnswerIssue[];
   disabled?: boolean;
+  /** Agentes que um campo "Agente" pode escolher (sem o próprio e sem removidos). */
+  agents?: Array<{ id: string; name: string }>;
 };
 
 /** Problema de um campo (ou de um item dele: `campo[0]`, `campo[0].sub`). */
@@ -65,9 +73,11 @@ export function isAnswered(field: FunctionField, answers: FunctionAnswers): bool
   if (typeof value === 'number') return true;
   if (Array.isArray(value)) {
     return value.some((item) =>
-      typeof item === 'string'
-        ? item.trim().length > 0
-        : Object.values((item as KnowledgeItem).values).some((text) => text.trim()),
+      typeof item === 'number'
+        ? true
+        : typeof item === 'string'
+          ? item.trim().length > 0
+          : Object.values((item as KnowledgeItem).values).some((text) => text.trim()),
     );
   }
   if (field.kind === 'BITRIX_STAGE') return Boolean((value as { stageId?: string }).stageId);
@@ -155,7 +165,10 @@ function Group({
   );
 }
 
-export function FunctionForm({ form, answers, onChange, issues, disabled }: Props) {
+/** Agentes que os campos "Agente" oferecem (D17), sem repassar por cada pergunta. */
+const FormAgents = createContext<Array<{ id: string; name: string }>>([]);
+
+export function FunctionForm({ form, answers, onChange, issues, disabled, agents }: Props) {
   const set = (id: string, value: FunctionAnswerValue | undefined) => {
     const next = { ...answers };
     if (value === undefined) delete next[id];
@@ -177,28 +190,30 @@ export function FunctionForm({ form, answers, onChange, issues, disabled }: Prop
   );
 
   return (
-    <div className="space-y-8">
-      <Group
-        icon={TextIcon}
-        title="Como o agente atende"
-        description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
-        fields={config}
-        answers={answers}
-      >
-        {config.map((field, index) => card(field, index))}
-      </Group>
-      {knowledge.length > 0 && (
+    <FormAgents.Provider value={agents ?? []}>
+      <div className="space-y-8">
         <Group
-          icon={BookIcon}
-          title="Base de conhecimento"
-          description="Um assunto por item. Cada item vira um treinamento do agente."
-          fields={knowledge}
+          icon={TextIcon}
+          title="Como o agente atende"
+          description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
+          fields={config}
           answers={answers}
         >
-          {knowledge.map((field, index) => card(field, config.length + index))}
+          {config.map((field, index) => card(field, index))}
         </Group>
-      )}
-    </div>
+        {knowledge.length > 0 && (
+          <Group
+            icon={BookIcon}
+            title="Base de conhecimento"
+            description="Um assunto por item. Cada item vira um treinamento do agente."
+            fields={knowledge}
+            answers={answers}
+          >
+            {knowledge.map((field, index) => card(field, config.length + index))}
+          </Group>
+        )}
+      </div>
+    </FormAgents.Provider>
   );
 }
 
@@ -263,6 +278,7 @@ function FieldInput({
 }) {
   const value = answers[field.id];
   const own = issuesOf(issues, field.id);
+  const agents = useContext(FormAgents);
 
   switch (field.kind) {
     case 'TEXT': {
@@ -322,6 +338,19 @@ function FieldInput({
         </label>
       );
     case 'BITRIX_USER':
+      if (field.multiple) {
+        return (
+          <div>
+            <UsersPicker
+              label={field.required ? field.label : `${field.label} (opcional)`}
+              value={Array.isArray(value) ? (value as number[]) : []}
+              disabled={disabled}
+              onChange={(ids) => set(field.id, ids.length ? ids : undefined)}
+            />
+            <IssueText issues={own} />
+          </div>
+        );
+      }
       return (
         <div>
           <ResponsiblePicker
@@ -329,6 +358,31 @@ function FieldInput({
             value={typeof value === 'number' ? value : 0}
             disabled={disabled}
             onChange={(id) => set(field.id, id > 0 ? id : undefined)}
+          />
+          <IssueText issues={own} />
+        </div>
+      );
+    case 'BITRIX_OPENLINE':
+      return (
+        <div>
+          <OpenLinePicker
+            label={field.required ? field.label : `${field.label} (opcional)`}
+            value={typeof value === 'number' ? value : 0}
+            disabled={disabled}
+            onChange={(id) => set(field.id, id > 0 ? id : undefined)}
+          />
+          <IssueText issues={own} />
+        </div>
+      );
+    case 'AGENT':
+      return (
+        <div>
+          <AgentPicker
+            label={field.required ? field.label : `${field.label} (opcional)`}
+            value={typeof value === 'string' ? value : ''}
+            agents={agents ?? []}
+            disabled={disabled}
+            onChange={(id) => set(field.id, id || undefined)}
           />
           <IssueText issues={own} />
         </div>

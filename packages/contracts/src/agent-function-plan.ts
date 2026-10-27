@@ -1,4 +1,9 @@
-import type { CompiledAgent, CompiledIntention, CompiledTraining } from './agent-function-compiler';
+import type {
+  CompiledAgent,
+  CompiledIntention,
+  CompiledTraining,
+  CompiledTransfer,
+} from './agent-function-compiler';
 import type { AgentSettings } from './agents';
 
 /**
@@ -15,6 +20,8 @@ export interface PublishedFunctionState {
   settings: AgentSettings;
   trainings: Array<{ key: string; hash: string }>;
   intentions: Array<{ key: string; hash: string }>;
+  /** Regras de transferência entre agentes (design D17); estados antigos não têm. */
+  transfers?: Array<{ key: string; hash: string }>;
 }
 
 export type DiffLine = { op: 'equal' | 'add' | 'remove'; text: string };
@@ -26,6 +33,7 @@ export interface PublicationPlan {
   settings: Array<{ key: string; from: unknown; to: unknown }>;
   trainings: { create: CompiledTraining[]; update: CompiledTraining[]; remove: string[] };
   intentions: { create: CompiledIntention[]; update: CompiledIntention[]; remove: string[] };
+  transfers: { create: CompiledTransfer[]; update: CompiledTransfer[]; remove: string[] };
   /** Nada a fazer: a publicação não chama o GPTMaker. */
   empty: boolean;
 }
@@ -96,6 +104,10 @@ export function intentionHash(intention: CompiledIntention): string {
   return contentHash(intention.input);
 }
 
+export function transferHash(transfer: CompiledTransfer): string {
+  return contentHash(transfer);
+}
+
 /** Estado a guardar depois de publicar o compilado. */
 export function publishedStateOf(compiled: CompiledAgent): PublishedFunctionState {
   return {
@@ -111,6 +123,10 @@ export function publishedStateOf(compiled: CompiledAgent): PublishedFunctionStat
     intentions: compiled.intentions.map((intention) => ({
       key: intention.key,
       hash: intentionHash(intention),
+    })),
+    transfers: compiled.transfers.map((transfer) => ({
+      key: transfer.key,
+      hash: transferHash(transfer),
     })),
   };
 }
@@ -170,12 +186,13 @@ export function planPublication(
   const behaviorChanged = before.behavior !== compiled.behavior;
   const trainings = planResources(compiled.trainings, before.trainings, trainingHash);
   const intentions = planResources(compiled.intentions, before.intentions, intentionHash);
+  const transfers = planResources(compiled.transfers, before.transfers ?? [], transferHash);
   const empty =
     published !== null &&
     !behaviorChanged &&
     agent.length === 0 &&
     settings.length === 0 &&
-    [trainings, intentions].every(
+    [trainings, intentions, transfers].every(
       (plan) => plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0,
     );
 
@@ -188,6 +205,7 @@ export function planPublication(
     settings,
     trainings,
     intentions,
+    transfers,
     empty,
   };
 }

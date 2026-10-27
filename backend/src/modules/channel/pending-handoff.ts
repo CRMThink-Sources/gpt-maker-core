@@ -7,6 +7,13 @@ export interface PendingHandoff {
   agentId: string;
   /** Usuário do Bitrix que recebe a conversa; ausente ⇒ operador livre da Linha Aberta. */
   userId?: number;
+  /** Canal aberto que recebe a conversa (design D16). */
+  lineId?: number;
+  /**
+   * Chat do GPTMaker recebido pela intenção. Depois de uma troca de agente (D17) é o do agente de
+   * origem, e não o da intenção: o handoff usa este chat e o agente dono dele.
+   */
+  gptmakerChatId?: string;
 }
 
 /** A conversa em curso responde em segundos; depois disso o pedido perde o sentido. */

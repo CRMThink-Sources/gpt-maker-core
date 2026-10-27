@@ -36,6 +36,7 @@ import { AgentRepository, AgentService, type AgentOwner } from '../agents';
 import { TenantService } from '../tenancy';
 import { TrainingService } from '../training';
 import { FunctionCatalog, type PublishedFunction } from './function-catalog.service';
+import { transferTargets } from './function-transfer-targets';
 import { mediaTrainings } from './function-training-policy';
 import {
   currentState,
@@ -129,6 +130,7 @@ export class AgentFunctionService {
       mode: 'SIMPLE',
     });
     await this.assertTrainingRoom(owner.tenantId, compiled.trainings.length);
+    await transferTargets(this.db, owner.tenantId, null, compiled, fn.content);
 
     const view = await this.agents.create(owner, {
       name: input.name,
@@ -252,6 +254,8 @@ export class AgentFunctionService {
     );
     if (prepared.issues.length) throw answersInvalid(prepared.issues);
     if (prepared.compiled.errors.length) throw compileFailed(prepared.compiled.errors);
+    // Na hora, e mesmo sem outra mudança: destino removido depois da última publicação (D17).
+    await transferTargets(this.db, tenantId, agentId, prepared.compiled, prepared.latest.content);
 
     const sameTarget =
       config.versionId === prepared.latest.versionId &&

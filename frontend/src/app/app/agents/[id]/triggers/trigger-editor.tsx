@@ -339,13 +339,22 @@ function ActionConfig({
             }
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <ResponsiblePicker
-              value={action.config.responsibleId}
-              disabled={disabled}
-              onChange={(responsibleId) =>
-                onChange({ ...action, config: { ...action.config, responsibleId } })
-              }
-            />
+            {Array.isArray(action.config.responsibleId) ? (
+              <Field label="Responsável">
+                {/* Lista em rodízio vem da função (D15); aqui só aparece. */}
+                <span className="mt-1.5 block text-sm text-zinc-700">
+                  {action.config.responsibleId.length} usuários, em rodízio
+                </span>
+              </Field>
+            ) : (
+              <ResponsiblePicker
+                value={action.config.responsibleId}
+                disabled={disabled}
+                onChange={(responsibleId) =>
+                  onChange({ ...action, config: { ...action.config, responsibleId } })
+                }
+              />
+            )}
             <Field label="Prazo (dias)" hint="Em branco: sem prazo.">
               <input
                 type="number"
@@ -461,7 +470,15 @@ function ActionConfig({
               </label>
             ))}
           </div>
-          {action.config.target === 'USER' && (
+          {action.config.target === 'LINE' && (
+            <p className="text-sm text-zinc-700">Canal aberto {action.config.lineId}</p>
+          )}
+          {action.config.target === 'USER' && Array.isArray(action.config.userId) && (
+            <p className="text-sm text-zinc-700">
+              {action.config.userId.length} usuários, em rodízio
+            </p>
+          )}
+          {action.config.target === 'USER' && !Array.isArray(action.config.userId) && (
             <ResponsiblePicker
               label="Atendente"
               value={action.config.userId ?? 0}

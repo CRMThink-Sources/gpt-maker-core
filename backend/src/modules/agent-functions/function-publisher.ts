@@ -6,6 +6,7 @@ import {
   planPublication,
   publishedStateOf,
   trainingHash,
+  transferHash,
 } from '@gptmaker/contracts';
 import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
@@ -22,6 +23,7 @@ import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { AgentRepository, AgentService } from '../agents';
 import { CrmAccessService } from '../crm-tools';
+import { GptMakerClient, GptMakerError } from '../gptmaker';
 import { IntentionService } from '../intentions';
 import { TrainingService } from '../training';
 import { FunctionCatalog } from './function-catalog.service';
@@ -32,6 +34,7 @@ import {
   type ManagedResource,
 } from './function-state';
 import { mediaTrainings } from './function-training-policy';
+import { transferTargets } from './function-transfer-targets';
 
 // Dezenas de treinamentos, cada um com criação e listagem no GPTMaker.
 const LOCK_TTL_MS = 10 * 60_000;
@@ -56,6 +59,7 @@ export class FunctionPublisher {
     private readonly trainings: TrainingService,
     private readonly intentions: IntentionService,
     private readonly crmAccess: CrmAccessService,
+    private readonly gptmaker: GptMakerClient,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
   ) {
@@ -89,10 +93,13 @@ export class FunctionPublisher {
         takenOverBehavior: target.takenOverBehavior,
       });
       if (compiled.errors.length) throw new Error(compiled.errors.join('; '));
+      // Destinos conferidos antes de qualquer chamada: falha não deixa a publicação pela metade.
+      const targets = await transferTargets(this.db, config.tenantId, agentId, compiled, content);
 
       await this.applyProfile(config, compiled);
       await this.applyTrainings(config, compiled);
       await this.applyIntentions(config, compiled);
+      await this.applyTransfers(config, compiled, targets, owner.gptmakerAgentId);
       // Exigido pela função; tirar o bloco depois não desliga (o cliente pode ter ligado à mão).
       if (compiled.crmAccess) await this.crmAccess.ensureEnabled(config.tenantId, agentId);
       // Fora do modo avançado, site e vídeo saem (spec "Desligar o modo avançado").
@@ -239,6 +246,76 @@ export class FunctionPublisher {
     }
   }
 
+  /**
+   * Regras de transferência para outros agentes (design D17), pela chave e pelo hash. Os destinos
+   * (`gptmakerAgentId` por chave) já vêm conferidos por `transferTargets`.
+   */
+  private async applyTransfers(
+    config: FunctionConfig,
+    compiled: CompiledAgent,
+    targets: ReadonlyMap<string, string>,
+    sourceAgentId: string,
+  ): Promise<void> {
+    const { agentId } = config;
+
+    const resources = await this.resources(agentId, 'TRANSFER_RULE');
+    const wanted = new Set(compiled.transfers.map((transfer) => transfer.key));
+    for (const resource of resources) {
+      if (wanted.has(resource.key)) continue;
+      if (resource.transferRuleId) {
+        await ignoreProviderNotFound(() =>
+          this.gptmaker.deleteTransferRule(sourceAgentId, resource.transferRuleId!),
+        );
+      }
+      await this.dropResource(resource.id);
+    }
+
+    const byKey = new Map(resources.map((resource) => [resource.key, resource]));
+    let remote: Awaited<ReturnType<GptMakerClient['listTransferRules']>> | null = null;
+    for (const transfer of compiled.transfers) {
+      const hash = transferHash(transfer);
+      const resource = byKey.get(transfer.key);
+      const body = {
+        type: 'AGENT' as const,
+        agentId: targets.get(transfer.key)!,
+        instructions: transfer.instructions,
+        returnOnFinish: transfer.returnOnFinish,
+      };
+      if (resource?.transferRuleId) {
+        if (resource.hash === hash) continue;
+        try {
+          await this.gptmaker.updateTransferRule(sourceAgentId, resource.transferRuleId, body);
+          await this.setResource(resource.id, hash, { transferRuleId: resource.transferRuleId });
+          continue;
+        } catch (error) {
+          // Sumiu do GPTMaker: cria de novo abaixo.
+          if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
+        }
+      }
+      // Retomada: regra criada numa tentativa que caiu antes de gravar o recurso.
+      remote ??= await this.gptmaker.listTransferRules(sourceAgentId);
+      const linked = new Set(resources.map((item) => item.transferRuleId).filter(Boolean));
+      const orphan = remote.find(
+        (rule) =>
+          !linked.has(rule.id) &&
+          rule.type === 'AGENT' &&
+          rule.agentId === body.agentId &&
+          rule.instructions === body.instructions,
+      );
+      const transferRuleId = orphan
+        ? (await this.gptmaker.updateTransferRule(sourceAgentId, orphan.id, body), orphan.id)
+        : await this.gptmaker.createTransferRule(sourceAgentId, body);
+      await this.saveResource(
+        config,
+        'TRANSFER_RULE',
+        transfer.key,
+        hash,
+        { transferRuleId },
+        resource,
+      );
+    }
+  }
+
   private resources(agentId: string, kind: ManagedResource['kind']): Promise<ManagedResource[]> {
     return this.db
       .select()
@@ -251,7 +328,7 @@ export class FunctionPublisher {
     kind: ManagedResource['kind'],
     key: string,
     hash: string,
-    link: { trainingId?: string; intentionId?: string },
+    link: { trainingId?: string; intentionId?: string; transferRuleId?: string },
     existing: ManagedResource | undefined,
   ): Promise<void> {
     if (existing) {
@@ -266,7 +343,7 @@ export class FunctionPublisher {
   private async setResource(
     id: string,
     hash: string,
-    link: { trainingId?: string; intentionId?: string },
+    link: { trainingId?: string; intentionId?: string; transferRuleId?: string },
   ): Promise<void> {
     await this.db
       .update(agentManagedResource)
@@ -327,6 +404,16 @@ export class FunctionPublisher {
         ),
       );
     return row?.id ?? null;
+  }
+}
+
+/** Regra que já não existe no GPTMaker conta como removida. */
+async function ignoreProviderNotFound(call: () => Promise<void>): Promise<void> {
+  try {
+    await call();
+  } catch (error) {
+    if (error instanceof GptMakerError && error.kind === 'NOT_FOUND') return;
+    throw error;
   }
 }
 

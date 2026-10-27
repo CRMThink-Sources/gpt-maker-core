@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  isUserList,
   renderFields,
   renderTemplate,
   type TemplateContext,
@@ -7,6 +8,7 @@ import {
 } from '@gptmaker/contracts';
 import { BitrixClient, BitrixError } from '../../bitrix';
 import { ActionError } from './action-error';
+import { ActionRotation } from './action-rotation';
 import {
   bizprocDocumentId,
   type CrmBinding,
@@ -54,7 +56,10 @@ export class TriggerActionExecutor {
   /** Troca nos testes. */
   webhookDeps: Parameters<typeof sendOutboundWebhook>[1] = {};
 
-  constructor(private readonly bitrix: BitrixClient) {}
+  constructor(
+    private readonly bitrix: BitrixClient,
+    private readonly rotation: ActionRotation,
+  ) {}
 
   async execute(action: ExecutableAction, context: ActionContext): Promise<ActionResult> {
     const binding = lazy(() => this.crmBinding(context));
@@ -144,7 +149,10 @@ export class TriggerActionExecutor {
               ...(action.config.description
                 ? { DESCRIPTION: renderTemplate(action.config.description, template) }
                 : {}),
-              RESPONSIBLE_ID: action.config.responsibleId,
+              // Vários responsáveis: o próximo da lista (D15).
+              RESPONSIBLE_ID: isUserList(action.config.responsibleId)
+                ? await this.rotation.next(action.id, action.config.responsibleId)
+                : action.config.responsibleId,
               ...(deadline ? { DEADLINE: deadline } : {}),
               ...(entity ? { UF_CRM_TASK: [`${TASK_CRM_PREFIX[entity.type]}_${entity.id}`] } : {}),
             },

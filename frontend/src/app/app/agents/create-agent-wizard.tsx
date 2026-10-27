@@ -19,6 +19,7 @@ import { Alert, buttonClass, Loading } from '@/components/ui';
 import { credits, errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
+import { useTransferAgents } from './use-transfer-agents';
 import { type AgentFormValues, IdentityFields, initialValues, ModelFields } from './agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from './function-form';
 import { FunctionPreviewView } from './function-preview';
@@ -45,6 +46,7 @@ export function CreateAgentWizard({
   onCreated: (agent: AgentView) => void;
 }) {
   const { api } = useAppSession();
+  const transferAgents = useTransferAgents();
   const [functions, setFunctions] = useState<AgentFunctionView[] | null>(null);
   const [models, setModels] = useState<AvailableModel[] | null>(null);
   const [values, setValues] = useState<AgentFormValues | null>(null);
@@ -319,6 +321,7 @@ export function CreateAgentWizard({
                     answers={answers}
                     onChange={setAnswers}
                     issues={issues}
+                    agents={transferAgents}
                   />
                 </div>
               </>

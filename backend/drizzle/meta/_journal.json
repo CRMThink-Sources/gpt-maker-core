@@ -127,6 +127,13 @@
       "when": 1793111416079,
       "tag": "0017_function_template_tenants",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793143247736,
+      "tag": "0018_transfer_rules",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ import {
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BehaviorMeter, FunctionForm } from './function-form';
+import { BehaviorMeter, FunctionForm, isAnswered } from './function-form';
 
 // Formulário mínimo: um texto e uma escolha com campo dependente (spec agent-function-templates).
 const form = functionTemplateContentSchema.parse({
@@ -105,5 +105,73 @@ describe('formulário da função', () => {
     // Trocar de opção tira o trecho e o dependente da conta.
     fireEvent.click(screen.getByRole('radio', { name: 'Transferir' }));
     expect(meter()).toBe(compiled({ 'empresa.nome': 'Acme', 'teste.suporte': 'transferir' }));
+  });
+});
+
+describe('vários usuários, canal aberto e agente (D15–D17)', () => {
+  const AGENT_B = '0b6f7a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b';
+  const extra = functionTemplateContentSchema.parse({
+    agentType: 'SUPPORT',
+    profile: {},
+    fields: [
+      {
+        kind: 'BITRIX_USER',
+        id: 'teste.vendedores',
+        label: 'Vendedores',
+        required: true,
+        multiple: true,
+      },
+      { kind: 'BITRIX_OPENLINE', id: 'teste.canal_aberto', label: 'Canal aberto', required: true },
+      { kind: 'AGENT', id: 'teste.agente', label: 'Agente de vendas', required: true },
+    ],
+    behavior: 'Você é {{agente.nome}}.',
+  });
+
+  function ExtraHarness({ onAnswers }: { onAnswers: (answers: FunctionAnswers) => void }) {
+    const [answers, setAnswers] = useState<FunctionAnswers>({});
+    return (
+      <FunctionForm
+        form={extra}
+        answers={answers}
+        agents={[{ id: AGENT_B, name: 'Bia' }]}
+        onChange={(next) => {
+          setAnswers(next);
+          onAnswers(next);
+        }}
+      />
+    );
+  }
+
+  it('fora do Bitrix24: ids dos usuários, número do canal e agente da lista', () => {
+    let last: FunctionAnswers = {};
+    render(<ExtraHarness onAnswers={(answers) => (last = answers)} />);
+    type(/^Vendedores/, '3, 5');
+    expect(last['teste.vendedores']).toEqual([3, 5]);
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^Canal aberto/ }), {
+      target: { value: '7' },
+    });
+    expect(last['teste.canal_aberto']).toBe(7);
+    fireEvent.change(screen.getByRole('combobox', { name: /^Agente de vendas/ }), {
+      target: { value: AGENT_B },
+    });
+    expect(last['teste.agente']).toBe(AGENT_B);
+  });
+
+  it('agente escolhido que foi removido aparece como removido', () => {
+    render(
+      <FunctionForm
+        form={extra}
+        answers={{ 'teste.agente': '1c7f8b5f-2d3e-4f60-9b0c-1d2e3f4a5b6c' }}
+        agents={[{ id: AGENT_B, name: 'Bia' }]}
+        onChange={() => undefined}
+      />,
+    );
+    const select = screen.getByRole('combobox', { name: /^Agente de vendas/ }) as HTMLSelectElement;
+    expect(select.selectedOptions[0]?.textContent).toBe('Agente removido: escolha outro');
+  });
+
+  it('lista de usuários respondida conta como respondida', () => {
+    expect(isAnswered(extra.fields[0]!, { 'teste.vendedores': [3] })).toBe(true);
+    expect(isAnswered(extra.fields[0]!, { 'teste.vendedores': [] })).toBe(false);
   });
 });

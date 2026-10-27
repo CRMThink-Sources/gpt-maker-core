@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   collapseBlocks,
   expandBlocks,
+  type FunctionBlockContent,
   type FunctionTemplateContent,
+  type FunctionTemplateDraft,
   functionBlockContentSchema,
   functionTemplateContentSchema,
   functionTemplateDraftSchema,
@@ -243,5 +245,108 @@ describe('marcadores por contexto', () => {
       expect.arrayContaining(['intencao.respostas', 'contact.name', 'empresa.nome']),
     );
     expect(list).not.toContain('bloco.duvida');
+  });
+});
+
+describe('vários usuários, canal aberto, agente e transferências (D15–D17)', () => {
+  const transfer = {
+    key: 'vendas',
+    agent: '{{sdr.agente_vendas}}',
+    instructions: 'Quando o cliente pedir orçamento.',
+  };
+
+  it('BITRIX_USER aceita multiple e assume false', () => {
+    const parsed = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      fields: [
+        ...sdrFixtureInput.fields,
+        { kind: 'BITRIX_USER', id: 'sdr.atendentes', label: 'Atendentes', required: true },
+        {
+          kind: 'BITRIX_USER',
+          id: 'sdr.vendedores',
+          label: 'Vendedores',
+          required: true,
+          multiple: true,
+        },
+      ],
+    });
+    const byId = new Map(parsed.fields.map((field) => [field.id, field]));
+    expect(byId.get('sdr.atendentes')).toMatchObject({ multiple: false });
+    expect(byId.get('sdr.vendedores')).toMatchObject({ multiple: true });
+  });
+
+  it('aceita os campos de canal aberto e de agente', () => {
+    const parsed = functionTemplateContentSchema.safeParse({
+      ...sdrFixtureInput,
+      fields: [
+        ...sdrFixtureInput.fields,
+        { kind: 'BITRIX_OPENLINE', id: 'sdr.canal', label: 'Canal', required: true },
+        { kind: 'AGENT', id: 'sdr.agente_vendas', label: 'Agente de vendas', required: true },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('transfers: padrão vazio e no máximo 5', () => {
+    expect(functionTemplateContentSchema.parse(sdrFixtureInput).transfers).toEqual([]);
+    const many = Array.from({ length: 6 }, (_, index) => ({ ...transfer, key: `t${index}` }));
+    expect(
+      functionTemplateContentSchema.safeParse({ ...sdrFixtureInput, transfers: many }).success,
+    ).toBe(false);
+    expect(
+      functionTemplateContentSchema.parse({ ...sdrFixtureInput, transfers: [transfer] })
+        .transfers[0],
+    ).toMatchObject({ key: 'vendas', returnOnFinish: false });
+  });
+
+  it('expandBlocks junta as transferências do rascunho e dos blocos', () => {
+    const block = functionBlockContentSchema.parse({
+      transfers: [{ ...transfer, key: 'do_bloco' }],
+    });
+    const draft = functionTemplateDraftSchema.parse({
+      ...sdrFixtureInput,
+      blocks: ['comum_x'],
+      transfers: [transfer],
+    });
+    const { content } = expandBlocks(draft, new Map([['comum_x', block]]));
+    expect(content.transfers.map((item) => item.key)).toEqual(['vendas', 'do_bloco']);
+  });
+
+  it('marcadores de campo múltiplo, canal e agente só nas intenções', () => {
+    const content = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      fields: [
+        ...sdrFixtureInput.fields,
+        { kind: 'BITRIX_USER', id: 'sdr.vendedores', label: 'V', required: true, multiple: true },
+        { kind: 'BITRIX_OPENLINE', id: 'sdr.canal', label: 'Canal', required: true },
+        { kind: 'AGENT', id: 'sdr.agente_vendas', label: 'Agente', required: true },
+      ],
+    });
+    const behavior = names(availableMarkers(content, { kind: 'behavior' }));
+    for (const id of ['sdr.vendedores', 'sdr.canal', 'sdr.agente_vendas'])
+      expect(behavior).not.toContain(id);
+    const intention = names(availableMarkers(content, { kind: 'intention', key: 'qualificacao' }));
+    expect(intention).toEqual(expect.arrayContaining(['sdr.vendedores', 'sdr.canal']));
+  });
+});
+
+const names = (list: Array<{ marker: string }>) => list.map((item) => item.marker);
+
+describe('rascunho e bloco gravados antes das transferências', () => {
+  it('expandBlocks aceita rascunho e bloco sem transfers', () => {
+    const draft = {
+      ...functionTemplateDraftSchema.parse({
+        ...sdrFixtureInput,
+        blocks: ['antigo'],
+      }),
+      transfers: undefined,
+    };
+    const block = { ...functionBlockContentSchema.parse({}), transfers: undefined };
+    const { content } = expandBlocks(
+      draft as unknown as FunctionTemplateDraft,
+      new Map([['antigo', block as unknown as FunctionBlockContent]]),
+    );
+    expect(content.transfers).toEqual([]);
+    expect(() => templateIssues(content)).not.toThrow();
   });
 });

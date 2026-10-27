@@ -101,7 +101,8 @@ export interface AdminFunctionTemplateView extends AdminFunctionTemplateSummary 
    * Campos que já saíram em alguma versão publicada, com o tipo e os valores das opções: as
    * respostas dos agentes estão guardadas por eles, então o editor não deixa renomeá-los.
    */
-  published: Record<string, { kind: FunctionField['kind']; options: string[] }>;
+  /** `multiple` só em `BITRIX_USER`: travado depois de publicado, como o tipo (D15). */
+  published: Record<string, { kind: FunctionField['kind']; options: string[]; multiple?: boolean }>;
   /** Chaves de intenção já publicadas: ligam a ação dos agentes, o editor não as renomeia. */
   publishedIntentions: string[];
 }

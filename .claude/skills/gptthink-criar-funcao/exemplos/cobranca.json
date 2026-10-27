@@ -1,0 +1,334 @@
+{
+  "code": "COBRANCA",
+  "name": "Cobrança",
+  "description": "Lembra clientes de faturas em atraso, informa como pagar, negocia só dentro das regras da empresa, registra a promessa de pagamento no Bitrix24 e transfere para um atendente quando o cliente contesta a cobrança.",
+  "draft": {
+    "agentType": "SUPPORT",
+    "settings": {
+      "enabledHumanTransfer": true,
+      "limitSubjects": true
+    },
+    "profile": {
+      "jobName": "{{empresa.nome}}",
+      "jobDescription": "{{empresa.descricao}}",
+      "jobSite": ""
+    },
+    "blocks": [
+      "comum",
+      "registro",
+      "duvida",
+      "transferir",
+      "crm"
+    ],
+    "crmAccess": false,
+    "fields": [
+      {
+        "kind": "MULTI_CHOICE",
+        "id": "cobranca.identificacao",
+        "label": "Dados para localizar a fatura",
+        "help": "O agente pede esses dados quando não reconhece o cliente pelo CRM.",
+        "required": true,
+        "separator": ", ",
+        "options": [
+          {
+            "value": "nome",
+            "label": "Nome completo",
+            "snippet": "nome completo"
+          },
+          {
+            "value": "documento",
+            "label": "CPF ou CNPJ",
+            "snippet": "CPF ou CNPJ"
+          },
+          {
+            "value": "fatura",
+            "label": "Número da fatura",
+            "snippet": "número da fatura"
+          },
+          {
+            "value": "contrato",
+            "label": "Número do contrato",
+            "snippet": "número do contrato"
+          },
+          {
+            "value": "email",
+            "label": "E-mail",
+            "snippet": "e-mail"
+          }
+        ]
+      },
+      {
+        "kind": "MULTI_CHOICE",
+        "id": "cobranca.pagamento",
+        "label": "Formas de pagamento aceitas",
+        "required": true,
+        "separator": "\n",
+        "options": [
+          {
+            "value": "pix",
+            "label": "Pix",
+            "snippet": "- Pix: chave {{cobranca.chave_pix}}",
+            "dependents": [
+              {
+                "kind": "TEXT",
+                "id": "cobranca.chave_pix",
+                "label": "Chave Pix",
+                "required": true,
+                "maxLength": 60,
+                "placeholder": "financeiro@empresa.com.br"
+              }
+            ]
+          },
+          {
+            "value": "boleto",
+            "label": "Boleto",
+            "snippet": "- Boleto (2ª via): {{cobranca.link_boleto}}",
+            "dependents": [
+              {
+                "kind": "URL",
+                "id": "cobranca.link_boleto",
+                "label": "Link da segunda via do boleto",
+                "required": true,
+                "maxLength": 90
+              }
+            ]
+          },
+          {
+            "value": "link",
+            "label": "Link de pagamento (cartão)",
+            "snippet": "- Cartão: {{cobranca.link_pagamento}}",
+            "dependents": [
+              {
+                "kind": "URL",
+                "id": "cobranca.link_pagamento",
+                "label": "Link de pagamento",
+                "required": true,
+                "maxLength": 90
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "cobranca.parcelamento",
+        "label": "O agente pode oferecer parcelamento?",
+        "required": true,
+        "options": [
+          {
+            "value": "nao",
+            "label": "Não, só pagamento à vista",
+            "snippet": "Não ofereça parcelamento: o pagamento é à vista. Se o cliente insistir, use \"Transferir para atendente\"."
+          },
+          {
+            "value": "sim",
+            "label": "Sim, até um número de parcelas",
+            "snippet": "Sem condições de pagar à vista: ofereça até {{cobranca.max_parcelas}} parcelas. Condições: {{cobranca.regras_parcelamento}} Pedido acima disso: use \"Transferir para atendente\".",
+            "dependents": [
+              {
+                "kind": "INTEGER",
+                "id": "cobranca.max_parcelas",
+                "label": "Máximo de parcelas",
+                "required": true,
+                "min": 2,
+                "max": 24
+              },
+              {
+                "kind": "TEXT",
+                "id": "cobranca.regras_parcelamento",
+                "label": "Condições do parcelamento",
+                "help": "Ex.: parcela mínima, juros, entrada.",
+                "required": true,
+                "maxLength": 100,
+                "multiline": true,
+                "placeholder": "Parcela mínima de R$ 50, sem entrada, juros de 2% ao mês."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "INTEGER",
+        "id": "cobranca.prazo_promessa",
+        "label": "Prazo máximo da promessa de pagamento (dias)",
+        "help": "Até quantos dias a partir de hoje o cliente pode prometer pagar.",
+        "required": true,
+        "min": 1,
+        "max": 60
+      },
+      {
+        "kind": "CHOICE",
+        "id": "cobranca.acompanhamento",
+        "label": "Depois de registrar a promessa",
+        "required": true,
+        "options": [
+          {
+            "value": "registrar",
+            "label": "Só registrar no Bitrix24",
+            "snippet": "Confirme a data e a forma de pagamento combinadas."
+          },
+          {
+            "value": "tarefa",
+            "label": "Registrar e criar tarefa de acompanhamento",
+            "snippet": "Confirme a data e a forma de pagamento combinadas e avise que a equipe vai acompanhar.",
+            "dependents": [
+              {
+                "kind": "BITRIX_USER",
+                "id": "cobranca.responsavel",
+                "label": "Responsável pela tarefa",
+                "required": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "cobranca.ja_pagou",
+        "label": "Cliente diz que já pagou",
+        "required": true,
+        "options": [
+          {
+            "value": "comprovante",
+            "label": "Pedir o comprovante e avisar que a equipe confere",
+            "snippet": "Se o cliente já pagou: peça o comprovante e avise que a equipe vai conferir."
+          },
+          {
+            "value": "transferir",
+            "label": "Transferir para um atendente",
+            "snippet": "Se o cliente já pagou: use \"Transferir para atendente\"."
+          }
+        ]
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.politicas",
+        "label": "Políticas de cobrança",
+        "help": "Multa, juros, prazos de compensação, consequências do atraso.",
+        "required": false,
+        "maxItems": 10,
+        "subfields": [
+          {
+            "id": "titulo",
+            "label": "Título",
+            "required": true,
+            "maxLength": 100
+          },
+          {
+            "id": "texto",
+            "label": "Texto",
+            "required": true,
+            "maxLength": 900,
+            "multiline": true
+          }
+        ],
+        "format": "Política: {{titulo}}\n{{texto}}"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.faq",
+        "label": "Perguntas frequentes",
+        "required": false,
+        "maxItems": 20,
+        "subfields": [
+          {
+            "id": "pergunta",
+            "label": "Pergunta",
+            "required": true,
+            "maxLength": 200
+          },
+          {
+            "id": "resposta",
+            "label": "Resposta",
+            "required": true,
+            "maxLength": 800,
+            "multiline": true
+          }
+        ],
+        "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}"
+      }
+    ],
+    "behavior": "Você é {{agente.nome}}, do financeiro da {{empresa.nome}}. {{empresa.descricao}}\nSua função é lembrar faturas em atraso, informar como pagar e combinar o pagamento. Você não vende nem altera valores.\n\n{{bloco.crm}}\n\nCOMO CONDUZIR\n- Sem o cliente no CRM, peça: {{cobranca.identificacao}}.\n- Valor e vencimento só com dados do CRM ou do cliente. NUNCA invente valores, multas ou juros.\n- NUNCA ameace nem constranja o cliente.\n- Pergunte se ele paga hoje e passe a forma que escolher:\n{{cobranca.pagamento}}\n\nNEGOCIAÇÃO\n{{cobranca.parcelamento}}\nNUNCA ofereça desconto ou condição fora daqui ou da base de conhecimento.\n\nPROMESSA DE PAGAMENTO\nSe não pagar agora, combine uma data em até {{cobranca.prazo_promessa}} dias e use a ação \"Registrar promessa de pagamento\". Data além disso: use \"Transferir para atendente\".\n\nCONTESTAÇÃO\nCliente não reconhece a cobrança ou discorda do valor: não insista, peça desculpas e use \"Transferir para atendente\" com o motivo.\n\n{{cobranca.ja_pagou}}\n\n{{bloco.duvida}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas.\n\n{{avancado.instrucoes_adicionais}}",
+    "intentions": [
+      {
+        "key": "registrar_promessa",
+        "name": "Registrar promessa de pagamento",
+        "whenToUse": "Quando o cliente se comprometer a pagar a fatura em atraso numa data combinada, dentro do prazo de {{cobranca.prazo_promessa}} dias.",
+        "fields": [
+          {
+            "name": "Fatura",
+            "description": "Número ou descrição da fatura e o valor em atraso.",
+            "type": "STRING",
+            "required": true
+          },
+          {
+            "name": "Data prometida",
+            "description": "A data em que o cliente prometeu pagar.",
+            "type": "DATE",
+            "required": true
+          },
+          {
+            "name": "Forma de pagamento",
+            "description": "Pix, boleto ou cartão, como o cliente escolheu.",
+            "type": "STRING",
+            "required": true
+          },
+          {
+            "name": "Parcelas",
+            "description": "Número de parcelas combinado; 1 se for à vista.",
+            "type": "NUMBER",
+            "required": false
+          }
+        ],
+        "actions": [
+          {
+            "when": {
+              "field": "registro.onde",
+              "in": [
+                "conversa"
+              ]
+            },
+            "type": "TIMELINE_COMMENT",
+            "config": {
+              "text": "Promessa de pagamento registrada pelo agente.\nFatura: {{fields.fatura}}\nData prometida: {{fields.data_prometida}}\nForma: {{fields.forma_de_pagamento}}\nParcelas: {{fields.parcelas}}"
+            }
+          },
+          {
+            "when": {
+              "field": "registro.onde",
+              "in": [
+                "funil"
+              ]
+            },
+            "type": "UPSERT_DEAL",
+            "config": {
+              "categoryId": "{{registro.funil.categoryId}}",
+              "stageId": "{{registro.funil.stageId}}",
+              "fields": {
+                "TITLE": "Promessa de pagamento: {{contact.name}}",
+                "COMMENTS": "Fatura: {{fields.fatura}}\nData prometida: {{fields.data_prometida}}\nForma: {{fields.forma_de_pagamento}}\nParcelas: {{fields.parcelas}}"
+              }
+            }
+          },
+          {
+            "when": {
+              "field": "cobranca.acompanhamento",
+              "in": [
+                "tarefa"
+              ]
+            },
+            "type": "CREATE_TASK",
+            "config": {
+              "title": "Acompanhar promessa de pagamento de {{contact.name}}",
+              "description": "Fatura: {{fields.fatura}}\nData prometida: {{fields.data_prometida}}\nForma: {{fields.forma_de_pagamento}}\nParcelas: {{fields.parcelas}}\nTelefone: {{contact.phone}}",
+              "responsibleId": "{{cobranca.responsavel}}",
+              "deadlineDays": "{{cobranca.prazo_promessa}}"
+            }
+          }
+        ],
+        "responseMode": "INSTRUCTIONS",
+        "instructions": "Agradeça o compromisso. {{cobranca.acompanhamento}} Reenvie a forma de pagamento escolhida."
+      }
+    ]
+  }
+}

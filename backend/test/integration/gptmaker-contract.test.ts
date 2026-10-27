@@ -222,6 +222,48 @@ describe('contrato GPTMaker v2 (WireMock)', () => {
     await client.deleteTraining('tr-1');
   });
 
+  it('regras de transferência: listar, criar, atualizar e remover (design D17)', async () => {
+    const rule = {
+      type: 'AGENT' as const,
+      agentId: 'ag-2',
+      instructions: 'Quando pedir orçamento.',
+      returnOnFinish: true,
+    };
+    const body = { ...rule, userId: null };
+    await wiremock.stub({
+      request: { method: 'GET', urlPath: '/v2/agent/ag-1/transfer-rules', headers: auth },
+      response: ok([{ id: 'tr-9', createdAt: '2026-10-27T00:00:00Z', ...body }]),
+    });
+    await wiremock.stub({
+      request: {
+        method: 'POST',
+        urlPath: '/v2/agent/ag-1/transfer-rules',
+        headers: auth,
+        bodyPatterns: [json(body)],
+      },
+      response: ok({ id: 'tr-10', createdAt: '2026-10-27T00:00:00Z', ...body }),
+    });
+    await wiremock.stub({
+      request: {
+        method: 'PUT',
+        urlPath: '/v2/agent/ag-1/transfer-rules/tr-10',
+        headers: auth,
+        bodyPatterns: [json({ ...body, returnOnFinish: false })],
+      },
+      response: { status: 204 },
+    });
+    await wiremock.stub({
+      request: { method: 'DELETE', urlPath: '/v2/agent/ag-1/transfer-rules/tr-10', headers: auth },
+      response: { status: 204 },
+    });
+    await expect(client.listTransferRules('ag-1')).resolves.toEqual([
+      expect.objectContaining({ id: 'tr-9', agentId: 'ag-2', instructions: rule.instructions }),
+    ]);
+    await expect(client.createTransferRule('ag-1', rule)).resolves.toBe('tr-10');
+    await client.updateTransferRule('ag-1', 'tr-10', { ...rule, returnOnFinish: false });
+    await client.deleteTransferRule('ag-1', 'tr-10');
+  });
+
   it('GET e PUT /v2/agent/{id}/webhooks', async () => {
     const hooks = {
       onNewMessage: 'https://api.exemplo/gptmaker/webhooks/onNewMessage?t=x',

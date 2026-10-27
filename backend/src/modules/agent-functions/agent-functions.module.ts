@@ -14,6 +14,7 @@ import { FunctionPublisher } from './function-publisher';
 import { FunctionSandbox, SandboxIntentionController } from './function-sandbox';
 import { FunctionSeeder } from './function-seed';
 import { FunctionTrainingPolicy } from './function-training-policy';
+import { FunctionTransferTargets } from './function-transfer-targets';
 
 /** Funções do agente: templates, blocos, configuração e publicação (specs agent-function-*). */
 @Module({
@@ -35,6 +36,7 @@ import { FunctionTrainingPolicy } from './function-training-policy';
     FunctionSandbox,
     FunctionSeeder,
     FunctionTrainingPolicy,
+    FunctionTransferTargets,
   ],
   exports: [AgentFunctionService, FunctionCatalog, FunctionPublisher, FunctionSandbox],
 })

@@ -23,6 +23,15 @@ export class FakeGptMaker {
   agents = new Map<string, { id: string; profile: unknown; settings: Record<string, unknown> }>();
   trainings = new Map<string, FakeTraining>();
   intentions = new Map<string, FakeIntention>();
+  /** Regras de transferência por id: agente de origem e corpo enviado (design D17). */
+  transferRules = new Map<
+    string,
+    {
+      id: string;
+      agentId: string;
+      body: { agentId: string; instructions: string; returnOnFinish: boolean };
+    }
+  >();
   calls: string[] = [];
   private failures = new Map<string, { skip: number; times: number }>();
   private seq = 0;
@@ -40,6 +49,7 @@ export class FakeGptMaker {
     this.agents.clear();
     this.trainings.clear();
     this.intentions.clear();
+    this.transferRules.clear();
     this.calls = [];
     this.failures.clear();
   }
@@ -166,5 +176,41 @@ export class FakeGptMaker {
   async deleteIntention(intentionId: string) {
     this.call('intention.delete');
     this.intentions.delete(intentionId);
+  }
+
+  async listTransferRules(agentId: string) {
+    this.call('transferRule.list');
+    return [...this.transferRules.values()]
+      .filter((rule) => rule.agentId === agentId)
+      .map((rule) => ({ id: rule.id, type: 'AGENT' as const, ...rule.body }));
+  }
+
+  async createTransferRule(
+    agentId: string,
+    input: { agentId: string; instructions: string; returnOnFinish: boolean },
+  ) {
+    this.call('transferRule.create');
+    const id = this.id('rule');
+    this.transferRules.set(id, { id, agentId, body: { ...input } });
+    return id;
+  }
+
+  async updateTransferRule(
+    agentId: string,
+    ruleId: string,
+    input: { agentId: string; instructions: string; returnOnFinish: boolean },
+  ) {
+    this.call('transferRule.update');
+    const rule = this.transferRules.get(ruleId);
+    if (!rule || rule.agentId !== agentId)
+      throw new GptMakerError('NOT_FOUND', 'transferRule.update', 'não encontrada', {
+        status: 404,
+      });
+    rule.body = { ...input };
+  }
+
+  async deleteTransferRule(agentId: string, ruleId: string) {
+    this.call('transferRule.delete');
+    if (this.transferRules.get(ruleId)?.agentId === agentId) this.transferRules.delete(ruleId);
   }
 }

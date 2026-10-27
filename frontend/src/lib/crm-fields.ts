@@ -179,6 +179,24 @@ async function loadStages(pipelineId: number): Promise<DealStage[]> {
   }));
 }
 
+export interface OpenLine {
+  id: number;
+  name: string;
+}
+
+const openLinesCache: { request?: Promise<OpenLine[]> } = {};
+
+/** Canais abertos (Linhas Abertas) do portal, por nome (design D16). */
+async function loadOpenLines(): Promise<OpenLine[]> {
+  const data = await bx24Call<Array<{ ID: string | number; LINE_NAME: string }>>(
+    'imopenlines.config.list.get',
+    {},
+  );
+  return data
+    .map((line) => ({ id: Number(line.ID), name: line.LINE_NAME }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
 /** Uma chamada por chave e por carregamento da página; falha libera nova tentativa. */
 function cached<T>(
   get: () => Promise<T> | undefined,
@@ -219,6 +237,17 @@ function useBitrixList<T>(
   return state.key === key
     ? { data: state.data, failed: state.failed }
     : { data: null, failed: false };
+}
+
+/** Canais abertos do portal (transferência para um canal). */
+export function useOpenLines() {
+  return useBitrixList('openlines', () =>
+    cached(
+      () => openLinesCache.request,
+      (request) => (openLinesCache.request = request),
+      loadOpenLines,
+    ),
+  );
 }
 
 /** Funis de negócio do portal, o geral primeiro. */

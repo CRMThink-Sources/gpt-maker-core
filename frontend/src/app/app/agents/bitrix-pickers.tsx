@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { buttonClass } from '@/components/ui';
 import { bx24SelectUsers, insideBitrix } from '@/lib/bx24';
-import { useDealPipelines, useDealStages } from '@/lib/crm-fields';
+import { useDealPipelines, useDealStages, useOpenLines } from '@/lib/crm-fields';
 import { Field, inputClass } from './agent-fields';
 
 /** Seletores do Bitrix24 usados nos gatilhos, nas intenções e no formulário da função. */
@@ -155,6 +155,179 @@ export function ResponsiblePicker({
           />
         )}
       </div>
+    </Field>
+  );
+}
+
+/**
+ * Vários usuários do Bitrix24 (design D15): as ações vão para um de cada vez, em rodízio. Fora do
+ * Bitrix24, os ids separados por vírgula.
+ */
+export function UsersPicker({
+  value,
+  onChange,
+  disabled,
+  label = 'Usuários',
+}: {
+  value: number[];
+  onChange: (ids: number[]) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const [names, setNames] = useState<Record<number, string>>({});
+  const [text, setText] = useState(value.join(', '));
+  if (!insideBitrix()) {
+    return (
+      <Field
+        label={label}
+        hint="Ids dos usuários no Bitrix24, separados por vírgula. Recebem um de cada vez."
+      >
+        <input
+          className={`${inputClass} mt-1.5`}
+          value={text}
+          disabled={disabled}
+          onChange={(e) => {
+            setText(e.target.value);
+            const ids = e.target.value
+              .split(/[\s,;]+/)
+              .map(Number)
+              .filter((id) => Number.isInteger(id) && id > 0);
+            onChange([...new Set(ids)]);
+          }}
+        />
+      </Field>
+    );
+  }
+  return (
+    <Field label={label} hint="Recebem um de cada vez, em rodízio.">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        {value.length === 0 && <span className="text-sm text-zinc-700">Nenhum escolhido</span>}
+        {value.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pr-1 pl-2.5 text-xs text-zinc-700"
+          >
+            {names[id] ?? `Usuário #${id}`}
+            {!disabled && (
+              <button
+                type="button"
+                aria-label={`Tirar ${names[id] ?? id}`}
+                className="rounded-full px-1 hover:bg-zinc-200"
+                onClick={() => onChange(value.filter((item) => item !== id))}
+              >
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+        <button
+          type="button"
+          className={buttonClass('secondary', 'sm')}
+          disabled={disabled}
+          onClick={async () => {
+            const users = await bx24SelectUsers();
+            if (!users.length) return;
+            setNames((current) => ({
+              ...current,
+              ...Object.fromEntries(users.map((user) => [Number(user.id), user.name])),
+            }));
+            onChange(
+              [...new Set([...value, ...users.map((user) => Number(user.id))])].slice(0, 20),
+            );
+          }}
+        >
+          Adicionar
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+/** Canal aberto do Bitrix24 que recebe a conversa (design D16). Sem a lista, o id digitado. */
+export function OpenLinePicker({
+  value,
+  onChange,
+  disabled,
+  label = 'Canal aberto do Bitrix24',
+}: {
+  value: number;
+  onChange: (id: number) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const lines = useOpenLines();
+  if (!lines.data) {
+    return (
+      <Field
+        label={label}
+        hint={lines.failed ? 'Informe o id do canal aberto no Bitrix24.' : undefined}
+      >
+        <input
+          type="number"
+          min={1}
+          className={`${inputClass} mt-1.5 w-40`}
+          value={value || ''}
+          disabled={disabled || !lines.failed}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+      </Field>
+    );
+  }
+  return (
+    <Field label={label}>
+      <select
+        className={`${inputClass} mt-1.5`}
+        value={value || ''}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+      >
+        <option value="">Escolha um canal</option>
+        {lines.data.map((line) => (
+          <option key={line.id} value={line.id}>
+            {line.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+/** Outro agente do portal, destino de uma transferência entre agentes (design D17). */
+export function AgentPicker({
+  value,
+  agents,
+  onChange,
+  disabled,
+  label = 'Agente',
+}: {
+  value: string;
+  agents: Array<{ id: string; name: string }>;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <Field
+      label={label}
+      hint={agents.length === 0 ? 'Crie outro agente para poder transferir para ele.' : undefined}
+    >
+      <select
+        className={`${inputClass} mt-1.5`}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Escolha um agente</option>
+        {/* Escolhido antes e removido depois: aparece até o cliente trocar (D17). */}
+        {value && !agents.some((item) => item.id === value) && (
+          <option value={value}>Agente removido: escolha outro</option>
+        )}
+        {agents.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
+      </select>
     </Field>
   );
 }

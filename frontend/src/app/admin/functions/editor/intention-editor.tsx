@@ -571,7 +571,7 @@ function IntentionCard({
   );
 }
 
-function ConditionInput({
+export function ConditionInput({
   label,
   value,
   choices,
@@ -933,27 +933,45 @@ function ActionCard({
               <Segmented
                 label="Para quem"
                 disabled={disabled}
-                value={text('target') === 'USER' ? 'USER' : 'OPERATOR'}
+                value={
+                  text('target') === 'USER'
+                    ? 'USER'
+                    : text('target') === 'LINE'
+                      ? 'LINE'
+                      : 'OPERATOR'
+                }
                 options={[
                   { value: 'OPERATOR', label: 'Atendente livre da Linha Aberta' },
                   { value: 'USER', label: 'Um usuário' },
+                  { value: 'LINE', label: 'Canal aberto' },
                 ]}
                 onChange={(target) =>
                   setConfig(
                     target === 'USER'
-                      ? { target: 'USER', userId: config.userId ?? 1 }
-                      : { target: 'OPERATOR', userId: undefined },
+                      ? { target: 'USER', userId: config.userId ?? 1, lineId: undefined }
+                      : target === 'LINE'
+                        ? { target: 'LINE', lineId: config.lineId ?? 1, userId: undefined }
+                        : { target: 'OPERATOR', userId: undefined, lineId: undefined },
                   )
                 }
               />
             </div>
             {config.target === 'USER' && (
               <RefInput
-                label="Usuário"
+                label="Usuário (vários: rodízio)"
                 value={config.userId}
                 fields={ofKind('BITRIX_USER')}
                 disabled={disabled}
                 onChange={(value) => setConfig({ userId: value })}
+              />
+            )}
+            {config.target === 'LINE' && (
+              <RefInput
+                label="Canal aberto"
+                value={config.lineId}
+                fields={ofKind('BITRIX_OPENLINE')}
+                disabled={disabled}
+                onChange={(value) => setConfig({ lineId: value })}
               />
             )}
           </div>

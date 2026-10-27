@@ -292,6 +292,37 @@ export const intentionWriteAckSchema = z
   .object({ id: z.string().optional(), success: z.boolean().optional() })
   .loose();
 
+// ---- Regras de transferência (docs/gptmaker-api.md, design D17)
+
+export const transferRuleSchema = z
+  .object({
+    id: z.string(),
+    type: z.enum(['HUMAN', 'AGENT']),
+    agentId: z.string().nullable().optional(),
+    userId: z.string().nullable().optional(),
+    instructions: z.string().nullable().optional(),
+    returnOnFinish: z.boolean().optional(),
+  })
+  .loose();
+export type GptMakerTransferRule = z.infer<typeof transferRuleSchema>;
+
+export const transferRuleListSchema = z.union([
+  transferRuleSchema.array(),
+  z
+    .object({ data: transferRuleSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
+/** Corpo de criação e atualização: só regras para outro agente (o humano vem da intenção). */
+export const writeTransferRuleSchema = z.object({
+  type: z.literal('AGENT'),
+  agentId: z.string().min(1),
+  instructions: z.string().min(1),
+  returnOnFinish: z.boolean(),
+});
+export type GptMakerWriteTransferRule = z.infer<typeof writeTransferRuleSchema>;
+
 // ---- MCP (docs/gptmaker-mcp.md)
 
 /** Corpo de `POST /agent/{agentId}/mcp/add`. */
