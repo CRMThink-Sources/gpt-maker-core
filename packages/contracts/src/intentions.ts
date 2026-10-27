@@ -195,6 +195,8 @@ export type IntentionInput = z.input<typeof intentionInputSchema>;
 export interface IntentionView {
   id: string;
   kind: 'WEBHOOK' | 'BITRIX';
+  /** Gerada pela função do agente: só muda pelo formulário dela. */
+  managed: boolean;
   /** Ações no portal (intenção `BITRIX`). */
   actions: IntentionActionInput[];
   name: string;

@@ -155,6 +155,8 @@ export interface AdminTenantRow {
   tenantCode: string;
   installationId: string;
   status: TenantStatusView;
+  /** Parceiro: pode assumir o controle do comportamento dos agentes. */
+  isPartner: boolean;
   subscription: {
     status: SubscriptionStatusView;
     planId: string | null;
@@ -205,6 +207,9 @@ export interface AdminTenantDetail extends AdminTenantRow {
 export const suspendTenantSchema = z.object({
   reason: z.string().trim().min(5, 'Explique o motivo (mínimo 5 caracteres)').max(500),
 });
+
+/** Marca ou desmarca o portal como parceiro (spec admin-backoffice, "Tenant parceiro"). */
+export const setTenantPartnerSchema = z.object({ partner: z.boolean() });
 
 export const grantCreditsSchema = z.object({
   amount: z.number().int().positive().max(1_000_000),
