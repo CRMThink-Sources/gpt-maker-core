@@ -158,6 +158,11 @@ class Renderer {
       case 'KNOWLEDGE':
         // Itens da base vão para os treinamentos, não para o comportamento.
         return '';
+      case 'BITRIX_OPENLINE':
+        return typeof value === 'number' ? String(value) : '';
+      case 'AGENT':
+        // O agente de destino vai para a regra de transferência, não para o texto.
+        return '';
     }
   }
 }
