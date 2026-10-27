@@ -128,3 +128,47 @@ Por padrão uma função MUST valer para todos os portais. O backoffice MUST per
 #### Scenario: Portal inexistente
 - **WHEN** a lista enviada tem um portal que não existe
 - **THEN** o sistema recusa sem alterar a lista atual
+
+### Requirement: Vários usuários do Bitrix24 com rodízio
+Um campo de usuário do Bitrix24 MUST poder aceitar vários usuários (`multiple`). Usado como responsável de tarefa ou destino de transferência numa ação, um campo com vários usuários MUST distribuir em rodízio: cada execução da ação MUST ir para o próximo usuário da lista, voltando ao primeiro depois do último, com a contagem separada por ação.
+
+#### Scenario: Transferência distribuída
+- **WHEN** a ação "Transferir para atendente" tem os usuários Ana, Bruno e Carla e é executada quatro vezes
+- **THEN** as conversas vão para Ana, Bruno, Carla e Ana, nessa ordem
+
+#### Scenario: Tarefas distribuídas
+- **WHEN** a ação "Abrir chamado" cria tarefas com responsáveis Ana e Bruno
+- **THEN** as tarefas alternam o responsável entre Ana e Bruno
+
+#### Scenario: Um usuário só
+- **WHEN** o campo tem um único usuário escolhido
+- **THEN** toda execução vai para ele, como antes
+
+### Requirement: Transferir para um canal aberto
+A ação de transferir para atendente MUST aceitar como destino um canal aberto do Bitrix24, escolhido pelo cliente num campo "Canal aberto do Bitrix24" que lista os canais do portal. A conversa MUST ir para a fila desse canal.
+
+#### Scenario: Transferir para o canal de vendas
+- **WHEN** o cliente escolhe o canal "Vendas" e a intenção de transferência é executada
+- **THEN** a conversa entra na fila do canal "Vendas" do Bitrix24
+
+### Requirement: Transferência entre agentes
+O template MUST poder declarar transferências para outro agente: quando transferir (instruções), para qual agente (campo "Agente", em que o cliente escolhe um dos agentes do portal dele, exceto o próprio e os removidos), se a conversa volta ao agente de origem ao terminar e uma condição opcional. A publicação da função MUST criar, atualizar e remover as regras de transferência do agente no GPT Maker, que MUST ser gerenciadas só pela função. A conversa, o chat e o bot do Bitrix24 MUST continuar os mesmos depois da transferência. A publicação MUST falhar, nomeando o campo, se o agente escolhido for de outro portal, estiver removido ou for o próprio agente.
+
+#### Scenario: Suporte transfere para o agente de vendas
+- **WHEN** o agente de Suporte tem a transferência "Pedido de compra" para o agente SDR e o cliente pede um orçamento
+- **THEN** o GPT Maker passa a conversa para o agente SDR, no mesmo chat e com o mesmo bot no Bitrix24
+
+#### Scenario: Republicar sem a transferência
+- **WHEN** o cliente desmarca a opção que liga a transferência e republica
+- **THEN** a regra é removida do agente no GPT Maker
+
+#### Scenario: Agente de destino removido
+- **WHEN** o agente de destino foi removido e o cliente republica o agente de origem
+- **THEN** a publicação falha pedindo outro agente no campo da transferência
+
+### Requirement: Transferência para pessoa só pela intenção
+O evento `onTransfer` do GPT Maker MUST NOT iniciar atendimento humano nem transferir a conversa no Bitrix24: ele indica troca de agente no GPT Maker e MUST apenas ser registrado. A transferência para uma pessoa ou canal MUST vir da ação "Transferir para atendente" de uma intenção.
+
+#### Scenario: Troca de agente
+- **WHEN** o GPT Maker transfere a conversa para outro agente e envia `onTransfer`
+- **THEN** o diálogo continua com o agente, sem atendimento humano e sem transferência no Bitrix24

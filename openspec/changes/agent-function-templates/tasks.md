@@ -73,9 +73,18 @@
 
 - [x] 9.1 Migração `agent_function_template_tenant`, filtro por portal em `listPublished`/`latestPublished` (app recebe o portal da sessão), `PUT /admin/functions/:code/tenants` só ADMIN com auditoria `function.tenants`; testes de integração (restrição, portal inexistente, agente existente segue, SUPPORT 403) (~4h)
 - [x] 9.2 Backoffice: seção Portais na aba Geral (todos / só os escolhidos, busca de portal), indicador de portais no cabeçalho e no card da lista (~3h)
-- [ ] 9.3 Verificar no navegador: restringir uma função, conferir que some na criação de agente de outro portal e voltar para todos (~1h)
+- [x] 9.3 Verificar no navegador: restringir uma função, conferir que some na criação de agente de outro portal e voltar para todos (~1h)
 
 ## 10. Validação integrada
 
 - [ ] 10.1 Em staging: criar um agente de cada função, conversar e verificar comportamento, base, intenções ("Registrar dúvida", qualificação, link de agenda, avaliação) e registros no Bitrix24; registrar os resultados em `docs/staging.md` (~6h)
 - [ ] 10.2 Em staging: comparar respostas com `knowledgeByFunction` ligado e desligado em perguntas fora da base; registrar o resultado e, se favorável, publicar nova versão dos templates com o setting ligado (~3h)
+
+## 11. Usuários múltiplos, canal aberto e transferência entre agentes
+
+- [ ] 11.1 Contratos: `BITRIX_USER.multiple`, campos `BITRIX_OPENLINE` e `AGENT`, `transfers` no template e no bloco, `TRANSFER_TO_HUMAN` com `target: 'LINE'`/`lineId`, `responsibleId`/`userId` aceitando lista; respostas, checagem (inclusive `transfers`), compilação (`compiled.transfers`, marcador de campo múltiplo vira lista) e pior caso; testes unitários (~6h)
+- [ ] 11.2 Backend: rodízio na execução (intenção e gatilho, `INCR` por ação), `target: 'LINE'` no handoff (`QUEUE_ID`), `GET /bitrix/openlines`, `onTransfer` sem `HumanHandoff.start` (D18); testes de integração (~5h)
+- [ ] 11.3 Backend: cliente das regras de transferência do GPT Maker, recurso gerenciado `TRANSFER_RULE` (migração), passo de publicação com tradução e checagem do agente de destino, aviso ao remover agente usado como destino; testes de integração com o fake do GPT Maker (~6h)
+- [ ] 11.4 Frontend: seletor de vários usuários, de canal aberto e de agente no formulário do app; editor do backoffice (tipos novos, `multiple`, destino "Canal aberto" e seção de transferências); verificar no navegador (~8h)
+- [ ] 11.5 Em staging: rodízio de transferência e de tarefa, transferência para canal aberto (confirmar `QUEUE_ID`) e transferência entre agentes (mesmo chat e bot; `onTransfer` sem atendimento humano); registrar em `docs/staging.md` (~2h)
+- [ ] 11.6 Skill `gptthink-criar-funcao` em `.claude/skills/` com o formato novo, o validador cobrindo os tipos novos e `transfers`, e o script que gera `blocos.json` e os exemplos do seed; atualizar `gptthink-function-templates` (~3h)
