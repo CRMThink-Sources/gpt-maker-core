@@ -579,6 +579,18 @@ Campos observados (painel atual ⇒ API):
 | —                                           | `active`                                    | Liga/desliga a intenção                                                                                         |
 | (não existe mais no painel)                 | `preprocessingMessage`, `preprocessingText` | Veio `DISABLED`/`null`; a mensagem de espera da documentação antiga                                             |
 
+## 11. Regras de transferência do agente
+
+- Fonte: https://developer.gptmaker.ai/api-reference/transfer-rules (OpenAPI), lida em 2026-10-27. Usadas na transferência entre agentes das funções (design D17 de `agent-function-templates`).
+- **`GET /v2/agent/{agentId}/transfer-rules`**: lista `TransferRule[]`.
+- **`POST /v2/agent/{agentId}/transfer-rules`**: cria; responde a regra com `id`.
+- **`PUT /v2/agent/{agentId}/transfer-rules/{ruleId}`**: atualiza com o objeto inteiro; 204.
+- **`DELETE /v2/agent/{agentId}/transfer-rules/{ruleId}`**: remove; 204.
+
+`TransferRule`: `id`, `createdAt`, `type` (`HUMAN` | `AGENT`), `agentId` (destino, com `AGENT`), `userId` (usuário do GPTMaker, com `HUMAN`; não usado: a transferência para pessoa vem da intenção), `instructions` (quando transferir; o modelo decide lendo o texto) e `returnOnFinish` (a conversa volta ao agente de origem quando o atendimento termina).
+
+Comportamento informado pelo time: depois da troca, o chat (`public-api-<agente de origem>-…`) e o bot do Bitrix24 continuam os mesmos, e as mensagens seguem indo para o agente de origem. O `onTransfer` sinaliza a troca (o app só registra). A confirmar em staging (tarefa 11.5): se a transferência exige algum setting no agente e o que acontece com uma regra cujo agente de destino foi apagado.
+
 ---
 
 ## Apêndice A — Schemas auxiliares (OpenAPI)
