@@ -82,9 +82,9 @@
 
 ## 11. Usuários múltiplos, canal aberto e transferência entre agentes
 
-- [ ] 11.1 Contratos: `BITRIX_USER.multiple`, campos `BITRIX_OPENLINE` e `AGENT`, `transfers` no template e no bloco, `TRANSFER_TO_HUMAN` com `target: 'LINE'`/`lineId`, `responsibleId`/`userId` aceitando lista; respostas, checagem (inclusive `transfers`), compilação (`compiled.transfers`, marcador de campo múltiplo vira lista) e pior caso; testes unitários (~6h)
-- [ ] 11.2 Backend: rodízio na execução (intenção e gatilho, `INCR` por ação), `target: 'LINE'` no handoff (`QUEUE_ID`), `GET /bitrix/openlines`, `onTransfer` sem `HumanHandoff.start` (D18); testes de integração (~5h)
-- [ ] 11.3 Backend: cliente das regras de transferência do GPT Maker, recurso gerenciado `TRANSFER_RULE` (migração), passo de publicação com tradução e checagem do agente de destino, aviso ao remover agente usado como destino; testes de integração com o fake do GPT Maker (~6h)
+- [x] 11.1 Contratos: `BITRIX_USER.multiple`, campos `BITRIX_OPENLINE` e `AGENT`, `transfers` no template e no bloco, `TRANSFER_TO_HUMAN` com `target: 'LINE'`/`lineId`, `responsibleId`/`userId` aceitando lista; respostas, checagem (inclusive `transfers`), compilação (`compiled.transfers`, marcador de campo múltiplo vira lista) e pior caso; testes unitários (~6h)
+- [x] 11.2 Backend: rodízio na execução (intenção e gatilho, `INCR` por ação), `target: 'LINE'` no handoff (`QUEUE_ID`), `GET /bitrix/openlines`, `onTransfer` sem `HumanHandoff.start` (D18); testes de integração (~5h)
+- [x] 11.3 Backend: cliente das regras de transferência do GPT Maker, recurso gerenciado `TRANSFER_RULE` (migração), passo de publicação com tradução e checagem do agente de destino, aviso ao remover agente usado como destino; testes de integração com o fake do GPT Maker (~6h)
 - [ ] 11.4 Frontend: seletor de vários usuários, de canal aberto e de agente no formulário do app; editor do backoffice (tipos novos, `multiple`, destino "Canal aberto" e seção de transferências); verificar no navegador (~8h)
 - [ ] 11.5 Em staging: rodízio de transferência e de tarefa, transferência para canal aberto (confirmar `QUEUE_ID`) e transferência entre agentes (mesmo chat e bot; `onTransfer` sem atendimento humano); registrar em `docs/staging.md` (~2h)
-- [ ] 11.6 Skill `gptthink-criar-funcao` em `.claude/skills/` com o formato novo, o validador cobrindo os tipos novos e `transfers`, e o script que gera `blocos.json` e os exemplos do seed; atualizar `gptthink-function-templates` (~3h)
+- [x] 11.6 Skill `gptthink-criar-funcao` em `.claude/skills/` com o formato novo, o validador cobrindo os tipos novos e `transfers`, e o script que gera `blocos.json` e os exemplos do seed; atualizar `gptthink-function-templates` (~3h)
