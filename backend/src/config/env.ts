@@ -35,6 +35,8 @@ export const envSchema = z.object({
   BACKOFFICE_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(120),
   /** Duração máxima da sessão, mesmo em uso. */
   BACKOFFICE_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
+  /** Dias em que um navegador lembrado entra só com a senha, sem o código do autenticador. */
+  BACKOFFICE_TRUSTED_DEVICE_DAYS: z.coerce.number().int().positive().default(30),
   /** Cookie só por HTTPS; desligar apenas em desenvolvimento local (http://localhost). */
   BACKOFFICE_COOKIE_SECURE: booleanFromString.default(true),
   /** Nome que aparece no app autenticador. */

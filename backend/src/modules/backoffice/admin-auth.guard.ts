@@ -18,19 +18,24 @@ import { AdminAuthService } from './admin-auth.service';
 import type { Operator } from './operator.service';
 
 export const ADMIN_COOKIE = 'gm_admin';
+/** Navegador lembrado: dispensa o código do autenticador no login (não abre sessão sozinho). */
+export const TRUSTED_DEVICE_COOKIE = 'gm_admin_device';
 
 type AdminRequest = Request & { operator?: Operator };
 const ROLE = 'backoffice:role';
 
-/** Cookie da sessão sem `cookie-parser` (só este cookie é lido). */
-export function sessionToken(req: Request): string | undefined {
+/** Cookie do backoffice sem `cookie-parser` (só os nossos cookies são lidos). */
+function readCookie(req: Request, cookie: string): string | undefined {
   const header = req.headers.cookie ?? '';
   for (const part of header.split(';')) {
     const [name, ...value] = part.trim().split('=');
-    if (name === ADMIN_COOKIE) return decodeURIComponent(value.join('='));
+    if (name === cookie) return decodeURIComponent(value.join('='));
   }
   return undefined;
 }
+
+export const sessionToken = (req: Request) => readCookie(req, ADMIN_COOKIE);
+export const trustedDeviceToken = (req: Request) => readCookie(req, TRUSTED_DEVICE_COOKIE);
 
 /**
  * Rota do backoffice: exige sessão de operador ativo; `ADMIN` restringe ao perfil que altera

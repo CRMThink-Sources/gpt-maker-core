@@ -19,15 +19,19 @@ export const adminLoginSchema = z.object({
 export const adminTotpSchema = z.object({
   challenge: z.string().min(1).max(200),
   code: z.string().regex(/^\d{6}$/, 'Código de 6 dígitos'),
+  /** Lembrar este navegador: os próximos logins nele pedem só a senha, por alguns dias. */
+  rememberDevice: z.boolean().optional(),
 });
 
 /**
  * Resposta do primeiro passo. `totp`: pedir o código do app autenticador. `totp-setup`: primeiro
  * acesso, mostrar o QR (`otpauthUrl`) e o segredo; o código confirma a configuração.
+ * `authenticated`: navegador lembrado, a sessão já foi aberta sem pedir o código.
  */
 export type AdminLoginStep =
   | { step: 'totp'; challenge: string }
-  | { step: 'totp-setup'; challenge: string; otpauthUrl: string; secret: string };
+  | { step: 'totp-setup'; challenge: string; otpauthUrl: string; secret: string }
+  | ({ step: 'authenticated' } & AdminSessionView);
 
 export interface OperatorView {
   id: string;
