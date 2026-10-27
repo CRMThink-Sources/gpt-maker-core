@@ -113,3 +113,31 @@ describe('utilitários', () => {
     ]);
   });
 });
+
+describe('plano com transferências entre agentes (D17)', () => {
+  const transfer = {
+    key: 'orcamento',
+    agentId: '0b6f7a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b',
+    fieldId: 'sdr.agente',
+    instructions: 'Quando pedir orçamento.',
+    returnOnFinish: false,
+  };
+  const withTransfers = (transfers: (typeof transfer)[]) => ({ ...compile(raw), transfers });
+
+  it('transferência nova, alterada ou removida não é plano vazio', () => {
+    const published = publishedStateOf(withTransfers([transfer]));
+    expect(planPublication(withTransfers([transfer]), published).empty).toBe(true);
+    const changed = planPublication(
+      withTransfers([{ ...transfer, agentId: '1c7f8b5f-2d3e-4f60-9b0c-1d2e3f4a5b6c' }]),
+      published,
+    );
+    expect(changed.empty).toBe(false);
+    expect(changed.transfers.update.map((item) => item.key)).toEqual(['orcamento']);
+    expect(planPublication(withTransfers([]), published).transfers.remove).toEqual(['orcamento']);
+  });
+
+  it('estado publicado antes das transferências: sem regra continua vazio', () => {
+    const old = { ...publishedStateOf(compile(raw)), transfers: undefined };
+    expect(planPublication(compile(raw), old).empty).toBe(true);
+  });
+});

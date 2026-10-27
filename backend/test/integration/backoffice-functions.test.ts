@@ -644,6 +644,54 @@ describe('backoffice: templates de função', () => {
       await http().put(`/admin/functions/${code}/draft`, { draft: removed }).expect(200);
     });
 
+    it('vários usuários publicado não muda de modo (D15)', async () => {
+      await createBlock();
+      const user = (multiple: boolean) => ({
+        kind: 'BITRIX_USER' as const,
+        id: 'suporte.atendentes',
+        label: 'Atendentes',
+        required: false,
+        multiple,
+      });
+      const withUsers = (multiple: boolean) => {
+        const value = draft();
+        value.fields = [...value.fields, user(multiple)];
+        value.intentions = [
+          {
+            key: 'passar',
+            name: 'Passar',
+            whenToUse: 'Quando pedir.',
+            fields: [],
+            actions: [
+              {
+                type: 'TRANSFER_TO_HUMAN',
+                config: { target: 'USER', userId: '{{suporte.atendentes}}' },
+              },
+            ],
+            responseMode: 'INSTRUCTIONS',
+            instructions: 'Avise.',
+          },
+        ];
+        return value;
+      };
+      await createTemplate(withUsers(true));
+      const published = await http().post(`/admin/functions/${code}/publish`).expect(200);
+      expect(published.body.published['suporte.atendentes']).toEqual({
+        kind: 'BITRIX_USER',
+        options: [],
+        multiple: true,
+      });
+      const res = await http()
+        .put(`/admin/functions/${code}/draft`, { draft: withUsers(false) })
+        .expect(422);
+      expect(res.body.error).toMatchObject({
+        code: 'FUNCTION_FIELD_LOCKED',
+        details: {
+          fields: [{ id: 'suporte.atendentes', from: 'BITRIX_USER (vários)', to: 'BITRIX_USER' }],
+        },
+      });
+    });
+
     it('prévia do rascunho com respostas de exemplo', async () => {
       await createBlock();
       await createTemplate();

@@ -33,6 +33,7 @@ export interface PublicationPlan {
   settings: Array<{ key: string; from: unknown; to: unknown }>;
   trainings: { create: CompiledTraining[]; update: CompiledTraining[]; remove: string[] };
   intentions: { create: CompiledIntention[]; update: CompiledIntention[]; remove: string[] };
+  transfers: { create: CompiledTransfer[]; update: CompiledTransfer[]; remove: string[] };
   /** Nada a fazer: a publicação não chama o GPTMaker. */
   empty: boolean;
 }
@@ -185,12 +186,13 @@ export function planPublication(
   const behaviorChanged = before.behavior !== compiled.behavior;
   const trainings = planResources(compiled.trainings, before.trainings, trainingHash);
   const intentions = planResources(compiled.intentions, before.intentions, intentionHash);
+  const transfers = planResources(compiled.transfers, before.transfers ?? [], transferHash);
   const empty =
     published !== null &&
     !behaviorChanged &&
     agent.length === 0 &&
     settings.length === 0 &&
-    [trainings, intentions].every(
+    [trainings, intentions, transfers].every(
       (plan) => plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0,
     );
 
@@ -203,6 +205,7 @@ export function planPublication(
     settings,
     trainings,
     intentions,
+    transfers,
     empty,
   };
 }

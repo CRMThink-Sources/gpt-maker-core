@@ -11,6 +11,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentFunctionService } from '../../src/modules/agent-functions/agent-function.service';
 import { FunctionCatalog } from '../../src/modules/agent-functions/function-catalog.service';
+import {
+  FunctionTransferTargets,
+  TRANSFER_TARGET_GONE_REASON,
+} from '../../src/modules/agent-functions/function-transfer-targets';
 import { FunctionPublisher } from '../../src/modules/agent-functions/function-publisher';
 import { seedAgentFunctions } from '../../src/modules/agent-functions/function-seed';
 import { FunctionTrainingPolicy } from '../../src/modules/agent-functions/function-training-policy';
@@ -90,6 +94,7 @@ describe('publicação da função do agente', () => {
   let maxTrainings: number;
   let crmCalls: Array<[string, string]>;
   let crmFailure: Error | null;
+  let events: AgentEvents;
 
   async function rejection(promise: Promise<unknown>): Promise<DomainError> {
     const error = await promise.then(
@@ -141,7 +146,7 @@ describe('publicação da função do agente', () => {
       TRAINING_DEFAULT_MAX_STORAGE_MB: 50,
     } as Env;
     const repository = new AgentRepository(db);
-    const events = new AgentEvents();
+    events = new AgentEvents();
     const agents = new AgentService(
       repository,
       new TenantAgentLimitService(db, env),
@@ -171,6 +176,7 @@ describe('publicação da função do agente', () => {
       redis,
     );
     new FunctionTrainingPolicy(trainings, trainingSync, db).onModuleInit();
+    new FunctionTransferTargets(events, db).onModuleInit();
     catalog = new FunctionCatalog(db);
     publisher = new FunctionPublisher(
       catalog,
@@ -184,6 +190,7 @@ describe('publicação da função do agente', () => {
           if (crmFailure) throw crmFailure;
         },
       } as unknown as CrmAccessService,
+      client,
       db,
       redis,
     );
@@ -658,6 +665,150 @@ describe('publicação da função do agente', () => {
       }
       expect((await catalog.getTemplate('SDR')).tenants).toEqual([]);
       expect(await codes(owner.tenantId)).toContain('SDR');
+    });
+  });
+
+  describe('transferência entre agentes (D17)', () => {
+    /** Função mínima com uma transferência ligada a uma escolha. */
+    const TRANSFER_DRAFT = {
+      agentType: 'SUPPORT' as const,
+      settings: {},
+      profile: { jobName: '', jobDescription: '', jobSite: '' },
+      blocks: [],
+      crmAccess: false,
+      fields: [
+        {
+          kind: 'CHOICE' as const,
+          id: 'transf.orcamento',
+          label: 'Pedido de orçamento',
+          required: true,
+          options: [
+            { value: 'aqui', label: 'Atender aqui', snippet: 'Atenda o orçamento.' },
+            {
+              value: 'agente',
+              label: 'Passar para outro agente',
+              snippet: 'Orçamentos vão para outro agente.',
+              dependents: [
+                { kind: 'AGENT' as const, id: 'transf.agente', label: 'Agente', required: true },
+              ],
+            },
+          ],
+        },
+      ],
+      behavior: 'Você é {{agente.nome}}. {{transf.orcamento}}',
+      intentions: [],
+      transfers: [
+        {
+          key: 'orcamento',
+          when: { field: 'transf.orcamento', in: ['agente'] },
+          agent: '{{transf.agente}}',
+          instructions: 'Quando o cliente pedir orçamento.',
+          returnOnFinish: true,
+        },
+      ],
+    };
+
+    beforeAll(async () => {
+      await catalog.createTemplate({
+        code: 'TRANSF',
+        name: 'Com transferência',
+        description: 'Teste da transferência entre agentes.',
+        draft: TRANSFER_DRAFT,
+      });
+      await catalog.publishTemplate('TRANSF', null);
+    });
+
+    const gmOf = async (agentId: string) =>
+      (await db.select().from(agent).where(eq(agent.id, agentId)))[0]!.gptmakerAgentId;
+
+    async function createWithTransfer(answers: FunctionAnswers) {
+      const view = await functions.create(owner, { name: 'Bia', functionCode: 'TRANSF', answers });
+      return { view, outcome: await publisher.run(view.id) };
+    }
+
+    it('cria, atualiza e remove a regra no GPTMaker', async () => {
+      const target = await createAgent();
+      const other = await createAgent();
+      const { view, outcome } = await createWithTransfer({
+        'transf.orcamento': 'agente',
+        'transf.agente': target.id,
+      });
+      expect(outcome).toBe('DONE');
+      const source = await gmOf(view.id);
+      expect([...fake.transferRules.values()]).toEqual([
+        {
+          id: expect.any(String),
+          agentId: source,
+          body: {
+            type: 'AGENT',
+            agentId: await gmOf(target.id),
+            instructions: 'Quando o cliente pedir orçamento.',
+            returnOnFinish: true,
+          },
+        },
+      ]);
+      expect((await resources(view.id)).filter((r) => r.kind === 'TRANSFER_RULE')).toHaveLength(1);
+
+      fake.calls = [];
+      await functions.publish(owner.tenantId, view.id, {
+        answers: { 'transf.orcamento': 'agente', 'transf.agente': other.id },
+      });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      expect(fake.count('transferRule.update')).toBe(1);
+      expect([...fake.transferRules.values()][0]!.body.agentId).toBe(await gmOf(other.id));
+
+      await functions.publish(owner.tenantId, view.id, {
+        answers: { 'transf.orcamento': 'aqui' },
+      });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      expect(fake.transferRules.size).toBe(0);
+      expect((await resources(view.id)).filter((r) => r.kind === 'TRANSFER_RULE')).toEqual([]);
+    });
+
+    it('remover o agente de destino pede para republicar quem o usa', async () => {
+      const target = await createAgent();
+      const { view } = await createWithTransfer({
+        'transf.orcamento': 'agente',
+        'transf.agente': target.id,
+      });
+      await events.emit({ agentId: target.id, tenantId: owner.tenantId, kind: 'removed' });
+      expect((await configOf(view.id)).needsRepublishReason).toBe(TRANSFER_TARGET_GONE_REASON);
+      expect((await configOf(target.id)).needsRepublishReason).toBeNull();
+    });
+
+    it('destino removido: a publicação falha nomeando o campo e não cria regra', async () => {
+      const target = await createAgent();
+      await db.update(agent).set({ deletedAt: new Date() }).where(eq(agent.id, target.id));
+      const { view, outcome } = await createWithTransfer({
+        'transf.orcamento': 'agente',
+        'transf.agente': target.id,
+      });
+      expect(outcome).toBe('FAILED');
+      expect((await configOf(view.id)).publicationError).toContain(
+        'FUNCTION_TRANSFER_AGENT_INVALID: Escolha outro agente em "Agente"',
+      );
+      expect(fake.transferRules.size).toBe(0);
+    });
+
+    it('destino de outro portal é recusado', async () => {
+      const target = await createAgent();
+      const code = randomBytes(3).toString('hex');
+      const [other] = await db
+        .insert(tenant)
+        .values({
+          installationId: code,
+          memberId: code,
+          domain: `${code}.b24.com`,
+          tenantCode: code,
+        })
+        .returning();
+      await db.update(agent).set({ tenantId: other!.id }).where(eq(agent.id, target.id));
+      const { outcome } = await createWithTransfer({
+        'transf.orcamento': 'agente',
+        'transf.agente': target.id,
+      });
+      expect(outcome).toBe('FAILED');
+      expect(fake.transferRules.size).toBe(0);
     });
   });
 

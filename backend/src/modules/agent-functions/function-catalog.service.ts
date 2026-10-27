@@ -155,9 +155,14 @@ export class FunctionCatalog {
     const row = await this.template(code);
     // Id publicado com outro tipo: as respostas guardadas pelos agentes deixariam de servir.
     const published = await this.publishedFields(row.id);
+    // Vários usuários também: as respostas guardadas são número ou lista (D15).
+    const shape = (field: { kind: FunctionField['kind']; multiple?: boolean }) =>
+      field.kind === 'BITRIX_USER' && field.multiple ? 'BITRIX_USER (vários)' : field.kind;
     const changed = flattenFields(input.draft.fields)
-      .filter((field) => published.has(field.id) && published.get(field.id)!.kind !== field.kind)
-      .map((field) => ({ id: field.id, from: published.get(field.id)!.kind, to: field.kind }));
+      .filter(
+        (field) => published.has(field.id) && shape(published.get(field.id)!) !== shape(field),
+      )
+      .map((field) => ({ id: field.id, from: shape(published.get(field.id)!), to: shape(field) }));
     if (changed.length) {
       throw new DomainError(
         'FUNCTION_FIELD_LOCKED',
@@ -602,15 +607,22 @@ export class FunctionCatalog {
   /** Campos de todas as versões publicadas: tipo e valores das opções (design D12). */
   private async publishedFields(
     templateId: string,
-  ): Promise<Map<string, { kind: FunctionField['kind']; options: string[] }>> {
+  ): Promise<Map<string, { kind: FunctionField['kind']; options: string[]; multiple?: boolean }>> {
     const rows = await this.db
       .select({ content: agentFunctionTemplateVersion.content })
       .from(agentFunctionTemplateVersion)
       .where(eq(agentFunctionTemplateVersion.templateId, templateId));
-    const fields = new Map<string, { kind: FunctionField['kind']; options: string[] }>();
+    const fields = new Map<
+      string,
+      { kind: FunctionField['kind']; options: string[]; multiple?: boolean }
+    >();
     for (const { content } of rows) {
       for (const field of flattenFields(content.fields)) {
-        const entry = fields.get(field.id) ?? { kind: field.kind, options: [] };
+        const entry =
+          fields.get(field.id) ??
+          (field.kind === 'BITRIX_USER'
+            ? { kind: field.kind, options: [], multiple: field.multiple === true }
+            : { kind: field.kind, options: [] });
         if (field.kind === 'CHOICE' || field.kind === 'MULTI_CHOICE') {
           for (const option of field.options) {
             if (!entry.options.includes(option.value)) entry.options.push(option.value);

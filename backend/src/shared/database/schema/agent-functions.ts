@@ -159,7 +159,11 @@ export const agentFunctionConfig = pgTable(
   ],
 );
 
-export const managedResourceKind = pgEnum('managed_resource_kind', ['TRAINING', 'INTENTION']);
+export const managedResourceKind = pgEnum('managed_resource_kind', [
+  'TRAINING',
+  'INTENTION',
+  'TRANSFER_RULE',
+]);
 
 /** Treinamento ou intenção gerado pela função, pela chave estável do item ou da intenção. */
 export const agentManagedResource = pgTable(
@@ -178,6 +182,8 @@ export const agentManagedResource = pgTable(
     hash: text('hash').notNull(),
     trainingId: uuid('training_id').references(() => training.id),
     intentionId: uuid('intention_id').references(() => agentIntention.id),
+    /** Regra de transferência no GPTMaker (só lá existe; design D17). */
+    transferRuleId: text('transfer_rule_id'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
