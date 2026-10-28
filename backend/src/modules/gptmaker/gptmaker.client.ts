@@ -237,12 +237,25 @@ export class GptMakerClient {
     return { id: id ?? null };
   }
 
-  /** Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. */
+  /**
+   * Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. Desde
+   * 2026-10-28 a resposta é o treinamento atualizado (antes `{ success }`): só `success: false`
+   * é falha.
+   */
   async updateTextTraining(trainingId: string, input: GptMakerUpdateTextTraining): Promise<void> {
-    await this.success('training.update', 'PUT', `/training/${enc(trainingId)}`, {
-      type: 'TEXT',
-      ...updateTextTrainingSchema.parse(input),
+    const body = await this.request({
+      operation: 'training.update',
+      method: 'PUT',
+      path: `/training/${enc(trainingId)}`,
+      body: { type: 'TEXT', ...updateTextTrainingSchema.parse(input) },
+      response: z.unknown(),
     });
+    if (asRecord(body)?.success === false) {
+      throw new GptMakerError('UNKNOWN', 'training.update', 'provedor respondeu success=false', {
+        status: 200,
+        body,
+      });
+    }
   }
 
   async deleteTraining(trainingId: string): Promise<void> {
