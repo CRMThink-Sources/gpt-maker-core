@@ -222,6 +222,36 @@ describe('contrato GPTMaker v2 (WireMock)', () => {
     await client.deleteTraining('tr-1');
   });
 
+  it('PUT /v2/training/{id} que devolve o treinamento (sem success): sucesso', async () => {
+    // Resposta observada em produção em 2026-10-28: o treinamento atualizado, sem `success`.
+    await wiremock.stub({
+      request: {
+        method: 'PUT',
+        urlPath: '/v2/training/tr-2',
+        headers: auth,
+        bodyPatterns: [json({ type: 'TEXT', text: 'Novo texto' })],
+      },
+      response: ok({
+        id: 'tr-2',
+        text: 'Novo texto',
+        type: 'TEXT',
+        image: null,
+        callbackUrl: null,
+      }),
+    });
+    await expect(
+      client.updateTextTraining('tr-2', { text: 'Novo texto' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('PUT /v2/training/{id} com success=false: falha', async () => {
+    await wiremock.stub({
+      request: { method: 'PUT', urlPath: '/v2/training/tr-3', headers: auth },
+      response: ok({ success: false }),
+    });
+    await expect(client.updateTextTraining('tr-3', { text: 'x' })).rejects.toThrow('success=false');
+  });
+
   it('regras de transferência: listar, criar, atualizar e remover (design D17)', async () => {
     const rule = {
       type: 'AGENT' as const,

@@ -334,7 +334,7 @@ Status do processamento do treinamento (ex. pendente/erro), datas: **NÃO DOCUME
 - Fonte: https://developer.gptmaker.ai/api-reference/trainings/update-training
 - Doc: "Atualmente só é possível atualizar treinamentos de texto, para os demais treinamentos, é necessário remover e adicionar novamente."
 - Body (obrigatório): `{ "type": "TEXT", "text": string, "image": string }` (sem `callbackUrl`).
-- Resposta `200`: `{ "success": boolean }`.
+- Resposta `200`: era `{ "success": boolean }`; **desde 2026-10-28 é o treinamento atualizado** (`{ id, text, type, image, … }`, sem `success`), observado em produção. O app só trata `success: false` como falha.
 
 ### 4.4 Remover treinamento
 
