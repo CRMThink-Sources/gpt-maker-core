@@ -14,6 +14,8 @@ import {
 } from '../semantic';
 import type { TestConversations } from '../agent-test';
 import type { CrmCaller } from './crm-access.guard';
+import { CRM_GUIDANCE_DEFAULTS, type CrmGuidance } from './crm-guidance.defaults';
+import type { CrmGuidanceService } from './crm-guidance.service';
 import { CrmToolsService, MAX_DEALS } from './crm-tools.service';
 
 const caller: CrmCaller = { tenantId: 'tenant-a', agentId: 'agent-1', installationId: 101 };
@@ -31,7 +33,11 @@ const testConversations = {
     simulated.get(`${tenantId}:${conversationId}`) ?? null,
 } as unknown as TestConversations;
 
-function setup(choices: Array<[string, string, FieldChoice]> = [], ratePerMinute = 60) {
+function setup(
+  choices: Array<[string, string, FieldChoice]> = [],
+  ratePerMinute = 60,
+  edits: Partial<CrmGuidance> = {},
+) {
   const crm = new FakeCrmPortal();
   const redis = new FakeRedis();
   const settings = {
@@ -53,6 +59,7 @@ function setup(choices: Array<[string, string, FieldChoice]> = [], ratePerMinute
       CRM_TOOLS_RATE_PER_MINUTE: ratePerMinute,
     } as Env,
     testConversations,
+    { current: async () => ({ ...CRM_GUIDANCE_DEFAULTS, ...edits }) } as CrmGuidanceService,
   );
 
   crm.records.contact['12'] = {
@@ -262,6 +269,26 @@ describe('CrmToolsService: o que o agente recebe', () => {
 
     const identified = await service.identifyClient(caller, CHAT);
     expect(identified.body.orientacao).toMatch(/não ofereça nem prometa/i);
+  });
+});
+
+describe('CrmToolsService: orientações editadas no backoffice', () => {
+  it('usa o texto editado seguido do escopo dos dados', async () => {
+    const { service } = setup([], 60, {
+      negocios_do_cliente: 'Responda só com estes negócios.',
+      cliente_nao_identificado: 'Cliente sem cadastro.',
+    });
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    const result = await service.clientDeals(caller, ref, 'todos');
+    expect(result.body.orientacao).toBe(
+      `Responda só com estes negócios. ${CRM_GUIDANCE_DEFAULTS.escopo_dados}`,
+    );
+
+    const unknown = await service.identifyClient(caller, 'chat-sem-vinculo');
+    expect(unknown).toMatchObject({
+      outcome: 'not_identified',
+      body: { mensagem: 'Cliente sem cadastro.' },
+    });
   });
 });
 

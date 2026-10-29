@@ -134,6 +134,13 @@
       "when": 1793143247736,
       "tag": "0018_transfer_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793279985058,
+      "tag": "0019_crm_tool_guidance",
+      "breakpoints": true
     }
   ]
 }

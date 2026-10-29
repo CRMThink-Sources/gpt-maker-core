@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AgentFunctionsModule } from '../agent-functions';
 import { AgentsModule } from '../agents';
 import { BillingModule } from '../billing';
+import { CrmToolsModule } from '../crm-tools';
 import { GptMakerModule } from '../gptmaker';
 import { ModelsModule } from '../models';
 import { PaymentsModule } from '../payments';
@@ -14,6 +15,8 @@ import { AdminAuditInterceptor } from './admin-audit.interceptor';
 import { AuditController } from './audit.controller';
 import { AuditQueryService } from './audit-query.service';
 import { AuditService } from './audit.service';
+import { CrmGuidanceAdminController } from './crm-guidance-admin.controller';
+import { CrmGuidanceAdminService } from './crm-guidance-admin.service';
 import { ModelsAdminController } from './models-admin.controller';
 import { ModelsAdminService } from './models-admin.service';
 import { OperatorService } from './operator.service';
@@ -43,6 +46,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     AgentFunctionsModule,
     AgentsModule,
     BillingModule,
+    CrmToolsModule,
     GptMakerModule,
     ModelsModule,
     PaymentsModule,
@@ -61,6 +65,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     OperationsAdminController,
     FunctionsAdminController,
     FunctionBlocksAdminController,
+    CrmGuidanceAdminController,
   ],
   providers: [
     AdminAuthService,
@@ -80,6 +85,7 @@ import { WorkspaceAdminService } from './workspace-admin.service';
     FailuresService,
     OperationsAdminService,
     FunctionsAdminService,
+    CrmGuidanceAdminService,
   ],
   exports: [AdminAuthService, AdminAuthGuard, AuditService, OperatorService],
 })

@@ -7,24 +7,15 @@ import {
   type CrmEntity,
   type CrmFieldView,
   crmFieldSettingInputSchema,
-  STAGE_SEMANTIC_LABELS,
-  type StageSemantic,
 } from '@gptmaker/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PencilIcon, PlusIcon, RefreshIcon } from '@/components/icons';
+import { AlertIcon, PencilIcon, PlusIcon, RefreshIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
+import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@/components/ui';
 import {
-  Alert,
-  Badge,
-  buttonClass,
-  Card,
-  Loading,
-  PageHeader,
-  Spinner,
-  type Tone,
-} from '@/components/ui';
-import {
+  buildAgentPreview,
   CRM_ENTITY_TABS,
+  CRM_ENTITY_USAGE,
   crmErrorMessage,
   crmFeatureOff,
   crmUnavailable,
@@ -40,15 +31,6 @@ import { useAppSession } from '../session-provider';
 
 type LoadError = { kind: 'off' } | { kind: 'error'; message: string; retry: boolean };
 
-/** Abas: uma por entidade do CRM e os funis (só leitura). */
-type Tab = CrmEntity | 'pipelines';
-
-const STAGE_TONES: Record<StageSemantic, Tone> = {
-  process: 'zinc',
-  success: 'green',
-  failure: 'amber',
-};
-
 /** Telefone e e-mail: dados pessoais, só se o agente realmente precisar. */
 const PERSONAL_TYPES = new Set(['crm_multifield']);
 
@@ -62,7 +44,7 @@ export default function CrmPage() {
   const { session, api } = useAppSession();
   const [catalog, setCatalog] = useState<CrmCatalogView | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
-  const [tab, setTab] = useState<Tab>('contact');
+  const [tab, setTab] = useState<CrmEntity>('contact');
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -206,14 +188,11 @@ export default function CrmPage() {
     );
   }
 
-  const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    ...CRM_ENTITY_TABS.map((entity) => ({
-      id: entity,
-      label: CRM_ENTITY_LABELS[entity],
-      count: catalog.fields.filter((field) => field.entity === entity && field.exposed).length,
-    })),
-    { id: 'pipelines' as const, label: 'Funis', count: catalog.pipelines.length },
-  ];
+  const tabs = CRM_ENTITY_TABS.map((entity) => ({
+    id: entity,
+    label: CRM_ENTITY_LABELS[entity],
+    count: catalog.fields.filter((field) => field.entity === entity && field.exposed).length,
+  }));
 
   return (
     <>
@@ -231,9 +210,11 @@ export default function CrmPage() {
       )}
       {refreshed && (
         <Alert tone="success" className="mb-6">
-          Campos e funis atualizados do Bitrix24.
+          Campos atualizados do Bitrix24.
         </Alert>
       )}
+
+      <HowItWorks />
 
       <nav
         className="mb-5 flex flex-wrap gap-6 border-b border-zinc-200"
@@ -262,24 +243,20 @@ export default function CrmPage() {
         })}
       </nav>
 
-      {tab === 'pipelines' ? (
-        <PipelinesTab catalog={catalog} />
-      ) : (
-        <EntityTab
-          key={`${version}:${tab}`}
-          entity={tab}
-          fields={catalog.fields.filter((field) => field.entity === tab)}
-          canManage={canManage}
-          onAdd={() => setAdding(true)}
-          onSaved={onFieldSaved}
-        />
-      )}
+      <EntityTab
+        key={`${version}:${tab}`}
+        entity={tab}
+        fields={catalog.fields.filter((field) => field.entity === tab)}
+        canManage={canManage}
+        onAdd={() => setAdding(true)}
+        onSaved={onFieldSaved}
+      />
 
       <p className="mt-6 text-xs text-zinc-400">
         Dados lidos do Bitrix24 em {formatDateTime(catalog.loadedAt)}.
       </p>
 
-      {adding && tab !== 'pipelines' && (
+      {adding && (
         <AddFieldsModal
           entity={tab}
           // Campo que sumiu do portal não pode ser adicionado de novo.
@@ -291,6 +268,66 @@ export default function CrmPage() {
         />
       )}
     </>
+  );
+}
+
+const STEPS = [
+  {
+    title: 'Escolha os campos',
+    text: 'Só os campos adicionados aqui chegam ao agente. O resto do Bitrix24 fica invisível para ele.',
+  },
+  {
+    title: 'Explique o que significam',
+    text: 'A descrição diz ao agente como interpretar o campo no seu negócio.',
+  },
+];
+
+/** Os dois passos da tela, para quem chega sem saber para que ela serve. */
+function HowItWorks() {
+  return (
+    <ol className="mb-6 grid gap-3 sm:grid-cols-2">
+      {STEPS.map((step, index) => (
+        <li
+          key={step.title}
+          className="flex gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">
+            {index + 1}
+          </span>
+          <div>
+            <p className="text-sm font-medium text-zinc-900">{step.title}</p>
+            <p className="mt-0.5 text-sm text-zinc-600">{step.text}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Exemplo fictício do que o agente recebe com os campos expostos da entidade. */
+function AgentPreview({ entity, fields }: { entity: CrmEntity; fields: CrmFieldView[] }) {
+  const lines = buildAgentPreview(fields);
+  return (
+    <Card className="mt-4 p-5">
+      <p className="text-sm font-medium text-zinc-900">O que o agente recebe</p>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        Exemplo com valores fictícios, não é um cliente real.
+      </p>
+      {lines.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">
+          O agente não recebe dados de {CRM_ENTITY_LABELS[entity].toLowerCase()}.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-1.5 rounded-lg bg-zinc-50 p-3 font-mono text-xs text-zinc-700">
+          {lines.map((line) => (
+            <li key={line.label}>
+              <span className="text-zinc-900">{line.label}:</span> {line.example}
+              {line.description && <span className="text-zinc-500"> ({line.description})</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -315,10 +352,13 @@ function EntityTab({
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
-          {added.length === 1 ? 'O agente lê 1 campo' : `O agente lê ${added.length} campos`} de{' '}
-          {entityLabel}.
-        </p>
+        <div>
+          <p className="text-sm text-zinc-700">{CRM_ENTITY_USAGE[entity]}</p>
+          <p className="text-xs text-zinc-500">
+            {added.length === 1 ? 'O agente lê 1 campo' : `O agente lê ${added.length} campos`} de{' '}
+            {entityLabel}.
+          </p>
+        </div>
         {canManage && (
           <button
             type="button"
@@ -351,54 +391,22 @@ function EntityTab({
           </ul>
         )}
       </Card>
+      <AgentPreview entity={entity} fields={added} />
     </section>
   );
 }
 
-/** Funis e etapas como o agente os vê (só leitura). */
-function PipelinesTab({ catalog }: { catalog: CrmCatalogView }) {
-  return (
-    <section>
-      <p className="mb-3 text-sm text-zinc-500">
-        O agente vê o funil e a etapa dos negócios pelo nome. Para mudar, edite os funis no Bitrix24
-        e clique em &quot;Atualizar do Bitrix24&quot;.
-      </p>
-      {catalog.pipelines.length === 0 ? (
-        <Card className="px-5 py-8 text-center text-sm text-zinc-500">
-          Nenhum funil de negócios encontrado.
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {catalog.pipelines.map((pipeline) => (
-            <Card key={pipeline.id} className="p-5">
-              <p className="text-sm font-medium text-zinc-900">{pipeline.name}</p>
-              <ol className="mt-3 flex flex-wrap gap-2">
-                {pipeline.stages.map((stage, index) => (
-                  <li
-                    key={`${index}:${stage.name}`}
-                    className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700"
-                  >
-                    {stage.name}
-                    <Badge tone={STAGE_TONES[stage.semantic]}>
-                      {STAGE_SEMANTIC_LABELS[stage.semantic]}
-                    </Badge>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** Nome, selos e uma linha com tipo, código e valores aceitos (no tooltip). */
+/** Nome, selos e uma linha com tipo e valores aceitos; o código técnico fica só na dica do nome. */
 function FieldSummary({ field }: { field: CrmFieldView }) {
   return (
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium text-zinc-900">{field.label}</p>
+        <p
+          className="text-sm font-medium text-zinc-900"
+          title={`Código no Bitrix24: ${field.code}`}
+        >
+          {field.label}
+        </p>
         {field.custom && <Badge tone="brand">Personalizado</Badge>}
         {PERSONAL_TYPES.has(field.type) && <Badge tone="amber">Dado pessoal</Badge>}
         {!field.available && <Badge tone="amber">Não existe mais no portal</Badge>}
@@ -408,8 +416,6 @@ function FieldSummary({ field }: { field: CrmFieldView }) {
         {field.options.length > 0 && (
           <span title={field.options.join(', ')}>: {summarizeOptions(field.options, 4)}</span>
         )}
-        <span className="text-zinc-300"> · </span>
-        <code className="text-[11px]">{field.code}</code>
       </p>
     </div>
   );
@@ -537,7 +543,8 @@ function AddedFieldRow({
             </button>
           )}
         </div>
-      ) : (
+      ) : !field.custom ? (
+        // Campo padrão se explica pelo nome: sem aviso, só o link discreto.
         !readOnly && (
           <button
             type="button"
@@ -547,6 +554,22 @@ function AddedFieldRow({
             + Adicionar descrição
           </button>
         )
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="flex items-center gap-1.5">
+            <AlertIcon className="size-3.5 shrink-0" />
+            Sem descrição: explique o que este campo significa no seu negócio.
+          </span>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={startEditing}
+              className="font-medium text-amber-900 underline hover:no-underline"
+            >
+              Escrever descrição
+            </button>
+          )}
+        </div>
       )}
 
       {error && (

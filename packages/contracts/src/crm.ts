@@ -363,3 +363,45 @@ export interface CrmAccessView {
  * reservado: o cliente não cria intenção com esse nome.
  */
 export const CRM_SYSTEM_INTENTION_NAME = 'Consultar cliente no CRM';
+
+/**
+ * Orientações fixas das respostas das ferramentas do CRM, editáveis no backoffice (spec
+ * agent-crm-tools, "Orientações das respostas editáveis no backoffice"). Globais: mesmas para
+ * todos os tenants; sem edição, vale o padrão do produto.
+ */
+export const CRM_GUIDANCE_KEYS = [
+  'cliente_identificado',
+  'negocios_do_cliente',
+  'escopo_dados',
+  'cliente_nao_identificado',
+] as const;
+export const crmGuidanceKeySchema = z.enum(CRM_GUIDANCE_KEYS);
+export type CrmGuidanceKey = z.infer<typeof crmGuidanceKeySchema>;
+
+export const CRM_GUIDANCE_LABELS: Record<CrmGuidanceKey, string> = {
+  cliente_identificado: 'Cliente identificado',
+  negocios_do_cliente: 'Negócios do cliente',
+  escopo_dados: 'Escopo dos dados',
+  cliente_nao_identificado: 'Cliente não identificado',
+};
+
+export const CRM_GUIDANCE_MAX = 1000;
+
+export const crmGuidanceInputSchema = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1, 'Escreva a orientação')
+    .max(CRM_GUIDANCE_MAX, `Use até ${CRM_GUIDANCE_MAX} caracteres`),
+});
+export type CrmGuidanceInput = z.input<typeof crmGuidanceInputSchema>;
+
+/** Orientação no backoffice: o texto em uso, o padrão e quem editou. */
+export interface CrmGuidanceView {
+  key: CrmGuidanceKey;
+  text: string;
+  defaultText: string;
+  edited: boolean;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}

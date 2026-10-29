@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CRM_GUIDANCE_MAX,
   crmFieldSettingInputSchema,
+  crmGuidanceInputSchema,
   dealStageEntityId,
   exposedByDefault,
   normalizeCrmFields,
@@ -182,5 +184,24 @@ describe('padrões e configuração', () => {
       exposed: false,
       description: '',
     });
+  });
+});
+
+describe('crmGuidanceInputSchema', () => {
+  it('apara as pontas e aceita até o limite', () => {
+    expect(crmGuidanceInputSchema.parse({ text: '  Use estes dados.  ' }).text).toBe(
+      'Use estes dados.',
+    );
+    expect(crmGuidanceInputSchema.safeParse({ text: 'a'.repeat(CRM_GUIDANCE_MAX) }).success).toBe(
+      true,
+    );
+  });
+
+  it('recusa texto vazio, só espaços ou acima do limite', () => {
+    expect(crmGuidanceInputSchema.safeParse({ text: '' }).success).toBe(false);
+    expect(crmGuidanceInputSchema.safeParse({ text: '   ' }).success).toBe(false);
+    expect(
+      crmGuidanceInputSchema.safeParse({ text: 'a'.repeat(CRM_GUIDANCE_MAX + 1) }).success,
+    ).toBe(false);
   });
 });
