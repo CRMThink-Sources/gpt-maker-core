@@ -104,6 +104,77 @@ export function fieldTypeLabel(type: string): string {
   return FIELD_TYPES[type] ?? type;
 }
 
+/** Quando o agente usa os campos de cada entidade (spec agent-crm-tools, "Identificar o cliente"). */
+export const CRM_ENTITY_USAGE: Record<CrmEntity, string> = {
+  contact: 'O agente usa estes campos ao identificar o cliente da conversa.',
+  deal: 'O agente lê estes campos nos negócios do cliente (até 10, do mais recente para o mais antigo).',
+  lead: 'Usados quando a conversa está ligada a um lead e ainda não há contato.',
+  company: 'Usados quando a conversa está ligada só a uma empresa.',
+};
+
+/** Valor fictício por tipo, para a prévia do que o agente recebe. */
+const EXAMPLE_VALUES: Record<string, string> = {
+  string: 'Exemplo',
+  integer: '42',
+  double: '42',
+  money: 'R$ 1.500,00',
+  date: '15/03/2026',
+  datetime: '15/03/2026 14:30',
+  boolean: 'Sim',
+  char: 'Sim',
+  user: 'Ana (responsável)',
+  employee: 'Ana (responsável)',
+  crm_multifield: '(11) 91234-5678',
+  crm_currency: 'Real',
+  crm_category: 'Vendas',
+  crm_stage: 'Proposta enviada',
+  url: 'https://exemplo.com.br',
+  address: 'Av. Paulista, 1000 - São Paulo',
+};
+
+/**
+ * Valor fictício de campos padrão conhecidos, antes do valor por tipo: "Exemplo" em todo campo de
+ * texto não mostrava nada. Chave `entidade:código` vence a só pelo código (TITLE muda por entidade).
+ */
+const EXAMPLE_BY_FIELD: Record<string, string> = {
+  NAME: 'Maria',
+  SECOND_NAME: 'Aparecida',
+  LAST_NAME: 'Souza',
+  POST: 'Gerente comercial',
+  COMMENTS: 'Prefere contato por WhatsApp',
+  ADDRESS: 'Av. Paulista, 1000 - São Paulo',
+  'deal:TITLE': 'Implantação do CRM',
+  'lead:TITLE': 'Contato pelo site',
+  'company:TITLE': 'ACME Ltda',
+  'lead:COMPANY_TITLE': 'ACME Ltda',
+};
+
+export interface AgentPreviewLine {
+  label: string;
+  example: string;
+  description: string;
+}
+
+/**
+ * Prévia do que o agente recebe: só os campos expostos, com um valor fictício coerente com o tipo
+ * (o primeiro valor aceito, quando for lista). Não lê dados reais do portal.
+ */
+export function buildAgentPreview(fields: CrmFieldView[]): AgentPreviewLine[] {
+  return fields
+    .filter((field) => field.exposed && field.available)
+    .map((field) => ({
+      label: field.label,
+      example:
+        field.options[0] ??
+        (field.custom
+          ? undefined
+          : (EXAMPLE_BY_FIELD[`${field.entity}:${field.code}`] ?? EXAMPLE_BY_FIELD[field.code])) ??
+        EXAMPLE_VALUES[field.type] ??
+        '…',
+      description: field.description.trim(),
+    }));
+}
+
 /** Valores aceitos resumidos: os primeiros e quantos faltam. */
 export function summarizeOptions(options: string[], max = 6): string {
   if (options.length <= max) return options.join(', ');
