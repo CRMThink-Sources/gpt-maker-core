@@ -24,6 +24,8 @@ import {
 } from '../semantic';
 import { parseCrmBinding } from '../triggers';
 import { ClientRefs, type ClientType } from './client-ref';
+import { composeGuidance } from './crm-guidance.defaults';
+import { CrmGuidanceService } from './crm-guidance.service';
 import type { CrmCaller } from './crm-access.guard';
 
 export type ToolName = 'consultar_cliente' | 'negocios_do_cliente' | 'etapas_do_funil';
@@ -88,16 +90,6 @@ const duration = new Histogram({
   registers: [metricsRegistry],
 });
 
-/**
- * O que o agente tem e o que não tem do CRM: sem isso ele oferece histórico de atividades e
- * documentos, chama a ferramenta de novo e acaba pedindo desculpas (visto em staging).
- */
-export const DATA_SCOPE =
-  'Dados disponíveis: o cadastro do cliente e os negócios dele, só com os campos liberados pela empresa (por exemplo funil, etapa, valor e datas). ' +
-  'Dado que não veio não está liberado: não invente nem diga que vai buscar. ' +
-  'Não há acesso a histórico de atividades, tarefas, e-mails, documentos nem anexos: não ofereça nem prometa esses dados; se o cliente pedir, diga que a equipe pode ajudar. ' +
-  'Valor "não informado" significa que o negócio não tem valor cadastrado.';
-
 class ToolTimeout extends Error {}
 
 const UNAVAILABLE: ToolResult = {
@@ -127,6 +119,7 @@ export class CrmToolsService {
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(ENV) private readonly env: Env,
     private readonly testConversations: TestConversations,
+    private readonly guidance: CrmGuidanceService,
   ) {
     this.refs = ClientRefs.fromBase64Key(env.DATA_ENCRYPTION_KEY);
   }
@@ -138,14 +131,14 @@ export class CrmToolsService {
         typeof chat === 'string' && !/\{\{/.test(chat)
           ? dialogFromChat(chat, caller.tenantId)
           : null;
-      if (!dialogId) return notIdentified();
+      if (!dialogId) return this.notIdentified();
 
       const client = await this.conversationClient(caller, dialogId);
-      if (!client) return notIdentified();
+      if (!client) return this.notIdentified();
 
       const ctx = await this.context(caller);
       const record = await this.getRecord(caller, client.type, client.id);
-      if (!record) return notIdentified();
+      if (!record) return this.notIdentified();
       const deals = await this.listDeals(caller, client, 'em_andamento', ctx);
       const company = await this.companyName(caller, client.type, record);
       const names = await this.users.resolve(caller, [
@@ -156,6 +149,7 @@ export class CrmToolsService {
           .map(String),
       ]);
       const full = { ...ctx, users: names };
+      const guidance = await this.guidance.current();
 
       return {
         outcome: 'ok',
@@ -173,7 +167,7 @@ export class CrmToolsService {
           },
           negocios_em_andamento: deals.rows.map((deal) => this.dealView(deal, full)),
           ha_mais_negocios: deals.more,
-          orientacao: `Use estes dados para responder ao cliente. Para negócios ganhos, perdidos ou todos os negócios, use a ferramenta negocios_do_cliente com a referência do cliente. ${DATA_SCOPE}`,
+          orientacao: composeGuidance(guidance, 'cliente_identificado'),
         },
       };
     });
@@ -190,6 +184,7 @@ export class CrmToolsService {
       const deals = await this.listDeals(caller, client, situation, ctx);
       const names = await this.users.resolve(caller, userIdsIn('deal', deals.rows, ctx));
       const full = { ...ctx, users: names };
+      const guidance = await this.guidance.current();
       return {
         outcome: 'ok',
         count: deals.rows.length,
@@ -198,7 +193,7 @@ export class CrmToolsService {
           negocios: deals.rows.map((deal) => this.dealView(deal, full)),
           ha_mais: deals.more,
           ...(deals.more ? { total: deals.total } : {}),
-          orientacao: `Estes são todos os dados destes negócios: responda com eles, sem chamar a ferramenta de novo para buscar outros detalhes. ${DATA_SCOPE}`,
+          orientacao: composeGuidance(guidance, 'negocios_do_cliente'),
         },
       };
     });
@@ -249,6 +244,15 @@ export class CrmToolsService {
         },
       };
     });
+  }
+
+  private async notIdentified(): Promise<ToolResult> {
+    const guidance = await this.guidance.current();
+    return {
+      outcome: 'not_identified',
+      count: 0,
+      body: { cliente: null, mensagem: guidance.cliente_nao_identificado },
+    };
   }
 
   /** Limite por agente, tempo máximo, métricas, log sem dados e `last_call_at`. */
@@ -426,18 +430,6 @@ export class CrmToolsService {
       campos: translateRecord('deal', deal, ctx, OMIT_DEAL) satisfies SemanticValue[],
     };
   }
-}
-
-function notIdentified(): ToolResult {
-  return {
-    outcome: 'not_identified',
-    count: 0,
-    body: {
-      cliente: null,
-      mensagem:
-        'O cliente desta conversa não está identificado no CRM. Atenda normalmente, sem citar dados de cadastro.',
-    },
-  };
 }
 
 function notFound(message: string): ToolResult {

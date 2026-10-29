@@ -9,6 +9,7 @@ import { CrmAccessController } from './crm-access.controller';
 import { CrmAccessGuard } from './crm-access.guard';
 import { CrmAccessService } from './crm-access.service';
 import { CrmClientController } from './crm-client.controller';
+import { CrmGuidanceService } from './crm-guidance.service';
 import { CrmToolsService } from './crm-tools.service';
 import { CrmToolsSync } from './crm-tools.sync';
 import { McpController } from './mcp.controller';
@@ -23,7 +24,7 @@ import { McpController } from './mcp.controller';
     SemanticModule,
   ],
   controllers: [CrmAccessController, CrmClientController, McpController],
-  providers: [CrmAccessService, CrmAccessGuard, CrmToolsService, CrmToolsSync],
-  exports: [CrmAccessService],
+  providers: [CrmAccessService, CrmAccessGuard, CrmGuidanceService, CrmToolsService, CrmToolsSync],
+  exports: [CrmAccessService, CrmGuidanceService],
 })
 export class CrmToolsModule {}

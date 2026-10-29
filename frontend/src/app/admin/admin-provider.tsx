@@ -26,6 +26,7 @@ import {
   MenuIcon,
   ShieldIcon,
   SparkIcon,
+  TextIcon,
   UsersIcon,
   WalletIcon,
 } from '@/components/icons';
@@ -103,6 +104,12 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         match: under('/admin/functions'),
       },
       { href: '/admin/models', label: 'Modelos', icon: SparkIcon, match: under('/admin/models') },
+      {
+        href: '/admin/crm-guidance',
+        label: 'Orientações do CRM',
+        icon: TextIcon,
+        match: under('/admin/crm-guidance'),
+      },
       {
         href: '/admin/workspace',
         label: 'Workspace',

@@ -1,6 +1,7 @@
 import { boolean, pgEnum, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, encryptedText, timestamptz, updatedAt } from '../columns';
 import { agent } from './agents';
+import { backofficeUser } from './backoffice';
 import { tenant } from './tenancy';
 
 export const crmEntity = pgEnum('crm_entity', ['lead', 'deal', 'contact', 'company']);
@@ -57,3 +58,14 @@ export const agentCrmAccess = pgTable(
   },
   (t) => [uniqueIndex('agent_crm_access_token_hash_uq').on(t.tokenHash)],
 );
+
+/**
+ * Orientações das ferramentas do CRM editadas no backoffice (spec agent-crm-tools). Global; só
+ * guarda a edição: sem linha, vale o padrão do código (restaurar o padrão apaga a linha).
+ */
+export const crmToolGuidance = pgTable('crm_tool_guidance', {
+  key: text('key').primaryKey(),
+  text: text('text').notNull(),
+  updatedBy: uuid('updated_by').references(() => backofficeUser.id),
+  updatedAt: updatedAt(),
+});
