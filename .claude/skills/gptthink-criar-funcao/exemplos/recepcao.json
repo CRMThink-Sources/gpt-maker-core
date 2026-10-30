@@ -1,0 +1,177 @@
+{
+  "code": "RECEPCAO",
+  "name": "Recepção",
+  "description": "Recebe todos os contatos, entende o que o cliente precisa e passa a conversa para o agente certo: vendas, suporte ou financeiro. Quando o assunto não é de nenhum deles, transfere para um atendente.",
+  "draft": {
+    "agentType": "SUPPORT",
+    "settings": {
+      "enabledHumanTransfer": true,
+      "limitSubjects": true
+    },
+    "profile": {
+      "jobName": "{{empresa.nome}}",
+      "jobDescription": "{{empresa.descricao}}",
+      "jobSite": ""
+    },
+    "blocks": [
+      "comum",
+      "registro",
+      "duvida",
+      "transferir",
+      "crm"
+    ],
+    "crmAccess": false,
+    "fields": [
+      {
+        "kind": "AGENT",
+        "id": "recepcao.agente_vendas",
+        "label": "Agente de vendas",
+        "help": "O agente que atende quem quer comprar, pedir preço ou orçamento. Precisa ser outro agente deste portal.",
+        "required": true
+      },
+      {
+        "kind": "AGENT",
+        "id": "recepcao.agente_suporte",
+        "label": "Agente de suporte",
+        "help": "O agente que atende quem já é cliente e tem um problema ou dúvida de uso. Quando ele terminar, a conversa volta para a recepção.",
+        "required": true
+      },
+      {
+        "kind": "CHOICE",
+        "id": "recepcao.financeiro",
+        "label": "Quem atende boleto, pagamento e nota fiscal?",
+        "required": true,
+        "options": [
+          {
+            "value": "agente",
+            "label": "Outro agente de IA",
+            "snippet": "Boleto, pagamento ou nota fiscal: equipe financeira.",
+            "dependents": [
+              {
+                "kind": "AGENT",
+                "id": "recepcao.agente_financeiro",
+                "label": "Agente do financeiro",
+                "help": "O agente que cuida de cobranças e pagamentos.",
+                "required": true
+              }
+            ]
+          },
+          {
+            "value": "canal",
+            "label": "A fila de um canal aberto",
+            "snippet": "Boleto, pagamento ou nota fiscal: use a ação \"Passar para o financeiro\".",
+            "dependents": [
+              {
+                "kind": "BITRIX_OPENLINE",
+                "id": "recepcao.canal_financeiro",
+                "label": "Canal aberto do financeiro",
+                "help": "A conversa entra na fila deste canal do Bitrix24.",
+                "required": true
+              }
+            ]
+          },
+          {
+            "value": "atendente",
+            "label": "Um atendente, como os outros assuntos",
+            "snippet": "Boleto, pagamento ou nota fiscal: use \"Transferir para atendente\"."
+          }
+        ]
+      },
+      {
+        "kind": "MULTI_CHOICE",
+        "id": "recepcao.coleta",
+        "label": "O que pedir antes de transferir",
+        "help": "A equipe que recebe a conversa já começa com esses dados.",
+        "required": true,
+        "separator": ", ",
+        "options": [
+          {
+            "value": "nome",
+            "label": "Nome",
+            "snippet": "nome"
+          },
+          {
+            "value": "email",
+            "label": "E-mail",
+            "snippet": "e-mail"
+          },
+          {
+            "value": "empresa",
+            "label": "Empresa",
+            "snippet": "empresa"
+          },
+          {
+            "value": "pedido",
+            "label": "Número do pedido (se já for cliente)",
+            "snippet": "número do pedido, se já for cliente"
+          }
+        ]
+      }
+    ],
+    "behavior": "Você é {{agente.nome}}, da recepção da {{empresa.nome}}. {{empresa.descricao}}\nSua função é entender o que o cliente precisa e passar a conversa para a equipe certa. Você não vende, não dá suporte técnico e não negocia pagamentos.\n\n{{bloco.crm}}\n\nCOMO CONDUZIR\n- Cumprimente e pergunte como pode ajudar.\n- Se o assunto não ficar claro, faça uma pergunta por vez até entender.\n- Antes de transferir, peça: {{recepcao.coleta}}.\n- Ao transferir, avise que vai passar para a equipe certa. Não prometa prazos.\n- NUNCA responda preço, problema técnico ou valor de fatura: isso é com as equipes.\n\nPARA ONDE VAI\n- Compra, preço, orçamento ou planos: equipe de vendas.\n- Problema, dúvida de uso, troca ou reclamação: equipe de suporte.\n- {{recepcao.financeiro}}\n- Pedido para falar com uma pessoa ou assunto fora disso: use \"Transferir para atendente\".\n\n{{bloco.duvida}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas.\n\n{{avancado.instrucoes_adicionais}}",
+    "intentions": [
+      {
+        "key": "passar_financeiro",
+        "name": "Passar para o financeiro",
+        "whenToUse": "Quando o assunto for boleto, segunda via, pagamento, cobrança ou nota fiscal.",
+        "when": {
+          "field": "recepcao.financeiro",
+          "in": [
+            "canal"
+          ]
+        },
+        "fields": [
+          {
+            "name": "Assunto",
+            "description": "O que o cliente precisa do financeiro, em uma frase.",
+            "type": "STRING",
+            "required": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "TIMELINE_COMMENT",
+            "config": {
+              "text": "Recepção passou a conversa para o financeiro.\nAssunto: {{fields.assunto}}"
+            }
+          },
+          {
+            "type": "TRANSFER_TO_HUMAN",
+            "config": {
+              "target": "LINE",
+              "lineId": "{{recepcao.canal_financeiro}}"
+            }
+          }
+        ],
+        "responseMode": "INSTRUCTIONS",
+        "instructions": "Avise que a equipe financeira vai continuar o atendimento por aqui."
+      }
+    ],
+    "transfers": [
+      {
+        "key": "vendas",
+        "agent": "{{recepcao.agente_vendas}}",
+        "instructions": "Quando o cliente quiser comprar, pedir preço, orçamento ou proposta, ou conhecer produtos e planos. Transfira depois de pedir: {{recepcao.coleta}}.",
+        "returnOnFinish": false
+      },
+      {
+        "key": "suporte",
+        "agent": "{{recepcao.agente_suporte}}",
+        "instructions": "Quando o cliente já comprou e tem um problema, defeito, dúvida de uso, pedido de troca ou reclamação. Transfira depois de pedir: {{recepcao.coleta}}.",
+        "returnOnFinish": true
+      },
+      {
+        "key": "financeiro",
+        "when": {
+          "field": "recepcao.financeiro",
+          "in": [
+            "agente"
+          ]
+        },
+        "agent": "{{recepcao.agente_financeiro}}",
+        "instructions": "Quando o assunto for boleto, segunda via, pagamento, cobrança ou nota fiscal.",
+        "returnOnFinish": false
+      }
+    ]
+  }
+}

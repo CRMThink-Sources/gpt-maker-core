@@ -42,6 +42,7 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 | `BITRIX_USER` | `multiple` (bool, padrão `false`) | id do usuário (use em `responsibleId`/`userId`); com `multiple: true` o cliente escolhe vários e a ação usa **um de cada vez, em rodízio** | 7 (vários: 20 × 9) |
 | `BITRIX_OPENLINE` | — | id do canal aberto (use em `lineId` do `TRANSFER_TO_HUMAN`) | 7 |
 | `AGENT` | — | **nada**: o cliente escolhe outro agente do portal, destino de uma `transfers[]` | 0 |
+| `BITRIX_SPA` | `values` (1–20, abaixo) | **nada**: o cliente escolhe o SPA, o funil, a etapa e o campo de cada valor; só vale em `spa` da ação `CREATE_SPA_ITEM` | 0 |
 | `BITRIX_STAGE` | — | use `{{id.categoryId}}` e `{{id.stageId}}` em `UPSERT_DEAL` | — |
 | `CHOICE` | `options` (1–10) | o `snippet` da opção escolhida | o trecho mais longo |
 | `MULTI_CHOICE` | `options` (1–10), `separator` ≤10 (padrão `"\n\n"`) | trechos marcados unidos pelo separador | todos os trechos |
@@ -60,6 +61,10 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 ```
 
 `effects.communicationType`: `FORMAL`, `NORMAL` ou `RELAXED` (o bloco `comum` já cuida do tom).
+
+### Valor de `BITRIX_SPA`
+
+`{ "id": "prioridade", "label": "Prioridade", "help": "...", "required": true, "options": ["LOW", "NORMAL", "HIGH", "URGENT"] }`. O `id` segue `^[a-z][a-z0-9_]*$` e é único no campo. É o que a ação grava; **o template não tem código de campo do portal** (`ufCrm...`), id do SPA, funil nem etapa: no formulário o cliente liga cada valor a um campo do SPA dele. `required: true` ⇒ a publicação do agente exige o campo escolhido. `options` (1–20) é para campo lista: o cliente liga cada opção a um item da lista (o formulário sugere o item de mesmo nome); sem ligação, o app procura o item de mesmo texto, e sem correspondência o item é criado sem esse campo (com aviso no histórico).
 
 ### Subcampo de `KNOWLEDGE`
 
@@ -84,9 +89,10 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 ```
 
 - `fields[].type`: `STRING`, `NUMBER`, `BOOLEAN`, `DATE`, `DATE_TIME`, `URL`.
+- Limites do GPT Maker, **com os marcadores preenchidos no limite**: `fields[].description` ≤ 255 e `whenToUse` ≤ 512. Acima disso a publicação falha com 500 "Fail on train assistant.".
 - Nas ações, o campo coletado é `{{fields.<nome normalizado>}}`: sem acento, minúsculas, não alfanumérico vira `_` ("Dados do cliente" → `fields.dados_do_cliente`).
 - Com `collectFrom`: `{{intencao.respostas}}` lista "pergunta: resposta" e `{{fields.pergunta_N}}` existe.
-- Variáveis da conversa: `{{contact.name}}`, `{{contact.phone}}`, `{{message.text}}`, `{{agent.name}}`, `{{dialog.id}}`, `{{interaction.protocol}}`, `{{event.date}}`.
+- Variáveis da conversa: `{{contact.name}}`, `{{contact.phone}}`, `{{message.text}}`, `{{agent.name}}`, `{{dialog.id}}` (diálogo com prefixo, `chat9498`), `{{dialog.chatId}}` (só o número, `9498`), `{{dialog.sessionId}}` (sessão atual da Linha Aberta), `{{interaction.protocol}}`, `{{event.date}}`.
 - `when` na ação liga só aquele passo. Passo que usa um dependente precisa de `when` com a opção pai.
 
 ### Passos (`actions[]`): `{ "when"?, "type", "config" }`
@@ -98,9 +104,32 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 | `UPSERT_DEAL` | `{ "categoryId": "{{x.funil.categoryId}}", "stageId": "{{x.funil.stageId}}", "fields": { "TITLE": "...", "COMMENTS": "..." } }` |
 | `CREATE_TASK` | `{ "title": "...", "description": "...", "responsibleId": "{{x.responsavel}}", "deadlineDays": "{{x.prazo}}" }`: prazo 0–365 |
 | `START_BIZPROC` | `{ "templateId": 12, "documentType": "LEAD" \| "DEAL" \| "CONTACT" \| "COMPANY", "parameters": { "Param": "..." } }` |
+| `CREATE_SPA_ITEM` | `{ "spa": "{{x.spa}}", "title": "...", "values": { "<id do valor>": "..." } }`: item num processo inteligente. `spa` é o marcador sozinho de um campo `BITRIX_SPA`; `values` só com ids declarados nele, e todo valor declarado preenchido em alguma ação. Valor vazio não é gravado |
 | `TRANSFER_TO_HUMAN` | `{ "target": "OPERATOR" }`, `{ "target": "USER", "userId": "{{x.usuario}}" }` (campo de vários usuários ⇒ rodízio) ou `{ "target": "LINE", "lineId": "{{x.canal}}" }` (fila de um canal aberto): transfere depois da resposta |
 
 Números (`categoryId`, `responsibleId`, `deadlineDays`, `templateId`, `userId`, `lineId`) são número literal ou **um marcador sozinho** de `INTEGER`, `BITRIX_USER`, `BITRIX_OPENLINE` ou `<funil>.categoryId`; na compilação viram número. Marcador de `BITRIX_USER` com `multiple: true` vira a lista de ids (rodízio) em `responsibleId` e `userId`.
+
+## Item de SPA (`BITRIX_SPA` + `CREATE_SPA_ITEM`)
+
+```json
+{ "kind": "BITRIX_SPA", "id": "suporte.chamado", "label": "Onde abrir o chamado", "required": true,
+  "values": [
+    { "id": "origem", "label": "Origem", "required": true },
+    { "id": "prioridade", "label": "Prioridade", "required": true, "options": ["LOW", "NORMAL", "HIGH", "URGENT"] },
+    { "id": "problema", "label": "Problema relatado", "required": true },
+    { "id": "sessao", "label": "Sessão de Linhas Abertas", "required": false }
+  ] }
+```
+
+```json
+{ "type": "CREATE_SPA_ITEM", "config": {
+    "spa": "{{suporte.chamado}}",
+    "title": "Chamado de {{contact.name | \"cliente\"}}",
+    "values": { "origem": "CHAT", "prioridade": "{{fields.prioridade}}",
+                "problema": "{{fields.problema_relatado}}", "sessao": "{{dialog.sessionId}}" } } }
+```
+
+Na compilação, `spa`/`values` viram o SPA, o funil, a etapa e os códigos dos campos escolhidos pelo cliente. Erros da publicação: `em "spa", escolha um campo de processo inteligente`, `"x" não é um valor de <campo>`, `valor sem uso em <campo>: <valor>`, `escreva o título do item de SPA` e `o campo de SPA {{x}} só pode ser usado em "spa" ...`.
 
 ## Transferências entre agentes (`transfers[]`)
 

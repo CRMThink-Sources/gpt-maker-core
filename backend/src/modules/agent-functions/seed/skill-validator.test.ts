@@ -62,6 +62,18 @@ describe('validador da skill de criação de funções', () => {
     },
   );
 
+  // Exemplos escritos com a skill (fora do seed): também têm de passar na checagem de publicação.
+  it.each(['cobranca', 'recepcao', 'suporte-spa'])(
+    'exemplo %s: aprovado com o mesmo pior caso',
+    (name) => {
+      const example = JSON.parse(readFileSync(join(SKILL, `exemplos/${name}.json`), 'utf8'));
+      const result = validate(example.draft);
+      expect(result.output).toContain('OK');
+      expect(check(example.draft).errors).toEqual([]);
+      expect(worstCase(result.output)).toBe(check(example.draft).budget.length);
+    },
+  );
+
   const support = SEED_TEMPLATES.find((template) => template.code === 'SUPPORT')!.draft;
   const withTransfer: FunctionTemplateDraftInput = {
     ...support,
@@ -115,5 +127,35 @@ describe('validador da skill de criação de funções', () => {
     const result = validate(invalid);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('transferência vendas: escolha um campo de agente');
+  });
+
+  it('item de SPA com valor que o campo não declara: os dois recusam', () => {
+    const example = JSON.parse(readFileSync(join(SKILL, 'exemplos/suporte-spa.json'), 'utf8'));
+    const draft = example.draft as FunctionTemplateDraftInput;
+    const [intention] = draft.intentions!;
+    const [spa, ...rest] = intention!.actions;
+    const invalid: FunctionTemplateDraftInput = {
+      ...draft,
+      intentions: [
+        {
+          ...intention!,
+          actions: [
+            {
+              ...spa!,
+              config: {
+                ...spa!.config,
+                values: { ...(spa!.config.values as Record<string, string>), canal: 'x' },
+              },
+            },
+            ...rest,
+          ],
+        },
+      ],
+    };
+    const message = 'Abrir chamado: "canal" não é um valor de suporte.chamado';
+    expect(check(invalid).errors).toContain(message);
+    const result = validate(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain(message);
   });
 });

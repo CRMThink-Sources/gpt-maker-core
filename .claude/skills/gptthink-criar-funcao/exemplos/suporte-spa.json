@@ -1,0 +1,361 @@
+{
+  "code": "SUPORTE_CHAMADO",
+  "name": "Suporte com chamado (SPA)",
+  "description": "Primeiro atendimento do suporte: tenta resolver com as soluções conhecidas da base, avalia a prioridade e, quando não resolve, abre um chamado num processo inteligente (SPA) do Bitrix24 e transfere para a equipe.",
+  "draft": {
+    "agentType": "SUPPORT",
+    "settings": {
+      "enabledHumanTransfer": true,
+      "limitSubjects": true
+    },
+    "profile": {
+      "jobName": "{{empresa.nome}}",
+      "jobDescription": "{{empresa.descricao}}"
+    },
+    "blocks": [
+      "comum",
+      "crm"
+    ],
+    "fields": [
+      {
+        "kind": "TEXT_LIST",
+        "id": "suporte.excluidos",
+        "label": "Assuntos que vão direto para o chamado",
+        "help": "O agente não tenta resolver: abre o chamado e transfere.",
+        "required": false,
+        "minItems": 0,
+        "maxItems": 4,
+        "itemMaxLength": 80,
+        "placeholder": "Cancelamento"
+      },
+      {
+        "kind": "MULTI_CHOICE",
+        "id": "suporte.identificacao",
+        "label": "Dados para identificar o cliente",
+        "required": true,
+        "separator": ", ",
+        "options": [
+          {
+            "value": "nome",
+            "label": "Nome",
+            "snippet": "nome"
+          },
+          {
+            "value": "email",
+            "label": "E-mail",
+            "snippet": "e-mail"
+          },
+          {
+            "value": "documento",
+            "label": "CPF ou CNPJ",
+            "snippet": "CPF ou CNPJ"
+          },
+          {
+            "value": "pedido",
+            "label": "Número do pedido",
+            "snippet": "número do pedido"
+          },
+          {
+            "value": "contrato",
+            "label": "Número do contrato",
+            "snippet": "número do contrato"
+          },
+          {
+            "value": "dominio",
+            "label": "Endereço do Bitrix24",
+            "snippet": "endereço do Bitrix24 (ex.: empresa.bitrix24.com.br)"
+          }
+        ]
+      },
+      {
+        "kind": "TEXT",
+        "id": "suporte.prioridade_urgente",
+        "label": "Quando o chamado é URGENTE",
+        "help": "Até 55 caracteres. Ex.: sistema parado para todos ou perda de dados.",
+        "required": true,
+        "maxLength": 55
+      },
+      {
+        "kind": "TEXT",
+        "id": "suporte.prioridade_alta",
+        "label": "Quando o chamado é de prioridade ALTA",
+        "help": "Até 55 caracteres. Ex.: função importante parou para parte dos usuários.",
+        "required": true,
+        "maxLength": 55
+      },
+      {
+        "kind": "TEXT",
+        "id": "suporte.prioridade_normal",
+        "label": "Quando o chamado é de prioridade NORMAL",
+        "help": "Até 55 caracteres. Ex.: erro com alternativa ou lentidão. O resto fica LOW.",
+        "required": true,
+        "maxLength": 55
+      },
+      {
+        "kind": "TEXT_LIST",
+        "id": "suporte.perguntas",
+        "label": "Perguntas antes de abrir o chamado",
+        "help": "O agente faz uma por vez antes de abrir o chamado. As respostas vão para o item do SPA.",
+        "required": false,
+        "minItems": 0,
+        "maxItems": 4,
+        "itemMaxLength": 80,
+        "placeholder": "Desde quando o problema acontece?"
+      },
+      {
+        "kind": "BITRIX_SPA",
+        "id": "suporte.chamado",
+        "label": "Onde abrir o chamado",
+        "help": "Escolha o processo inteligente (SPA) de chamados, a etapa inicial e em qual campo vai cada informação.",
+        "required": true,
+        "values": [
+          {
+            "id": "origem",
+            "label": "Origem",
+            "help": "Campo lista: o agente grava sempre CHAT. Ligue cada opção a um item.",
+            "required": true,
+            "options": [
+              "CHAT",
+              "EMAIL",
+              "MANUAL"
+            ]
+          },
+          {
+            "id": "prioridade",
+            "label": "Prioridade",
+            "help": "Campo lista: ligue cada nível a um item.",
+            "required": true,
+            "options": [
+              "LOW",
+              "NORMAL",
+              "HIGH",
+              "URGENT"
+            ]
+          },
+          {
+            "id": "problema",
+            "label": "Problema relatado",
+            "required": true
+          },
+          {
+            "id": "respostas",
+            "label": "Respostas às perguntas",
+            "help": "Cada pergunta com a resposta do cliente.",
+            "required": false
+          },
+          {
+            "id": "chat",
+            "label": "Chat de origem",
+            "help": "Número do chat, ex.: 9498.",
+            "required": false
+          },
+          {
+            "id": "dialogo",
+            "label": "Diálogo de origem",
+            "help": "Diálogo com o prefixo, ex.: chat9498.",
+            "required": false
+          },
+          {
+            "id": "sessao",
+            "label": "Sessão de Linhas Abertas",
+            "required": false
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "suporte.depois_chamado",
+        "label": "Para quem transferir depois de abrir o chamado",
+        "required": true,
+        "options": [
+          {
+            "value": "usuario",
+            "label": "Atendentes escolhidos",
+            "snippet": "Um atendente da equipe vai continuar a conversa.",
+            "dependents": [
+              {
+                "kind": "BITRIX_USER",
+                "id": "suporte.atendentes",
+                "label": "Atendentes que recebem a conversa",
+                "help": "Com mais de um, as conversas são distribuídas em rodízio.",
+                "required": true,
+                "multiple": true
+              }
+            ]
+          },
+          {
+            "value": "fila",
+            "label": "Fila da Linha Aberta",
+            "snippet": "Um atendente da equipe vai continuar a conversa."
+          }
+        ]
+      },
+      {
+        "kind": "CHOICE",
+        "id": "suporte.vendas",
+        "label": "Pedido de compra ou orçamento",
+        "required": true,
+        "options": [
+          {
+            "value": "chamado",
+            "label": "Abrir chamado e transferir",
+            "snippet": "Compras e orçamentos: use a ação \"Abrir chamado\"."
+          },
+          {
+            "value": "canal",
+            "label": "Informar o canal de vendas",
+            "snippet": "Compras e orçamentos: oriente a falar pelo {{suporte.canal_vendas}}.",
+            "dependents": [
+              {
+                "kind": "TEXT",
+                "id": "suporte.canal_vendas",
+                "label": "Canal de vendas",
+                "required": true,
+                "maxLength": 80
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.problemas",
+        "label": "Soluções de problemas conhecidos",
+        "help": "O problema como o cliente descreve e o passo a passo da solução. O agente só resolve o que estiver aqui.",
+        "required": false,
+        "maxItems": 20,
+        "subfields": [
+          {
+            "id": "problema",
+            "label": "Problema",
+            "required": true,
+            "maxLength": 150
+          },
+          {
+            "id": "solucao",
+            "label": "Solução",
+            "required": true,
+            "maxLength": 850,
+            "multiline": true
+          }
+        ],
+        "format": "Problema: {{problema}}\nSolução: {{solucao}}"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.faq",
+        "label": "Perguntas frequentes",
+        "required": false,
+        "maxItems": 20,
+        "subfields": [
+          {
+            "id": "pergunta",
+            "label": "Pergunta",
+            "required": true,
+            "maxLength": 200
+          },
+          {
+            "id": "resposta",
+            "label": "Resposta",
+            "required": true,
+            "maxLength": 800,
+            "multiline": true
+          }
+        ],
+        "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "id": "base.politicas",
+        "label": "Políticas",
+        "help": "Troca, garantia, prazos, horários.",
+        "required": false,
+        "maxItems": 10,
+        "subfields": [
+          {
+            "id": "titulo",
+            "label": "Título",
+            "required": true,
+            "maxLength": 100
+          },
+          {
+            "id": "texto",
+            "label": "Texto",
+            "required": true,
+            "maxLength": 900,
+            "multiline": true
+          }
+        ],
+        "format": "Política: {{titulo}}\n{{texto}}"
+      }
+    ],
+    "behavior": "Você é {{agente.nome}}, do primeiro atendimento de suporte da {{empresa.nome}}. {{empresa.descricao}}\nResolva o que estiver nas soluções da base; o resto vira chamado para a equipe. Não venda nem prometa o que não está na base.\n\n{{bloco.crm}}\n\nCOMO ATENDER\n- Entenda o problema antes de responder; peça detalhes se a descrição for vaga.\n- Antes de tratar um caso específico, peça: {{suporte.identificacao}}.\n- Avalie a prioridade você mesmo, pelos critérios da ação \"Abrir chamado\"; nunca pergunte ao cliente.\n- Passe a solução da base em etapas curtas e confirme se funcionou.\n- Responda só com o que está na base; não deduza nem invente.\n\nABRA O CHAMADO SEM TENTAR RESOLVER QUANDO\n- o caso for urgente: {{suporte.prioridade_urgente}}\n- o cliente pedir para falar com uma pessoa ou estiver irritado;\n- o assunto for um destes:\n{{suporte.excluidos}}\n\nQUANDO NÃO RESOLVER\nSolução não funcionou ou não está na base: use a ação \"Abrir chamado\".\n\nANTES DE ABRIR O CHAMADO\nFaça as perguntas da ação, uma por vez. Depois de abrir, avise que um atendente vai continuar a conversa.\n\n{{suporte.vendas}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas e diretas.\n\n{{avancado.instrucoes_adicionais}}",
+    "intentions": [
+      {
+        "key": "abrir_chamado",
+        "name": "Abrir chamado",
+        "whenToUse": "Quando a base não resolver, o caso for urgente, o cliente pedir uma pessoa ou estiver irritado, ou o assunto for de chamado direto. Antes, pergunte uma por vez:\n{{suporte.perguntas}}",
+        "fields": [
+          {
+            "name": "Problema relatado",
+            "description": "O problema do cliente e o que já foi tentado, em poucas frases.",
+            "type": "STRING",
+            "required": true
+          },
+          {
+            "name": "Prioridade",
+            "description": "Você define, não pergunte. LOW, NORMAL, HIGH, URGENT. URGENT: {{suporte.prioridade_urgente}} HIGH: {{suporte.prioridade_alta}} NORMAL: {{suporte.prioridade_normal}} Senão LOW.",
+            "type": "STRING",
+            "required": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "CREATE_SPA_ITEM",
+            "config": {
+              "spa": "{{suporte.chamado}}",
+              "title": "Chamado de {{contact.name | \"cliente\"}}",
+              "values": {
+                "origem": "CHAT",
+                "prioridade": "{{fields.prioridade}}",
+                "problema": "{{fields.problema_relatado}}",
+                "chat": "{{dialog.chatId}}",
+                "dialogo": "{{dialog.id}}",
+                "sessao": "{{dialog.sessionId}}",
+                "respostas": "{{intencao.respostas}}"
+              }
+            }
+          },
+          {
+            "when": {
+              "field": "suporte.depois_chamado",
+              "in": [
+                "usuario"
+              ]
+            },
+            "type": "TRANSFER_TO_HUMAN",
+            "config": {
+              "target": "USER",
+              "userId": "{{suporte.atendentes}}"
+            }
+          },
+          {
+            "when": {
+              "field": "suporte.depois_chamado",
+              "in": [
+                "fila"
+              ]
+            },
+            "type": "TRANSFER_TO_HUMAN",
+            "config": {
+              "target": "OPERATOR"
+            }
+          }
+        ],
+        "responseMode": "INSTRUCTIONS",
+        "instructions": "Confirme que o chamado foi aberto e avise que um atendente vai continuar a conversa.",
+        "collectFrom": "suporte.perguntas"
+      }
+    ]
+  }
+}
