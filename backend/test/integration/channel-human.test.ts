@@ -160,6 +160,8 @@ describe('atendimento humano', () => {
     expect(await human.isActive(owner.id, 'chat9498')).toBe(true);
     expect(await wiremock.bodies('POST', OPERATOR)).toMatchObject([{ CHAT_ID: 9498 }]);
     expect(await wiremock.count('PUT', chatPath('chat9498', 'start-human'))).toBe(1);
+    // O atendimento do agente é encerrado no GPTMaker (RESOLVED), para as métricas.
+    expect(await wiremock.count('PUT', chatPath('chat9498', 'stop-human'))).toBe(1);
   });
 
   it('diálogo já com operador (recusa do Bitrix): segue para o GPTMaker', async () => {
@@ -177,11 +179,12 @@ describe('atendimento humano', () => {
 
     expect(await stateOf('chat2')).toMatchObject({ humanActive: false, humanStartedAt: null });
     expect(await human.isActive(owner.id, 'chat2')).toBe(false);
-    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(1);
+    // Um na transferência (encerra o atendimento do agente) e um no fim do atendimento humano.
+    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(2);
 
     // Repetir não chama o GPTMaker de novo.
     await expect(handoff.stop({ tenantId: owner.id, dialogId: 'chat2' })).resolves.toBe('skipped');
-    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(1);
+    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(2);
   });
 
   it('diálogo que nunca teve humano: nada a encerrar', async () => {

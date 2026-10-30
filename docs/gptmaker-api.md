@@ -509,6 +509,8 @@ Endpoint relacionado (fora do rascunho, útil para disparos ativos): **`POST /v2
 
 O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, retornado por `GET /v2/workspace/{workspaceId}/chats` (https://developer.gptmaker.ai/api-reference/chats/list-chats).
 
+**Atendimento (`Interaction`) e controle humano (observado em 2026-10-30):** `start-human` só preenche o `transferAt` do atendimento, que continua `RUNNING`; `stop-human` o deixa `RESOLVED` com `resolvedAt`, mantendo o `transferAt`. A API não tem outro jeito de finalizar um atendimento. Por isso, ao transferir para uma pessoa, o app chama os dois em seguida (`channel/human-handoff.ts`): o atendimento do agente fecha na transferência e as métricas de tempo de atendimento do GPTMaker ficam certas. O agente não volta a responder porque, enquanto o diálogo está com humano, o app não repassa as mensagens; no fim do atendimento humano o app chama `stop-human` de novo, sem efeito.
+
 **`chatId` de uma conversa pela API (observado em 2026-10-01):** `public-api-<agentId>-<contextId>`, onde `<contextId>` é o valor mandado em `/conversation` (§6). A listagem de chats devolve esse `id`, com o `contextId` original em `recipient` e `type: "API"`; é o mesmo valor que chega como `contextId` nos webhooks (§5.4.1). O app calcula o `chatId` sem consultar a listagem. Ainda não testado: `start-human`/`stop-human` com esse id.
 
 ---
@@ -563,6 +565,8 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 - **`POST /v2/agent/{agentId}/intentions`**: cria. Desde 2026-10-04 responde **`{ id, tenant }`** (antes `{ success }`, sem id; o app ainda localiza pela listagem quando o id não vem).
 - **`PUT /v2/intention/{intentionId}`**: atualiza com o objeto inteiro; desde 2026-10-04 responde `{ tenant }` (antes `{ success }`).
 - **`DELETE /v2/intention/{intentionId}`**: remove; resposta `{ success }`.
+
+**Limites medidos (2026-10-30, criando intenções num agente de teste):** a descrição de um campo de `fields[]` aceita até **255** caracteres e o `details` até **512** (600 falha). Acima disso, a criação responde **HTTP 500 `{ "error": "Fail on train assistant." }`**, sem dizer o campo; quebras de linha, dois-pontos e o número de campos não influem. O app limita a descrição em 255 (`INTENTION_FIELD_DESCRIPTION_MAX`), a checagem das funções testa as intenções com as respostas no limite e esse 500 vira o erro `GPTMAKER_TRAIN_FAILED`, sem "tente de novo".
 
 Campos observados (painel atual ⇒ API):
 
