@@ -24,6 +24,7 @@ export const KIND_LABELS: Record<FieldKind, string> = {
   BITRIX_STAGE: 'Funil e etapa',
   BITRIX_OPENLINE: 'Canal aberto do Bitrix24',
   AGENT: 'Agente',
+  BITRIX_SPA: 'Processo inteligente (SPA)',
   CHOICE: 'Escolha única',
   MULTI_CHOICE: 'Múltipla escolha',
   KNOWLEDGE: 'Itens da base de conhecimento',
@@ -41,6 +42,8 @@ export const KIND_HINTS: Record<FieldKind, string> = {
   BITRIX_OPENLINE:
     'O cliente escolhe um canal aberto do portal. Use em "Transferir para atendente" com destino Canal aberto.',
   AGENT: 'O cliente escolhe outro agente do portal. Use numa transferência entre agentes.',
+  BITRIX_SPA:
+    'O cliente escolhe um SPA e em qual campo vai cada valor. Use na ação "Criar item de SPA".',
   CHOICE: 'O cliente escolhe uma opção; o texto da opção entra no agente.',
   MULTI_CHOICE: 'O cliente marca várias; os textos das marcadas entram juntos.',
   KNOWLEDGE: 'Não entra no texto: cada item vira um treinamento na base.',
@@ -82,6 +85,15 @@ export function newField(kind: FieldKind, id: string, label: string): FunctionFi
     case 'BITRIX_OPENLINE':
     case 'AGENT':
       return { kind, ...base };
+    case 'BITRIX_SPA':
+      return {
+        kind,
+        ...base,
+        values: [
+          { id: 'origem', label: 'Origem', required: true },
+          { id: 'descricao', label: 'Descrição', required: true },
+        ],
+      };
     case 'CHOICE':
       return {
         kind,

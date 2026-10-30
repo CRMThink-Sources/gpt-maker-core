@@ -27,6 +27,7 @@ import {
   UserIcon,
   BotIcon,
   ChatIcon,
+  LayersIcon,
 } from '@/components/icons';
 
 /**
@@ -415,6 +416,7 @@ export const KIND_STYLE: Record<FunctionField['kind'], { icon: IconType; tone: s
   BITRIX_STAGE: { icon: FunnelIcon, tone: 'bg-amber-50 text-amber-600' },
   BITRIX_OPENLINE: { icon: ChatIcon, tone: 'bg-amber-50 text-amber-600' },
   AGENT: { icon: BotIcon, tone: 'bg-violet-50 text-violet-600' },
+  BITRIX_SPA: { icon: LayersIcon, tone: 'bg-violet-50 text-violet-600' },
   CHOICE: { icon: CircleDotIcon, tone: 'bg-brand-50 text-brand-600' },
   MULTI_CHOICE: { icon: CheckSquareIcon, tone: 'bg-brand-50 text-brand-600' },
   KNOWLEDGE: { icon: BookIcon, tone: 'bg-emerald-50 text-emerald-600' },

@@ -3,6 +3,7 @@
 import type {
   FunctionField,
   FunctionKnowledgeSubfield,
+  FunctionSpaValue,
   FunctionOption,
   MarkerOption,
 } from '@gptmaker/contracts';
@@ -365,7 +366,8 @@ function FieldCard({
                 onChange={(e) => setId(e.target.value.trim())}
               />
               <span className="hidden shrink-0 lg:inline">
-                no texto: <Code>{`{{${field.id}}}`}</Code>
+                {field.kind === 'BITRIX_SPA' ? 'na ação:' : 'no texto:'}{' '}
+                <Code>{`{{${field.id}}}`}</Code>
               </span>
             </div>
           </div>
@@ -523,6 +525,8 @@ function KindSettings({
           Ações).
         </p>
       );
+    case 'BITRIX_SPA':
+      return <SpaSettings field={field} ctx={ctx} onChange={onChange} />;
     case 'CHOICE':
     case 'MULTI_CHOICE':
       return <OptionsEditor field={field} ctx={ctx} onChange={onChange} />;
@@ -777,6 +781,147 @@ function OptionsEditor({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Valores que a ação "Criar item de SPA" grava. O cliente liga cada um a um campo do SPA; com
+ * opções (ex.: LOW, HIGH), também liga cada opção a um item quando o campo é lista.
+ */
+function SpaSettings({
+  field,
+  ctx,
+  onChange,
+}: {
+  field: Extract<FunctionField, { kind: 'BITRIX_SPA' }>;
+  ctx: FieldContext;
+  onChange: (field: FunctionField) => void;
+}) {
+  const disabled = ctx.disabled;
+  const setValue = (index: number, patch: Partial<FunctionSpaValue>) =>
+    onChange({
+      ...field,
+      values: field.values.map((v, i) => (i === index ? { ...v, ...patch } : v)),
+    });
+  return (
+    <div className="space-y-3">
+      <p className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">
+        O cliente escolhe o SPA, o funil, a etapa e em qual campo vai cada valor. Preencha os
+        valores na ação “Criar item de SPA” (aba Ações).
+      </p>
+      <div>
+        <Label>Valores gravados no item</Label>
+        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+          {field.values.map((value, index) => (
+            <div key={index} className="space-y-2 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  className="w-48 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+                  value={value.label}
+                  aria-label="Nome do valor"
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const auto = value.id === slug(value.label);
+                    setValue(index, {
+                      label: e.target.value,
+                      ...(auto ? { id: slug(e.target.value) } : {}),
+                    });
+                  }}
+                />
+                <Code>{value.id}</Code>
+                <span className="flex-1" />
+                <Check
+                  label="Obrigatório"
+                  checked={value.required}
+                  disabled={disabled}
+                  onChange={(required) => setValue(index, { required })}
+                />
+                {field.values.length > 1 && (
+                  <ItemActions
+                    disabled={disabled}
+                    removeLabel="Remover valor"
+                    onRemove={() =>
+                      onChange({ ...field, values: field.values.filter((_, i) => i !== index) })
+                    }
+                  />
+                )}
+              </div>
+              <SpaOptionsInput
+                label={value.label}
+                options={value.options}
+                disabled={disabled}
+                onChange={(options) => setValue(index, { options })}
+              />
+            </div>
+          ))}
+        </div>
+        {!disabled && field.values.length < 20 && (
+          <button
+            type="button"
+            className={`${buttonClass('ghost', 'sm')} mt-1`}
+            onClick={() =>
+              onChange({
+                ...field,
+                values: [
+                  ...field.values,
+                  {
+                    id: uniqueId('valor', new Set(field.values.map((v) => v.id))),
+                    label: 'Valor',
+                    required: false,
+                  },
+                ],
+              })
+            }
+          >
+            <PlusIcon className="size-4" /> Adicionar valor
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Opções de um valor do SPA, digitadas com vírgula; a lista só é montada ao sair do campo. */
+function SpaOptionsInput({
+  label,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  options: string[] | undefined;
+  disabled?: boolean;
+  onChange: (options: string[] | undefined) => void;
+}) {
+  const joined = (options ?? []).join(', ');
+  const [text, setText] = useState(joined);
+  const [synced, setSynced] = useState(joined);
+  // Mudou por fora (desfazer, JSON): mostra o novo valor.
+  if (joined !== synced) {
+    setSynced(joined);
+    setText(joined);
+  }
+  return (
+    <input
+      className="w-full rounded-md border border-zinc-200 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none disabled:bg-zinc-50"
+      value={text}
+      aria-label={`Opções de ${label}`}
+      placeholder="Opções, separadas por vírgula (ex.: LOW, NORMAL, HIGH, URGENT). Vazio: texto livre."
+      disabled={disabled}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        const list = [
+          ...new Set(
+            text
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          ),
+        ];
+        onChange(list.length ? list : undefined);
+        setText(list.join(', '));
+      }}
+    />
   );
 }
 
