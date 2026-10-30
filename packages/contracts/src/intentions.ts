@@ -44,10 +44,23 @@ export function intentionPlaceholders(text: string | null | undefined): string[]
 
 const httpUrl = z.url({ protocol: /^https?$/ });
 
+/**
+ * Limite da descrição de um campo coletado no GPTMaker: acima disso a criação da intenção responde
+ * 500 "Fail on train assistant." (medido em 2026-10-30, docs/gptmaker-api.md §10).
+ */
+export const INTENTION_FIELD_DESCRIPTION_MAX = 255;
+
 const fieldSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome do campo').max(60),
   /** Opcional: sem ela, o agente se guia pelo nome. */
-  description: z.string().trim().max(500).default(''),
+  description: z
+    .string()
+    .trim()
+    .max(
+      INTENTION_FIELD_DESCRIPTION_MAX,
+      `use até ${INTENTION_FIELD_DESCRIPTION_MAX} caracteres na descrição (limite do GPTMaker)`,
+    )
+    .default(''),
   type: intentionFieldTypeSchema,
   required: z.boolean(),
 });

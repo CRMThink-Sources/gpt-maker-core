@@ -32,6 +32,16 @@ function sampleValue(field: FunctionField): FunctionAnswerValue | undefined {
       return SAMPLE_AGENT;
     case 'BITRIX_STAGE':
       return { categoryId: 1, stageId: 'C1:NEW' };
+    case 'BITRIX_SPA':
+      // Todo valor ligado a um campo, para a checagem compilar a ação inteira.
+      return {
+        entityTypeId: 1030,
+        categoryId: 1,
+        stageId: 'DT1030_1:NEW',
+        fields: Object.fromEntries(
+          field.values.map((value, index) => [value.id, `ufCrm1_${index + 1}`]),
+        ),
+      };
     case 'CHOICE':
       return field.options[0]!.value;
     case 'MULTI_CHOICE':
@@ -102,6 +112,9 @@ export interface TemplateCheck {
   budget: BudgetReport;
 }
 
+/** Campos cujo tamanho da resposta muda o tamanho dos textos (os demais viram ids). */
+const TEXT_KINDS = new Set<FunctionField['kind']>(['TEXT', 'TEXT_LIST', 'URL', 'INTEGER']);
+
 /** Intenção citada no erro da compilação (`intenção <chave>: ...`). */
 const INTENTION_ERROR = /^intenção ([a-z][a-z0-9_]*): /;
 
@@ -136,6 +149,29 @@ export function checkTemplate(content: FunctionTemplateContent): TemplateCheck {
           message,
         });
       }
+    }
+    // Respostas no limite: um texto de intenção que cita campos do formulário pode passar do
+    // limite do GPTMaker só quando o cliente escreve tudo (ex.: critérios numa descrição).
+    const worst = compileAgent({
+      content,
+      answers: {
+        ...sampleAnswerSets(content)[0],
+        ...Object.fromEntries(
+          flattenFields(content.fields)
+            .filter((field) => TEXT_KINDS.has(field.kind) && field.id in budget.answers)
+            .map((field) => [field.id, budget.answers[field.id]!]),
+        ),
+      },
+      agentName: 'Agente',
+      mode: 'SIMPLE',
+    });
+    for (const message of worst.errors) {
+      const key = INTENTION_ERROR.exec(message)?.[1];
+      if (!key || issues.some((issue) => issue.message === message)) continue;
+      issues.push({
+        where: { section: 'actions', intentionKey: key },
+        message: `${message} (com as respostas no limite)`,
+      });
     }
   }
   return { errors: issues.map((issue) => issue.message), issues, budget };
