@@ -1,4 +1,5 @@
 import {
+  type BitrixSpaValue,
   type FunctionAnswers,
   type FunctionAnswerValue,
   type KnowledgeItem,
@@ -129,7 +130,7 @@ class Renderer {
         return part === 'categoryId'
           ? String(stage.categoryId)
           : part === 'stageId'
-            ? stage.stageId
+            ? (stage.stageId ?? '')
             : '';
       }
       return '';
@@ -177,6 +178,9 @@ class Renderer {
       case 'AGENT':
         // O agente de destino vai para a regra de transferência, não para o texto.
         return '';
+      case 'BITRIX_SPA':
+        // O SPA e os campos vão para a ação "Criar item de SPA", não para o texto.
+        return '';
     }
   }
 }
@@ -221,6 +225,41 @@ function renderConfig(
     );
   }
   return value;
+}
+
+/**
+ * Ação "Criar item de SPA" do template (`spa` + `values` por id do valor) ⇒ a da intenção, com o
+ * SPA, o funil, a etapa e os códigos dos campos escolhidos pelo cliente. Valor sem campo escolhido
+ * sai. Sem SPA respondido ⇒ `undefined` (a ação não é gerada).
+ */
+export function spaActionConfig(
+  config: Record<string, unknown>,
+  answers: FunctionAnswers,
+): Record<string, unknown> | undefined {
+  const fieldId = typeof config.spa === 'string' ? singleMarker(config.spa) : undefined;
+  const spa = fieldId ? (answers[fieldId] as BitrixSpaValue | undefined) : undefined;
+  if (!spa || typeof spa !== 'object' || !('entityTypeId' in spa)) return undefined;
+  const values =
+    config.values && typeof config.values === 'object'
+      ? (config.values as Record<string, unknown>)
+      : {};
+  const fields: Record<string, unknown> = {};
+  const lists: Record<string, Record<string, number>> = {};
+  for (const [valueId, content] of Object.entries(values)) {
+    const code = spa.fields[valueId];
+    if (!code) continue;
+    fields[code] = content;
+    const list = spa.lists?.[valueId];
+    if (list) lists[code] = list;
+  }
+  return {
+    entityTypeId: spa.entityTypeId,
+    ...(spa.categoryId !== undefined ? { categoryId: spa.categoryId } : {}),
+    ...(spa.stageId ? { stageId: spa.stageId } : {}),
+    title: config.title,
+    fields,
+    ...(Object.keys(lists).length ? { lists } : {}),
+  };
 }
 
 /** Caminho de um texto que é só um marcador (`{{campo}}`). */
@@ -398,10 +437,15 @@ export function compileAgent(input: CompileInput): CompiledAgent {
       httpMethod: 'POST',
       actions: intention.actions
         .filter((action) => conditionMet(action.when, answers))
-        .map((action) => ({
-          type: action.type,
-          config: renderConfig(action.config, render, userList),
-        })),
+        .flatMap((action) => {
+          const config =
+            action.type === 'CREATE_SPA_ITEM'
+              ? spaActionConfig(action.config, answers)
+              : action.config;
+          return config
+            ? [{ type: action.type, config: renderConfig(config, render, userList) }]
+            : [];
+        }),
       autoGenerateParams: false,
       autoGenerateBody: false,
       responseMode: intention.responseMode ?? 'INSTRUCTIONS',

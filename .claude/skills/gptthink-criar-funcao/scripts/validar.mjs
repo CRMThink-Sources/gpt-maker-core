@@ -18,13 +18,14 @@ const COLLECTED = 'intencao.respostas';
 const RUNTIME_ROOTS = ['contact', 'message', 'agent', 'event', 'dialog', 'interaction', 'payload', 'fields'];
 const TEMPLATE_VARIABLES = [
   'contact.name', 'contact.phone', 'message.text', 'message.role', 'agent.name', 'agent.id',
-  'event.name', 'event.date', 'dialog.id', 'interaction.id', 'interaction.protocol',
+  'event.name', 'event.date', 'dialog.id', 'dialog.chatId', 'dialog.sessionId', 'interaction.id',
+  'interaction.protocol',
 ];
 const FIELD_ID = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const SIMPLE_ID = /^[a-z][a-z0-9_]*$/;
 const MARKER = /\{\{\s*([^{}|\s]+)\s*\}\}/g;
-const KINDS = ['TEXT', 'TEXT_LIST', 'URL', 'INTEGER', 'BITRIX_USER', 'BITRIX_STAGE', 'BITRIX_OPENLINE', 'AGENT', 'CHOICE', 'MULTI_CHOICE', 'KNOWLEDGE'];
-const ACTIONS = ['CREATE_LEAD', 'UPSERT_DEAL', 'TIMELINE_COMMENT', 'CREATE_TASK', 'START_BIZPROC', 'TRANSFER_TO_HUMAN'];
+const KINDS = ['TEXT', 'TEXT_LIST', 'URL', 'INTEGER', 'BITRIX_USER', 'BITRIX_STAGE', 'BITRIX_OPENLINE', 'AGENT', 'BITRIX_SPA', 'CHOICE', 'MULTI_CHOICE', 'KNOWLEDGE'];
+const ACTIONS = ['CREATE_LEAD', 'UPSERT_DEAL', 'TIMELINE_COMMENT', 'CREATE_TASK', 'START_BIZPROC', 'CREATE_SPA_ITEM', 'TRANSFER_TO_HUMAN'];
 const FIELD_TYPES = ['STRING', 'NUMBER', 'BOOLEAN', 'DATE', 'DATE_TIME', 'URL'];
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -79,6 +80,19 @@ function checkField(f, where) {
     case 'BITRIX_USER':
       if (f.multiple !== undefined && typeof f.multiple !== 'boolean') err(`${at}: multiple precisa ser true/false`);
       break;
+    case 'BITRIX_SPA': {
+      const vals = f.values;
+      if (!Array.isArray(vals) || vals.length < 1 || vals.length > 20) { err(`${at}: values com 1 a 20 valores`); break; }
+      if (new Set(vals.map((v) => v.id)).size !== vals.length) err(`${at}: há valores com o mesmo id`);
+      for (const v of vals) {
+        if (!SIMPLE_ID.test(v.id ?? '')) err(`${at}: valor "${v.id}" — minúsculas, números e _`);
+        if (!str(v.label, 1, 120)) err(`${at}.${v.id}: label de 1 a 120`);
+        if (typeof v.required !== 'boolean') err(`${at}.${v.id}: required precisa ser true/false`);
+        if (v.options !== undefined && (!Array.isArray(v.options) || v.options.length < 1 || v.options.length > 20 || new Set(v.options).size !== v.options.length))
+          err(`${at}.${v.id}: options com 1 a 20 textos sem repetir`);
+      }
+      break;
+    }
     case 'INTEGER':
       if (!int(f.min) || !int(f.max) || f.min > f.max) err(`${at}: min e max inteiros, min ≤ max`);
       break;
@@ -316,6 +330,42 @@ for (const i of content.intentions) {
   }
 }
 
+// ---------- item de SPA ----------
+// `spa` é o marcador sozinho de um campo BITRIX_SPA; `values` usa só os valores declarados; todo
+// valor declarado é preenchido; o campo não aparece em nenhum outro texto.
+{
+  const spaFields = all.filter((f) => f.kind === 'BITRIX_SPA');
+  const filled = new Map(spaFields.map((f) => [f.id, new Set()]));
+  const outside = [
+    [content.behavior, 'behavior'],
+    ...all.flatMap((f) => (f.options ?? []).map((o) => [o.snippet, `opção ${f.id}=${o.value}`])),
+    ...content.transfers.map((t) => [t.instructions, `transferência ${t.key}`]),
+  ];
+  for (const i of content.intentions) {
+    const at = `intenção ${i.key}`;
+    for (const t of [i.name, i.whenToUse, i.instructions ?? '', ...(i.fields ?? []).map((f) => f.description ?? '')]) outside.push([t, at]);
+    for (const a of i.actions ?? []) {
+      const c = a.config ?? {};
+      if (a.type !== 'CREATE_SPA_ITEM') { for (const t of configTexts(c)) outside.push([t, at]); continue; }
+      const { spa, values, ...rest } = c;
+      for (const t of configTexts(rest)) outside.push([t, at]);
+      const id = /^\{\{\s*([^{}|\s]+)\s*\}\}$/.exec(String(spa ?? '').trim())?.[1];
+      const f = spaFields.find((x) => x.id === id);
+      if (!f) { err(`${i.name}: em "spa", escolha um campo de processo inteligente (BITRIX_SPA), ex.: "{{suporte.spa}}"`); continue; }
+      if (!str(c.title, 1, 5000)) err(`${i.name}: escreva o título do item de SPA (config.title)`);
+      for (const [vid, text] of Object.entries(values && typeof values === 'object' ? values : {})) {
+        if (!f.values.some((v) => v.id === vid)) { err(`${i.name}: "${vid}" não é um valor de ${f.id}`); continue; }
+        if (typeof text === 'string' && text.trim()) filled.get(f.id).add(vid);
+      }
+    }
+  }
+  for (const [t, label] of outside)
+    for (const m of markers(t))
+      if (spaFields.some((f) => f.id === m)) err(`o campo de SPA {{${m}}} só pode ser usado em "spa" da ação "Criar item de SPA" (citado em ${label})`);
+  for (const f of spaFields)
+    for (const v of f.values) if (!filled.get(f.id).has(v.id)) err(`valor sem uso em ${f.id}: ${v.id} (preencha em "values" de uma ação "Criar item de SPA")`);
+}
+
 // ---------- transferências entre agentes ----------
 const transferKeys = new Set();
 for (const t of content.transfers) {
@@ -395,6 +445,18 @@ try {
   const fixed = content.behavior.replace(MARKER, '').length;
   const length = normalize(render(content.behavior, answers, builtins)).length;
   const top = Object.entries(parts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p}: ${n}`).join(', ');
+  // Intenções no limite: o GPTMaker responde 500 "Fail on train assistant." com descrição de campo
+  // acima de 255 ou "quando usar" acima de 512 (medido em 2026-10-30).
+  for (const i of content.intentions) {
+    const when = normalize(render(i.whenToUse, answers, builtins)).length;
+    if (when > 512) err(`intenção ${i.key}: whenToUse chega a ${when} caracteres com as respostas no limite (máximo 512)`);
+    for (const f of i.fields ?? []) {
+      const len = render(f.description ?? '', answers, builtins).trim().length;
+      if (len > 255) err(`intenção ${i.key}: descrição do campo "${f.name}" chega a ${len} caracteres com as respostas no limite (máximo 255 no GPTMaker); encurte o texto ou o maxLength dos campos citados`);
+    }
+    const list = i.collectFrom ? byId.get(i.collectFrom) : undefined;
+    if (list?.itemMaxLength > 255) err(`intenção ${i.key}: cada pergunta de ${list.id} vira descrição de campo; use itemMaxLength até 255`);
+  }
   const line = `pior caso do comportamento: ${length}/${BEHAVIOR_MAX} (texto fixo ${fixed}; ${top})`;
   if (length > BEHAVIOR_MAX) err(line);
   else {

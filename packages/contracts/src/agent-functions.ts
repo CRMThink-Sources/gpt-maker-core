@@ -105,6 +105,18 @@ export type FunctionField =
   | { kind: 'BITRIX_OPENLINE'; id: string; label: string; help?: string; required: boolean }
   /** Outro agente do portal, destino de uma transferência entre agentes (D17). */
   | { kind: 'AGENT'; id: string; label: string; help?: string; required: boolean }
+  /**
+   * Processo inteligente do Bitrix24: o template declara os valores que a ação "Criar item de SPA"
+   * grava; o cliente escolhe o SPA, o funil, a etapa e o campo de cada valor.
+   */
+  | {
+      kind: 'BITRIX_SPA';
+      id: string;
+      label: string;
+      help?: string;
+      required: boolean;
+      values: FunctionSpaValue[];
+    }
   | {
       kind: 'CHOICE';
       id: string;
@@ -144,6 +156,17 @@ export interface FunctionOption {
   effects?: z.infer<typeof functionOptionEffectsSchema>;
 }
 
+/** Valor gravado num item de SPA; o cliente liga a um campo do SPA do portal dele. */
+export interface FunctionSpaValue {
+  id: string;
+  label: string;
+  help?: string;
+  /** Sem campo escolhido, a publicação é recusada. */
+  required: boolean;
+  /** Valores possíveis (ex.: `LOW`, `HIGH`): num campo lista, cada um é ligado a um item. */
+  options?: string[];
+}
+
 export interface FunctionKnowledgeSubfield {
   id: string;
   label: string;
@@ -164,6 +187,19 @@ const knowledgeSubfieldSchema = z.object({
 });
 
 const base = { id: fieldId, label, help, required: z.boolean() };
+
+const spaValueSchema = z.object({
+  id: subfieldId,
+  label,
+  help,
+  required: z.boolean(),
+  options: z
+    .array(z.string().trim().min(1).max(100))
+    .min(1)
+    .max(20)
+    .refine((list) => new Set(list).size === list.length, 'há opções repetidas')
+    .optional(),
+});
 
 export const functionOptionSchema: z.ZodType<FunctionOption> = z.lazy(() =>
   z.object({
@@ -216,6 +252,18 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
     z.object({ kind: z.literal('BITRIX_STAGE'), ...base }),
     z.object({ kind: z.literal('BITRIX_OPENLINE'), ...base }),
     z.object({ kind: z.literal('AGENT'), ...base }),
+    z.object({
+      kind: z.literal('BITRIX_SPA'),
+      ...base,
+      values: z
+        .array(spaValueSchema)
+        .min(1)
+        .max(20)
+        .refine(
+          (list) => new Set(list.map((value) => value.id)).size === list.length,
+          'há valores com o mesmo id',
+        ),
+    }),
     z.object({ kind: z.literal('CHOICE'), ...base, options }),
     z.object({
       kind: z.literal('MULTI_CHOICE'),
@@ -572,6 +620,88 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
     });
   }
 
+  // Item de SPA: `spa` aponta para um campo de SPA; `values` usa só os valores declarados, e todo
+  // valor declarado é preenchido por alguma ação. O campo não vira texto em lugar nenhum.
+  const spaFields = all.filter(
+    (field): field is Extract<FunctionField, { kind: 'BITRIX_SPA' }> => field.kind === 'BITRIX_SPA',
+  );
+  const filledValues = new Map<string, Set<string>>(
+    spaFields.map((field) => [field.id, new Set()]),
+  );
+  const outsideSpa: Array<[string, TemplateIssueWhere]> = [
+    [content.behavior, { section: 'behavior' }],
+    ...all.flatMap((field): Array<[string, TemplateIssueWhere]> =>
+      field.kind === 'CHOICE' || field.kind === 'MULTI_CHOICE'
+        ? field.options.map((option) => [
+            option.snippet,
+            { section: 'form', fieldId: field.id, option: option.value },
+          ])
+        : [],
+    ),
+    ...(content.transfers ?? []).map((transfer): [string, TemplateIssueWhere] => [
+      transfer.instructions,
+      { section: 'actions', intentionKey: transfer.key },
+    ]),
+  ];
+  for (const intention of content.intentions) {
+    const where: TemplateIssueWhere = { section: 'actions', intentionKey: intention.key };
+    for (const text of [
+      intention.name,
+      intention.whenToUse,
+      intention.instructions ?? '',
+      ...(intention.fields ?? []).map((field) => field.description ?? ''),
+    ]) {
+      outsideSpa.push([text, where]);
+    }
+    intention.actions.forEach((action, index) => {
+      const at: TemplateIssueWhere = { ...where, actionIndex: index };
+      if (action.type !== 'CREATE_SPA_ITEM') {
+        for (const text of configTexts(action.config)) outsideSpa.push([text, at]);
+        return;
+      }
+      const { spa, values, ...rest } = action.config;
+      for (const text of configTexts(rest)) outsideSpa.push([text, at]);
+      const spaId =
+        typeof spa === 'string' ? /^\{\{\s*([^{}|\s]+)\s*\}\}$/.exec(spa.trim())?.[1] : undefined;
+      const field = spaId ? spaFields.find((candidate) => candidate.id === spaId) : undefined;
+      if (!field) {
+        add(at, `${intention.name}: em "spa", escolha um campo de processo inteligente`);
+        return;
+      }
+      if (typeof action.config.title !== 'string' || !action.config.title.trim()) {
+        add(at, `${intention.name}: escreva o título do item de SPA`);
+      }
+      const given = values && typeof values === 'object' ? Object.entries(values) : [];
+      for (const [valueId, text] of given) {
+        if (!field.values.some((value) => value.id === valueId)) {
+          add(at, `${intention.name}: "${valueId}" não é um valor de ${field.id}`);
+          continue;
+        }
+        if (typeof text === 'string' && text.trim()) filledValues.get(field.id)!.add(valueId);
+      }
+    });
+  }
+  for (const [text, where] of outsideSpa) {
+    for (const marker of functionMarkers(text)) {
+      if (spaFields.some((field) => field.id === marker)) {
+        add(
+          where,
+          `o campo de SPA {{${marker}}} só pode ser usado em "spa" da ação "Criar item de SPA"`,
+        );
+      }
+    }
+  }
+  for (const field of spaFields) {
+    for (const value of field.values) {
+      if (!filledValues.get(field.id)!.has(value.id)) {
+        add(
+          { section: 'form', fieldId: field.id },
+          `valor sem uso em ${field.id}: ${value.id} (preencha em "values" de uma ação "Criar item de SPA")`,
+        );
+      }
+    }
+  }
+
   // Transferências entre agentes (D17): como as intenções, endereçadas pela chave.
   const transferKeys = new Set<string>();
   for (const transfer of content.transfers ?? []) {
@@ -669,7 +799,7 @@ export function availableMarkers(
   for (const field of flattenFields(content.fields)) {
     if (field.kind === 'KNOWLEDGE') continue;
     // Agente, canal e vários usuários servem às ações, não ao texto (D15–D17).
-    if (field.kind === 'AGENT') continue;
+    if (field.kind === 'AGENT' || field.kind === 'BITRIX_SPA') continue;
     if (context.kind !== 'intention' && actionOnly(field)) continue;
     if (field.kind === 'BITRIX_STAGE') {
       markers.push({ marker: `${field.id}.categoryId`, label: `${field.label} (funil)` });

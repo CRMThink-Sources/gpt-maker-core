@@ -1,9 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import type { BitrixSpaValue, FunctionSpaValue } from '@gptmaker/contracts';
+import { useId, useState } from 'react';
 import { buttonClass } from '@/components/ui';
 import { bx24SelectUsers, insideBitrix } from '@/lib/bx24';
-import { useDealPipelines, useDealStages, useOpenLines } from '@/lib/crm-fields';
+import {
+  type SpaField,
+  suggestListLinks,
+  useDealPipelines,
+  useDealStages,
+  useOpenLines,
+  useSpaCategories,
+  useSpaFields,
+  useSpaStages,
+  useSpaTypes,
+} from '@/lib/crm-fields';
 import { Field, inputClass } from './agent-fields';
 
 /** Seletores do Bitrix24 usados nos gatilhos, nas intenções e no formulário da função. */
@@ -329,5 +340,386 @@ export function AgentPicker({
         ))}
       </select>
     </Field>
+  );
+}
+
+/**
+ * Processo inteligente (SPA), funil, etapa e o campo do SPA de cada valor declarado no template
+ * (change agent-function-spa-item). Num valor com opções ligado a um campo lista, cada opção é
+ * ligada a um item, já sugerido pelo nome. Trocar o SPA limpa o resto. Sem as listas do portal,
+ * ids e códigos digitados.
+ */
+export function SpaFields({
+  values,
+  value,
+  onChange,
+  disabled,
+  issueOf,
+}: {
+  values: readonly FunctionSpaValue[];
+  value: BitrixSpaValue | undefined;
+  onChange: (next: BitrixSpaValue | undefined) => void;
+  disabled?: boolean;
+  /** Mensagem de problema de um valor (`campo.valor`). */
+  issueOf?: (valueId: string) => string | undefined;
+}) {
+  const entityTypeId = value?.entityTypeId ?? null;
+  const types = useSpaTypes();
+  const categories = useSpaCategories(entityTypeId);
+  const categoryId = value?.categoryId ?? categories.data?.[0]?.id ?? null;
+  const stages = useSpaStages(entityTypeId, categoryId);
+  const fields = useSpaFields(entityTypeId);
+  const typed = types.failed && !types.data;
+
+  const update = (patch: Partial<BitrixSpaValue>) =>
+    entityTypeId && onChange({ ...value!, ...patch });
+  const setField = (declared: FunctionSpaValue, code: string) => {
+    const nextFields = { ...value!.fields };
+    const nextLists = { ...value!.lists };
+    delete nextLists[declared.id];
+    if (code) {
+      nextFields[declared.id] = code;
+      const field = fields.data?.find((item) => item.code === code);
+      if (declared.options && field?.options) {
+        const links = suggestListLinks(declared.options, field.options);
+        if (Object.keys(links).length) nextLists[declared.id] = links;
+      }
+    } else {
+      delete nextFields[declared.id];
+    }
+    update({ fields: nextFields, lists: nextLists });
+  };
+  const setLink = (declared: FunctionSpaValue, option: string, itemId: number) => {
+    const links = { ...value!.lists?.[declared.id] };
+    if (itemId > 0) links[option] = itemId;
+    else delete links[option];
+    update({ lists: { ...value!.lists, [declared.id]: links } });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Processo inteligente">
+          {typed ? (
+            <input
+              type="number"
+              min={1}
+              className={inputClass}
+              value={entityTypeId ?? ''}
+              disabled={disabled}
+              onChange={(e) =>
+                onChange(
+                  Number(e.target.value) > 0
+                    ? { entityTypeId: Number(e.target.value), fields: {} }
+                    : undefined,
+                )
+              }
+            />
+          ) : (
+            <SearchSelect
+              options={
+                types.data?.map((type) => ({
+                  value: String(type.entityTypeId),
+                  label: type.title,
+                })) ?? null
+              }
+              value={entityTypeId ? String(entityTypeId) : ''}
+              placeholder={types.data ? 'Digite para buscar o SPA…' : 'Carregando…'}
+              disabled={disabled}
+              onChange={(next) =>
+                // O mesmo SPA de novo não limpa o mapeamento.
+                Number(next) !== entityTypeId &&
+                onChange({ entityTypeId: Number(next), fields: {} })
+              }
+            />
+          )}
+        </Field>
+        <Field label="Funil">
+          {typed || (categories.failed && !categories.data) ? (
+            <input
+              type="number"
+              min={0}
+              className={inputClass}
+              value={value?.categoryId ?? ''}
+              disabled={disabled || !entityTypeId}
+              onChange={(e) => update({ categoryId: Number(e.target.value), stageId: undefined })}
+            />
+          ) : (
+            <select
+              className={inputClass}
+              value={categoryId ?? ''}
+              disabled={disabled || !categories.data}
+              onChange={(e) => update({ categoryId: Number(e.target.value), stageId: undefined })}
+            >
+              {!categories.data && <option value="">{entityTypeId ? 'Carregando…' : '—'}</option>}
+              {categories.data?.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Field label="Etapa inicial">
+          {typed || (stages.failed && !stages.data) ? (
+            <input
+              className={`${inputClass} font-mono text-xs`}
+              value={value?.stageId ?? ''}
+              placeholder="DT1204_180:NEW"
+              disabled={disabled || !entityTypeId}
+              onChange={(e) => update({ stageId: e.target.value || undefined })}
+            />
+          ) : (
+            <select
+              className={inputClass}
+              value={value?.stageId ?? ''}
+              disabled={disabled || !stages.data}
+              onChange={(e) =>
+                update({
+                  ...(categoryId !== null ? { categoryId } : {}),
+                  stageId: e.target.value || undefined,
+                })
+              }
+            >
+              <option value="">{stages.data ? 'A primeira do funil' : '—'}</option>
+              {stages.data?.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                  {stage.semantics ? (STAGE_SUFFIX[stage.semantics] ?? '') : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      </div>
+
+      {entityTypeId && (
+        <div className="rounded-lg border border-zinc-200">
+          <p className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600">
+            Em qual campo do SPA vai cada informação
+          </p>
+          <ul className="divide-y divide-zinc-100">
+            {values.map((declared) => {
+              const code = value?.fields[declared.id] ?? '';
+              const field = fields.data?.find((item) => item.code === code);
+              const issue = issueOf?.(declared.id);
+              return (
+                <li key={declared.id} className="grid gap-2 px-3 py-2.5 sm:grid-cols-2">
+                  <div className="text-sm">
+                    <span className="font-medium text-zinc-800">{declared.label}</span>
+                    {!declared.required && (
+                      <span className="ml-1.5 text-xs text-zinc-400">(opcional)</span>
+                    )}
+                    {declared.help && (
+                      <span className="mt-0.5 block text-xs text-zinc-500">{declared.help}</span>
+                    )}
+                  </div>
+                  <div>
+                    <SpaFieldSelect
+                      label={declared.label}
+                      fields={fields.data}
+                      typed={typed || (fields.failed && !fields.data)}
+                      code={code}
+                      required={declared.required}
+                      disabled={disabled}
+                      onChange={(next) => setField(declared, next)}
+                    />
+                    {issue && <span className="mt-1 block text-xs text-red-600">{issue}</span>}
+                    {declared.options && field?.options && (
+                      <div className="mt-2 space-y-1.5">
+                        {declared.options.map((option) => (
+                          <label key={option} className="flex items-center gap-2 text-xs">
+                            <span className="w-20 shrink-0 font-mono text-zinc-600">{option}</span>
+                            <select
+                              aria-label={`${declared.label}: ${option}`}
+                              className={`${inputClass} mt-0 py-1 text-xs`}
+                              value={value?.lists?.[declared.id]?.[option] ?? ''}
+                              disabled={disabled}
+                              onChange={(e) => setLink(declared, option, Number(e.target.value))}
+                            >
+                              <option value="">Pelo nome do item</option>
+                              {field.options!.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpaFieldSelect({
+  label,
+  fields,
+  typed,
+  code,
+  required,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  fields: SpaField[] | null;
+  typed: boolean;
+  code: string;
+  required: boolean;
+  disabled?: boolean;
+  onChange: (code: string) => void;
+}) {
+  if (typed) {
+    return (
+      <input
+        aria-label={label}
+        className={`${inputClass} mt-0 font-mono text-xs`}
+        value={code}
+        placeholder="ufCrm136_1750943184955"
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value.trim())}
+      />
+    );
+  }
+  return (
+    <select
+      aria-label={label}
+      className={`${inputClass} mt-0`}
+      value={code}
+      disabled={disabled || !fields}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">
+        {!fields ? 'Carregando campos…' : required ? 'Escolha o campo…' : 'Não gravar'}
+      </option>
+      {/* Escolhido antes e apagado no portal depois: aparece até o cliente trocar. */}
+      {code && fields && !fields.some((field) => field.code === code) && (
+        <option value={code}>Campo removido ({code}): escolha outro</option>
+      )}
+      {fields?.map((field) => (
+        <option key={field.code} value={field.code}>
+          {field.label}
+          {field.options ? ' (lista)' : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Sem acento e sem maiúsculas, para a busca. */
+function searchable(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/**
+ * Lista com busca (combobox): mostra o escolhido; ao focar, digitar filtra pelo nome ou pelo valor.
+ * Setas, Enter e Esc pelo teclado. Para listas longas do portal, como os processos inteligentes.
+ */
+export function SearchSelect({
+  options,
+  value,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  options: Array<{ value: string; label: string }> | null;
+  value: string;
+  placeholder?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const listId = useId();
+  // `null`: fechado, o campo mostra o escolhido.
+  const [query, setQuery] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+  const selected = options?.find((option) => option.value === value);
+  const term = searchable(query ?? '').trim();
+  const matches =
+    query === null
+      ? []
+      : (options ?? []).filter(
+          (option) => searchable(option.label).includes(term) || option.value === term,
+        );
+  const pick = (option: { value: string }) => {
+    setQuery(null);
+    onChange(option.value);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        role="combobox"
+        aria-expanded={query !== null}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={
+          query !== null && matches[active] ? `${listId}-${active}` : undefined
+        }
+        className={inputClass}
+        value={query ?? selected?.label ?? ''}
+        placeholder={placeholder}
+        disabled={disabled || !options}
+        onFocus={() => {
+          setQuery('');
+          setActive(0);
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+        }}
+        onBlur={() => setQuery(null)}
+        onKeyDown={(e) => {
+          if (query === null) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActive((index) => Math.min(index + 1, matches.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((index) => Math.max(index - 1, 0));
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (matches[active]) pick(matches[active]);
+          } else if (e.key === 'Escape') {
+            setQuery(null);
+          }
+        }}
+      />
+      {query !== null && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-64 w-80 min-w-full max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg"
+        >
+          {matches.length === 0 && <li className="px-3 py-2 text-zinc-500">Nenhum resultado</li>}
+          {matches.map((option, index) => (
+            <li
+              key={option.value}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={option.value === value}
+              className={`flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 ${
+                index === active ? 'bg-brand-50 text-brand-700' : 'text-zinc-800'
+              }`}
+              // Antes do blur do campo, que fecharia a lista.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(option);
+              }}
+              onMouseEnter={() => setActive(index)}
+            >
+              <span className="truncate">{option.label}</span>
+              <span className="shrink-0 font-mono text-xs text-zinc-400">{option.value}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

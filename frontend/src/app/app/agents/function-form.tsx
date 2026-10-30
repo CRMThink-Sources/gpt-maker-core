@@ -2,6 +2,7 @@
 
 import {
   type AnswerIssue,
+  type BitrixSpaValue,
   compileAgent,
   FUNCTION_BEHAVIOR_MAX,
   type FunctionAnswers,
@@ -24,6 +25,7 @@ import {
   OpenLinePicker,
   PipelineStageFields,
   ResponsiblePicker,
+  SpaFields,
   UsersPicker,
 } from './bitrix-pickers';
 
@@ -81,6 +83,8 @@ export function isAnswered(field: FunctionField, answers: FunctionAnswers): bool
     );
   }
   if (field.kind === 'BITRIX_STAGE') return Boolean((value as { stageId?: string }).stageId);
+  if (field.kind === 'BITRIX_SPA')
+    return Boolean((value as { entityTypeId?: number }).entityTypeId);
   return true;
 }
 
@@ -390,7 +394,7 @@ function FieldInput({
     case 'BITRIX_STAGE': {
       const stage =
         value && typeof value === 'object' && !Array.isArray(value)
-          ? value
+          ? (value as { categoryId: number; stageId: string })
           : { categoryId: 0, stageId: '' };
       return (
         <div>
@@ -407,6 +411,28 @@ function FieldInput({
         </div>
       );
     }
+    case 'BITRIX_SPA':
+      return (
+        <div>
+          <p className="mb-2">
+            <Title field={field} />
+          </p>
+          <SpaFields
+            values={field.values}
+            value={
+              value && typeof value === 'object' && 'entityTypeId' in value
+                ? (value as BitrixSpaValue)
+                : undefined
+            }
+            disabled={disabled}
+            onChange={(next) => set(field.id, next)}
+            issueOf={(valueId) =>
+              issues?.find((issue) => issue.field === `${field.id}.${valueId}`)?.message
+            }
+          />
+          <IssueText issues={own} />
+        </div>
+      );
     case 'TEXT_LIST':
       return <ListInput field={field} value={value} set={set} issues={own} disabled={disabled} />;
     case 'CHOICE':

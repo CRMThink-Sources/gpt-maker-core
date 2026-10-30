@@ -112,6 +112,29 @@ function actionSchemas(allowFields: boolean) {
           .max(2000),
       }),
     }),
+    z.object({
+      id: z.uuid().optional(),
+      type: z.literal('CREATE_SPA_ITEM'),
+      /** Item num processo inteligente (`crm.item.add`); só nas intenções por enquanto. */
+      config: z.object({
+        /** SPA (`entityTypeId`, os dinâmicos começam em 1030). */
+        entityTypeId: positiveId,
+        /** Funil do SPA; sem ele, o padrão. */
+        categoryId: z.number().int().nonnegative().optional(),
+        /** Etapa (`DT1204_180:NEW`); sem ela, a primeira do funil. */
+        stageId: z.string().trim().min(1).max(50).optional(),
+        title: template,
+        /** Código do campo no portal (`ufCrm136_1750943184955`) ⇒ template do valor. */
+        fields: fieldMap,
+        /** Campo lista: texto do valor (`HIGH`) ⇒ id do item da lista escolhido pelo cliente. */
+        lists: z
+          .record(
+            z.string().trim().min(1).max(100),
+            z.record(z.string().min(1).max(100), positiveId),
+          )
+          .optional(),
+      }),
+    }),
   ] as const;
 }
 
@@ -176,13 +199,15 @@ export const intentionActionTypeSchema = z.enum([
   'TIMELINE_COMMENT',
   'CREATE_TASK',
   'START_BIZPROC',
+  'CREATE_SPA_ITEM',
   'TRANSFER_TO_HUMAN',
 ]);
 export type IntentionActionType = z.infer<typeof intentionActionTypeSchema>;
 
 /**
  * Ações de uma intenção "Ação no Bitrix24": as dos gatilhos, com os campos coletados pelo agente,
- * mais a transferência para atendente; sem webhook de saída (a intenção genérica já chama APIs).
+ * mais o item de SPA e a transferência para atendente; sem webhook de saída (a intenção genérica
+ * já chama APIs).
  */
 export const intentionActionInputSchema = z.discriminatedUnion('type', [
   intention[0],
@@ -190,11 +215,15 @@ export const intentionActionInputSchema = z.discriminatedUnion('type', [
   intention[2],
   intention[3],
   intention[4],
+  intention[6],
   transferToHuman,
 ]);
 export type IntentionActionInput = z.input<typeof intentionActionInputSchema>;
 
 export type TriggerActionInput = z.input<typeof triggerActionInputSchema>;
+
+/** Item de SPA (só intenções); o executor dos gatilhos também roda as ações das intenções. */
+export type SpaItemActionInput = z.input<(typeof intention)[6]>;
 
 const actions = z
   .array(triggerActionInputSchema)

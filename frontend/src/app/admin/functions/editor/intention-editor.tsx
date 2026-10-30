@@ -18,6 +18,7 @@ import {
   UserIcon,
   UsersIcon,
   CheckSquareIcon,
+  LayersIcon,
 } from '@/components/icons';
 import { Badge, buttonClass } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
@@ -41,6 +42,7 @@ export const ACTION_TYPES: Record<string, string> = {
   UPSERT_DEAL: 'Criar ou atualizar negócio',
   CREATE_TASK: 'Criar tarefa',
   START_BIZPROC: 'Iniciar processo de negócio',
+  CREATE_SPA_ITEM: 'Criar item de SPA',
   TRANSFER_TO_HUMAN: 'Transferir para atendente',
 };
 
@@ -70,6 +72,11 @@ const ACTION_STYLE: Record<string, { icon: typeof BoltIcon; tone: string; hint: 
     icon: BoltIcon,
     tone: 'bg-brand-50 text-brand-600',
     hint: 'Dispara um processo de negócio do Bitrix24.',
+  },
+  CREATE_SPA_ITEM: {
+    icon: LayersIcon,
+    tone: 'bg-violet-50 text-violet-600',
+    hint: 'Cria um item num processo inteligente (SPA) que o cliente escolhe.',
   },
   TRANSFER_TO_HUMAN: {
     icon: UsersIcon,
@@ -125,6 +132,8 @@ function newAction(type: string): DraftAction {
       };
     case 'START_BIZPROC':
       return { type, config: { templateId: 1, documentType: 'DEAL' } };
+    case 'CREATE_SPA_ITEM':
+      return { type, config: { spa: '', title: 'Chamado de {{contact.name}}', values: {} } };
     default:
       return { type: 'TRANSFER_TO_HUMAN', config: { target: 'OPERATOR' } };
   }
@@ -926,6 +935,15 @@ function ActionCard({
             </Field>
           </div>
         )}
+        {action.type === 'CREATE_SPA_ITEM' && (
+          <SpaActionInput
+            config={config}
+            spaFields={ofKind('BITRIX_SPA')}
+            markers={markers}
+            disabled={disabled}
+            onChange={setConfig}
+          />
+        )}
         {action.type === 'TRANSFER_TO_HUMAN' && (
           <div className="flex flex-wrap items-end gap-4">
             <div>
@@ -982,6 +1000,86 @@ function ActionCard({
         <Issues messages={issues} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Passo "Criar item de SPA": o campo de SPA do formulário (o cliente escolhe o SPA e os campos), o
+ * título e o conteúdo de cada valor declarado nele. Valor vazio fica sem uso e a checagem avisa.
+ */
+function SpaActionInput({
+  config,
+  spaFields,
+  markers,
+  disabled,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  spaFields: FunctionField[];
+  markers: ReturnType<typeof availableMarkers>;
+  disabled?: boolean;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const marker = typeof config.spa === 'string' ? config.spa : '';
+  const chosen = spaFields.find((field) => `{{${field.id}}}` === marker.trim());
+  const values =
+    config.values && typeof config.values === 'object'
+      ? (config.values as Record<string, string>)
+      : {};
+  return (
+    <>
+      <Field label="Campo de SPA do formulário">
+        <select
+          className={inputClass}
+          value={chosen ? `{{${chosen.id}}}` : ''}
+          disabled={disabled}
+          onChange={(e) => onChange({ spa: e.target.value })}
+        >
+          <option value="">
+            {spaFields.length
+              ? 'Escolha o campo…'
+              : 'Crie no formulário um campo "Processo inteligente"'}
+          </option>
+          {spaFields.map((field) => (
+            <option key={field.id} value={`{{${field.id}}}`}>
+              {field.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Título do item">
+        <MarkerText
+          value={typeof config.title === 'string' ? config.title : ''}
+          rows={1}
+          markers={markers}
+          allowRuntime
+          disabled={disabled}
+          onChange={(value) => onChange({ title: value })}
+        />
+      </Field>
+      {chosen?.kind === 'BITRIX_SPA' &&
+        chosen.values.map((declared) => (
+          <Field
+            key={declared.id}
+            label={`${declared.label}${declared.required ? '' : ' (opcional)'}`}
+            hint={declared.options ? `Um destes: ${declared.options.join(', ')}` : undefined}
+          >
+            <MarkerText
+              value={values[declared.id] ?? ''}
+              rows={1}
+              markers={markers}
+              allowRuntime
+              disabled={disabled}
+              onChange={(value) => {
+                const next = { ...values };
+                if (value) next[declared.id] = value;
+                else delete next[declared.id];
+                onChange({ values: next });
+              }}
+            />
+          </Field>
+        ))}
+    </>
   );
 }
 

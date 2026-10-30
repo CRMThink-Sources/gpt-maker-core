@@ -272,3 +272,159 @@ export function useDealStages(pipelineId: number | null) {
     ),
   );
 }
+
+/** Processo inteligente (SPA) do portal. */
+export interface SpaType {
+  entityTypeId: number;
+  title: string;
+}
+
+/** Campo de um SPA que a ação pode preencher. */
+export interface SpaField {
+  /** Nome em camelCase, o aceito pelo `crm.item.add` (`ufCrm136_1750943184955`). */
+  code: string;
+  label: string;
+  type: string;
+  /** Campo lista: itens pelo id. */
+  options?: CrmFieldOption[];
+}
+
+interface RawSpaField {
+  type: string;
+  title?: string;
+  /** Campo personalizado (do cliente), qualquer que seja o formato do código. */
+  isDynamic?: boolean;
+  isReadOnly?: boolean;
+  isMultiple?: boolean;
+  items?: Array<{ ID: string | number; VALUE: string }>;
+}
+
+/**
+ * Campos de `crm.item.fields` oferecidos no formulário: os personalizados, editáveis, de valor
+ * único e com valor em texto (fora arquivo e vínculos), por nome. Personalizado é o que o Bitrix
+ * marca com `isDynamic`: o código varia (`ufCrm136_1750943184955`, `ufCrm_6712345`, `ufCrmCodigo`),
+ * conforme como e quando o campo foi criado (docs/bitrix-observado.md).
+ */
+export function spaFieldsFrom(raw: Record<string, RawSpaField>): SpaField[] {
+  return Object.entries(raw)
+    .filter(
+      ([code, field]) =>
+        (field.isDynamic ?? code.startsWith('uf')) &&
+        !field.isReadOnly &&
+        !field.isMultiple &&
+        !UNSUPPORTED_TYPES.has(field.type),
+    )
+    .map(([code, field]) => ({
+      code,
+      label: field.title || code,
+      type: field.type,
+      ...(field.type === 'enumeration' && field.items
+        ? { options: field.items.map((item) => ({ id: String(item.ID), label: item.VALUE })) }
+        : {}),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+}
+
+/** Opção do template ⇒ item da lista de mesmo texto, sem diferenciar maiúsculas. */
+export function suggestListLinks(
+  options: readonly string[],
+  items: readonly CrmFieldOption[],
+): Record<string, number> {
+  const links: Record<string, number> = {};
+  for (const option of options) {
+    const item = items.find(
+      (candidate) => candidate.label.trim().toLowerCase() === option.toLowerCase(),
+    );
+    if (item) links[option] = Number(item.id);
+  }
+  return links;
+}
+
+const spaTypesCache: { request?: Promise<SpaType[]> } = {};
+const spaCategoriesCache = new Map<string, Promise<DealPipeline[]>>();
+const spaStagesCache = new Map<string, Promise<DealStage[]>>();
+const spaFieldsCache = new Map<string, Promise<SpaField[]>>();
+
+async function loadSpaTypes(): Promise<SpaType[]> {
+  const data = await bx24Call<{ types: Array<{ entityTypeId: number; title: string }> }>(
+    'crm.type.list',
+    {},
+  );
+  return data.types
+    .map((type) => ({ entityTypeId: Number(type.entityTypeId), title: type.title }))
+    .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+}
+
+async function loadSpaCategories(entityTypeId: number): Promise<DealPipeline[]> {
+  const data = await bx24Call<{
+    categories: Array<{ id: number; name: string; isDefault: string; sort: number }>;
+  }>('crm.category.list', { entityTypeId });
+  return data.categories
+    .sort((a, b) => Number(b.isDefault === 'Y') - Number(a.isDefault === 'Y') || a.sort - b.sort)
+    .map(({ id, name }) => ({ id: Number(id), name }));
+}
+
+/** Etapas de um funil do SPA: `DYNAMIC_<entityTypeId>_STAGE_<funil>` (`DT1204_180:NEW`). */
+async function loadSpaStages(entityTypeId: number, categoryId: number): Promise<DealStage[]> {
+  const rows = await bx24Call<
+    Array<{ STATUS_ID: string; NAME: string; SEMANTICS?: string; EXTRA?: { SEMANTICS?: string } }>
+  >('crm.status.list', {
+    filter: { ENTITY_ID: `DYNAMIC_${entityTypeId}_STAGE_${categoryId}` },
+    order: { SORT: 'ASC' },
+  });
+  return rows.map((row) => ({
+    id: row.STATUS_ID,
+    name: row.NAME,
+    semantics: row.SEMANTICS ?? row.EXTRA?.SEMANTICS ?? null,
+  }));
+}
+
+async function loadSpaFields(entityTypeId: number): Promise<SpaField[]> {
+  const data = await bx24Call<{ fields: Record<string, RawSpaField> }>('crm.item.fields', {
+    entityTypeId,
+  });
+  return spaFieldsFrom(data.fields);
+}
+
+function mapCached<T>(map: Map<string, Promise<T>>, key: string, load: () => Promise<T>) {
+  return cached(
+    () => map.get(key),
+    (request) => (request ? map.set(key, request) : map.delete(key)),
+    load,
+  );
+}
+
+/** Processos inteligentes do portal, por nome. */
+export function useSpaTypes() {
+  return useBitrixList('spa-types', () =>
+    cached(
+      () => spaTypesCache.request,
+      (request) => (spaTypesCache.request = request),
+      loadSpaTypes,
+    ),
+  );
+}
+
+/** Funis de um SPA, o padrão primeiro. */
+export function useSpaCategories(entityTypeId: number | null) {
+  const key = entityTypeId ? String(entityTypeId) : null;
+  return useBitrixList(key && `spa-categories:${key}`, () =>
+    mapCached(spaCategoriesCache, key!, () => loadSpaCategories(entityTypeId!)),
+  );
+}
+
+/** Etapas de um funil do SPA, na ordem do Bitrix24. */
+export function useSpaStages(entityTypeId: number | null, categoryId: number | null) {
+  const key = entityTypeId && categoryId !== null ? `${entityTypeId}:${categoryId}` : null;
+  return useBitrixList(key && `spa-stages:${key}`, () =>
+    mapCached(spaStagesCache, key!, () => loadSpaStages(entityTypeId!, categoryId!)),
+  );
+}
+
+/** Campos personalizados de um SPA. */
+export function useSpaFields(entityTypeId: number | null) {
+  const key = entityTypeId ? String(entityTypeId) : null;
+  return useBitrixList(key && `spa-fields:${key}`, () =>
+    mapCached(spaFieldsCache, key!, () => loadSpaFields(entityTypeId!)),
+  );
+}

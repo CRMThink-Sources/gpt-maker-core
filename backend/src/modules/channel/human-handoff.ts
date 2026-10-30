@@ -30,7 +30,8 @@ export type HandoffOutcome = 'started' | 'stopped' | 'skipped';
 /**
  * Atendimento humano num diálogo (spec bitrix-chatbot-channel: transferência para humano).
  * `start` (o GPTMaker pediu, `onTransfer`): marca o diálogo como humano (o worker para de
- * encaminhar), transfere ao operador livre da Linha Aberta e avisa o GPTMaker (`start-human`).
+ * encaminhar), transfere ao operador livre da Linha Aberta e, no GPTMaker, marca a transferência
+ * (`start-human`) e encerra o atendimento do agente (`stop-human`).
  * `stop` (o atendimento humano terminou): desmarca e avisa o GPTMaker (`stop-human`), e o agente
  * volta a responder. Cada passo é idempotente; recusas definitivas (diálogo já com operador, chat
  * inexistente no GPTMaker) só vão para o log.
@@ -107,6 +108,13 @@ export class HumanHandoff {
       );
     }
     await this.tolerant('start-human no GPTMaker', () => this.gptmaker.startHuman(gptmakerChatId));
+    // O atendimento do agente acaba na transferência: `stop-human` o deixa RESOLVED no GPTMaker
+    // (com o `transferAt` do passo anterior), e as métricas de tempo de atendimento fecham. O
+    // agente não volta a responder: enquanto o diálogo está com humano, o app não repassa as
+    // mensagens (docs/gptmaker-api.md §7).
+    await this.tolerant('encerrar o atendimento no GPTMaker', () =>
+      this.gptmaker.stopHuman(gptmakerChatId),
+    );
     this.logger.log({ dialogId: input.dialogId }, 'diálogo transferido para atendimento humano');
     return 'started';
   }

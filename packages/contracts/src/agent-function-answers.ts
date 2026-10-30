@@ -18,12 +18,33 @@ export const bitrixStageValueSchema = z.object({
   stageId: z.string().trim().min(1).max(50),
 });
 
+const spaFieldCode = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'código de campo inválido')
+  .max(100);
+
+/**
+ * Processo inteligente escolhido: SPA, funil e etapa, e por id do valor declarado no template o
+ * código do campo do portal (`ufCrm136_...`) e, nos campos lista, opção ⇒ id do item da lista.
+ */
+export const bitrixSpaValueSchema = z.object({
+  entityTypeId: z.number().int().positive(),
+  categoryId: z.number().int().nonnegative().optional(),
+  stageId: z.string().trim().min(1).max(50).optional(),
+  fields: z.record(z.string(), spaFieldCode),
+  lists: z.record(z.string(), z.record(z.string(), z.number().int().positive())).optional(),
+});
+export type BitrixSpaValue = z.infer<typeof bitrixSpaValueSchema>;
+
 export const functionAnswerValueSchema = z.union([
   z.string().max(5000),
   z.array(z.string().max(5000)).max(50),
   /** Vários usuários do Bitrix24 (design D15). */
   z.array(z.number().int()).max(50),
   z.number().int(),
+  // Antes do funil: o objeto do funil aceitaria o do SPA e descartaria o resto.
+  bitrixSpaValueSchema,
   bitrixStageValueSchema,
   z.array(knowledgeItemSchema).max(50),
 ]);
@@ -178,6 +199,41 @@ function checkField(
       const parsed = bitrixStageValueSchema.safeParse(value);
       if (!parsed.success) return fail('escolha o funil e a etapa');
       return parsed.data;
+    }
+    case 'BITRIX_SPA': {
+      const parsed = bitrixSpaValueSchema.safeParse(value);
+      if (!parsed.success) return fail('escolha o processo inteligente');
+      const spa = parsed.data;
+      const fields: Record<string, string> = {};
+      const lists: Record<string, Record<string, number>> = {};
+      // Só os valores declarados; códigos e ligações de valores que sumiram do template saem.
+      for (const declared of field.values) {
+        const code = spa.fields[declared.id];
+        if (!code) {
+          if (declared.required && !partial) {
+            issues.push({
+              field: `${field.id}.${declared.id}`,
+              message: `escolha o campo do SPA para "${declared.label}"`,
+            });
+          }
+          continue;
+        }
+        fields[declared.id] = code;
+        const chosen = spa.lists?.[declared.id];
+        if (chosen && declared.options) {
+          const kept = Object.fromEntries(
+            Object.entries(chosen).filter(([option]) => declared.options!.includes(option)),
+          );
+          if (Object.keys(kept).length) lists[declared.id] = kept;
+        }
+      }
+      return {
+        entityTypeId: spa.entityTypeId,
+        ...(spa.categoryId !== undefined ? { categoryId: spa.categoryId } : {}),
+        ...(spa.stageId ? { stageId: spa.stageId } : {}),
+        fields,
+        ...(Object.keys(lists).length ? { lists } : {}),
+      };
     }
     case 'CHOICE': {
       if (typeof value !== 'string' || !field.options.some((option) => option.value === value)) {
