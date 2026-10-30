@@ -574,6 +574,16 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
         { traceId, operation: error.operation, kind: error.kind, err: error },
         'falha no GPTMaker',
       );
+      // 500 com esse corpo é recusa de conteúdo, não indisponibilidade: repetir não adianta
+      // (ex.: descrição de campo acima de 255 caracteres, docs/gptmaker-api.md §10).
+      if (isTrainFailure(error)) {
+        throw new DomainError(
+          'GPTMAKER_TRAIN_FAILED',
+          'O GPTMaker não conseguiu treinar o agente com esta intenção. Revise os textos: descrição de cada campo até 255 caracteres e "quando usar" até 512',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          { traceId },
+        );
+      }
       if (error.kind === 'VALIDATION') {
         throw new DomainError(
           'GPTMAKER_REJECTED',
@@ -590,4 +600,10 @@ export class IntentionService implements OnModuleInit, AgentChangeListener {
       );
     }
   }
+}
+
+/** Resposta do GPTMaker quando o conteúdo da intenção quebra o treino do assistente. */
+function isTrainFailure(error: GptMakerError): boolean {
+  const body = error.body as { error?: unknown } | undefined;
+  return error.status === 500 && body?.error === 'Fail on train assistant.';
 }

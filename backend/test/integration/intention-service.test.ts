@@ -245,6 +245,15 @@ describe('serviço de intenções', () => {
     expect(await db.select().from(agentIntention)).toEqual([]);
   });
 
+  it('GPTMaker não consegue treinar (500 "Fail on train assistant."): recusa clara, nada gravado', async () => {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: LIST },
+      response: { status: 500, jsonBody: { error: 'Fail on train assistant.' } },
+    });
+    expect(await errorOf(service.create(tenantId, agentId, form()))).toBe('GPTMAKER_TRAIN_FAILED');
+    expect(await db.select().from(agentIntention)).toEqual([]);
+  });
+
   it('remove (ausente no GPTMaker conta como removida); agente removido leva as intenções', async () => {
     await stubWrite('POST', LIST);
     await stubList([
