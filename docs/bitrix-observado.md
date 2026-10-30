@@ -36,8 +36,12 @@ Chamado com `DIALOG_ID` (`chat9498`). Resposta real (2026-10-01), só os campos 
 
 - `entity_data_2`: pares tipo e id (`LEAD`, `COMPANY`, `CONTACT`, `DEAL`), `0` quando não há vínculo.
   É o que o app lê para as ações dos gatilhos (`triggers/actions/crm-binding.ts`).
-- `entity_data_1`: começa com `Y` (vinculado ao CRM) e a entidade principal (`DEAL|27134`); os
-  segmentos seguintes não foram identificados.
+- `entity_data_1`: começa com `Y` (vinculado ao CRM) e a entidade principal (`DEAL|27134`). O
+  **6º segmento é a sessão atual** da Linha Aberta daquele chat: em 2026-10-30, no portal
+  `crmthinkers`, o `chat9500` teve as sessões 2002, 2006 e 2008 (atividades `IMOPENLINES_SESSION`
+  do CRM) e o `imopenlines.dialog.get` devolveu `Y|DEAL|39808|N|N|2008|1793305311|0|0|0` para
+  qualquer uma delas, ou seja, sempre a mais recente. O 7º parece um timestamp. É de onde vem
+  `{{dialog.sessionId}}` (`triggers/actions/crm-binding.ts`).
 - `entity_id`: conector, linha, id do cliente no conector e usuário (aqui, uma linha de WhatsApp).
 
 ## Escopos da instalação
@@ -48,3 +52,25 @@ instalação de teste (`2017`) tinha só `crm`, `imbot`, `imopenlines`, `im`, `u
 `placement`. Sem `task`, o `tasks.task.add` responde `insufficient_scope`, e o mesmo vale para o
 `bizproc.workflow.start` sem `bizproc`. As ações "criar tarefa" e "business process" dos gatilhos
 dependem desses escopos. Corrigir no cadastro do app no Bitrix24 e reinstalar.
+
+## Processos inteligentes (SPA)
+
+Observado em 2026-10-30 no portal `crmthinkers` (SPA "SPA Vitor", `entityTypeId` 1204). Usado pela
+ação "Criar item de SPA" (`triggers/actions/action-executor.ts`) e pelo seletor do formulário
+(`frontend/src/lib/crm-fields`).
+
+- `crm.type.list`: paginado (`next`), 50 por página; `types[].entityTypeId` (≥ 1030) e `title`.
+  `isCategoriesEnabled = N` ⇒ só o funil padrão.
+- `crm.category.list { entityTypeId }`: `categories[]` com `id`, `name`, `isDefault`.
+- Etapas: `crm.status.list` com `ENTITY_ID = DYNAMIC_<entityTypeId>_STAGE_<categoryId>`; o
+  `STATUS_ID` é `DT1204_180:NEW` (esse texto é o `stageId` do item).
+- `crm.item.fields { entityTypeId }`: chaves em camelCase. Os campos do cliente vêm com
+  `isDynamic: true`, e o formato do código **varia** conforme como e quando o campo foi criado:
+  `ufCrm136_1750943184955` (criado na tela do SPA), `ufCrm_6712345`, `ufCrm_ADDRESS_2` e
+  `ufCrmContactId` (o "SPA Vitor" tem 94 campos assim) e `ufCrmCodigo` (todos os 8 do SPA 1310).
+  Os do sistema (`title`, `stageId`, `assignedById`...) vêm com `isDynamic: false`. O seletor do
+  formulário usa `isDynamic`, não o formato do código (2026-10-30). Campo lista:
+  `type = enumeration`, `items[] = { ID, VALUE }` (sem `XML_ID` nesse portal). `title` é "Nome",
+  não obrigatório.
+- `crm.item.add`: ainda não exercitado com campo lista; a confirmação fica para o teste de
+  integração da change `agent-function-spa-item` (6.1).

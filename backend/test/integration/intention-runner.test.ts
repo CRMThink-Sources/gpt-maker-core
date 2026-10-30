@@ -241,6 +241,36 @@ describe('intenção com ações no Bitrix24', () => {
     });
   });
 
+  it('item de SPA que falha não impede a transferência seguinte', async () => {
+    failOn = 'CREATE_SPA_ITEM';
+    await db
+      .update(agentIntention)
+      .set({
+        actions: [
+          {
+            type: 'CREATE_SPA_ITEM',
+            config: { entityTypeId: 1204, title: 'Chamado', fields: { ufCrm136_1: 'CHAT' } },
+          },
+          { type: 'TRANSFER_TO_HUMAN', config: { target: 'USER', userId: 9 } },
+        ],
+      })
+      .where(eq(agentIntention.id, intentionId));
+    const outcome = await runner.run(intentionId, TOKEN, body());
+    expect(outcome).toMatchObject({
+      reply: {
+        ok: false,
+        results: [
+          { type: 'CREATE_SPA_ITEM', ok: false },
+          { type: 'TRANSFER_TO_HUMAN', ok: true },
+        ],
+      },
+    });
+    expect(calls[0]!.context.template.dialog).toEqual({ id: 'chat9498', chatId: '9498' });
+    expect(await new PendingHandoffs(redis).peek(tenantId, 'chat9498')).toMatchObject({
+      userId: 9,
+    });
+  });
+
   describe('vários usuários e canal aberto (D15, D16)', () => {
     const transfer = (config: Record<string, unknown>) =>
       db

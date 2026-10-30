@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { isUserList, type TemplateContext } from '@gptmaker/contracts';
+import { dialogChatId, isUserList, type TemplateContext } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { fieldCipher } from '../../shared/crypto/field-cipher';
@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
   TIMELINE_COMMENT: 'comentário registrado no CRM',
   CREATE_TASK: 'tarefa criada',
   START_BIZPROC: 'processo iniciado',
+  CREATE_SPA_ITEM: 'item criado no processo inteligente do CRM',
   TRANSFER_TO_HUMAN: 'transferência para um atendente agendada',
 };
 
@@ -215,7 +216,7 @@ export class IntentionRunner {
       message: { text: null, role: null },
       agent: { id: intention.agentId, name: row.agentName },
       event: { name: 'intention', date: new Date(started).toISOString() },
-      dialog: { id: dialogId },
+      dialog: { id: dialogId, chatId: dialogChatId(dialogId) },
       interaction: { id: null, protocol: null },
       payload: body,
       fields,

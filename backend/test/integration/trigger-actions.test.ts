@@ -317,4 +317,111 @@ describe('ações dos gatilhos', () => {
       signPayload('seg', calls[0]!.body, 1_700_000_000),
     );
   });
+  describe('item de SPA', () => {
+    const fieldsMeta = {
+      fields: {
+        title: { type: 'string' },
+        ufCrm136_1: { type: 'string' },
+        ufCrm136_2: {
+          type: 'enumeration',
+          items: [
+            { ID: '101', VALUE: 'LOW' },
+            { ID: '102', VALUE: 'Normal' },
+            { ID: '103', VALUE: 'Alta' },
+          ],
+        },
+        ufCrm136_3: { type: 'string' },
+        ufCrm136_4: { type: 'string' },
+        ufCrm136_5: { type: 'string' },
+      },
+    };
+    const spa = (overrides: Record<string, unknown> = {}) =>
+      action({
+        type: 'CREATE_SPA_ITEM',
+        config: {
+          entityTypeId: 1204,
+          categoryId: 180,
+          stageId: 'DT1204_180:NEW',
+          title: 'Chamado de {{contact.name}}',
+          fields: {
+            ufCrm136_1: 'CHAT',
+            ufCrm136_2: '{{fields.prioridade}}',
+            ufCrm136_3: '{{dialog.chatId}}',
+            ufCrm136_4: '{{dialog.id}}',
+            ufCrm136_5: '{{dialog.sessionId}}',
+          },
+          lists: { ufCrm136_2: { HIGH: 103 } },
+          ...overrides,
+        },
+      });
+    const spaContext = (prioridade: string) =>
+      context({
+        template: {
+          ...template,
+          dialog: { id: 'chat9498', chatId: '9498' },
+          fields: { prioridade },
+        },
+      });
+
+    it('cria no funil e etapa, lista pela ligação do formulário, chat e sessão', async () => {
+      await stub('imopenlines.dialog.get', {
+        dialog_id: 'chat9498',
+        entity_data_1: 'Y|DEAL|39808|N|N|2008|1793305311|0|0|0',
+        entity_data_2: 'LEAD|0|COMPANY|0|CONTACT|0|DEAL|39808',
+      });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 55 } });
+      await expect(executor.execute(spa(), spaContext('HIGH'))).resolves.toEqual({
+        itemId: 55,
+        entityTypeId: 1204,
+      });
+      expect(await bodies('crm.item.fields')).toMatchObject([{ entityTypeId: 1204 }]);
+      expect(await bodies('crm.item.add')).toMatchObject([
+        {
+          entityTypeId: 1204,
+          fields: {
+            title: 'Chamado de Maria',
+            categoryId: 180,
+            stageId: 'DT1204_180:NEW',
+            ufCrm136_1: 'CHAT',
+            ufCrm136_2: 103,
+            ufCrm136_3: '9498',
+            ufCrm136_4: 'chat9498',
+            ufCrm136_5: '2008',
+          },
+        },
+      ]);
+    });
+
+    it('lista pelo valor do item, sem diferenciar maiúsculas; sem sessão citada, não lê o diálogo', async () => {
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 56 } });
+      const fields = { ...(spa().config as { fields: Record<string, string> }).fields };
+      delete fields.ufCrm136_5;
+      await executor.execute(spa({ fields, lists: undefined }), spaContext('normal'));
+      expect((await bodies('crm.item.add'))[0]!.fields).toMatchObject({ ufCrm136_2: 102 });
+      expect(await bodies('imopenlines.dialog.get')).toEqual([]);
+    });
+
+    it('valor fora da lista: cria sem o campo e avisa', async () => {
+      await stub('imopenlines.dialog.get', { entity_data_1: 'Y|DEAL|1|N|N|2008|0|0|0|0' });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 57 } });
+      await expect(executor.execute(spa(), spaContext('URGENTE'))).resolves.toEqual({
+        itemId: 57,
+        entityTypeId: 1204,
+        warnings: ['"URGENTE" não é um item da lista ufCrm136_2; o campo ficou vazio'],
+      });
+      expect((await bodies('crm.item.add'))[0]!.fields).not.toHaveProperty('ufCrm136_2');
+    });
+
+    it('recusa do Bitrix é definitiva', async () => {
+      await stub('imopenlines.dialog.get', { entity_data_1: '' });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', 'NOT_FOUND', 400);
+      const error = await executor.execute(spa(), spaContext('HIGH')).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ActionError);
+      expect((error as ActionError).transient).toBe(false);
+    });
+  });
 });
