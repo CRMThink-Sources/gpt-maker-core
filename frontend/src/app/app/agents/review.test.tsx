@@ -180,6 +180,7 @@ describe('botão Revisar com IA (6.4)', () => {
         expectation=""
         onExpectation={() => undefined}
         onAddGap={() => undefined}
+        onRetryFailed={() => undefined}
         onReview={() => undefined}
       />,
     );
@@ -293,6 +294,7 @@ describe('expectativa e cobertura (3.1, 3.3)', () => {
         expectation={props.expectation ?? ''}
         onExpectation={() => undefined}
         onAddGap={props.onAddGap ?? (() => undefined)}
+        onRetryFailed={() => undefined}
         onReview={() => undefined}
       />,
     );
@@ -411,5 +413,81 @@ describe('marcador pendente no formulário (3.4)', () => {
       'base.faq': [{ itemKey: KEY_A, values: { pergunta: 'P?', resposta: '[preencher: x]' } }],
     };
     expect(attentionCount(base, marked)).toBe(0);
+  });
+});
+
+describe('campos que falharam (staging: muitas revisões ao mesmo tempo)', () => {
+  const failedState = (): ReviewState => ({
+    fields: {
+      'base.itens': {
+        status: 'error',
+        answerKey: '',
+        code: 'AI_BUSY',
+        message: 'Muitas revisões agora. Tente de novo em instantes.',
+      },
+      'empresa.desc': {
+        status: 'error',
+        answerKey: '',
+        code: 'AI_BUSY',
+        message: 'Muitas revisões agora. Tente de novo em instantes.',
+      },
+    },
+    gaps: { status: 'idle' },
+    contradictions: [],
+    cross: 'idle',
+    error: null,
+  });
+
+  it('o painel oferece revisar só os que falharam, com o custo deles', () => {
+    const onRetryFailed = vi.fn();
+    render(
+      <ReviewPanel
+        form={form}
+        answers={{ 'base.itens': ['a'], 'empresa.desc': 'Vendemos roupas.' }}
+        aiKey={{
+          configured: false,
+          last4: null,
+          verifiedAt: null,
+          creditsPerField: 2,
+          platformAvailable: true,
+        }}
+        state={failedState()}
+        running={false}
+        canConfigureKey
+        expectation=""
+        onExpectation={() => undefined}
+        onAddGap={() => undefined}
+        onRetryFailed={onRetryFailed}
+        onReview={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/2 campos não foram revisados e não foram cobrados/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar só esses · 4 créditos' }));
+    expect(onRetryFailed).toHaveBeenCalledWith(['base.itens', 'empresa.desc']);
+  });
+
+  it('o campo que falhou tem "tentar de novo", exceto sem créditos', () => {
+    const onRerun = vi.fn();
+    const ai: Ai = { busy: false, onRerun, onApplied: vi.fn(), fields: failedState().fields };
+    render(<Harness initial={{ 'base.itens': ['a'] }} ai={ai} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'tentar de novo' })[0]!);
+    expect(onRerun).toHaveBeenCalledWith('base.itens');
+    cleanup();
+
+    const noCredit: Ai = {
+      busy: false,
+      onRerun,
+      onApplied: vi.fn(),
+      fields: {
+        'base.itens': {
+          status: 'error',
+          answerKey: '',
+          code: 'NO_CREDIT',
+          message: 'Sem créditos.',
+        },
+      },
+    };
+    render(<Harness initial={{ 'base.itens': ['a'] }} ai={noCredit} />);
+    expect(screen.queryByRole('button', { name: 'tentar de novo' })).toBeNull();
   });
 });

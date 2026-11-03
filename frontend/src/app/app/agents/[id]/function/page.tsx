@@ -481,6 +481,7 @@ export default function AgentFunctionPage() {
           onExpectation={setExpectation}
           onAddGap={addGap}
           onReview={(ids) => void review.run(ids, answers, expectation)}
+          onRetryFailed={(ids) => void review.run(ids, answers)}
         />
       )}
 
