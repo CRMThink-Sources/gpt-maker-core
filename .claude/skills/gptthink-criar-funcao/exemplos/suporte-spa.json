@@ -26,7 +26,10 @@
         "minItems": 0,
         "maxItems": 4,
         "itemMaxLength": 80,
-        "placeholder": "Cancelamento"
+        "placeholder": "Cancelamento",
+        "review": {
+          "rubric": "Cada item é um assunto concreto que o agente deve encaminhar sem tentar resolver (por exemplo, cancelamento ou cobrança)."
+        }
       },
       {
         "kind": "MULTI_CHOICE",
@@ -236,10 +239,17 @@
             "label": "Solução",
             "required": true,
             "maxLength": 850,
-            "multiline": true
+            "multiline": true,
+            "review": {
+              "minLength": 80
+            }
           }
         ],
-        "format": "Problema: {{problema}}\nSolução: {{solucao}}"
+        "format": "Problema: {{problema}}\nSolução: {{solucao}}",
+        "review": {
+          "recommendedItems": 3,
+          "rubric": "O problema está como o cliente descreve; a solução vem em passos numerados que ele consegue seguir sozinho e diz quando abrir um chamado ou falar com um atendente. Cada item trata de um problema só."
+        }
       },
       {
         "kind": "KNOWLEDGE",
@@ -259,10 +269,16 @@
             "label": "Resposta",
             "required": true,
             "maxLength": 800,
-            "multiline": true
+            "multiline": true,
+            "review": {
+              "minLength": 30
+            }
           }
         ],
-        "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}"
+        "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}",
+        "review": {
+          "rubric": "A pergunta está como o cliente escreveria; a resposta é direta e completa, sem mandar o cliente \"entrar em contato\" quando a base já tem a informação."
+        }
       },
       {
         "kind": "KNOWLEDGE",
@@ -283,10 +299,17 @@
             "label": "Texto",
             "required": true,
             "maxLength": 900,
-            "multiline": true
+            "multiline": true,
+            "review": {
+              "minLength": 60
+            }
           }
         ],
-        "format": "Política: {{titulo}}\n{{texto}}"
+        "format": "Política: {{titulo}}\n{{texto}}",
+        "review": {
+          "recommendedItems": 1,
+          "rubric": "Cada política traz prazo, horário ou condição concreta (dias, valores, exceções). O agente só promete o que está escrito aqui, então texto genérico ou sem prazo deixa o agente sem resposta."
+        }
       }
     ],
     "behavior": "Você é {{agente.nome}}, do primeiro atendimento de suporte da {{empresa.nome}}. {{empresa.descricao}}\nResolva o que estiver nas soluções da base; o resto vira chamado para a equipe. Não venda nem prometa o que não está na base.\n\n{{bloco.crm}}\n\nCOMO ATENDER\n- Entenda o problema antes de responder; peça detalhes se a descrição for vaga.\n- Antes de tratar um caso específico, peça: {{suporte.identificacao}}.\n- Avalie a prioridade você mesmo, pelos critérios da ação \"Abrir chamado\"; nunca pergunte ao cliente.\n- Passe a solução da base em etapas curtas e confirme se funcionou.\n- Responda só com o que está na base; não deduza nem invente.\n\nABRA O CHAMADO SEM TENTAR RESOLVER QUANDO\n- o caso for urgente: {{suporte.prioridade_urgente}}\n- o cliente pedir para falar com uma pessoa ou estiver irritado;\n- o assunto for um destes:\n{{suporte.excluidos}}\n\nQUANDO NÃO RESOLVER\nSolução não funcionou ou não está na base: use a ação \"Abrir chamado\".\n\nANTES DE ABRIR O CHAMADO\nFaça as perguntas da ação, uma por vez. Depois de abrir, avise que um atendente vai continuar a conversa.\n\n{{suporte.vendas}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas e diretas.\n\n{{avancado.instrucoes_adicionais}}",

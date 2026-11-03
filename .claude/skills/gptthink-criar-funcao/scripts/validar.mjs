@@ -58,6 +58,27 @@ if (input.draft) {
 }
 
 // ---------- estrutura ----------
+// Critério de revisão (opcional): só gera avisos ao cliente. Chave que não vale para o tipo do campo
+// é recusada, e os limites usam as mesmas mensagens do schema da publicação.
+function checkReview(owner, review, { at, id, allowed, maxItems, maxLength, scope }) {
+  if (review === undefined) return;
+  if (review === null || typeof review !== 'object' || Array.isArray(review)) return err(`${at}: review precisa ser um objeto`);
+  for (const key of Object.keys(review))
+    if (!allowed.includes(key)) err(`${at}: review.${key} não vale para ${owner}`);
+  if (review.rubric !== undefined && (typeof review.rubric !== 'string' || review.rubric.trim().length > 500))
+    err(`${at}: review.rubric é um texto de até 500 caracteres`);
+  if (review.minLength !== undefined) {
+    if (!int(review.minLength) || review.minLength < 1) err(`${at}: review.minLength é um inteiro a partir de 1`);
+    else if (int(maxLength) && review.minLength > maxLength)
+      err(`${id}: o mínimo da revisão (${review.minLength}) passa do limite de ${maxLength} caracteres do ${scope}`);
+  }
+  if (review.recommendedItems !== undefined) {
+    if (!int(review.recommendedItems) || review.recommendedItems < 1) err(`${at}: review.recommendedItems é um inteiro a partir de 1`);
+    else if (int(maxItems) && review.recommendedItems > maxItems)
+      err(`${id}: o recomendado de itens da revisão (${review.recommendedItems}) passa do máximo de itens do campo (${maxItems})`);
+  }
+}
+
 function checkField(f, where) {
   const at = `${where} ${f?.id ?? '?'}`;
   if (!KINDS.includes(f?.kind)) return err(`${at}: kind inválido (${f?.kind})`);
@@ -68,11 +89,13 @@ function checkField(f, where) {
   switch (f.kind) {
     case 'TEXT':
       if (!int(f.maxLength) || f.maxLength < 1 || f.maxLength > BEHAVIOR_MAX) err(`${at}: maxLength de 1 a 3000`);
+      checkReview('TEXT', f.review, { at, id: f.id, allowed: ['minLength', 'rubric'], maxLength: f.maxLength, scope: 'campo' });
       break;
     case 'TEXT_LIST':
       if (!int(f.minItems) || !int(f.maxItems) || f.minItems < 0 || f.maxItems < 1 || f.maxItems > 20 || f.minItems > f.maxItems)
         err(`${at}: minItems 0..20, maxItems 1..20, min ≤ max`);
       if (!int(f.itemMaxLength) || f.itemMaxLength < 1 || f.itemMaxLength > 1000) err(`${at}: itemMaxLength de 1 a 1000`);
+      checkReview('TEXT_LIST', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric'], maxItems: f.maxItems });
       break;
     case 'URL':
       if (f.maxLength !== undefined && (!int(f.maxLength) || f.maxLength < 10 || f.maxLength > 2000)) err(`${at}: maxLength de 10 a 2000`);
@@ -123,7 +146,9 @@ function checkField(f, where) {
       for (const s of f.subfields) {
         if (!SIMPLE_ID.test(s.id ?? '')) err(`${at}: subcampo "${s.id}" — minúsculas, números e _`);
         if (!int(s.maxLength) || s.maxLength < 1 || s.maxLength > TRAINING_MAX) err(`${at}.${s.id}: maxLength de 1 a ${TRAINING_MAX}`);
+        checkReview('subcampo', s.review, { at: `${at}.${s.id}`, id: `${f.id}.${s.id}`, allowed: ['minLength'], maxLength: s.maxLength, scope: 'subcampo' });
       }
+      checkReview('KNOWLEDGE', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric'], maxItems: f.maxItems });
       if (!str(f.format, 1, 500)) err(`${at}: format de 1 a 500 caracteres`);
       break;
   }
@@ -474,6 +499,23 @@ try {
   for (const t of texts)
     for (const [, n] of String(t).matchAll(/(?:ação|[Uu]se|[Uu]sar)\s+(?:a ação\s+)?"([^"]+)"/g))
       if (!names.has(n)) warnings.push(`o texto cita a ação "${n}", mas não há intenção com esse name (existentes: ${[...names].join(", ")})`);
+}
+
+// O texto de exemplo (`placeholder`) não pode usar [preencher: …]: esse marcador é da revisão por IA
+// e a publicação do cliente é recusada enquanto ele existir.
+{
+  const PENDING = /\[preencher:[^\]]*\]/i;
+  const walk = (node, where) => {
+    if (Array.isArray(node)) node.forEach((item, i) => walk(item, `${where}[${i}]`));
+    else if (node && typeof node === 'object') {
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'placeholder' && typeof value === 'string' && PENDING.test(value)) {
+          err(`${where}.placeholder usa o marcador [preencher: …], reservado à revisão por IA`);
+        } else walk(value, `${where}.${key}`);
+      }
+    }
+  };
+  walk(draft, 'draft');
 }
 
 for (const w of warnings) console.log(`aviso: ${w}`);

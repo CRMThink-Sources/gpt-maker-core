@@ -35,8 +35,8 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 
 | `kind` | Chaves extras | No comportamento vira | Peso no pior caso |
 |---|---|---|---|
-| `TEXT` | `maxLength` 1–3000, `multiline` (bool), `placeholder` ≤200 | o texto | `maxLength` |
-| `TEXT_LIST` | `minItems` 0–20, `maxItems` 1–20, `itemMaxLength` 1–1000, `placeholder` | linhas `- item` | `maxItems × (itemMaxLength + 3) − 1` |
+| `TEXT` | `maxLength` 1–3000, `multiline` (bool), `placeholder` ≤200, `review` (opcional) | o texto | `maxLength` |
+| `TEXT_LIST` | `minItems` 0–20, `maxItems` 1–20, `itemMaxLength` 1–1000, `placeholder`, `review` (opcional) | linhas `- item` | `maxItems × (itemMaxLength + 3) − 1` |
 | `URL` | `maxLength` 10–2000 (padrão 200) | o link | `maxLength` |
 | `INTEGER` | `min`, `max` | o número | dígitos |
 | `BITRIX_USER` | `multiple` (bool, padrão `false`) | id do usuário (use em `responsibleId`/`userId`); com `multiple: true` o cliente escolhe vários e a ação usa **um de cada vez, em rodízio** | 7 (vários: 20 × 9) |
@@ -46,7 +46,7 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 | `BITRIX_STAGE` | — | use `{{id.categoryId}}` e `{{id.stageId}}` em `UPSERT_DEAL` | — |
 | `CHOICE` | `options` (1–10) | o `snippet` da opção escolhida | o trecho mais longo |
 | `MULTI_CHOICE` | `options` (1–10), `separator` ≤10 (padrão `"\n\n"`) | trechos marcados unidos pelo separador | todos os trechos |
-| `KNOWLEDGE` | `maxItems` 1–50, `subfields` (1–6), `format` 1–500 | **nada**: cada item vira um treinamento | 0 |
+| `KNOWLEDGE` | `maxItems` 1–50, `subfields` (1–6), `format` 1–500, `review` (opcional) | **nada**: cada item vira um treinamento | 0 |
 
 ### Opção (`CHOICE` / `MULTI_CHOICE`)
 
@@ -68,7 +68,32 @@ Todos têm `kind`, `id` (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, sem começar p
 
 ### Subcampo de `KNOWLEDGE`
 
-`{ "id": "pergunta", "label": "Pergunta", "required": true, "maxLength": 200, "multiline": false }`. O `id` segue `^[a-z][a-z0-9_]*$`; o `format` usa `{{pergunta}}` (sem prefixo). Uma linha do `format` cujos subcampos ficaram todos vazios some do treinamento. `format` + soma dos `maxLength` ≤ 1028. Comece o format com um rótulo: `"Pergunta: {{pergunta}}\nResposta: {{resposta}}"`.
+`{ "id": "pergunta", "label": "Pergunta", "required": true, "maxLength": 200, "multiline": false, "review": { "minLength": 30 } }` (`review` é opcional). O `id` segue `^[a-z][a-z0-9_]*$`; o `format` usa `{{pergunta}}` (sem prefixo). Uma linha do `format` cujos subcampos ficaram todos vazios some do treinamento. `format` + soma dos `maxLength` ≤ 1028. Comece o format com um rótulo: `"Pergunta: {{pergunta}}\nResposta: {{resposta}}"`.
+
+### Critério de revisão (`review`)
+
+Opcional em `TEXT`, `TEXT_LIST` e `KNOWLEDGE`, e `{ "minLength" }` em cada subcampo de `KNOWLEDGE`. O app usa o critério para **avisar** o cliente sobre o preenchimento (nunca bloqueia a publicação) e, na revisão por IA, como roteiro de avaliação. Não entra no comportamento nem no orçamento de 3000 caracteres.
+
+| Chave | Vale em | O que faz |
+|---|---|---|
+| `recommendedItems` (1 até `maxItems`) | `TEXT_LIST`, `KNOWLEDGE` | menos itens que isso, inclusive nenhum, gera o aviso "poucos itens" |
+| `minLength` (1 até o `maxLength`) | `TEXT`, subcampo de `KNOWLEDGE` | texto menor que isso gera a dica "texto curto" |
+| `rubric` (até 500 caracteres) | `TEXT`, `TEXT_LIST`, `KNOWLEDGE` | o que um bom preenchimento tem; lido só pela revisão por IA |
+
+Chave que não vale para o tipo do campo é recusada (um `recommendedItems` num `TEXT` não some em silêncio). **Campo vazio só avisa quando há `recommendedItems`**: uma FAQ opcional sem `review` não gera aviso por estar vazia. Sem `review`, valem só as regras genéricas: texto igual ao exemplo (`placeholder`), itens repetidos, texto perto do limite e mapeamento repetido do SPA.
+
+```json
+{
+  "kind": "KNOWLEDGE", "id": "base.problemas", "label": "Problemas comuns", "required": false, "maxItems": 20,
+  "review": { "recommendedItems": 3, "rubric": "A solução vem em passos numerados que o cliente consegue seguir sozinho; diz quando abrir um chamado." },
+  "subfields": [
+    { "id": "problema", "label": "Problema", "required": true, "maxLength": 150 },
+    { "id": "solucao", "label": "Solução", "required": true, "maxLength": 850, "multiline": true, "review": { "minLength": 80 } }
+  ],
+  "format": "Problema: {{problema}}
+Solução: {{solucao}}"
+}
+```
 
 ## Intenções
 
