@@ -44,7 +44,7 @@ describe('loadEnv', () => {
     expect(loadEnv(base)).toMatchObject({
       VIBECODE_BASE_URL: 'https://vibecode.bitrix24.com',
       VIBECODE_REVIEW_MODEL: 'bitrix/bitrixgpt-5.5',
-      VIBECODE_PLATFORM_RPM: 20,
+      VIBECODE_PLATFORM_RPM: 200,
       VIBECODE_TIMEOUT_MS: 60_000,
       REVIEW_CREDITS_PER_FIELD: 2,
     });
