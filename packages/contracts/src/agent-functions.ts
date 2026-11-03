@@ -506,7 +506,9 @@ export const blockCodeSchema = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minús
 export const functionTemplateDraftSchema = functionTemplateContentSchema.extend({
   blocks: z.array(blockCodeSchema).max(10).default([]),
 });
-export type FunctionTemplateDraft = z.output<typeof functionTemplateDraftSchema>;
+/** `assist` é opcional: rascunhos salvos antes da ajuda da IA não o têm (o padrão é desligado). */
+export type FunctionTemplateDraft = Omit<z.output<typeof functionTemplateDraftSchema>, 'assist'> &
+  Partial<Pick<z.output<typeof functionTemplateDraftSchema>, 'assist'>>;
 export type FunctionTemplateDraftInput = z.input<typeof functionTemplateDraftSchema>;
 
 type ChoiceField = Extract<FunctionField, { kind: 'CHOICE' | 'MULTI_CHOICE' }>;
