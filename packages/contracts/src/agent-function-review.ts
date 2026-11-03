@@ -3,10 +3,10 @@ import {
   type FunctionAnswers,
   type KnowledgeItem,
   bitrixSpaValueSchema,
+  findPlaceholders,
   knowledgeItemSchema,
   visibleFields,
 } from './agent-function-answers';
-import { findPlaceholders } from './agent-function-placeholders';
 import type { FunctionField, FunctionTemplateContent } from './agent-functions';
 
 /**
