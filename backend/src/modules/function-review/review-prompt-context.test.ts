@@ -255,3 +255,60 @@ describe('regras contra sugestão inútil', () => {
     expect(system).toContain('aponte o problema e não sugira texto');
   });
 });
+
+describe('falsos positivos vistos no teste local', () => {
+  const texto = functionFieldSchema.parse({
+    kind: 'TEXT',
+    id: 'suporte.normal',
+    label: 'Quando o chamado é de prioridade NORMAL',
+    required: true,
+    maxLength: 55,
+  }) as Extract<FunctionField, { kind: 'TEXT' }>;
+  const others = [
+    { fieldId: 'base.faq', label: 'Perguntas frequentes', titles: ['Prazo de troca'] },
+  ];
+
+  it('os títulos dos outros campos de base só vão no pedido de um campo de base', () => {
+    const base = text(fieldMessages(field, items, { ...ctx, otherTitles: others }), 'user');
+    expect(base).toContain('<outros>');
+    const simples = text(
+      fieldMessages(texto, [{ index: 0, values: { text: 'Erro com alternativa.' } }], {
+        ...ctx,
+        otherTitles: others,
+      }),
+      'user',
+    );
+    expect(simples).not.toContain('<outros>');
+    expect(simples).not.toContain('Prazo de troca');
+  });
+
+  it('sugestão que é só um marcador não é entregue, mas o problema continua', () => {
+    const result = toFieldResult(texto, [{ index: 0, values: { text: 'Função parou.' } }], {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [{ category: 'ambiguous', severity: 'polish', text: 'Igual ao exemplo.' }],
+          suggestion: { text: '[preencher: critério para prioridade alta]' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.problems).toHaveLength(1);
+    expect(result.items[0]!.suggestion).toBeUndefined();
+  });
+
+  it('marcador dentro de uma frase com o texto do cliente é entregue', () => {
+    const result = toFieldResult(texto, [{ index: 0, values: { text: 'Função parou.' } }], {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [{ category: 'incomplete', severity: 'blocks', text: 'Falta o critério.' }],
+          suggestion: { text: 'Função parou para [preencher: quantos usuários].' },
+        },
+      ],
+    });
+    expect(result.items[0]!.suggestion!.values.text).toContain('Função parou');
+  });
+});

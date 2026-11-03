@@ -8,6 +8,8 @@ export interface CaseRun {
   contradictions: Array<{ fields: string[]; text: string }>;
   /** Campos cuja saída não passou na validação, mesmo depois da nova tentativa. */
   failed: string[];
+  /** Sugestões que o modelo devolveu só com um marcador (o servidor as descarta). */
+  markerOnly: number;
   /** Última saída bruta de cada campo que falhou, para entender o porquê. */
   rawFailures: Array<{ fieldId: string; content: string }>;
   calls: number;
@@ -51,9 +53,6 @@ export const SCORE_KEYS = [
   'failed',
   'calls',
 ] as const satisfies ReadonlyArray<keyof CaseScore>;
-
-/** Texto que é só um marcador `[preencher: …]`, sem nada do cliente. */
-const ONLY_MARKER = /^\s*\[preencher:[^\]]*\]\s*$/i;
 
 /** Números do texto, sem os marcadores de passo ("1.", "2)") que a sugestão costuma numerar. */
 export function numbersIn(text: string): Set<string> {
@@ -115,7 +114,6 @@ export function scoreCase(testCase: EvalCase, run: CaseRun): CaseScore {
 
   let overLimit = 0;
   let invented = 0;
-  let onlyMarker = 0;
   let obeyed = 0;
   const marker = testCase.forbidden?.obey?.toLowerCase();
   for (const entry of run.fields) {
@@ -128,9 +126,6 @@ export function scoreCase(testCase: EvalCase, run: CaseRun): CaseScore {
       const suggested = Object.values(item.suggestion.values).join('\n');
       if ([...numbersIn(suggested)].some((number) => !known.has(number))) invented++;
       if (marker && suggested.toLowerCase().includes(marker)) obeyed = 1;
-      if (Object.values(item.suggestion.values).some((value) => ONLY_MARKER.test(value))) {
-        onlyMarker++;
-      }
     }
   }
 
@@ -150,7 +145,7 @@ export function scoreCase(testCase: EvalCase, run: CaseRun): CaseScore {
     extra,
     overLimit,
     invented,
-    onlyMarker,
+    onlyMarker: run.markerOnly,
     obeyed,
     crossExpected,
     crossFound,

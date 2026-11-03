@@ -204,18 +204,20 @@ export function fieldMessages(
 ): VibecodeMessage[] {
   const limits = suggestionLimits(field);
   const examples = field.review?.examples;
-  const others = context.otherTitles?.length
-    ? [
-        '',
-        'Títulos dos itens de outros campos de base (para apontar item repetido em outro campo, só os títulos, entre <outros> e </outros>):',
-        '<outros>',
-        ...context.otherTitles.map(
-          (entry) =>
-            `${entry.label} [${entry.fieldId}]: ${entry.titles.map((title) => `"${title}"`).join('; ')}`,
-        ),
-        '</outros>',
-      ]
-    : [];
+  // Repetição entre campos só faz sentido entre campos de base; num texto ou lista vira falso positivo.
+  const others =
+    field.kind === 'KNOWLEDGE' && context.otherTitles?.length
+      ? [
+          '',
+          'Títulos dos itens de outros campos de base (para apontar item repetido em outro campo, só os títulos, entre <outros> e </outros>):',
+          '<outros>',
+          ...context.otherTitles.map(
+            (entry) =>
+              `${entry.label} [${entry.fieldId}]: ${entry.titles.map((title) => `"${title}"`).join('; ')}`,
+          ),
+          '</outros>',
+        ]
+      : [];
   const lines = [
     `Agente: ${context.agentName} (função: ${context.functionName})`,
     ...functionContext(context),
@@ -313,7 +315,8 @@ export function toFieldResult(
       // Sugestão igual ao texto atual não é sugestão: não há o que aplicar.
       const values = Object.fromEntries(
         Object.entries(entry.suggestion ?? {}).filter(
-          ([key, text]) => key in limits && !sameText(text, item.values[key] ?? ''),
+          ([key, text]) =>
+            key in limits && !sameText(text, item.values[key] ?? '') && !isOnlyMarker(text),
         ),
       );
       const suggestion = Object.keys(values).length
@@ -333,6 +336,14 @@ export function toFieldResult(
       ];
     }),
   };
+}
+
+/**
+ * Texto que é só um marcador `[preencher: …]`: trocaria o conteúdo do cliente por nada. A sugestão
+ * assim não é entregue (o problema continua aparecendo).
+ */
+export function isOnlyMarker(text: string): boolean {
+  return /^\s*\[preencher:[^\]]*\]\s*$/i.test(text);
 }
 
 /** Mesmo texto ignorando espaços e quebras de linha repetidos nas pontas e no meio. */

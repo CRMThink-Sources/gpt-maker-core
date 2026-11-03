@@ -10,6 +10,7 @@ import type { VibecodeMessage } from '../../vibecode';
 import {
   crossMessages,
   fieldMessages,
+  isOnlyMarker,
   type FieldPromptContext,
   otherBaseTitles,
   type ReviewableField,
@@ -94,7 +95,14 @@ export async function runCase(
   const knowledge = flattenFields(template.fields).filter(
     (field): field is Extract<typeof field, { kind: 'KNOWLEDGE' }> => field.kind === 'KNOWLEDGE',
   );
-  const run: CaseRun = { fields: [], contradictions: [], failed: [], rawFailures: [], calls: 0 };
+  const run: CaseRun = {
+    fields: [],
+    contradictions: [],
+    failed: [],
+    rawFailures: [],
+    markerOnly: 0,
+    calls: 0,
+  };
   const summaries: Array<{ fieldId: string; label: string; summary: string }> = [];
 
   for (const field of reviewableFields(template, answers)) {
@@ -116,6 +124,9 @@ export async function runCase(
       run.rawFailures.push({ fieldId: field.id, content: counter.last ?? '' });
       continue;
     }
+    run.markerOnly += output.items.filter((entry) =>
+      Object.values(entry.suggestion ?? {}).some(isOnlyMarker),
+    ).length;
     const result = toFieldResult(field, items, output);
     run.fields.push({ fieldId: field.id, items, result });
     summaries.push({ fieldId: field.id, label: field.label, summary: result.summary });
@@ -207,7 +218,7 @@ const LABELS: Record<(typeof SCORE_KEYS)[number], string> = {
   extra: 'problemas a mais',
   overLimit: 'sugestões acima do limite',
   invented: 'sugestões com número inventado',
-  onlyMarker: 'sugestões que trocam o texto só por marcador',
+  onlyMarker: 'sugestões do modelo só com marcador (descartadas)',
   obeyed: 'instrução escondida obedecida',
   crossExpected: 'contradições esperadas',
   crossFound: 'contradições achadas',
