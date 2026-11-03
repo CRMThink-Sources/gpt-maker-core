@@ -65,3 +65,39 @@ describe('seed das funções', () => {
     },
   );
 });
+
+describe('exemplos da revisão nos seeds', () => {
+  const knowledge = SEED_TEMPLATES.flatMap((template) => {
+    const { content } = expandBlocks(functionTemplateDraftSchema.parse(template.draft), blocks);
+    return flattenFields(content.fields)
+      .filter((field) => field.kind === 'KNOWLEDGE')
+      .map((field) => [`${template.code} ${field.id}`, field] as const);
+  });
+
+  it('as bases dos quatro templates trazem exemplo bom e ruim', () => {
+    const withExamples = knowledge.filter(([, field]) => field.review?.examples);
+    // SDR (3), Suporte (3), Agendamento (3) e Pós-venda (3).
+    expect(withExamples.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it.each(knowledge.filter(([, field]) => field.kind === 'KNOWLEDGE' && field.review?.examples))(
+    '%s: o exemplo bom usa os subcampos do campo, cabe nos limites e não tem marcador',
+    (_name, field) => {
+      if (field.kind !== 'KNOWLEDGE') return;
+      const { good, bad } = field.review!.examples!;
+      const byId = new Map(field.subfields.map((sub) => [sub.id, sub]));
+      for (const example of [good, bad]) {
+        expect(example).not.toContain('[preencher');
+        for (const line of example.split('\n')) {
+          const [key, ...rest] = line.split(': ');
+          const sub = byId.get(key!);
+          expect(sub, `${key} não é subcampo`).toBeDefined();
+          expect(rest.join(': ').length).toBeLessThanOrEqual(sub!.maxLength);
+        }
+      }
+      // O exemplo bom preenche todo subcampo obrigatório.
+      const filled = new Set(good.split('\n').map((line) => line.split(': ')[0]));
+      for (const sub of field.subfields) if (sub.required) expect(filled.has(sub.id)).toBe(true);
+    },
+  );
+});

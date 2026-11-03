@@ -191,6 +191,10 @@ export const POST_SALES: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Troca, devolução, garantia e prazos com números (dias, condições) e exceções. O agente só promete o que está escrito aqui.',
+          examples: {
+            good: 'titulo: Garantia\ntexto: 12 meses contra defeito de fabricação, contados da data da nota fiscal. Não cobre mau uso nem desgaste natural. Para acionar, o cliente envia o número do pedido e uma foto do defeito.',
+            bad: 'titulo: Garantia\ntexto: Todos os produtos têm garantia.',
+          },
         },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
@@ -216,6 +220,10 @@ export const POST_SALES: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Passo a passo numerado de ativação, montagem ou acesso, na ordem em que o cliente faz, com o que ele precisa ter em mãos.',
+          examples: {
+            good: 'titulo: Ativar o aparelho\ntexto: 1. Ligue na tomada e aguarde a luz azul. 2. Baixe o app e crie sua conta. 3. Toque em "Adicionar aparelho" e siga as instruções na tela. Tenha a nota fiscal e o Wi-Fi em mãos.',
+            bad: 'titulo: Ativação\ntexto: Siga o manual.',
+          },
         },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
@@ -239,6 +247,10 @@ export const POST_SALES: SeedTemplate = {
         review: {
           rubric:
             'A pergunta está como o cliente escreveria; a resposta é direta e completa e cabe em poucas frases.',
+          examples: {
+            good: 'pergunta: Onde acompanho a entrega do meu pedido?\nresposta: Pelo link de rastreio enviado por e-mail e WhatsApp quando o pedido sai. O prazo previsto aparece na mesma página.',
+            bad: 'pergunta: Entrega\nresposta: Acompanhe pelo site.',
+          },
         },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },

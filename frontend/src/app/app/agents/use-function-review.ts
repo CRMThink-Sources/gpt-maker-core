@@ -126,7 +126,10 @@ export function useFunctionReview(api: Api, base: string, options: { busyDelayMs
       try {
         const review = await api<CreateReviewResult>(`${base}/function/review`, {
           method: 'POST',
-          body: JSON.stringify({ fieldIds, ...(withGaps ? { withGaps: true } : {}) }),
+          body: JSON.stringify({
+            fieldIds,
+            ...(withGaps ? { withGaps: true, expectation: expectation!.trim() } : {}),
+          }),
         });
         const summaries: Array<{ fieldId: string; summary: string }> = [];
         const queue = [...fieldIds];

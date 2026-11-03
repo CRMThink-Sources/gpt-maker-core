@@ -138,7 +138,11 @@ describe('cobertura da base (3.2)', () => {
     const { api, bodies, calls } = gapsApi();
     const { result: hook } = renderHook(() => useFunctionReview(api, BASE));
     await act(() => hook.current.run(['f1', 'f2'], answers, `  ${EXPECTATION}  `));
-    expect(bodies.review).toMatchObject({ withGaps: true });
+    expect(bodies.review).toEqual({
+      fieldIds: ['f1', 'f2'],
+      withGaps: true,
+      expectation: EXPECTATION,
+    });
     expect(calls().at(-1)).toMatch(/\/gaps$/);
     expect(bodies.gaps).toMatchObject({ expectation: EXPECTATION });
     expect((bodies.gaps as { summaries: unknown[] }).summaries).toHaveLength(2);

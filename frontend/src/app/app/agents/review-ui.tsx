@@ -9,8 +9,14 @@ import type {
   FunctionTemplateContent,
   ReviewFieldResult,
   ReviewGap,
+  ReviewProblem,
 } from '@gptmaker/contracts';
-import { EXPECTATION_MAX, EXPECTATION_MIN, flattenFields } from '@gptmaker/contracts';
+import {
+  EXPECTATION_MAX,
+  EXPECTATION_MIN,
+  flattenFields,
+  REVIEW_CATEGORY_LABELS,
+} from '@gptmaker/contracts';
 import Link from 'next/link';
 import { createContext, useContext, useState } from 'react';
 import { Alert, buttonClass, Card } from '@/components/ui';
@@ -20,10 +26,13 @@ import {
   canApply,
   expectationValid,
   GAP_REASONS,
+  impactMessage,
   reviewableIds,
   reviewCost,
+  reviewImpact,
   sortedWarnings,
   topLevelIds,
+  visibleProblems,
   WARNINGS_PER_FIELD,
   withSuggestion,
 } from './review-logic';
@@ -195,12 +204,7 @@ function AiResult({
           {state.result.items.map((item) => (
             <li key={item.index} className="text-xs text-zinc-700">
               <span className="font-medium">Item {item.index + 1}</span>
-              {!state.applied?.includes(item.index) &&
-                item.problems.map((problem, i) => (
-                  <p key={i} className="mt-0.5">
-                    • {problem.text}
-                  </p>
-                ))}
+              {!state.applied?.includes(item.index) && <Problems problems={item.problems} />}
               <Suggestion
                 applied={state.applied?.includes(item.index) ?? false}
                 review={review}
@@ -214,6 +218,36 @@ function AiResult({
         </ul>
       )}
     </div>
+  );
+}
+
+/** Problemas de um item: os que atrapalham primeiro; com muitos, as melhorias ficam recolhidas. */
+function Problems({ problems }: { problems: ReviewProblem[] }) {
+  const [open, setOpen] = useState(false);
+  const { shown, hidden } = visibleProblems(problems);
+  const line = (problem: ReviewProblem, i: number) => (
+    <p key={i} className="mt-0.5">
+      • <span className="text-zinc-500">{REVIEW_CATEGORY_LABELS[problem.category]}:</span>{' '}
+      {problem.text}
+    </p>
+  );
+  return (
+    <>
+      {shown.map(line)}
+      {hidden.length > 0 &&
+        (open ? (
+          hidden.map(line)
+        ) : (
+          <button
+            type="button"
+            className="mt-0.5 font-medium underline"
+            onClick={() => setOpen(true)}
+          >
+            ver mais {hidden.length}{' '}
+            {hidden.length === 1 ? 'sugestão de melhoria' : 'sugestões de melhoria'}
+          </button>
+        ))}
+    </>
   );
 }
 
@@ -323,6 +357,13 @@ export function ReviewPanel({
     .filter(([, entry]) => entry.status === 'error')
     .map(([id]) => id);
   const retryCost = reviewCost(aiKey.creditsPerField, failed.length, aiKey.configured);
+  const impact = impactMessage(
+    reviewImpact(
+      Object.values(state.fields).flatMap((entry) =>
+        entry.status === 'done' ? [entry.result] : [],
+      ),
+    ),
+  );
   return (
     <Card className="space-y-3 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -383,6 +424,7 @@ export function ReviewPanel({
           Preencha algum campo de texto ou da base para revisar.
         </p>
       )}
+      {impact && !running && <p className="text-sm text-zinc-700">{impact}.</p>}
       {failed.length > 0 && !running && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
           <span>

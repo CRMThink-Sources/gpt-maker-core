@@ -93,7 +93,20 @@ describe('resultado da IA no campo (6.5, 6.6)', () => {
         result: {
           fieldId: 'base.itens',
           summary: 'x',
-          items: [{ index: 0, problems: [{ code: 'curto', text: 'Muito vago.' }], suggestion }],
+          items: [
+            {
+              index: 0,
+              problems: [
+                {
+                  code: 'incomplete',
+                  category: 'incomplete',
+                  severity: 'polish',
+                  text: 'Muito vago.',
+                },
+              ],
+              suggestion,
+            },
+          ],
         },
       },
     },
@@ -489,5 +502,101 @@ describe('campos que falharam (staging: muitas revisões ao mesmo tempo)', () =>
     };
     render(<Harness initial={{ 'base.itens': ['a'] }} ai={noCredit} />);
     expect(screen.queryByRole('button', { name: 'tentar de novo' })).toBeNull();
+  });
+});
+
+describe('problemas com categoria e gravidade', () => {
+  const problem = (text: string, severity: 'blocks' | 'polish', category = 'ambiguous') => ({
+    code: category,
+    category: category as never,
+    severity,
+    text,
+  });
+  const withProblems = (problems: ReturnType<typeof problem>[], key: string): Ai => ({
+    busy: false,
+    onRerun: vi.fn(),
+    onApplied: vi.fn(),
+    fields: {
+      'base.itens': {
+        status: 'done',
+        answerKey: key,
+        result: { fieldId: 'base.itens', summary: 'x', items: [{ index: 0, problems }] },
+      },
+    },
+  });
+  const initial = { 'base.itens': ['a', 'b', 'c'] };
+  const key = answerKey(initial['base.itens']);
+
+  it('mostra a categoria em português e o que atrapalha antes da melhoria', () => {
+    const ai = withProblems(
+      [
+        problem('Redação seca.', 'polish', 'other'),
+        problem('Falta o prazo.', 'blocks', 'missing_term'),
+      ],
+      key,
+    );
+    render(<Harness initial={initial} ai={ai} />);
+    const lines = screen.getAllByText(/Falta o prazo\.|Redação seca\./).map((el) => el.textContent);
+    expect(lines[0]).toContain('Sem prazo ou condição: Falta o prazo.');
+    expect(lines[1]).toContain('Outro: Redação seca.');
+  });
+
+  it('com mais de 3 problemas recolhe as melhorias atrás de "ver mais"', () => {
+    const ai = withProblems(
+      [
+        problem('Grave.', 'blocks'),
+        ...Array.from({ length: 4 }, (_, i) => problem(`Leve ${i}.`, 'polish')),
+      ],
+      key,
+    );
+    render(<Harness initial={initial} ai={ai} />);
+    expect(screen.getByText(/Grave\./)).toBeTruthy();
+    expect(screen.queryByText(/Leve 0\./)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'ver mais 4 sugestões de melhoria' }));
+    expect(screen.getByText(/Leve 0\./)).toBeTruthy();
+    expect(screen.getByText(/Leve 3\./)).toBeTruthy();
+  });
+
+  it('o painel resume quantos itens atrapalham e quantos têm melhorias', () => {
+    const done = (items: Array<{ index: number; problems: ReturnType<typeof problem>[] }>) => ({
+      status: 'done' as const,
+      answerKey: 'k',
+      result: { fieldId: 'f', summary: 'x', items },
+    });
+    const state: ReviewState = {
+      fields: {
+        'base.itens': done([
+          { index: 0, problems: [problem('a', 'blocks')] },
+          { index: 1, problems: [problem('b', 'polish')] },
+        ]),
+        'empresa.desc': done([{ index: 0, problems: [problem('c', 'polish')] }]),
+      },
+      gaps: { status: 'idle' },
+      contradictions: [],
+      cross: 'idle',
+      error: null,
+    };
+    render(
+      <ReviewPanel
+        form={form}
+        answers={{ 'base.itens': ['a'], 'empresa.desc': 'Vendemos roupas.' }}
+        aiKey={{
+          configured: false,
+          last4: null,
+          verifiedAt: null,
+          creditsPerField: 2,
+          platformAvailable: true,
+        }}
+        state={state}
+        running={false}
+        canConfigureKey
+        expectation=""
+        onExpectation={() => undefined}
+        onAddGap={() => undefined}
+        onRetryFailed={() => undefined}
+        onReview={() => undefined}
+      />,
+    );
+    expect(screen.getByText('1 item atrapalha o agente e 2 têm melhorias.')).toBeTruthy();
   });
 });

@@ -175,6 +175,10 @@ export const SDR: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Cada item diz o que é, para quem serve e o diferencial, sem prometer preço ou prazo que a empresa não confirmou.',
+          examples: {
+            good: 'nome: Plano Profissional\ndescricao: Sistema de agendamento para clínicas de pequeno e médio porte. Reduz faltas com lembretes automáticos por WhatsApp e integra com a agenda do profissional. Valores e condições são passados pelo time comercial.',
+            bad: 'nome: Produto\ndescricao: A melhor solução do mercado, com preço imperdível.',
+          },
         },
         subfields: [
           { id: 'nome', label: 'Nome', required: true, maxLength: 60 },
@@ -198,6 +202,10 @@ export const SDR: SeedTemplate = {
         review: {
           rubric:
             'A objeção está como o cliente diria; a resposta reconhece a dúvida, responde com um fato e convida ao próximo passo, sem pressionar.',
+          examples: {
+            good: 'objecao: Está caro para o meu momento\nresposta: Entendo, o investimento pesa mesmo. Muitos clientes recuperam o valor nos primeiros meses ao reduzir faltas e retrabalho. Posso te mostrar como isso funciona no seu caso numa conversa rápida?',
+            bad: 'objecao: Caro\nresposta: Não é caro, é o melhor custo-benefício. Feche hoje.',
+          },
         },
         subfields: [
           { id: 'objecao', label: 'Objeção', required: true, maxLength: 150 },
@@ -221,6 +229,10 @@ export const SDR: SeedTemplate = {
         review: {
           rubric:
             'A pergunta está como o cliente escreveria; a resposta é direta, completa e cabe em poucas frases.',
+          examples: {
+            good: 'pergunta: Vocês atendem empresas de fora do estado?\nresposta: Sim, atendemos todo o Brasil. A implantação e o suporte são feitos online, sem precisar de visita presencial.',
+            bad: 'pergunta: Atendimento\nresposta: Sim.',
+          },
         },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },

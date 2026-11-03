@@ -185,6 +185,10 @@ export const SUPPORT: SeedTemplate = {
           recommendedItems: 3,
           rubric:
             'O problema está como o cliente descreve; a solução vem em passos numerados que ele consegue seguir sozinho e diz quando abrir um chamado ou falar com um atendente. Cada item trata de um problema só.',
+          examples: {
+            good: 'problema: Não consigo entrar na minha conta\nsolucao: 1. Toque em "Esqueci a senha". 2. Digite o e-mail do cadastro. 3. Abra o e-mail e use o link em até 30 minutos. Se o e-mail não chegar em 10 minutos ou o erro continuar, abra um chamado.',
+            bad: 'problema: Login\nsolucao: Reinicie e tente de novo.',
+          },
         },
         subfields: [
           { id: 'problema', label: 'Problema', required: true, maxLength: 150 },
@@ -208,6 +212,10 @@ export const SUPPORT: SeedTemplate = {
         review: {
           rubric:
             'A pergunta está como o cliente escreveria; a resposta é direta e completa, sem mandar o cliente "entrar em contato" quando a base já tem a informação.',
+          examples: {
+            good: 'pergunta: Quanto tempo leva para eu receber resposta do suporte?\nresposta: Respondemos em até 4 horas úteis, de segunda a sexta, das 9h às 18h. Fora desse horário, a resposta vem no próximo dia útil.',
+            bad: 'pergunta: Prazo\nresposta: Entre em contato com a gente para saber.',
+          },
         },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
@@ -233,6 +241,10 @@ export const SUPPORT: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Cada política traz prazo, horário ou condição concreta (dias, valores, exceções). O agente só promete o que está escrito aqui, então texto genérico ou sem prazo deixa o agente sem resposta.',
+          examples: {
+            good: 'titulo: Troca e devolução\ntexto: Aceitamos troca ou devolução em até 7 dias corridos após o recebimento, com o produto sem uso e na embalagem original. O frete da devolução é por nossa conta em caso de defeito. Reembolso em até 10 dias úteis após recebermos o produto.',
+            bad: 'titulo: Trocas\ntexto: Aceitamos trocas conforme a política da empresa.',
+          },
         },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },

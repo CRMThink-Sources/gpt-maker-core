@@ -229,4 +229,30 @@ describe('critério de revisão (review) na skill', () => {
     expect(result.ok).toBe(false);
     expect(result.output).toContain('review.rubric é um texto de até 500 caracteres');
   });
+
+  it('examples válidos: os dois aceitam', () => {
+    const draft = patched('base.produtos', {
+      review: { examples: { good: 'nome: Plano\ndescricao: Bom.', bad: 'nome: X' } },
+    });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
+    expect(validate(draft).ok).toBe(true);
+  });
+
+  it('examples malformados: os dois recusam', () => {
+    const cases: Array<[unknown, string]> = [
+      [{ good: 'só o bom' }, 'review.examples.bad é um texto de 1 a 400 caracteres'],
+      [
+        { good: 'x'.repeat(401), bad: 'y' },
+        'review.examples.good é um texto de 1 a 400 caracteres',
+      ],
+      [{ good: 'a', bad: 'b', extra: 'c' }, 'review.examples.extra não existe'],
+    ];
+    for (const [examples, message] of cases) {
+      const draft = patched('base.produtos', { review: { examples } });
+      expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(false);
+      const result = validate(draft);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain(message);
+    }
+  });
 });

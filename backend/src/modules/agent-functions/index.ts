@@ -8,3 +8,4 @@ export {
   type PublishedFunction,
   type PublishOutcome,
 } from './function-catalog.service';
+export { SEED_BLOCKS, SEED_TEMPLATES } from './seed';
