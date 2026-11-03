@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findPlaceholders } from './agent-function-placeholders';
 import type { FunctionField, FunctionTemplateContent } from './agent-functions';
 import { TRAINING_TEXT_MAX } from './trainings';
 
@@ -318,5 +319,18 @@ export function validateFunctionAnswers(
     }
   };
   visit(content.fields);
+  // Rascunho aceita; publicar e criar o agente não: o marcador viraria texto do agente.
+  if (!options.partial) {
+    for (const where of findPlaceholders(content, answers)) {
+      const at =
+        where.item === undefined
+          ? ''
+          : `[${where.item}]${where.subfield ? `.${where.subfield}` : ''}`;
+      issues.push({
+        field: `${where.field}${at}`,
+        message: 'ainda tem um trecho [preencher: …] sem preencher',
+      });
+    }
+  }
   return { answers, issues };
 }

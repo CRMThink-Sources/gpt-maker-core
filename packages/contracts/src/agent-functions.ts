@@ -59,6 +59,27 @@ export const functionOptionEffectsSchema = z.object({
   settings: agentSettingsSchema.optional(),
 });
 
+/**
+ * Critério da revisão das respostas (spec agent-knowledge-review): só gera avisos, nunca bloqueia.
+ * Não entra no comportamento nem no orçamento de caracteres.
+ */
+export interface FunctionTextReview {
+  /** Texto abaixo disso gera o aviso "texto curto". */
+  minLength?: number;
+  /** O que um bom preenchimento tem; lido só pela revisão por IA. */
+  rubric?: string;
+}
+
+export interface FunctionListReview {
+  /** Menos itens que isso (inclusive nenhum) gera o aviso "poucos itens". */
+  recommendedItems?: number;
+  rubric?: string;
+}
+
+export interface FunctionSubfieldReview {
+  minLength?: number;
+}
+
 export type FunctionField =
   | {
       kind: 'TEXT';
@@ -69,6 +90,7 @@ export type FunctionField =
       maxLength: number;
       multiline: boolean;
       placeholder?: string;
+      review?: FunctionTextReview;
     }
   | {
       kind: 'TEXT_LIST';
@@ -80,6 +102,7 @@ export type FunctionField =
       maxItems: number;
       itemMaxLength: number;
       placeholder?: string;
+      review?: FunctionListReview;
     }
   | { kind: 'URL'; id: string; label: string; help?: string; required: boolean; maxLength: number }
   | {
@@ -144,6 +167,7 @@ export type FunctionField =
       subfields: FunctionKnowledgeSubfield[];
       /** Texto do treinamento de cada item, com `{{subcampo}}`. */
       format: string;
+      review?: FunctionListReview;
     };
 
 export interface FunctionOption {
@@ -173,10 +197,24 @@ export interface FunctionKnowledgeSubfield {
   required: boolean;
   maxLength: number;
   multiline: boolean;
+  review?: FunctionSubfieldReview;
 }
 
 const optionValue = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minúsculas, números e _');
 const subfieldId = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minúsculas, números e _');
+
+/** Chave desconhecida é erro: um `recommendedItems` num campo de texto não pode sumir em silêncio. */
+const reviewMinLength = z.number().int().min(1);
+const reviewRubric = z.string().trim().max(500);
+const reviewTextSchema = z.strictObject({
+  minLength: reviewMinLength.optional(),
+  rubric: reviewRubric.optional(),
+});
+const reviewListSchema = z.strictObject({
+  recommendedItems: z.number().int().min(1).optional(),
+  rubric: reviewRubric.optional(),
+});
+const reviewSubfieldSchema = z.strictObject({ minLength: reviewMinLength.optional() });
 
 const knowledgeSubfieldSchema = z.object({
   id: subfieldId,
@@ -184,6 +222,7 @@ const knowledgeSubfieldSchema = z.object({
   required: z.boolean(),
   maxLength: z.number().int().min(1).max(TRAINING_TEXT_MAX),
   multiline: z.boolean().default(false),
+  review: reviewSubfieldSchema.optional(),
 });
 
 const base = { id: fieldId, label, help, required: z.boolean() };
@@ -222,13 +261,24 @@ const options = z
 
 export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
   z.discriminatedUnion('kind', [
-    z.object({
-      kind: z.literal('TEXT'),
-      ...base,
-      maxLength: z.number().int().min(1).max(FUNCTION_BEHAVIOR_MAX),
-      multiline: z.boolean().default(false),
-      placeholder: z.string().max(200).optional(),
-    }),
+    z
+      .object({
+        kind: z.literal('TEXT'),
+        ...base,
+        maxLength: z.number().int().min(1).max(FUNCTION_BEHAVIOR_MAX),
+        multiline: z.boolean().default(false),
+        placeholder: z.string().max(200).optional(),
+        review: reviewTextSchema.optional(),
+      })
+      .superRefine((field, ctx) => {
+        if (field.review?.minLength !== undefined && field.review.minLength > field.maxLength) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['review', 'minLength'],
+            message: `${field.id}: o mínimo da revisão (${field.review.minLength}) passa do limite de ${field.maxLength} caracteres do campo`,
+          });
+        }
+      }),
     z
       .object({
         kind: z.literal('TEXT_LIST'),
@@ -237,8 +287,21 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
         maxItems: z.number().int().min(1).max(20),
         itemMaxLength: z.number().int().min(1).max(1000),
         placeholder: z.string().max(200).optional(),
+        review: reviewListSchema.optional(),
       })
-      .refine((field) => field.minItems <= field.maxItems, 'minItems maior que maxItems'),
+      .refine((field) => field.minItems <= field.maxItems, 'minItems maior que maxItems')
+      .superRefine((field, ctx) => {
+        if (
+          field.review?.recommendedItems !== undefined &&
+          field.review.recommendedItems > field.maxItems
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['review', 'recommendedItems'],
+            message: `${field.id}: o recomendado de itens da revisão (${field.review.recommendedItems}) passa do máximo de itens do campo (${field.maxItems})`,
+          });
+        }
+      }),
     z.object({
       kind: z.literal('URL'),
       ...base,
@@ -272,13 +335,39 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
       /** Entre os trechos das opções marcadas: linha em branco (seções) ou ', ' (itens). */
       separator: z.string().max(10).default('\n\n'),
     }),
-    z.object({
-      kind: z.literal('KNOWLEDGE'),
-      ...base,
-      maxItems: z.number().int().min(1).max(50),
-      subfields: z.array(knowledgeSubfieldSchema).min(1).max(6),
-      format: z.string().min(1).max(500),
-    }),
+    z
+      .object({
+        kind: z.literal('KNOWLEDGE'),
+        ...base,
+        maxItems: z.number().int().min(1).max(50),
+        subfields: z.array(knowledgeSubfieldSchema).min(1).max(6),
+        format: z.string().min(1).max(500),
+        review: reviewListSchema.optional(),
+      })
+      .superRefine((field, ctx) => {
+        if (
+          field.review?.recommendedItems !== undefined &&
+          field.review.recommendedItems > field.maxItems
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['review', 'recommendedItems'],
+            message: `${field.id}: o recomendado de itens da revisão (${field.review.recommendedItems}) passa do máximo de itens do campo (${field.maxItems})`,
+          });
+        }
+        field.subfields.forEach((subfield, index) => {
+          if (
+            subfield.review?.minLength !== undefined &&
+            subfield.review.minLength > subfield.maxLength
+          ) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['subfields', index, 'review', 'minLength'],
+              message: `${field.id}.${subfield.id}: o mínimo da revisão (${subfield.review.minLength}) passa do limite de ${subfield.maxLength} caracteres do subcampo`,
+            });
+          }
+        });
+      }),
   ]),
 );
 

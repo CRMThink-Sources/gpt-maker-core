@@ -110,3 +110,35 @@ describe('texto do item da base', () => {
     expect(renderKnowledgeItem(field, item)).toBe('Serviço: Avaliação\nAgende pelo link.');
   });
 });
+
+describe('marcador [preencher: …] (agent-knowledge-gaps)', () => {
+  const withMarker: FunctionAnswers = {
+    ...complete,
+    'empresa.descricao': 'Implantação de Bitrix24 [preencher: onde atendem]',
+    'sdr.perguntas': ['Quantos vendedores?', 'Prazo? [preencher: prazo]'],
+    'base.produtos': [
+      { itemKey: KEY, values: { nome: 'Plano Pro', descricao: 'Custa [preencher: valor]' } },
+    ],
+  };
+
+  it('publicar e criar o agente recusam, dizendo o campo, o item e o subcampo', () => {
+    expect(validate(withMarker).issues).toEqual([
+      { field: 'empresa.descricao', message: 'ainda tem um trecho [preencher: …] sem preencher' },
+      { field: 'sdr.perguntas[1]', message: 'ainda tem um trecho [preencher: …] sem preencher' },
+      {
+        field: 'base.produtos[0].descricao',
+        message: 'ainda tem um trecho [preencher: …] sem preencher',
+      },
+    ]);
+  });
+
+  it('o rascunho aceita o marcador', () => {
+    expect(validate(withMarker, true).issues).toEqual([]);
+  });
+
+  it('com o marcador preenchido a publicação segue', () => {
+    expect(
+      validate({ ...complete, 'empresa.descricao': 'Implantação em todo o Brasil.' }).issues,
+    ).toEqual([]);
+  });
+});

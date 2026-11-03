@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { type FunctionAnswers, validateFunctionAnswers } from './agent-function-answers';
 import { type CompileInput, compileAgent, worstCaseBudget } from './agent-function-compiler';
-import { sdrFixture } from './agent-functions.fixture';
+import { functionTemplateContentSchema } from './agent-functions';
+import { sdrFixture, sdrFixtureInput } from './agent-functions.fixture';
 
 const KEY = '7f2c1b8e-2a4d-4c6e-9b1a-3d5f7e9a1c2b';
 
@@ -173,5 +174,43 @@ describe('orçamento no pior caso', () => {
     const report = worstCaseBudget(content);
     expect(report.length).toBeGreaterThan(3000);
     expect(report.markers['sdr.perguntas']).toBe(20 * 122 + 19);
+  });
+});
+
+describe('review não entra no comportamento nem no orçamento', () => {
+  const reviewed = functionTemplateContentSchema.parse({
+    ...sdrFixtureInput,
+    fields: sdrFixture.fields.map((field) => {
+      if (field.id === 'empresa.descricao') {
+        return { ...field, review: { minLength: 40, rubric: 'Diz o que a empresa vende.' } };
+      }
+      if (field.id === 'sdr.perguntas') {
+        return { ...field, review: { recommendedItems: 2, rubric: 'Perguntas abertas.' } };
+      }
+      if (field.id === 'base.produtos' && field.kind === 'KNOWLEDGE') {
+        return {
+          ...field,
+          review: { recommendedItems: 3, rubric: 'Cada produto tem preço e prazo.' },
+          subfields: field.subfields.map((subfield) => ({
+            ...subfield,
+            review: { minLength: 10 },
+          })),
+        };
+      }
+      return field;
+    }),
+  });
+
+  it('compila o mesmo comportamento com e sem review', () => {
+    const valid = validateFunctionAnswers(sdrFixture, raw);
+    const input = { answers: valid.answers, agentName: 'Ana', mode: 'SIMPLE' as const };
+    const plain = compileAgent({ content: sdrFixture, ...input });
+    const withReview = compileAgent({ content: reviewed, ...input });
+    expect(withReview.behavior).toBe(plain.behavior);
+    expect(withReview.errors).toEqual([]);
+  });
+
+  it('mantém o pior caso do orçamento igual', () => {
+    expect(worstCaseBudget(reviewed)).toEqual(worstCaseBudget(sdrFixture));
   });
 });
