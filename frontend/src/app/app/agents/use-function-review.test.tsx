@@ -188,3 +188,53 @@ describe('cobertura da base (3.2)', () => {
     expect(hook.current.state.gaps.status).toBe('done');
   });
 });
+
+describe('"Muitas revisões agora" passa sozinho', () => {
+  const busy = () => new ApiRequestError(429, 'AI_BUSY', 'Muitas revisões agora.');
+
+  /** API em que o campo `f2` responde ocupado `times` vezes antes de dar certo. */
+  function busyApi(times: number) {
+    let left = times;
+    const calls: string[] = [];
+    const api = vi.fn(async (path: string, init?: RequestInit) => {
+      calls.push(path);
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (path.endsWith('/function/review')) return { reviewId: 'r1', keySource: 'platform' };
+      if (path.endsWith('/cross')) return { contradictions: [] };
+      if (body.fieldId === 'f2' && left > 0) {
+        left--;
+        throw busy();
+      }
+      return { fieldId: body.fieldId, summary: `resumo ${body.fieldId}`, items: [] };
+    });
+    return { api: api as never, calls };
+  }
+
+  it('tenta de novo e o campo termina revisado, sem aparecer como falha', async () => {
+    const { api, calls } = busyApi(2);
+    const { result: hook } = renderHook(() => useFunctionReview(api, BASE, { busyDelayMs: 0 }));
+    await act(() => hook.current.run(['f1', 'f2'], answers));
+    expect(hook.current.state.fields.f2!.status).toBe('done');
+    // 1 do f1 + 3 do f2 (2 ocupadas e 1 certa).
+    expect(calls.filter((path) => path.endsWith('/field'))).toHaveLength(4);
+  });
+
+  it('esgotadas as tentativas, o campo mostra a falha e os outros seguem', async () => {
+    const { api } = busyApi(99);
+    const { result: hook } = renderHook(() => useFunctionReview(api, BASE, { busyDelayMs: 0 }));
+    await act(() => hook.current.run(['f1', 'f2'], answers));
+    expect(hook.current.state.fields.f1!.status).toBe('done');
+    expect(hook.current.state.fields.f2).toMatchObject({ status: 'error', code: 'AI_BUSY' });
+  });
+
+  it('outros erros não são repetidos', async () => {
+    const api = vi.fn(async (path: string) => {
+      if (path.endsWith('/function/review')) return { reviewId: 'r1', keySource: 'platform' };
+      throw new ApiRequestError(502, 'AI_BAD_OUTPUT', 'Não foi possível revisar.');
+    }) as never;
+    const { result: hook } = renderHook(() => useFunctionReview(api, BASE, { busyDelayMs: 0 }));
+    await act(() => hook.current.run(['f1'], answers));
+    expect(hook.current.state.fields.f1).toMatchObject({ status: 'error', code: 'AI_BAD_OUTPUT' });
+    expect((api as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(2);
+  });
+});

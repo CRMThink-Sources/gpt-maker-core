@@ -48,6 +48,25 @@ const EMPTY: ReviewState = {
 /** Campos revisados ao mesmo tempo (design D3). */
 export const REVIEW_CONCURRENCY = 2;
 
+/**
+ * "Muitas revisões agora" (`AI_BUSY`) não é cobrado e passa sozinho: tenta de novo algumas vezes,
+ * esperando, antes de mostrar a falha. O campo segue como "revisando…" enquanto isso.
+ */
+export const BUSY_RETRIES = 3;
+export const BUSY_DELAY_MS = 6000;
+
+async function retryWhenBusy<T>(call: () => Promise<T>, delayMs: number): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (error) {
+      const busy = error instanceof ApiRequestError && error.code === 'AI_BUSY';
+      if (!busy || attempt >= BUSY_RETRIES) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 function failure(error: unknown): { message: string; code: string | null } {
   if (error instanceof ApiRequestError) return { message: error.message, code: error.code };
   return { message: 'Não foi possível revisar agora. Tente de novo.', code: null };
@@ -73,7 +92,8 @@ export function useAiKey(api: Api): AiKeyView | null {
  * 2 requisições ao mesmo tempo e, por fim, pede as contradições entre campos. O resultado vive só
  * aqui; cada campo guarda a resposta que leu, para marcar "desatualizado" quando ela mudar.
  */
-export function useFunctionReview(api: Api, base: string) {
+export function useFunctionReview(api: Api, base: string, options: { busyDelayMs?: number } = {}) {
+  const busyDelay = options.busyDelayMs ?? BUSY_DELAY_MS;
   const [state, setState] = useState<ReviewState>(EMPTY);
   const [running, setRunning] = useState(false);
   const runs = useRef(0);
@@ -124,9 +144,13 @@ export function useFunctionReview(api: Api, base: string) {
               continue;
             }
             try {
-              const result = await api<ReviewFieldResult>(
-                `${base}/function/review/${review.reviewId}/field`,
-                { method: 'POST', body: JSON.stringify({ fieldId: id, answers }) },
+              const result = await retryWhenBusy(
+                () =>
+                  api<ReviewFieldResult>(`${base}/function/review/${review.reviewId}/field`, {
+                    method: 'POST',
+                    body: JSON.stringify({ fieldId: id, answers }),
+                  }),
+                busyDelay,
               );
               if (result.summary) summaries.push({ fieldId: id, summary: result.summary });
               patch(id, { status: 'done', answerKey: keys[id]!, result });
@@ -145,9 +169,13 @@ export function useFunctionReview(api: Api, base: string) {
         if (summaries.length >= 2) {
           setState((prev) => ({ ...prev, cross: 'running' }));
           try {
-            const { contradictions } = await api<ReviewCrossResult>(
-              `${base}/function/review/${review.reviewId}/cross`,
-              { method: 'POST', body: JSON.stringify({ summaries }) },
+            const { contradictions } = await retryWhenBusy(
+              () =>
+                api<ReviewCrossResult>(`${base}/function/review/${review.reviewId}/cross`, {
+                  method: 'POST',
+                  body: JSON.stringify({ summaries }),
+                }),
+              busyDelay,
             );
             setState((prev) => ({ ...prev, cross: 'done', contradictions }));
           } catch {
@@ -157,12 +185,13 @@ export function useFunctionReview(api: Api, base: string) {
         // Cobertura da base: uma chamada, cobrada como um campo; falha não afeta o resto.
         if (withGaps) {
           try {
-            const result = await api<ReviewGapsResult>(
-              `${base}/function/review/${review.reviewId}/gaps`,
-              {
-                method: 'POST',
-                body: JSON.stringify({ expectation: expectation!.trim(), answers, summaries }),
-              },
+            const result = await retryWhenBusy(
+              () =>
+                api<ReviewGapsResult>(`${base}/function/review/${review.reviewId}/gaps`, {
+                  method: 'POST',
+                  body: JSON.stringify({ expectation: expectation!.trim(), answers, summaries }),
+                }),
+              busyDelay,
             );
             setState((prev) => ({ ...prev, gaps: { status: 'done', result, added: [] } }));
           } catch (error) {
@@ -184,7 +213,7 @@ export function useFunctionReview(api: Api, base: string) {
         if (runs.current === token) setRunning(false);
       }
     },
-    [api, base, patch],
+    [api, base, patch, busyDelay],
   );
 
   /**

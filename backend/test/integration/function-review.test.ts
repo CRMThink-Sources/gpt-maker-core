@@ -570,7 +570,7 @@ describe('revisão por IA da função', () => {
 
     it('global da chave da CRMThink: o excedente espera, tenta uma vez e vira AI_BUSY sem cobrança', async () => {
       await redis.flushall();
-      rpm = 12; // 1 chamada por janela de 5 s
+      rpm = 6; // 1 chamada por janela de 10 s
       const limited = build();
       const ctx = await setup(100);
       const { reviewId } = await limited.create(ctx.tenantId, ctx.agentId, { fieldIds: FIELDS });
@@ -593,6 +593,27 @@ describe('revisão por IA da função', () => {
         outcomes.indexOf('AI_BUSY')
       ]!;
       expect(await new ReviewSessionStore(redis).reserve(reviewId, busyField)).toBe(true);
+    }, 60_000);
+
+    it('com 20 por minuto, vários campos de uma revisão passam sem "muitas revisões"', async () => {
+      await redis.flushall();
+      rpm = 20; // antes: floor(20 × 5 / 60) = 1 por janela, e a revisão de 11 campos estourava
+      const limited = build();
+      rpm = 600;
+      const ctx = await setup(100);
+      const { reviewId } = await limited.create(ctx.tenantId, ctx.agentId, { fieldIds: FIELDS });
+      const outcomes = await Promise.all(
+        ['base.problemas', 'base.faq', 'base.politicas'].map((fieldId) =>
+          refusal(
+            limited.reviewField(ctx.tenantId, ctx.agentId, reviewId, {
+              fieldId,
+              answers: ANSWERS() as never,
+            }),
+          ),
+        ),
+      );
+      expect(outcomes).toEqual([null, null, null]);
+      expect(await debits(ctx.tenantId)).toHaveLength(3);
     }, 30_000);
   });
   describe('cobertura da base (agent-knowledge-gaps)', () => {

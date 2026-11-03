@@ -153,6 +153,19 @@ function AiResult({
             </Link>
           </>
         )}
+        {state.code !== 'NO_CREDIT' && (
+          <>
+            {' '}
+            <button
+              type="button"
+              className="font-medium underline disabled:opacity-50"
+              disabled={review.ai.busy}
+              onClick={() => review.ai!.onRerun(field.id)}
+            >
+              tentar de novo
+            </button>
+          </>
+        )}
       </p>
     );
   }
@@ -277,6 +290,7 @@ export function ReviewPanel({
   onExpectation,
   onAddGap,
   onReview,
+  onRetryFailed,
 }: {
   form: FunctionTemplateContent;
   answers: FunctionAnswers;
@@ -291,6 +305,8 @@ export function ReviewPanel({
   /** Insere o item sugerido da lacuna no formulário; `index` é a posição dela na lista. */
   onAddGap: (gap: ReviewGap, index: number) => void;
   onReview: (fieldIds: string[]) => void;
+  /** Revisa só os campos que falharam (sem expectativa, sem cobrar de novo os que deram certo). */
+  onRetryFailed: (fieldIds: string[]) => void;
 }) {
   const ids = reviewableIds(form, answers);
   if (!aiKey) return null;
@@ -302,6 +318,11 @@ export function ReviewPanel({
   const labels = new Map(allFields.map((field) => [field.id, field.label]));
   const fieldOf = new Map(allFields.map((field) => [field.id, field]));
   const tooShort = expectation.trim().length > 0 && !gapsOn;
+  // Falhou e não foi cobrado: refazer só esses não paga de novo o que já deu certo.
+  const failed = Object.entries(state.fields)
+    .filter(([, entry]) => entry.status === 'error')
+    .map(([id]) => id);
+  const retryCost = reviewCost(aiKey.creditsPerField, failed.length, aiKey.configured);
   return (
     <Card className="space-y-3 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -361,6 +382,24 @@ export function ReviewPanel({
         <p className="text-xs text-zinc-500">
           Preencha algum campo de texto ou da base para revisar.
         </p>
+      )}
+      {failed.length > 0 && !running && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+          <span>
+            {failed.length === 1
+              ? '1 campo não foi revisado'
+              : `${failed.length} campos não foram revisados`}{' '}
+            e não {failed.length === 1 ? 'foi cobrado' : 'foram cobrados'}.
+          </span>
+          <button
+            type="button"
+            className={buttonClass('secondary', 'sm')}
+            disabled={disabled}
+            onClick={() => onRetryFailed(failed)}
+          >
+            Revisar só {failed.length === 1 ? 'este' : 'esses'} · {retryCost.label}
+          </button>
+        </div>
       )}
       {state.error && <Alert tone="error">{state.error}</Alert>}
       {state.cross === 'running' && (

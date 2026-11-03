@@ -53,9 +53,12 @@ import { ReviewSessionStore } from './review-session.store';
 /** Campos por tenant na janela (design D7). */
 export const TENANT_FIELDS_PER_WINDOW = 60;
 export const TENANT_WINDOW_MS = 10 * 60 * 1000;
-/** Janela do limite global da chave da CRMThink; curta, para a espera de até 5 s alcançar a próxima. */
-export const PLATFORM_WINDOW_MS = 5000;
-export const PLATFORM_MAX_WAIT_MS = 5000;
+/**
+ * Janela do limite global da chave da CRMThink. 10 s dão vagas inteiras para qualquer RPM razoável
+ * (com 5 s, 20 por minuto virava 1 por janela: 12 por minuto). A espera cobre uma janela inteira.
+ */
+export const PLATFORM_WINDOW_MS = 10_000;
+export const PLATFORM_MAX_WAIT_MS = 10_000;
 
 const TEMPERATURE = 0.2;
 

@@ -181,7 +181,7 @@ export const envSchema = z.object({
     .optional()
     .transform((value) => value || undefined),
   /** Revisões de campo por minuto com a chave da CRMThink, somando todos os clientes. */
-  VIBECODE_PLATFORM_RPM: z.coerce.number().int().positive().default(20),
+  VIBECODE_PLATFORM_RPM: z.coerce.number().int().positive().default(200),
   /** Por chamada ao Vibecode (a revisão de um campo é síncrona). */
   VIBECODE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   /** Créditos debitados por campo revisado com a chave da CRMThink. */
