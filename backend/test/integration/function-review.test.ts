@@ -293,7 +293,9 @@ describe('revisão por IA da função', () => {
           items: [
             {
               index: 0,
-              problems: [{ category: 'incomplete', severity: 'blocks', text: 'Solução sem passos.' }],
+              problems: [
+                { category: 'incomplete', severity: 'blocks', text: 'Solução sem passos.' },
+              ],
               suggestion: { solucao: '1. Abra o app.\n2. Toque em Entrar.' },
             },
           ],

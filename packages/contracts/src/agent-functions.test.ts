@@ -429,14 +429,19 @@ describe('critério de revisão (review) no template', () => {
   });
 
   it('aceita exemplos bom e ruim na revisão e recusa os mal formados', () => {
-    const examples = { good: 'Vendemos roupas femininas, entrega em 3 dias.', bad: 'Vendemos coisas.' };
+    const examples = {
+      good: 'Vendemos roupas femininas, entrega em 3 dias.',
+      bad: 'Vendemos coisas.',
+    };
     expect(messages(patched('base.produtos', { review: { examples } }))).toEqual([]);
     expect(messages(patched('empresa.nome', { review: { examples } }))).toEqual([]);
     expect(
       messages(patched('base.produtos', { review: { examples: { good: 'só o bom' } } })),
     ).not.toEqual([]);
     expect(
-      messages(patched('base.produtos', { review: { examples: { ...examples, bad: 'x'.repeat(401) } } })),
+      messages(
+        patched('base.produtos', { review: { examples: { ...examples, bad: 'x'.repeat(401) } } }),
+      ),
     ).not.toEqual([]);
     expect(
       messages(patched('base.produtos', { review: { examples: { ...examples, extra: 'x' } } })),
