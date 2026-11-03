@@ -1,8 +1,4 @@
-import {
-  type FunctionAnswers,
-  type FunctionField,
-  functionFieldSchema,
-} from '@gptmaker/contracts';
+import { type FunctionAnswers, type FunctionField, functionFieldSchema } from '@gptmaker/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   capTitles,
@@ -163,7 +159,85 @@ describe('teto dos títulos dos outros campos', () => {
     expect(list[0]!.titles).toEqual([curto, curto]);
   });
 
-  it('campo que perdeu todos os títulos some da lista', () => {
+  it('campo que perdeu todos os títulos some da lista (fim do teto)', () => {
     expect(capTitles([{ fieldId: 'a', label: 'A', titles: ['L'.repeat(30)] }], 40, 10)).toEqual([]);
+  });
+});
+
+describe('resultado do campo: o que não deve virar ruído na tela', () => {
+  const two = [
+    { index: 0, values: { problema: 'Boleto', solucao: 'Peça no portal.' } },
+    { index: 1, values: { problema: 'Senha', solucao: 'Use o link recebido.' } },
+  ];
+  const problem = (text: string) => ({
+    category: 'other' as const,
+    severity: 'polish' as const,
+    text,
+  });
+
+  it('sugestão igual ao texto atual some, mesmo com espaços e quebras diferentes', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [],
+          suggestion: { problema: 'Boleto', solucao: '  Peça   no\nportal. ' },
+        },
+      ],
+    });
+    expect(result.items).toEqual([]);
+  });
+
+  it('com problema, o item fica mesmo sem sugestão útil', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [problem('Vago.')],
+          suggestion: { problema: 'Boleto', solucao: 'Peça no portal.' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.suggestion).toBeUndefined();
+  });
+
+  it('só os subcampos que mudaram ficam na sugestão', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        { index: 1, problems: [], suggestion: { problema: 'Senha', solucao: '1. Use o link.' } },
+      ],
+    });
+    expect(result.items[0]!.suggestion!.values).toEqual({ solucao: '1. Use o link.' });
+  });
+
+  it('o mesmo item repetido vira uma entrada: problemas juntos e a primeira sugestão', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        { index: 1, problems: [problem('Duas perguntas.')], suggestion: { solucao: 'Primeira.' } },
+        {
+          index: 1,
+          problems: [problem('Duas perguntas.'), problem('Vago.')],
+          suggestion: { solucao: 'Segunda.' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.problems.map((p) => p.text)).toEqual(['Duas perguntas.', 'Vago.']);
+    expect(result.items[0]!.suggestion!.values).toEqual({ solucao: 'Primeira.' });
+  });
+
+  it('o pedido numera os itens a partir de 1 e manda não contar caracteres', () => {
+    const messages = fieldMessages(field, two, ctx);
+    const user = text(messages, 'user');
+    expect(user).toContain('<item index="1" posição="2">');
+    const system = text(messages, 'system');
+    expect(system).toContain('NUNCA conte caracteres');
+    expect(system).toContain('item <posição>');
+    expect(system).toContain('única entrada por item');
   });
 });
