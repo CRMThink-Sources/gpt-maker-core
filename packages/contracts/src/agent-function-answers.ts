@@ -113,6 +113,20 @@ export function visibleFields(
   });
 }
 
+/** Campos de texto visíveis e vazios com ajuda da IA; vazio se o template a desligou. */
+export function assistFields(
+  content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
+  answers: FunctionAnswers,
+): Array<Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }>> {
+  if (!content.assist.enabled) return [];
+  return visibleFields(content.fields, answers).filter(
+    (field): field is Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }> =>
+      (field.kind === 'TEXT' || field.kind === 'TEXT_LIST') &&
+      field.assist !== undefined &&
+      isEmpty(answers[field.id]),
+  );
+}
+
 /** Valores escolhidos de uma escolha única ou múltipla. */
 export function selectedValues(value: FunctionAnswerValue | undefined): string[] {
   if (typeof value === 'string') return value ? [value] : [];
@@ -143,7 +157,7 @@ export function renderKnowledgeItem(
     .trim();
 }
 
-function isEmpty(value: FunctionAnswerValue | undefined): boolean {
+export function isEmpty(value: FunctionAnswerValue | undefined): boolean {
   if (value === undefined) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (Array.isArray(value)) return value.length === 0;

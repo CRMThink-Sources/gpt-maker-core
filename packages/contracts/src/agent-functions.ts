@@ -91,6 +91,12 @@ export interface FunctionSubfieldReview {
   minLength?: number;
 }
 
+/** Ajuda da IA para preencher o campo vazio: perguntas ao cliente e orientação ao texto gerado. */
+export interface FunctionFieldAssist {
+  questions: string[];
+  instructions?: string;
+}
+
 export type FunctionField =
   | {
       kind: 'TEXT';
@@ -102,6 +108,7 @@ export type FunctionField =
       multiline: boolean;
       placeholder?: string;
       review?: FunctionTextReview;
+      assist?: FunctionFieldAssist;
     }
   | {
       kind: 'TEXT_LIST';
@@ -114,6 +121,7 @@ export type FunctionField =
       itemMaxLength: number;
       placeholder?: string;
       review?: FunctionListReview;
+      assist?: FunctionFieldAssist;
     }
   | { kind: 'URL'; id: string; label: string; help?: string; required: boolean; maxLength: number }
   | {
@@ -215,6 +223,11 @@ const optionValue = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minúsculas, núm
 const subfieldId = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minúsculas, números e _');
 
 /** Chave desconhecida é erro: um `recommendedItems` num campo de texto não pode sumir em silêncio. */
+const assistSchema = z.strictObject({
+  questions: z.array(z.string().trim().min(1).max(200)).min(1).max(5),
+  instructions: z.string().trim().max(500).optional(),
+});
+
 const reviewMinLength = z.number().int().min(1);
 const reviewRubric = z.string().trim().max(500);
 const reviewExamples = z.strictObject({
@@ -286,6 +299,7 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
         multiline: z.boolean().default(false),
         placeholder: z.string().max(200).optional(),
         review: reviewTextSchema.optional(),
+        assist: assistSchema.optional(),
       })
       .superRefine((field, ctx) => {
         if (field.review?.minLength !== undefined && field.review.minLength > field.maxLength) {
@@ -305,6 +319,7 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
         itemMaxLength: z.number().int().min(1).max(1000),
         placeholder: z.string().max(200).optional(),
         review: reviewListSchema.optional(),
+        assist: assistSchema.optional(),
       })
       .refine((field) => field.minItems <= field.maxItems, 'minItems maior que maxItems')
       .superRefine((field, ctx) => {
@@ -466,6 +481,8 @@ export const functionTemplateContentSchema = z.object({
    * MCP, spec agent-crm-tools): a publicação no agente o ativa, se ainda não estiver ativo.
    */
   crmAccess: z.boolean().default(false),
+  /** Liga a ajuda da IA para os campos de texto vazios que declaram `assist`. */
+  assist: z.object({ enabled: z.boolean() }).default({ enabled: false }),
 });
 export type FunctionTemplateContent = z.output<typeof functionTemplateContentSchema>;
 export type FunctionTemplateContentInput = z.input<typeof functionTemplateContentSchema>;
@@ -981,6 +998,7 @@ export function expandBlocks(
     // Rascunhos e blocos gravados antes das transferências (D17) não têm a lista.
     transfers: [...(draft.transfers ?? []), ...included.flatMap((block) => block.transfers ?? [])],
     crmAccess: draft.crmAccess || included.some((block) => block.crmAccess),
+    assist: draft.assist ?? { enabled: false },
   };
   return { content, errors };
 }
@@ -1028,6 +1046,7 @@ export function collapseBlocks(
     ),
     // Bloco que exige o CRM já liga o acesso na expansão: o rascunho não precisa marcar.
     crmAccess: included.some((block) => block!.crmAccess) ? false : content.crmAccess,
+    assist: content.assist ?? { enabled: false },
   };
   const blockMarkers = (text: string) => text.match(/\{\{\s*bloco\.[a-z][a-z0-9_]*\s*\}\}/g) ?? [];
   const kept = new Set(blockMarkers(draft.behavior).map((marker) => marker.replace(/\s/g, '')));

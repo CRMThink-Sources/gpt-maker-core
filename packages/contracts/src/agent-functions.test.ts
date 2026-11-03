@@ -12,6 +12,7 @@ import {
   availableMarkers,
   templateIssues,
 } from './agent-functions';
+import { assistFields } from './agent-function-answers';
 import { sdrFixture, sdrFixtureInput } from './agent-functions.fixture';
 
 const withBehavior = (behavior: string): FunctionTemplateContent => ({ ...sdrFixture, behavior });
@@ -452,5 +453,64 @@ describe('critério de revisão (review) no template', () => {
     // Em vez de descartar em silêncio: recommendedItems não existe em texto, minLength não em lista.
     expect(messages(patched('empresa.nome', { review: { recommendedItems: 1 } }))).not.toEqual([]);
     expect(messages(patched('sdr.perguntas', { review: { minLength: 10 } }))).not.toEqual([]);
+  });
+});
+
+describe('ajuda da IA (assist) no template', () => {
+  const patched = (patches: Record<string, Record<string, unknown>>, extra = {}) => ({
+    ...sdrFixtureInput,
+    ...extra,
+    fields: sdrFixture.fields.map((field) =>
+      patches[field.id] ? { ...field, ...patches[field.id] } : field,
+    ),
+  });
+  const assist = { questions: ['O que a empresa vende?'], instructions: 'Seja direto.' };
+
+  it('accepts assist on TEXT and TEXT_LIST', () => {
+    const result = functionTemplateContentSchema.safeParse(
+      patched({ 'empresa.descricao': { assist }, 'sdr.perguntas': { assist } }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const byId = (id: string) => result.data.fields.find((field) => field.id === id);
+      expect(byId('empresa.descricao')).toMatchObject({ assist });
+      expect(byId('sdr.perguntas')).toMatchObject({ assist });
+    }
+  });
+
+  it('rejects assist with 0 or 6 questions', () => {
+    for (const questions of [[], Array.from({ length: 6 }, (_, i) => `Pergunta ${i}?`)]) {
+      const result = functionTemplateContentSchema.safeParse(
+        patched({ 'empresa.descricao': { assist: { questions } } }),
+      );
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('template assist.enabled defaults to false', () => {
+    const result = functionTemplateContentSchema.safeParse(sdrFixtureInput);
+    expect(result.success && result.data.assist).toEqual({ enabled: false });
+  });
+
+  const enabled = (extra: Record<string, unknown> = {}) =>
+    functionTemplateContentSchema.parse(
+      patched({ 'empresa.descricao': { assist }, 'sdr.perguntas': { assist } }, extra),
+    );
+
+  it('assistFields returns only empty visible text fields with assist when enabled', () => {
+    const content = enabled({ assist: { enabled: true } });
+    expect(assistFields(content, {}).map((field) => field.id)).toEqual([
+      'empresa.descricao',
+      'sdr.perguntas',
+    ]);
+    expect(
+      assistFields(content, { 'empresa.descricao': 'Já preenchido', 'sdr.perguntas': [] }).map(
+        (field) => field.id,
+      ),
+    ).toEqual(['sdr.perguntas']);
+  });
+
+  it('assistFields returns [] when assist.enabled is false', () => {
+    expect(assistFields(enabled(), {})).toEqual([]);
   });
 });
