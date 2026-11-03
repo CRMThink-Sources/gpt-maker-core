@@ -73,3 +73,53 @@ viu na tela e do banco e Redis locais; o log do backend não foi guardado.
   os modelos com `pricing`, o formato de `usage` e o corpo e status de cada erro.
 - **1.3:** rodar o prompt de revisão também sobre **SDR** e **Suporte**, com nota de qualidade.
 - **7.1:** roteiro no staging com a chave da CRMThink (débito no extrato igual a preço × campos).
+
+## Avaliação da qualidade da revisão (mudança `agent-review-quality`)
+
+Comando: `npm run review:eval -w backend -- --versions=baseline,current --repeat=2 --details`, com
+`VIBECODE_EVAL_API_KEY` no ambiente. 14 casos fictícios do Suporte (bom, ruim, contradição, repetição e
+instrução escondida), 2 repetições por caso, modelo `bitrix/bitrixgpt-5.5`. `baseline` é o prompt de
+antes da mudança; `current` é o novo (papel do campo, contexto da função, exemplos, categoria e
+gravidade, regra de não inventar fato).
+
+### Resultado final, 2026-11-03
+
+| Métrica | baseline | current |
+|---|---|---|
+| Problemas esperados | 20 | 20 |
+| Achados no item certo | 20 | 20 |
+| **Achados com a categoria certa** | **6** | **20** |
+| Problemas a mais | 2 | 2 |
+| Sugestões acima do limite | 0 | 0 |
+| Sugestões com número inventado | 0 | 0 |
+| Instrução escondida obedecida | 0 | 0 |
+| Contradições achadas / esperadas | 4 / 4 | 4 / 4 |
+| Campos sem resposta válida | 0 | 0 |
+| Chamadas | 45 | 45 |
+
+- O ganho está na classificação: o baseline devolvia quase tudo como `other`/`polish` (o prompt antigo
+  nem pedia categoria), e o novo acerta a categoria nos 20 achados.
+- O prompt novo **não custa chamadas** a mais (45 nas duas versões).
+
+### Rodadas anteriores e o que mudou por causa delas
+
+1. Primeira rodada: categoria 6 → 15, mas 3 sugestões com número inventado, 3 campos sem resposta
+   válida e 1 achado a menos no item certo.
+2. Com `--details`: o "número novo 24" era "Bitrix24" (erro da métrica, corrigido para ignorar dígito
+   colado em palavra); "resposta enrolada" saía como `other` em vez de `too_long`; a IA inventava
+   prazo ("10 minutos") e procedimento ("abra um chamado no Bitrix24") nas sugestões; no caso de item
+   repetido entre campos ela apontava o outro lado da repetição (o caso passou a aceitar os dois).
+3. Prompt: definição de cada categoria (com `other` só como último recurso) e a regra de que todo
+   fato, número, canal ou procedimento da sugestão tem de estar no texto do cliente, senão entra
+   `[preencher: o que falta]`. A terceira rodada é a tabela acima.
+
+### Observações
+
+- O baseline já usava `[inserir número]`/`[Inserir aqui …]` em algumas sugestões; o novo usa o marcador
+  `[preencher: …]`, que o app reconhece e recusa na publicação.
+- **Limite da métrica:** ela só vê número inventado. O procedimento "abra um chamado no Bitrix24" ainda
+  apareceu numa sugestão do caso `repetido-no-campo` (uma das duas repetições), por vir da rubrica do
+  campo ("diz quando abrir um chamado"). A IA não é determinística: o campo "sem resposta válida" deu 2
+  e 3 em rodadas anteriores e 0 na final.
+- Para medir uma ideia nova: copie `current` para `candidate` em `buildPrompts` e rode
+  `--versions=current,candidate`.
