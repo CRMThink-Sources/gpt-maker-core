@@ -4,7 +4,10 @@
  *   VIBECODE_EVAL_API_KEY=vibe_api_… npm run review:eval -w backend -- --versions=baseline,current
  *
  * Opções: --versions=a,b (current, candidate, baseline; duas mostram a diferença),
- * --repeat=2 (vezes por caso), --cases=id1,id2.
+ * --repeat=2 (vezes por caso), --cases=id1,id2, --details.
+ * Com --assist avalia a ajuda da IA para preencher campos (fatos inventados e limites).
+ *
+ *   VIBECODE_EVAL_API_KEY=vibe_api_… npm run review:eval -w backend -- --assist
  */
 import { VibecodeClient } from '../src/modules/vibecode';
 import { main } from '../src/modules/function-review/eval/eval-cli';

@@ -1,0 +1,134 @@
+[
+  {
+    "id": "sdr-perfil-completa",
+    "template": "SDR",
+    "fieldId": "sdr.perfil_ideal",
+    "kind": "complete",
+    "about": "Somos a Agência Pixel, fazemos marketing digital e gestão de tráfego para clínicas odontológicas.",
+    "questions": ["Quem é o cliente ideal?", "Qual o porte?"],
+    "interview": [
+      {
+        "question": "Quem é o cliente ideal?",
+        "answer": "Dono de clínica odontológica que quer mais pacientes novos"
+      },
+      { "question": "Qual o porte?", "answer": "Clínicas com 2 a 6 dentistas" }
+    ]
+  },
+  {
+    "id": "sdr-perfil-vazia",
+    "template": "SDR",
+    "fieldId": "sdr.perfil_ideal",
+    "kind": "empty",
+    "about": "Vendemos um software de agendamento para salões de beleza.",
+    "questions": ["Quem é o cliente ideal?", "Qual o porte?"],
+    "interview": []
+  },
+  {
+    "id": "sdr-perfil-nao-sei",
+    "template": "SDR",
+    "fieldId": "sdr.perfil_ideal",
+    "kind": "unknown",
+    "about": "Consultoria financeira para pequenas empresas, atendemos todo o Brasil.",
+    "questions": ["Quem é o cliente ideal?", "Qual o porte?"],
+    "interview": [
+      { "question": "Quem é o cliente ideal?", "answer": "não sei" },
+      { "question": "Qual o porte?", "answer": "Não sei dizer" }
+    ]
+  },
+  {
+    "id": "sdr-criterio-completa",
+    "template": "SDR",
+    "fieldId": "sdr.criterio",
+    "kind": "complete",
+    "about": "Vendemos CRM com automação para equipes comerciais de médio porte.",
+    "questions": ["O que qualifica um lead?", "Em quanto tempo ele precisa decidir?"],
+    "interview": [
+      {
+        "question": "O que qualifica um lead?",
+        "answer": "Time com 8 vendedores ou mais e cargo de gerente ou diretor"
+      },
+      {
+        "question": "Em quanto tempo ele precisa decidir?",
+        "answer": "Quer implantar em até 60 dias"
+      }
+    ]
+  },
+  {
+    "id": "sdr-criterio-nao-sei",
+    "template": "SDR",
+    "fieldId": "sdr.criterio",
+    "kind": "unknown",
+    "about": "Vendemos CRM com automação para equipes comerciais de médio porte.",
+    "questions": ["O que qualifica um lead?", "Em quanto tempo ele precisa decidir?"],
+    "interview": [
+      { "question": "O que qualifica um lead?", "answer": "não sei" },
+      { "question": "Em quanto tempo ele precisa decidir?", "answer": "não sei" }
+    ]
+  },
+  {
+    "id": "sdr-criterio-vazia",
+    "template": "SDR",
+    "fieldId": "sdr.criterio",
+    "kind": "empty",
+    "about": "Escola de idiomas com aulas online e presenciais para adultos.",
+    "questions": ["O que qualifica um lead?", "Em quanto tempo ele precisa decidir?"],
+    "interview": []
+  },
+  {
+    "id": "sdr-perguntas-completa",
+    "template": "SDR",
+    "fieldId": "sdr.perguntas",
+    "kind": "complete",
+    "about": "Vendemos CRM com automação para equipes comerciais de médio porte.",
+    "questions": ["O que o agente precisa descobrir do lead?"],
+    "interview": [
+      {
+        "question": "O que o agente precisa descobrir do lead?",
+        "answer": "Quantos vendedores tem, qual CRM usa hoje e quando quer começar"
+      }
+    ]
+  },
+  {
+    "id": "sdr-perguntas-vazia",
+    "template": "SDR",
+    "fieldId": "sdr.perguntas",
+    "kind": "empty",
+    "about": "Escola de idiomas com aulas online e presenciais para adultos.",
+    "questions": ["O que o agente precisa descobrir do lead?"],
+    "interview": []
+  },
+  {
+    "id": "suporte-excluidos-completa",
+    "template": "SUPPORT",
+    "fieldId": "suporte.excluidos",
+    "kind": "complete",
+    "about": "Provedor de internet residencial, atendemos clientes pelo WhatsApp.",
+    "questions": ["Que assuntos o agente deve encaminhar sem resolver?"],
+    "interview": [
+      {
+        "question": "Que assuntos o agente deve encaminhar sem resolver?",
+        "answer": "Cancelamento de contrato, negociação de dívida e visita técnica"
+      }
+    ]
+  },
+  {
+    "id": "suporte-excluidos-nao-sei",
+    "template": "SUPPORT",
+    "fieldId": "suporte.excluidos",
+    "kind": "unknown",
+    "about": "Provedor de internet residencial, atendemos clientes pelo WhatsApp.",
+    "questions": ["Que assuntos o agente deve encaminhar sem resolver?"],
+    "interview": [
+      { "question": "Que assuntos o agente deve encaminhar sem resolver?", "answer": "não sei" }
+    ]
+  },
+  {
+    "id": "suporte-excluidos-vazia",
+    "template": "SUPPORT",
+    "fieldId": "suporte.excluidos",
+    "kind": "empty",
+    "about": "Loja virtual de eletrônicos com entrega para todo o país.",
+    "questions": ["Que assuntos o agente deve encaminhar sem resolver?"],
+    "interview": []
+  }
+]
