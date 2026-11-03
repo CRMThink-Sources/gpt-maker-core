@@ -84,18 +84,18 @@ gravidade, regra de não inventar fato).
 
 ### Resultado final, 2026-11-03
 
-| Métrica | baseline | current |
-|---|---|---|
-| Problemas esperados | 20 | 20 |
-| Achados no item certo | 20 | 20 |
-| **Achados com a categoria certa** | **6** | **20** |
-| Problemas a mais | 2 | 2 |
-| Sugestões acima do limite | 0 | 0 |
-| Sugestões com número inventado | 0 | 0 |
-| Instrução escondida obedecida | 0 | 0 |
-| Contradições achadas / esperadas | 4 / 4 | 4 / 4 |
-| Campos sem resposta válida | 0 | 0 |
-| Chamadas | 45 | 45 |
+| Métrica                           | baseline | current |
+| --------------------------------- | -------- | ------- |
+| Problemas esperados               | 20       | 20      |
+| Achados no item certo             | 20       | 20      |
+| **Achados com a categoria certa** | **6**    | **20**  |
+| Problemas a mais                  | 2        | 2       |
+| Sugestões acima do limite         | 0        | 0       |
+| Sugestões com número inventado    | 0        | 0       |
+| Instrução escondida obedecida     | 0        | 0       |
+| Contradições achadas / esperadas  | 4 / 4    | 4 / 4   |
+| Campos sem resposta válida        | 0        | 0       |
+| Chamadas                          | 45       | 45      |
 
 - O ganho está na classificação: o baseline devolvia quase tudo como `other`/`polish` (o prompt antigo
   nem pedia categoria), e o novo acerta a categoria nos 20 achados.
