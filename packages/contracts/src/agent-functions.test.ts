@@ -510,6 +510,12 @@ describe('ajuda da IA (assist) no template', () => {
     ).toEqual(['sdr.perguntas']);
   });
 
+  it('assistFields returns [] for a legacy content without assist', () => {
+    const legacy: Record<string, unknown> = { ...enabled({ assist: { enabled: true } }) };
+    delete legacy.assist;
+    expect(assistFields(legacy as never, {})).toEqual([]);
+  });
+
   it('assistFields returns [] when assist.enabled is false', () => {
     expect(assistFields(enabled(), {})).toEqual([]);
   });

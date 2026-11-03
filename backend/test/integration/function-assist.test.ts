@@ -41,15 +41,26 @@ const GOOD = JSON.stringify({
   ],
 });
 
-/** Liga a ajuda e declara `assist` nos dois campos de texto do Suporte. */
-function withAssist(content: FunctionTemplateContent, enabled: boolean): FunctionTemplateContent {
-  const fields = content.fields.map((field): FunctionField => {
-    if (field.id === TEXT_ID || field.id === LIST_ID) {
-      return { ...field, assist: { questions: ['O que a empresa faz?'] } } as FunctionField;
-    }
-    return field;
-  });
-  return { ...content, fields, assist: { enabled } };
+type Variant = 'enabled' | 'disabled' | 'legacy' | 'no-assist-fields';
+
+/** Versão do template: com `assist` nos dois campos de texto do Suporte, ou uma das variantes. */
+function withAssist(content: FunctionTemplateContent, variant: Variant): FunctionTemplateContent {
+  const fields =
+    variant === 'no-assist-fields'
+      ? content.fields
+      : content.fields.map((field): FunctionField => {
+          if (field.id === TEXT_ID || field.id === LIST_ID) {
+            return { ...field, assist: { questions: ['O que a empresa faz?'] } } as FunctionField;
+          }
+          return field;
+        });
+  if (variant === 'legacy') {
+    // Versão publicada antes da ajuda da IA: o jsonb não tem a chave `assist`.
+    const legacy: Partial<FunctionTemplateContent> = { ...content, fields };
+    delete legacy.assist;
+    return legacy as FunctionTemplateContent;
+  }
+  return { ...content, fields, assist: { enabled: variant !== 'disabled' } };
 }
 
 // Ajuda da IA para preencher campos de texto vazios da função.
@@ -126,7 +137,7 @@ describe('ajuda da IA para preencher a função', () => {
   });
 
   /** Tenant com um agente de Suporte preso a uma versão com a ajuda da IA ligada (ou não). */
-  async function setup(credits = 100, assistEnabled = true) {
+  async function setup(credits = 100, variant: Variant = 'enabled') {
     const code = randomBytes(4).toString('hex');
     const [row] = await db
       .insert(tenant)
@@ -164,7 +175,7 @@ describe('ajuda da IA para preencher a função', () => {
       .values({
         templateId: published.templateId,
         version: 1_000_000 + Math.floor(Math.random() * 1_000_000),
-        content: withAssist(published.content, assistEnabled),
+        content: withAssist(published.content, variant),
       })
       .returning();
     await db.insert(agentFunctionConfig).values({
@@ -214,7 +225,7 @@ describe('ajuda da IA para preencher a função', () => {
   });
 
   it('refuses when assist is disabled', async () => {
-    const { tenantId, agentId } = await setup(100, false);
+    const { tenantId, agentId } = await setup(100, 'disabled');
     expect(await refusal(service.assist(tenantId, agentId, input([TEXT_ID])))).toBe(
       'ASSIST_NOT_ENABLED',
     );
@@ -247,11 +258,11 @@ describe('ajuda da IA para preencher a função', () => {
     expect(chats).toHaveLength(1);
     expect(chats[0]!.apiKey).toBe('vibe_api_plataforma');
     const entries = await debits(tenantId);
-    expect(entries).toHaveLength(2);
-    expect(entries.every((entry) => entry.idempotencyKey.startsWith('assist:'))).toBe(true);
-    expect(entries.map((entry) => entry.idempotencyKey.split(':')[2]).sort()).toEqual(
-      [LIST_ID, TEXT_ID].sort(),
-    );
+    // Um débito só por chamada (carteira TRIAL), chave assist:<uuid>, refId = o uuid da chamada.
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.idempotencyKey).toMatch(/^assist:[0-9a-f-]{36}/);
+    expect(entries[0]!.amount).toBe(-2 * PRICE);
+    expect(entries[0]!.idempotencyKey).toContain(entries[0]!.refId!);
   });
 
   it('accepts the field label in place of the id', async () => {
@@ -296,6 +307,76 @@ describe('ajuda da IA para preencher a função', () => {
     await service.assist(tenantId, agentId, input([TEXT_ID]));
     const prompt = chats[0]!.prompt;
     expect(prompt).toContain('Respostas: nenhuma');
-    expect(prompt).toContain('[preencher:');
+    expect(prompt).toContain('[preencher: o que falta]');
+    expect(prompt).not.toContain('<resposta ');
+  });
+
+  it('charges only the fields that came back with a value', async () => {
+    const { tenantId, agentId } = await setup();
+    queue.push(
+      JSON.stringify({
+        fields: [{ fieldId: TEXT_ID, text: 'Loja online.' }, { fieldId: LIST_ID }],
+      }),
+    );
+    const result = await service.assist(tenantId, agentId, input([TEXT_ID, LIST_ID]));
+    expect(result.credits).toBe(PRICE);
+    expect(result.fields[1]).toEqual({
+      fieldId: LIST_ID,
+      value: [],
+      applicable: false,
+      markers: 0,
+    });
+    const entries = await debits(tenantId);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.amount).toBe(-PRICE);
+  });
+
+  it('does not charge when every entry is empty or has the wrong shape', async () => {
+    const { tenantId, agentId } = await setup();
+    queue.push(
+      JSON.stringify({
+        fields: [
+          { fieldId: TEXT_ID, items: ['x'] },
+          { fieldId: LIST_ID, items: ['  '] },
+        ],
+      }),
+    );
+    const result = await service.assist(tenantId, agentId, input([TEXT_ID, LIST_ID]));
+    expect(result.credits).toBe(0);
+    expect(result.fields.every((entry) => !entry.applicable)).toBe(true);
+    expect(await debits(tenantId)).toHaveLength(0);
+  });
+
+  it('charges a text over the limit, returned whole and not applicable', async () => {
+    const { tenantId, agentId } = await setup();
+    const long = 'a'.repeat(5000);
+    queue.push(JSON.stringify({ fields: [{ fieldId: TEXT_ID, text: long }] }));
+    const result = await service.assist(tenantId, agentId, input([TEXT_ID]));
+    expect(result.fields[0]).toMatchObject({ value: long, applicable: false });
+    expect(result.credits).toBe(PRICE);
+  });
+
+  it('a legacy version without assist answers ASSIST_NOT_ENABLED, not 500', async () => {
+    const { tenantId, agentId } = await setup(100, 'legacy');
+    expect(await refusal(service.assist(tenantId, agentId, input([TEXT_ID])))).toBe(
+      'ASSIST_NOT_ENABLED',
+    );
+    expect(chats).toHaveLength(0);
+  });
+
+  it('assist enabled but no field declares it: ASSIST_NOT_ENABLED before the AI', async () => {
+    const { tenantId, agentId } = await setup(100, 'no-assist-fields');
+    expect(await refusal(service.assist(tenantId, agentId, input([TEXT_ID])))).toBe(
+      'ASSIST_NOT_ENABLED',
+    );
+    expect(chats).toHaveLength(0);
+  });
+
+  it('a field that does not exist is refused with ASSIST_FIELD_NOT_ELIGIBLE', async () => {
+    const { tenantId, agentId } = await setup();
+    expect(await refusal(service.assist(tenantId, agentId, input(['nao.existe'])))).toBe(
+      'ASSIST_FIELD_NOT_ELIGIBLE',
+    );
+    expect(chats).toHaveLength(0);
   });
 });

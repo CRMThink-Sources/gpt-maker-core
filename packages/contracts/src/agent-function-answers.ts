@@ -118,7 +118,8 @@ export function assistFields(
   content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
   answers: FunctionAnswers,
 ): Array<Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }>> {
-  if (!content.assist.enabled) return [];
+  // Versões publicadas antes da ajuda da IA não têm `assist`.
+  if (!content.assist?.enabled) return [];
   return visibleFields(content.fields, answers).filter(
     (field): field is Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }> =>
       (field.kind === 'TEXT' || field.kind === 'TEXT_LIST') &&

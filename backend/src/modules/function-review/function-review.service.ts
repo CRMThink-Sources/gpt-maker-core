@@ -357,7 +357,7 @@ export class FunctionReviewService {
       );
     }
     const eligible = assistFields(content, answers);
-    if (!content.assist.enabled || eligible.length === 0) {
+    if (!content.assist?.enabled || eligible.length === 0) {
       throw new DomainError(
         'ASSIST_NOT_ENABLED',
         'A ajuda da IA não está disponível para esta função',
@@ -409,15 +409,18 @@ export class FunctionReviewService {
     };
     const result = toAssistResult(fields, normalized);
 
+    // Campo gerado = valor não vazio (texto acima do limite conta); um débito só por chamada.
+    const generated = result.filter((entry) =>
+      Array.isArray(entry.value)
+        ? entry.value.some((item) => typeof item === 'string' && item.trim() !== '')
+        : typeof entry.value === 'string' && entry.value.trim() !== '',
+    ).length;
     const assistId = randomUUID();
-    // Cobra só o campo que a IA devolveu.
-    const generated = fields.filter((field) =>
-      normalized.fields.some((entry) => entry.fieldId === field.id),
-    );
-    for (const field of generated) {
-      await this.charge(session, assistId, agentId, field.id, `assist:${assistId}:${field.id}`);
+    const amount = session.keySource === 'platform' ? price * generated : 0;
+    if (amount > 0) {
+      await this.charge(session, assistId, agentId, 'assist', `assist:${assistId}`, amount);
     }
-    const credits = session.keySource === 'platform' && price > 0 ? price * generated.length : 0;
+    const credits = amount;
     return { fields: result, credits };
   }
 
@@ -437,6 +440,7 @@ export class FunctionReviewService {
     agentId: string,
     fieldKey: string,
     key = `review:${reviewId}:${fieldKey}`,
+    amount = this.env.REVIEW_CREDITS_PER_FIELD,
   ): Promise<void> {
     const price = this.env.REVIEW_CREDITS_PER_FIELD;
     if (session.keySource !== 'platform' || price <= 0) return;
@@ -445,11 +449,11 @@ export class FunctionReviewService {
       const debit = await this.ledger.debit({
         tenantId,
         key,
-        amount: price,
+        amount,
         // O razão exige o modelo no débito; aqui é o da revisão, que não casa com o catálogo de
         // atendimento (a reconciliação só olha os modelos do catálogo).
         modelCode: this.env.VIBECODE_REVIEW_MODEL,
-        unitCost: price,
+        unitCost: amount,
         agentId,
         refType: 'function_review',
         refId: reviewId,
