@@ -141,6 +141,13 @@
       "when": 1793279985058,
       "tag": "0019_crm_tool_guidance",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793673832961,
+      "tag": "0020_tenant_ai_key",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import {
   CREDITS_TIMEZONE,
   type CreditEntriesView,
   type CreditEntryView,
+  type CreditUsageKind,
   type CreditUsageQuery,
   type CreditUsageView,
 } from '@gptmaker/contracts';
@@ -40,12 +41,19 @@ export class CreditStatementService {
 
   async usage(tenantId: string, query: CreditUsageQuery): Promise<CreditUsageView> {
     const day = sql<string>`to_char(${creditLedger.createdAt} at time zone ${TZ}, 'YYYY-MM-DD')`;
+    // Revisão da função por IA (`ref_id` = a revisão): conta campos revisados, sem o sufixo da
+    // carteira na chave, em vez de respostas.
+    const isReview = sql`${creditLedger.refType} = 'function_review'`;
+    const kind = sql<CreditUsageKind>`case when ${isReview} then 'FUNCTION_REVIEW' else 'RESPONSE' end`;
     const rows = await this.db
       .select({
         day,
         agentId: creditLedger.agentId,
         agentName: agent.name,
-        responses: sql<string>`count(distinct ${creditLedger.refId})`,
+        kind,
+        responses: sql<string>`count(distinct case when ${isReview}
+          then regexp_replace(${creditLedger.idempotencyKey}, ':(TRIAL|PLAN|EXTRA)$', '')
+          else ${creditLedger.refId} end)`,
         credits: sql<string>`-sum(${creditLedger.amount})`,
       })
       .from(creditLedger)
@@ -60,20 +68,23 @@ export class CreditStatementService {
           query.agentId ? eq(creditLedger.agentId, query.agentId) : undefined,
         ),
       )
-      .groupBy(day, creditLedger.agentId, agent.name)
-      .orderBy(desc(day), agent.name);
+      .groupBy(day, creditLedger.agentId, agent.name, kind)
+      .orderBy(desc(day), agent.name, kind);
 
     const view = rows.map((row) => ({
       day: row.day,
       agentId: row.agentId,
       agentName: row.agentName,
+      kind: row.kind,
       responses: Number(row.responses),
       credits: Number(row.credits),
     }));
     return {
       rows: view,
       totals: {
-        responses: view.reduce((sum, row) => sum + row.responses, 0),
+        responses: view
+          .filter((row) => row.kind === 'RESPONSE')
+          .reduce((sum, row) => sum + row.responses, 0),
         credits: view.reduce((sum, row) => sum + row.credits, 0),
       },
     };

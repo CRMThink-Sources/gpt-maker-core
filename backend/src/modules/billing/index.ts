@@ -1,5 +1,6 @@
 // API pública do módulo: outros módulos só importam daqui.
 export { BillingModule } from './billing.module';
+export { CreditAlerts } from './credit-alerts';
 export { balanceCacheKey, BalanceReader } from './balance.reader';
 export {
   type BalanceView,

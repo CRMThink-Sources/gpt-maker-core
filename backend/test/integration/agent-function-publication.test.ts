@@ -333,6 +333,61 @@ describe('publicação da função do agente', () => {
     });
   });
 
+  describe('marcador [preencher: …] (agent-knowledge-gaps)', () => {
+    const withMarker = () =>
+      sdrAnswers({
+        'base.produtos': [
+          {
+            itemKey: ITEM_A,
+            values: { nome: 'Plano Pro', descricao: 'Custa [preencher: valor do plano]' },
+          },
+        ],
+      });
+    const issueOf = (error: DomainError) =>
+      (error.details as { issues: Array<{ field: string; message: string }> }).issues;
+
+    it('criar o agente é recusado, apontando campo, item e subcampo', async () => {
+      const error = await rejection(
+        functions.create(owner, { name: 'Ana', functionCode: 'SDR', answers: withMarker() }),
+      );
+      expect(error.code).toBe('FUNCTION_ANSWERS_INVALID');
+      expect(issueOf(error)).toEqual([
+        {
+          field: 'base.produtos[0].descricao',
+          message: 'ainda tem um trecho [preencher: …] sem preencher',
+        },
+      ]);
+      expect(fake.count('agent.create')).toBe(0);
+    });
+
+    it('o rascunho aceita o marcador; publicar é recusado e o agente não muda', async () => {
+      const view = await createAgent();
+      await functions.saveDraft(owner.tenantId, view.id, { answers: withMarker() });
+      expect((await configOf(view.id)).draftAnswers).toMatchObject({
+        'base.produtos': [expect.objectContaining({ itemKey: ITEM_A })],
+      });
+
+      const error = await rejection(
+        functions.publish(owner.tenantId, view.id, { answers: withMarker() }),
+      );
+      expect(error.code).toBe('FUNCTION_ANSWERS_INVALID');
+      expect(issueOf(error)[0]!.field).toBe('base.produtos[0].descricao');
+      expect(fake.calls).toEqual([]);
+    });
+
+    it('com o marcador preenchido a publicação segue', async () => {
+      const view = await createAgent();
+      const filled = sdrAnswers({
+        'base.produtos': [
+          { itemKey: ITEM_A, values: { nome: 'Plano Pro', descricao: 'Custa R$ 99 por mês' } },
+        ],
+      });
+      expect(await functions.publish(owner.tenantId, view.id, { answers: filled })).toEqual({
+        status: 'PENDING',
+      });
+    });
+  });
+
   describe('republicação', () => {
     it('rascunho não muda o agente publicado', async () => {
       const view = await createAgent();

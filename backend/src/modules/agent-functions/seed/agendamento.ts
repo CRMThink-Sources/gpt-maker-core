@@ -122,9 +122,21 @@ export const SCHEDULING: SeedTemplate = {
         label: 'Serviços',
         required: false,
         maxItems: 15,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Cada serviço diz o que inclui, quanto dura e como se preparar. Não promete horário nem vaga: quem confirma é a agenda.',
+        },
         subfields: [
           { id: 'nome', label: 'Nome', required: true, maxLength: 60 },
-          { id: 'descricao', label: 'Descrição', required: true, maxLength: 500, multiline: true },
+          {
+            id: 'descricao',
+            label: 'Descrição',
+            required: true,
+            maxLength: 500,
+            multiline: true,
+            review: { minLength: 40 },
+          },
           { id: 'duracao', label: 'Duração', required: false, maxLength: 60 },
           {
             id: 'preparo',
@@ -144,9 +156,20 @@ export const SCHEDULING: SeedTemplate = {
         label: 'Perguntas frequentes',
         required: false,
         maxItems: 20,
+        review: {
+          rubric:
+            'A pergunta está como o cliente escreveria; a resposta é direta e completa e cabe em poucas frases.',
+        },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
-          { id: 'resposta', label: 'Resposta', required: true, maxLength: 800, multiline: true },
+          {
+            id: 'resposta',
+            label: 'Resposta',
+            required: true,
+            maxLength: 800,
+            multiline: true,
+            review: { minLength: 30 },
+          },
         ],
         format: 'Pergunta: {{pergunta}}\nResposta: {{resposta}}',
       },
@@ -157,9 +180,21 @@ export const SCHEDULING: SeedTemplate = {
         help: 'Endereço, como chegar, se é online ou presencial.',
         required: false,
         maxItems: 5,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Presencial: endereço completo e como chegar. Online: o link ou as instruções de acesso e o que o cliente precisa ter em mãos.',
+        },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
-          { id: 'texto', label: 'Texto', required: true, maxLength: 900, multiline: true },
+          {
+            id: 'texto',
+            label: 'Texto',
+            required: true,
+            maxLength: 900,
+            multiline: true,
+            review: { minLength: 40 },
+          },
         ],
         format: '{{titulo}}\n{{texto}}',
       },
