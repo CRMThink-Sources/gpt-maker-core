@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  assistFields,
+  type AssistInput,
+  assistModelOutputSchema,
+  type AssistResult,
   type CreateReviewInput,
   type CreateReviewResult,
   type FunctionAnswers,
@@ -37,6 +41,7 @@ import { FunctionCatalog } from '../agent-functions';
 import { BalanceReader, CreditAlerts, LedgerService } from '../billing';
 import { VibecodeClient, VibecodeError, type VibecodeMessage } from '../vibecode';
 import { AiKeyService } from './ai-key.service';
+import { assistMessages, toAssistResult } from './assist-prompt';
 import {
   crossMessages,
   type FieldPromptContext,
@@ -331,6 +336,91 @@ export class FunctionReviewService {
     }
   }
 
+  /**
+   * Ajuda da IA: rascunho dos campos de texto vazios, sem sessão. A chave é escolhida na hora; cada
+   * campo gerado é cobrado à parte (chave `assist:<id>:<campo>`), só depois da saída válida.
+   */
+  async assist(tenantId: string, agentId: string, input: AssistInput): Promise<AssistResult> {
+    const { content, functionName, functionDescription, agentName } = await this.template(
+      tenantId,
+      agentId,
+    );
+    const { answers, issues } = validateFunctionAnswers(content, input.answers as FunctionAnswers, {
+      partial: true,
+    });
+    if (issues.length) {
+      throw new DomainError(
+        'FUNCTION_ANSWERS_INVALID',
+        'As respostas têm erros; corrija antes de pedir a ajuda',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        issues,
+      );
+    }
+    const eligible = assistFields(content, answers);
+    if (!content.assist.enabled || eligible.length === 0) {
+      throw new DomainError(
+        'ASSIST_NOT_ENABLED',
+        'A ajuda da IA não está disponível para esta função',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const ids = [...new Set(input.fieldIds)];
+    const eligibleIds = new Set(eligible.map((field) => field.id));
+    const refused = ids.filter((id) => !eligibleIds.has(id));
+    if (refused.length) {
+      throw new DomainError(
+        'ASSIST_FIELD_NOT_ELIGIBLE',
+        `A ajuda da IA não se aplica a estes campos: ${refused.join(', ')}`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const fields = eligible.filter((field) => ids.includes(field.id));
+
+    const session: Session = { tenantId, keySource: await this.chooseKey(tenantId) };
+    await this.tenantLimit(tenantId);
+    const price = this.env.REVIEW_CREDITS_PER_FIELD;
+    // Sem saldo para todos os campos pedidos, a IA nem é chamada.
+    if (session.keySource === 'platform' && price > 0) {
+      if ((await this.balance.total(tenantId)) < price * fields.length) {
+        throw reviewError('NO_CREDIT');
+      }
+    }
+    const apiKey = await this.apiKey(session);
+    const output = await this.ask(
+      session,
+      apiKey,
+      assistMessages({
+        fields,
+        about: input.about,
+        interview: input.interview,
+        context: { functionName, functionDescription, agentName },
+      }),
+      assistModelOutputSchema,
+    );
+    // O modelo às vezes cita o nome do campo em vez do id: aceita os dois; o resto é ignorado.
+    const byLabel = new Map(fields.map((field) => [field.label.trim().toLowerCase(), field.id]));
+    const toId = (ref: string) =>
+      eligibleIds.has(ref) && ids.includes(ref) ? ref : byLabel.get(ref.trim().toLowerCase());
+    const normalized = {
+      fields: output.fields.flatMap((entry) => {
+        const fieldId = toId(entry.fieldId);
+        return fieldId ? [{ ...entry, fieldId }] : [];
+      }),
+    };
+    const result = toAssistResult(fields, normalized);
+
+    const assistId = randomUUID();
+    // Cobra só o campo que a IA devolveu.
+    const generated = fields.filter((field) =>
+      normalized.fields.some((entry) => entry.fieldId === field.id),
+    );
+    for (const field of generated) {
+      await this.charge(session, assistId, agentId, field.id, `assist:${assistId}:${field.id}`);
+    }
+    const credits = session.keySource === 'platform' && price > 0 ? price * generated.length : 0;
+    return { fields: result, credits };
+  }
+
   // Internos ---------------------------------------------------------------------------------
 
   /** Com a chave da CRMThink, sem saldo para um campo a IA nem é chamada (design D9). */
@@ -346,6 +436,7 @@ export class FunctionReviewService {
     reviewId: string,
     agentId: string,
     fieldKey: string,
+    key = `review:${reviewId}:${fieldKey}`,
   ): Promise<void> {
     const price = this.env.REVIEW_CREDITS_PER_FIELD;
     if (session.keySource !== 'platform' || price <= 0) return;
@@ -353,7 +444,7 @@ export class FunctionReviewService {
     try {
       const debit = await this.ledger.debit({
         tenantId,
-        key: `review:${reviewId}:${fieldKey}`,
+        key,
         amount: price,
         // O razão exige o modelo no débito; aqui é o da revisão, que não casa com o catálogo de
         // atendimento (a reconciliação só olha os modelos do catálogo).
