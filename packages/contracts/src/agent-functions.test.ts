@@ -428,6 +428,21 @@ describe('critério de revisão (review) no template', () => {
     expect(messages(patched('empresa.nome', { review: { minLength: 0 } }))).not.toEqual([]);
   });
 
+  it('aceita exemplos bom e ruim na revisão e recusa os mal formados', () => {
+    const examples = { good: 'Vendemos roupas femininas, entrega em 3 dias.', bad: 'Vendemos coisas.' };
+    expect(messages(patched('base.produtos', { review: { examples } }))).toEqual([]);
+    expect(messages(patched('empresa.nome', { review: { examples } }))).toEqual([]);
+    expect(
+      messages(patched('base.produtos', { review: { examples: { good: 'só o bom' } } })),
+    ).not.toEqual([]);
+    expect(
+      messages(patched('base.produtos', { review: { examples: { ...examples, bad: 'x'.repeat(401) } } })),
+    ).not.toEqual([]);
+    expect(
+      messages(patched('base.produtos', { review: { examples: { ...examples, extra: 'x' } } })),
+    ).not.toEqual([]);
+  });
+
   it('recusa chave que não vale para o tipo do campo', () => {
     // Em vez de descartar em silêncio: recommendedItems não existe em texto, minLength não em lista.
     expect(messages(patched('empresa.nome', { review: { recommendedItems: 1 } }))).not.toEqual([]);

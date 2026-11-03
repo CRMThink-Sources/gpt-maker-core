@@ -126,6 +126,10 @@ export const SCHEDULING: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Cada serviço diz o que inclui, quanto dura e como se preparar. Não promete horário nem vaga: quem confirma é a agenda.',
+          examples: {
+            good: 'nome: Limpeza de pele\ndescricao: Higienização, esfoliação e hidratação do rosto. Indicada para quem sente a pele oleosa ou com cravos.\nduracao: 60 minutos\npreparo: Venha sem maquiagem e evite sol forte nas 24 horas antes.',
+            bad: 'nome: Limpeza\ndescricao: Um serviço muito bom.',
+          },
         },
         subfields: [
           { id: 'nome', label: 'Nome', required: true, maxLength: 60 },
@@ -159,6 +163,10 @@ export const SCHEDULING: SeedTemplate = {
         review: {
           rubric:
             'A pergunta está como o cliente escreveria; a resposta é direta e completa e cabe em poucas frases.',
+          examples: {
+            good: 'pergunta: Posso remarcar meu horário?\nresposta: Pode, sem custo, com pelo menos 24 horas de antecedência. É só avisar por aqui e confirmamos o novo horário.',
+            bad: 'pergunta: Remarcar\nresposta: Fale com a recepção.',
+          },
         },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
@@ -184,6 +192,10 @@ export const SCHEDULING: SeedTemplate = {
           recommendedItems: 1,
           rubric:
             'Presencial: endereço completo e como chegar. Online: o link ou as instruções de acesso e o que o cliente precisa ter em mãos.',
+          examples: {
+            good: 'titulo: Endereço da clínica\ntexto: Rua das Flores, 120, sala 4, Centro. Fica a duas quadras do metrô, com estacionamento conveniado na esquina. A recepção abre 15 minutos antes do primeiro horário.',
+            bad: 'titulo: Local\ntexto: Fica no centro, é fácil de achar.',
+          },
         },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },

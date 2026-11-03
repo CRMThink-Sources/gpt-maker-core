@@ -150,6 +150,7 @@ O cliente, no formulário, escolhe o SPA, o funil, a etapa inicial e o campo de 
 O cliente costuma deixar a base vazia ou rasa. O `review` (formato em `referencia/formato.md`) faz o app avisar isso antes de publicar.
 
 - Ponha `rubric` em todo campo `KNOWLEDGE` e nos textos que definem o atendimento: uma frase com o que um bom item tem ("solução em passos numerados", "prazo em dias"). Escreva para quem revisa, não para o agente.
+- Ponha `examples` (`good` e `bad`) nos campos `KNOWLEDGE` principais: um item bom e um ruim, curtos e do mesmo assunto, com o erro típico no ruim (título genérico, solução sem passos, política sem prazo). Em base, escreva uma linha `subcampo: texto` por subcampo. Nunca ponha dado real da empresa nem `[preencher: …]` no exemplo.
 - Use `recommendedItems` só onde a função depende da base (problemas e políticas do Suporte, serviços do Agendamento). Numa FAQ opcional, deixe sem: campo vazio só avisa quando há `recommendedItems`.
 - Use `minLength` no subcampo que costuma ficar raso (solução, descrição, texto da política); 60 a 80 serve para a maioria.
 - O `review` não gasta orçamento e nunca bloqueia a publicação: é um aviso ao cliente.

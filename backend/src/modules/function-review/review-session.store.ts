@@ -14,6 +14,8 @@ export interface ReviewSession {
   fieldIds: string[];
   /** Campos de base (todos, inclusive vazios) onde a análise de cobertura pode sugerir itens. */
   gapFieldIds?: string[];
+  /** O que o cliente espera do agente; só aqui (30 min), contexto das revisões desta sessão. */
+  expectation?: string;
 }
 
 const sessionKey = (reviewId: string) => `review:${reviewId}`;

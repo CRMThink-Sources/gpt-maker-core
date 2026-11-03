@@ -63,17 +63,28 @@ export const functionOptionEffectsSchema = z.object({
  * Critério da revisão das respostas (spec agent-knowledge-review): só gera avisos, nunca bloqueia.
  * Não entra no comportamento nem no orçamento de caracteres.
  */
+/** Um preenchimento bom e um ruim, só como referência de estilo para a revisão por IA. */
+export const REVIEW_EXAMPLE_MAX = 400;
+export interface FunctionReviewExamples {
+  good: string;
+  bad: string;
+}
+
 export interface FunctionTextReview {
   /** Texto abaixo disso gera o aviso "texto curto". */
   minLength?: number;
   /** O que um bom preenchimento tem; lido só pela revisão por IA. */
   rubric?: string;
+  /** Exemplo bom e ruim; lidos só pela revisão por IA, nunca copiados para o cliente. */
+  examples?: FunctionReviewExamples;
 }
 
 export interface FunctionListReview {
   /** Menos itens que isso (inclusive nenhum) gera o aviso "poucos itens". */
   recommendedItems?: number;
   rubric?: string;
+  /** Em campo de base, o exemplo é um item inteiro (subcampos em linhas `chave: texto`). */
+  examples?: FunctionReviewExamples;
 }
 
 export interface FunctionSubfieldReview {
@@ -206,13 +217,19 @@ const subfieldId = z.string().regex(/^[a-z][a-z0-9_]*$/, 'use minúsculas, núme
 /** Chave desconhecida é erro: um `recommendedItems` num campo de texto não pode sumir em silêncio. */
 const reviewMinLength = z.number().int().min(1);
 const reviewRubric = z.string().trim().max(500);
+const reviewExamples = z.strictObject({
+  good: z.string().trim().min(1).max(REVIEW_EXAMPLE_MAX),
+  bad: z.string().trim().min(1).max(REVIEW_EXAMPLE_MAX),
+});
 const reviewTextSchema = z.strictObject({
   minLength: reviewMinLength.optional(),
   rubric: reviewRubric.optional(),
+  examples: reviewExamples.optional(),
 });
 const reviewListSchema = z.strictObject({
   recommendedItems: z.number().int().min(1).optional(),
   rubric: reviewRubric.optional(),
+  examples: reviewExamples.optional(),
 });
 const reviewSubfieldSchema = z.strictObject({ minLength: reviewMinLength.optional() });
 

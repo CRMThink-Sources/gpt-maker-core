@@ -59,7 +59,9 @@ const FIELDS = ['empresa.descricao', 'base.problemas', 'base.faq', 'base.politic
 
 const GOOD_FIELD = JSON.stringify({
   summary: 'Resumo do campo.',
-  items: [{ index: 0, problems: [{ code: 'curto', text: 'Está curto.' }] }],
+  items: [
+    { index: 0, problems: [{ category: 'incomplete', severity: 'polish', text: 'Está curto.' }] },
+  ],
 });
 
 /** Resposta do Vibecode simulado: um texto, ou uma falha. */
@@ -291,7 +293,7 @@ describe('revisão por IA da função', () => {
           items: [
             {
               index: 0,
-              problems: [{ code: 'sem_passos', text: 'Solução sem passos.' }],
+              problems: [{ category: 'incomplete', severity: 'blocks', text: 'Solução sem passos.' }],
               suggestion: { solucao: '1. Abra o app.\n2. Toque em Entrar.' },
             },
           ],
@@ -304,7 +306,14 @@ describe('revisão por IA da função', () => {
         items: [
           {
             index: 0,
-            problems: [{ code: 'sem_passos', text: 'Solução sem passos.' }],
+            problems: [
+              {
+                code: 'incomplete',
+                category: 'incomplete',
+                severity: 'blocks',
+                text: 'Solução sem passos.',
+              },
+            ],
             suggestion: {
               values: { solucao: '1. Abra o app.\n2. Toque em Entrar.' },
               applicable: true,
@@ -753,6 +762,100 @@ describe('revisão por IA da função', () => {
       queue.push(GAPS_OK);
       await ask();
       expect(await debits(tenantId)).toHaveLength(1);
+    });
+  });
+
+  describe('contexto da revisão (agent-review-quality)', () => {
+    const EXPECTATION = 'Clientes pedem segunda via de boleto e perguntam o prazo de troca.';
+    const GAPS_EMPTY = JSON.stringify({ gaps: [], covered: [] });
+
+    async function started(expectation?: string) {
+      const ctx = await setup(100);
+      const { reviewId } = await service.create(ctx.tenantId, ctx.agentId, {
+        fieldIds: FIELDS,
+        withGaps: true,
+        ...(expectation ? { expectation } : {}),
+      });
+      const field = (fieldId: string) =>
+        service.reviewField(ctx.tenantId, ctx.agentId, reviewId, {
+          fieldId,
+          answers: ANSWERS() as never,
+        });
+      return { ...ctx, reviewId, field };
+    }
+
+    it('a expectativa da criação chega ao prompt de cada campo', async () => {
+      const { field } = await started(EXPECTATION);
+      await field('base.faq');
+      expect(chats[0]!.prompt).toContain(`<expectativa>\n${EXPECTATION}\n</expectativa>`);
+    });
+
+    it('sem expectativa o prompt do campo não tem o bloco', async () => {
+      const { field } = await started();
+      await field('base.faq');
+      expect(chats[0]!.prompt).not.toContain('<expectativa>');
+    });
+
+    it('o prompt leva o que a função faz e só os títulos dos outros campos de base', async () => {
+      const { field } = await started();
+      await field('base.faq');
+      const prompt = chats[0]!.prompt;
+      expect(prompt).toContain('O que a função faz:');
+      expect(prompt).toContain('Problemas comuns');
+      expect(prompt).toContain('"Não consigo entrar"');
+      // O corpo dos itens dos outros campos não vai.
+      expect(prompt).not.toContain('Reinicie o aplicativo e tente de novo.');
+      expect(prompt).not.toContain('Trocas em até 7 dias corridos');
+    });
+
+    it('a cobertura usa a expectativa da sessão quando o corpo não a traz', async () => {
+      const { tenantId, agentId, reviewId } = await started(EXPECTATION);
+      queue.push(GAPS_EMPTY);
+      await service.gaps(tenantId, agentId, reviewId, {
+        answers: { 'base.faq': ANSWERS()['base.faq'] } as never,
+        summaries: [],
+      });
+      expect(chats[0]!.prompt).toContain(EXPECTATION);
+    });
+
+    it('a expectativa do corpo do /gaps vale mais que a da sessão', async () => {
+      const { tenantId, agentId, reviewId } = await started(EXPECTATION);
+      queue.push(GAPS_EMPTY);
+      await service.gaps(tenantId, agentId, reviewId, {
+        expectation: 'Clientes querem saber se há entrega aos domingos.',
+        answers: { 'base.faq': ANSWERS()['base.faq'] } as never,
+        summaries: [],
+      });
+      expect(chats[0]!.prompt).toContain('entrega aos domingos');
+      expect(chats[0]!.prompt).not.toContain('segunda via de boleto');
+    });
+
+    it('sem expectativa na sessão nem no corpo, a cobertura é recusada antes da IA', async () => {
+      const { tenantId, agentId, reviewId } = await started();
+      expect(
+        await refusal(
+          service.gaps(tenantId, agentId, reviewId, {
+            answers: { 'base.faq': ANSWERS()['base.faq'] } as never,
+            summaries: [],
+          }),
+        ),
+      ).toBe('REVIEW_EXPECTATION_REQUIRED');
+      expect(chats).toHaveLength(0);
+    });
+
+    it('categoria desconhecida volta como "outro" e o campo não falha', async () => {
+      const { field } = await started();
+      queue.push(
+        JSON.stringify({
+          summary: 'x',
+          items: [{ index: 0, problems: [{ category: 'tom_de_voz', text: 'Tom informal.' }] }],
+        }),
+      );
+      const result = await field('base.faq');
+      expect(result.items[0]!.problems[0]).toMatchObject({
+        category: 'other',
+        severity: 'polish',
+      });
     });
   });
 });

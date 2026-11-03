@@ -79,6 +79,7 @@ Opcional em `TEXT`, `TEXT_LIST` e `KNOWLEDGE`, e `{ "minLength" }` em cada subca
 | `recommendedItems` (1 até `maxItems`) | `TEXT_LIST`, `KNOWLEDGE` | menos itens que isso, inclusive nenhum, gera o aviso "poucos itens" |
 | `minLength` (1 até o `maxLength`) | `TEXT`, subcampo de `KNOWLEDGE` | texto menor que isso gera a dica "texto curto" |
 | `rubric` (até 500 caracteres) | `TEXT`, `TEXT_LIST`, `KNOWLEDGE` | o que um bom preenchimento tem; lido só pela revisão por IA |
+| `examples` (`{ "good": "…", "bad": "…" }`, até 400 caracteres cada) | `TEXT`, `TEXT_LIST`, `KNOWLEDGE` | um preenchimento bom e um ruim, só como referência de estilo para a revisão por IA (nunca vão para o cliente nem para o agente). Em `KNOWLEDGE` o exemplo é um item inteiro, uma linha `subcampo: texto` por subcampo |
 
 Chave que não vale para o tipo do campo é recusada (um `recommendedItems` num `TEXT` não some em silêncio). **Campo vazio só avisa quando há `recommendedItems`**: uma FAQ opcional sem `review` não gera aviso por estar vazia. Sem `review`, valem só as regras genéricas: texto igual ao exemplo (`placeholder`), itens repetidos, texto perto do limite e mapeamento repetido do SPA.
 

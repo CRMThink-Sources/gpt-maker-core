@@ -39,9 +39,11 @@ import { VibecodeClient, VibecodeError, type VibecodeMessage } from '../vibecode
 import { AiKeyService } from './ai-key.service';
 import {
   crossMessages,
+  type FieldPromptContext,
   fieldMessages,
   gapBase,
   gapsMessages,
+  otherBaseTitles,
   toGapsResult,
   reviewItems,
   type ReviewableField,
@@ -140,6 +142,7 @@ export class FunctionReviewService {
       keySource,
       fieldIds: [...new Set(input.fieldIds)],
       ...(gapFieldIds ? { gapFieldIds } : {}),
+      ...(input.expectation ? { expectation: input.expectation } : {}),
     });
     return { reviewId, keySource, creditsPerField: this.env.REVIEW_CREDITS_PER_FIELD };
   }
@@ -153,7 +156,10 @@ export class FunctionReviewService {
     const session = await this.session(tenantId, agentId, reviewId);
     if (!session.fieldIds.includes(input.fieldId)) throw notFound();
 
-    const { content, functionName, agentName } = await this.template(tenantId, agentId);
+    const { content, functionName, functionDescription, agentName } = await this.template(
+      tenantId,
+      agentId,
+    );
     // O template é o da versão a que a configuração está presa, nunca o que vem do app.
     const { answers, issues } = validateFunctionAnswers(content, input.answers as FunctionAnswers, {
       partial: true,
@@ -187,6 +193,16 @@ export class FunctionReviewService {
       return await this.run(session, reviewId, agentId, field, answers, {
         functionName,
         agentName,
+        functionDescription,
+        expectation: session.expectation,
+        otherTitles: otherBaseTitles(
+          flattenFields(content.fields).filter(
+            (entry): entry is Extract<typeof entry, { kind: 'KNOWLEDGE' }> =>
+              entry.kind === 'KNOWLEDGE',
+          ),
+          answers,
+          field.id,
+        ),
       });
     } catch (error) {
       // Falha libera o campo, para o app poder tentar de novo na mesma revisão.
@@ -270,6 +286,14 @@ export class FunctionReviewService {
         issues,
       );
     }
+    const expectation = input.expectation ?? session.expectation;
+    if (!expectation) {
+      throw new DomainError(
+        'REVIEW_EXPECTATION_REQUIRED',
+        'Descreva o que você espera do agente para analisar a cobertura',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     const summaries = new Map(input.summaries.map((entry) => [entry.fieldId, entry.summary]));
     const allowed = new Set(session.gapFieldIds);
     const bases = visibleFields(content.fields, answers)
@@ -295,7 +319,7 @@ export class FunctionReviewService {
       const output = await this.ask(
         session,
         apiKey,
-        gapsMessages(input.expectation, bases, { functionName, agentName }),
+        gapsMessages(expectation, bases, { functionName, agentName }),
         reviewGapsModelOutputSchema,
       );
       const result = toGapsResult(output, bases);
@@ -357,7 +381,7 @@ export class FunctionReviewService {
     agentId: string,
     field: ReviewableField,
     answers: FunctionAnswers,
-    context: { functionName: string; agentName: string },
+    context: FieldPromptContext,
   ): Promise<ReviewFieldResult> {
     // Sem saldo, o campo nem chega à IA (design D9).
     await this.assertBalance(session);
@@ -494,7 +518,7 @@ export class FunctionReviewService {
     tenantId: string,
     agentId: string,
     reviewId: string,
-  ): Promise<Session & { fieldIds: string[]; gapFieldIds?: string[] }> {
+  ): Promise<Session & { fieldIds: string[]; gapFieldIds?: string[]; expectation?: string }> {
     const session = await this.sessions.find(reviewId);
     // Revisão de outro tenant ou de outro agente é como se não existisse.
     if (!session || session.tenantId !== tenantId || session.agentId !== agentId) throw notFound();
@@ -505,7 +529,12 @@ export class FunctionReviewService {
   private async template(
     tenantId: string,
     agentId: string,
-  ): Promise<{ content: FunctionTemplateContent; functionName: string; agentName: string }> {
+  ): Promise<{
+    content: FunctionTemplateContent;
+    functionName: string;
+    functionDescription: string;
+    agentName: string;
+  }> {
     const agent = await this.agentRows.getById(tenantId, agentId);
     const [config] = await this.db
       .select({
@@ -524,7 +553,12 @@ export class FunctionReviewService {
     const published = config.versionId
       ? await this.catalog.versionById(config.versionId)
       : await this.catalog.latestOfTemplate(config.templateId);
-    return { content: published.content, functionName: published.name, agentName: agent.name };
+    return {
+      content: published.content,
+      functionName: published.name,
+      functionDescription: published.description,
+      agentName: agent.name,
+    };
   }
 }
 

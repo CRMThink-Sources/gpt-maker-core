@@ -9,6 +9,7 @@
     "start:api": "node dist/main.api.js",
     "start:worker": "node dist/main.worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "review:eval": "tsx scripts/review-eval.ts",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",

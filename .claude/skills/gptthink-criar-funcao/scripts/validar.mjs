@@ -67,6 +67,17 @@ function checkReview(owner, review, { at, id, allowed, maxItems, maxLength, scop
     if (!allowed.includes(key)) err(`${at}: review.${key} não vale para ${owner}`);
   if (review.rubric !== undefined && (typeof review.rubric !== 'string' || review.rubric.trim().length > 500))
     err(`${at}: review.rubric é um texto de até 500 caracteres`);
+  if (review.examples !== undefined) {
+    const ex = review.examples;
+    if (ex === null || typeof ex !== 'object' || Array.isArray(ex)) err(`${at}: review.examples precisa ser { good, bad }`);
+    else {
+      for (const key of Object.keys(ex))
+        if (key !== 'good' && key !== 'bad') err(`${at}: review.examples.${key} não existe (use good e bad)`);
+      for (const key of ['good', 'bad'])
+        if (typeof ex[key] !== 'string' || ex[key].trim().length < 1 || ex[key].trim().length > 400)
+          err(`${at}: review.examples.${key} é um texto de 1 a 400 caracteres`);
+    }
+  }
   if (review.minLength !== undefined) {
     if (!int(review.minLength) || review.minLength < 1) err(`${at}: review.minLength é um inteiro a partir de 1`);
     else if (int(maxLength) && review.minLength > maxLength)
@@ -89,13 +100,13 @@ function checkField(f, where) {
   switch (f.kind) {
     case 'TEXT':
       if (!int(f.maxLength) || f.maxLength < 1 || f.maxLength > BEHAVIOR_MAX) err(`${at}: maxLength de 1 a 3000`);
-      checkReview('TEXT', f.review, { at, id: f.id, allowed: ['minLength', 'rubric'], maxLength: f.maxLength, scope: 'campo' });
+      checkReview('TEXT', f.review, { at, id: f.id, allowed: ['minLength', 'rubric', 'examples'], maxLength: f.maxLength, scope: 'campo' });
       break;
     case 'TEXT_LIST':
       if (!int(f.minItems) || !int(f.maxItems) || f.minItems < 0 || f.maxItems < 1 || f.maxItems > 20 || f.minItems > f.maxItems)
         err(`${at}: minItems 0..20, maxItems 1..20, min ≤ max`);
       if (!int(f.itemMaxLength) || f.itemMaxLength < 1 || f.itemMaxLength > 1000) err(`${at}: itemMaxLength de 1 a 1000`);
-      checkReview('TEXT_LIST', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric'], maxItems: f.maxItems });
+      checkReview('TEXT_LIST', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric', 'examples'], maxItems: f.maxItems });
       break;
     case 'URL':
       if (f.maxLength !== undefined && (!int(f.maxLength) || f.maxLength < 10 || f.maxLength > 2000)) err(`${at}: maxLength de 10 a 2000`);
@@ -148,7 +159,7 @@ function checkField(f, where) {
         if (!int(s.maxLength) || s.maxLength < 1 || s.maxLength > TRAINING_MAX) err(`${at}.${s.id}: maxLength de 1 a ${TRAINING_MAX}`);
         checkReview('subcampo', s.review, { at: `${at}.${s.id}`, id: `${f.id}.${s.id}`, allowed: ['minLength'], maxLength: s.maxLength, scope: 'subcampo' });
       }
-      checkReview('KNOWLEDGE', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric'], maxItems: f.maxItems });
+      checkReview('KNOWLEDGE', f.review, { at, id: f.id, allowed: ['recommendedItems', 'rubric', 'examples'], maxItems: f.maxItems });
       if (!str(f.format, 1, 500)) err(`${at}: format de 1 a 500 caracteres`);
       break;
   }

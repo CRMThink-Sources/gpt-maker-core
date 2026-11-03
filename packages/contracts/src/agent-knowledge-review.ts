@@ -69,11 +69,26 @@ export function reviewableFields(
   });
 }
 
+/**
+ * Cobertura da base (spec agent-knowledge-gaps): a expectativa do cliente contra o que a base
+ * cobre. Enviada ao criar a revisão, fica só na sessão da revisão (30 minutos) para dar contexto
+ * às revisões de campo e à cobertura; nada é gravado no banco.
+ */
+export const EXPECTATION_MIN = 20;
+export const EXPECTATION_MAX = 1000;
+const expectationSchema = z
+  .string()
+  .trim()
+  .min(EXPECTATION_MIN, `descreva em pelo menos ${EXPECTATION_MIN} caracteres`)
+  .max(EXPECTATION_MAX, `use até ${EXPECTATION_MAX} caracteres`);
+
 /** Criar a revisão: os campos que o cliente quer revisar. */
 export const createReviewInputSchema = z.object({
   fieldIds: z.array(fieldId).min(1).max(60),
   /** Haverá análise de cobertura: a sessão guarda todos os campos de base, inclusive os vazios. */
   withGaps: z.boolean().optional(),
+  /** O que o cliente espera do agente; opcional, vira contexto das revisões desta sessão. */
+  expectation: expectationSchema.optional(),
 });
 export type CreateReviewInput = z.infer<typeof createReviewInputSchema>;
 
@@ -92,10 +107,51 @@ export const reviewFieldInputSchema = z.object({
 });
 export type ReviewFieldInput = z.infer<typeof reviewFieldInputSchema>;
 
+/** Tipo do problema; fixo para a tela poder rotular e ordenar. */
+export const reviewProblemCategorySchema = z.enum([
+  'ambiguous',
+  'incomplete',
+  'contradiction',
+  'too_long',
+  'missing_term',
+  'off_topic',
+  'duplicate',
+  'other',
+]);
+export type ReviewProblemCategory = z.infer<typeof reviewProblemCategorySchema>;
+
+/** `blocks`: atrapalha o agente; `polish`: melhoria. */
+export const reviewProblemSeveritySchema = z.enum(['blocks', 'polish']);
+export type ReviewProblemSeverity = z.infer<typeof reviewProblemSeveritySchema>;
+
+export const REVIEW_CATEGORY_LABELS: Record<ReviewProblemCategory, string> = {
+  ambiguous: 'Ambíguo',
+  incomplete: 'Incompleto',
+  contradiction: 'Contraditório',
+  too_long: 'Longo demais',
+  missing_term: 'Sem prazo ou condição',
+  off_topic: 'Fora do assunto',
+  duplicate: 'Repetido',
+  other: 'Outro',
+};
+
+const problemText = z.string().trim().min(1).max(300);
+
+/** Saída da IA: categoria ou gravidade desconhecida vira `other`/`polish`, sem derrubar o campo. */
+const modelProblemSchema = z.object({
+  category: reviewProblemCategorySchema.catch('other'),
+  severity: reviewProblemSeveritySchema.catch('polish'),
+  text: problemText,
+});
+
+/** Problema entregue ao app; `code` repete a categoria (campo antigo, mantido por compatibilidade). */
 const problemSchema = z.object({
   code: z.string().trim().min(1).max(40),
-  text: z.string().trim().min(1).max(300),
+  category: reviewProblemCategorySchema,
+  severity: reviewProblemSeveritySchema,
+  text: problemText,
 });
+export type ReviewProblem = z.infer<typeof problemSchema>;
 
 /**
  * O que a IA devolve por campo (validado no backend, com uma nova tentativa se vier fora do
@@ -107,7 +163,7 @@ export const reviewModelFieldOutputSchema = z.object({
     .array(
       z.object({
         index: z.number().int().nonnegative(),
-        problems: z.array(problemSchema).max(10).default([]),
+        problems: z.array(modelProblemSchema).max(10).default([]),
         suggestion: z.record(z.string(), z.string().trim().max(TRAINING_TEXT_MAX)).optional(),
       }),
     )
@@ -175,22 +231,12 @@ export const aiKeyViewSchema = z.object({
 });
 export type AiKeyView = z.infer<typeof aiKeyViewSchema>;
 
-/**
- * Cobertura da base (spec agent-knowledge-gaps): a expectativa do cliente contra o que a base
- * cobre. A expectativa vive só na tela; o backend a usa na hora e não a guarda.
- */
-export const EXPECTATION_MIN = 20;
-export const EXPECTATION_MAX = 1000;
-
 /** Campo reservado e chave de cobrança da análise de cobertura (não é id de campo de template). */
 export const GAPS_FIELD_ID = '__gaps__';
 
 export const reviewGapsInputSchema = z.object({
-  expectation: z
-    .string()
-    .trim()
-    .min(EXPECTATION_MIN, `descreva em pelo menos ${EXPECTATION_MIN} caracteres`)
-    .max(EXPECTATION_MAX, `use até ${EXPECTATION_MAX} caracteres`),
+  /** Opcional: sem ela, vale a que foi enviada ao criar a revisão (guardada na sessão). */
+  expectation: expectationSchema.optional(),
   /** Respostas da tela (salvas ou não), para o backend conhecer os itens que a base já tem. */
   answers: functionAnswersSchema,
   /** Resumos dos campos já revisados; pode ser vazio (base ainda vazia). */

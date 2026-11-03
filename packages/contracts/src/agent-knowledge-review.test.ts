@@ -56,7 +56,7 @@ describe('contratos da revisão por IA', () => {
       items: [
         {
           index: 0,
-          problems: [{ code: 'NO_STEPS', text: 'A solução não tem passos.' }],
+          problems: [{ category: 'incomplete', severity: 'blocks', text: 'A solução não tem passos.' }],
           suggestion: { solucao: '1. Abra o menu. 2. Troque a senha.' },
         },
         { index: 1 },
@@ -71,7 +71,7 @@ describe('contratos da revisão por IA', () => {
     const bad = (value: unknown) => reviewModelFieldOutputSchema.safeParse(value).success;
     expect(bad({ items: [] })).toBe(false);
     expect(bad({ summary: 'x', items: [{ index: -1 }] })).toBe(false);
-    expect(bad({ summary: 'x', items: [{ index: 0, problems: [{ code: 'A', text: '' }] }] })).toBe(
+    expect(bad({ summary: 'x', items: [{ index: 0, problems: [{ category: 'other', severity: 'polish', text: '' }] }] })).toBe(
       false,
     );
     expect(bad({ summary: 'x', items: [{ index: 0, suggestion: 'texto solto' }] })).toBe(false);
@@ -297,6 +297,38 @@ describe('cobertura da base (agent-knowledge-gaps)', () => {
         gaps: [{ fieldId: 'f', title: 't', why: 'w', item: {}, applicable: false, reason: 'X' }],
         covered: [],
       }).success,
+    ).toBe(false);
+  });
+
+  it('normaliza categoria e gravidade desconhecidas sem derrubar o campo', () => {
+    const parsed = reviewModelFieldOutputSchema.parse({
+      summary: 'x',
+      items: [
+        {
+          index: 0,
+          problems: [
+            { category: 'tom_de_voz', severity: 'urgente', text: 'Tom informal demais.' },
+            { text: 'Sem categoria nem gravidade.' },
+            { category: 'missing_term', severity: 'blocks', text: 'Falta o prazo.' },
+          ],
+        },
+      ],
+    });
+    expect(parsed.items[0]!.problems).toEqual([
+      { category: 'other', severity: 'polish', text: 'Tom informal demais.' },
+      { category: 'other', severity: 'polish', text: 'Sem categoria nem gravidade.' },
+      { category: 'missing_term', severity: 'blocks', text: 'Falta o prazo.' },
+    ]);
+  });
+
+  it('aceita a expectativa ao criar a revisão, com os mesmos limites da cobertura', () => {
+    const base = { fieldIds: ['a'] };
+    expect(createReviewInputSchema.safeParse(base).success).toBe(true);
+    const ok = 'Atender dúvidas de troca e envio.';
+    expect(createReviewInputSchema.safeParse({ ...base, expectation: ok }).success).toBe(true);
+    expect(createReviewInputSchema.safeParse({ ...base, expectation: 'curta' }).success).toBe(false);
+    expect(
+      createReviewInputSchema.safeParse({ ...base, expectation: 'x'.repeat(1001) }).success,
     ).toBe(false);
   });
 });

@@ -5,7 +5,9 @@ import {
   type FunctionReviewWarning,
   type FunctionTemplateContent,
   EXPECTATION_MIN,
+  type ReviewFieldResult,
   type ReviewGap,
+  type ReviewProblem,
   type KnowledgeItem,
   REVIEW_TEXT_KEY,
   reviewableFields,
@@ -188,4 +190,64 @@ export function canAddGap(
   return !issues.some(
     (issue) => issue.field === field.id || issue.field.startsWith(`${field.id}[`),
   );
+}
+
+/** Problemas por item acima disso: os de melhoria (`polish`) ficam recolhidos (spec, categoria e gravidade). */
+export const PROBLEMS_COLLAPSE_ABOVE = 3;
+
+/** `blocks` antes de `polish`, mantendo a ordem de origem dentro de cada gravidade. */
+export function sortedProblems(problems: ReviewProblem[]): ReviewProblem[] {
+  const rank = (problem: ReviewProblem) => (problem.severity === 'blocks' ? 0 : 1);
+  return problems
+    .map((problem, index) => ({ problem, index }))
+    .sort((a, b) => rank(a.problem) - rank(b.problem) || a.index - b.index)
+    .map((entry) => entry.problem);
+}
+
+/**
+ * O que mostrar de um item: com mais de 3 problemas só os que atrapalham ficam à vista e os de
+ * melhoria vão para `hidden`, atrás de "ver mais".
+ */
+export function visibleProblems(problems: ReviewProblem[]): {
+  shown: ReviewProblem[];
+  hidden: ReviewProblem[];
+} {
+  const sorted = sortedProblems(problems);
+  if (sorted.length <= PROBLEMS_COLLAPSE_ABOVE) return { shown: sorted, hidden: [] };
+  return {
+    shown: sorted.filter((problem) => problem.severity === 'blocks'),
+    hidden: sorted.filter((problem) => problem.severity === 'polish'),
+  };
+}
+
+/** Itens com problema que atrapalha o agente x itens só com melhorias, nos campos já revisados. */
+export function reviewImpact(results: Array<Pick<ReviewFieldResult, 'items'>>): {
+  blocking: number;
+  polishOnly: number;
+} {
+  let blocking = 0;
+  let polishOnly = 0;
+  for (const result of results) {
+    for (const item of result.items) {
+      if (item.problems.some((problem) => problem.severity === 'blocks')) blocking++;
+      else if (item.problems.length > 0) polishOnly++;
+    }
+  }
+  return { blocking, polishOnly };
+}
+
+/** Frase do resumo da revisão; `null` quando não há nada a dizer. */
+export function impactMessage(impact: { blocking: number; polishOnly: number }): string | null {
+  const parts: string[] = [];
+  if (impact.blocking > 0) {
+    parts.push(
+      impact.blocking === 1
+        ? '1 item atrapalha o agente'
+        : `${impact.blocking} itens atrapalham o agente`,
+    );
+  }
+  if (impact.polishOnly > 0) {
+    parts.push(impact.polishOnly === 1 ? '1 tem melhorias' : `${impact.polishOnly} têm melhorias`);
+  }
+  return parts.length ? parts.join(' e ') : null;
 }
