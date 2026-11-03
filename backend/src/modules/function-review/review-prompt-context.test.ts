@@ -1,8 +1,4 @@
-import {
-  type FunctionAnswers,
-  type FunctionField,
-  functionFieldSchema,
-} from '@gptmaker/contracts';
+import { type FunctionAnswers, type FunctionField, functionFieldSchema } from '@gptmaker/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   capTitles,
@@ -163,7 +159,156 @@ describe('teto dos títulos dos outros campos', () => {
     expect(list[0]!.titles).toEqual([curto, curto]);
   });
 
-  it('campo que perdeu todos os títulos some da lista', () => {
+  it('campo que perdeu todos os títulos some da lista (fim do teto)', () => {
     expect(capTitles([{ fieldId: 'a', label: 'A', titles: ['L'.repeat(30)] }], 40, 10)).toEqual([]);
+  });
+});
+
+describe('resultado do campo: o que não deve virar ruído na tela', () => {
+  const two = [
+    { index: 0, values: { problema: 'Boleto', solucao: 'Peça no portal.' } },
+    { index: 1, values: { problema: 'Senha', solucao: 'Use o link recebido.' } },
+  ];
+  const problem = (text: string) => ({
+    category: 'other' as const,
+    severity: 'polish' as const,
+    text,
+  });
+
+  it('sugestão igual ao texto atual some, mesmo com espaços e quebras diferentes', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [],
+          suggestion: { problema: 'Boleto', solucao: '  Peça   no\nportal. ' },
+        },
+      ],
+    });
+    expect(result.items).toEqual([]);
+  });
+
+  it('com problema, o item fica mesmo sem sugestão útil', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [problem('Vago.')],
+          suggestion: { problema: 'Boleto', solucao: 'Peça no portal.' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.suggestion).toBeUndefined();
+  });
+
+  it('só os subcampos que mudaram ficam na sugestão', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        { index: 1, problems: [], suggestion: { problema: 'Senha', solucao: '1. Use o link.' } },
+      ],
+    });
+    expect(result.items[0]!.suggestion!.values).toEqual({ solucao: '1. Use o link.' });
+  });
+
+  it('o mesmo item repetido vira uma entrada: problemas juntos e a primeira sugestão', () => {
+    const result = toFieldResult(field, two, {
+      summary: 's',
+      items: [
+        { index: 1, problems: [problem('Duas perguntas.')], suggestion: { solucao: 'Primeira.' } },
+        {
+          index: 1,
+          problems: [problem('Duas perguntas.'), problem('Vago.')],
+          suggestion: { solucao: 'Segunda.' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.problems.map((p) => p.text)).toEqual(['Duas perguntas.', 'Vago.']);
+    expect(result.items[0]!.suggestion!.values).toEqual({ solucao: 'Primeira.' });
+  });
+
+  it('o pedido numera os itens a partir de 1 e manda não contar caracteres', () => {
+    const messages = fieldMessages(field, two, ctx);
+    const user = text(messages, 'user');
+    expect(user).toContain('<item index="1" posição="2">');
+    const system = text(messages, 'system');
+    expect(system).toContain('NUNCA conte caracteres');
+    expect(system).toContain('item <posição>');
+    expect(system).toContain('única entrada por item');
+  });
+});
+
+describe('regras contra sugestão inútil', () => {
+  const system = text(fieldMessages(field, items, ctx), 'system');
+
+  it('texto já claro não ganha reparo nem reescrita equivalente', () => {
+    expect(system).toContain('NÃO aponte ajuste de estilo');
+    expect(system).toContain('não o devolva em "items"');
+  });
+
+  it('o marcador entra só na parte que falta, nunca no lugar do texto inteiro do cliente', () => {
+    expect(system).toContain('NUNCA troque o texto inteiro do cliente por um marcador sozinho');
+    expect(system).toContain('aponte o problema e não sugira texto');
+  });
+});
+
+describe('falsos positivos vistos no teste local', () => {
+  const texto = functionFieldSchema.parse({
+    kind: 'TEXT',
+    id: 'suporte.normal',
+    label: 'Quando o chamado é de prioridade NORMAL',
+    required: true,
+    maxLength: 55,
+  }) as Extract<FunctionField, { kind: 'TEXT' }>;
+  const others = [
+    { fieldId: 'base.faq', label: 'Perguntas frequentes', titles: ['Prazo de troca'] },
+  ];
+
+  it('os títulos dos outros campos de base só vão no pedido de um campo de base', () => {
+    const base = text(fieldMessages(field, items, { ...ctx, otherTitles: others }), 'user');
+    expect(base).toContain('<outros>');
+    const simples = text(
+      fieldMessages(texto, [{ index: 0, values: { text: 'Erro com alternativa.' } }], {
+        ...ctx,
+        otherTitles: others,
+      }),
+      'user',
+    );
+    expect(simples).not.toContain('<outros>');
+    expect(simples).not.toContain('Prazo de troca');
+  });
+
+  it('sugestão que é só um marcador não é entregue, mas o problema continua', () => {
+    const result = toFieldResult(texto, [{ index: 0, values: { text: 'Função parou.' } }], {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [{ category: 'ambiguous', severity: 'polish', text: 'Igual ao exemplo.' }],
+          suggestion: { text: '[preencher: critério para prioridade alta]' },
+        },
+      ],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.problems).toHaveLength(1);
+    expect(result.items[0]!.suggestion).toBeUndefined();
+  });
+
+  it('marcador dentro de uma frase com o texto do cliente é entregue', () => {
+    const result = toFieldResult(texto, [{ index: 0, values: { text: 'Função parou.' } }], {
+      summary: 's',
+      items: [
+        {
+          index: 0,
+          problems: [{ category: 'incomplete', severity: 'blocks', text: 'Falta o critério.' }],
+          suggestion: { text: 'Função parou para [preencher: quantos usuários].' },
+        },
+      ],
+    });
+    expect(result.items[0]!.suggestion!.values.text).toContain('Função parou');
   });
 });

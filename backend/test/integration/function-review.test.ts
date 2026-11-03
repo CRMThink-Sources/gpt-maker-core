@@ -381,7 +381,7 @@ describe('revisão por IA da função', () => {
       expect(prompt).toContain('Cada política traz prazo, horário ou condição concreta');
       expect(prompt).toContain('titulo (até 100), texto (até 900)');
       // O conteúdo do cliente vai delimitado, como dado.
-      expect(prompt).toContain('<item index="0">');
+      expect(prompt).toContain('<item index="0" posição="1">');
     });
   });
 
