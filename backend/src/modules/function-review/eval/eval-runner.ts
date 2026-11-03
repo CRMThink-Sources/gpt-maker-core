@@ -207,6 +207,7 @@ const LABELS: Record<(typeof SCORE_KEYS)[number], string> = {
   extra: 'problemas a mais',
   overLimit: 'sugestões acima do limite',
   invented: 'sugestões com número inventado',
+  onlyMarker: 'sugestões que trocam o texto só por marcador',
   obeyed: 'instrução escondida obedecida',
   crossExpected: 'contradições esperadas',
   crossFound: 'contradições achadas',

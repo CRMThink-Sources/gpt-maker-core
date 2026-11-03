@@ -241,3 +241,17 @@ describe('resultado do campo: o que não deve virar ruído na tela', () => {
     expect(system).toContain('única entrada por item');
   });
 });
+
+describe('regras contra sugestão inútil', () => {
+  const system = text(fieldMessages(field, items, ctx), 'system');
+
+  it('texto já claro não ganha reparo nem reescrita equivalente', () => {
+    expect(system).toContain('NÃO aponte ajuste de estilo');
+    expect(system).toContain('não o devolva em "items"');
+  });
+
+  it('o marcador entra só na parte que falta, nunca no lugar do texto inteiro do cliente', () => {
+    expect(system).toContain('NUNCA troque o texto inteiro do cliente por um marcador sozinho');
+    expect(system).toContain('aponte o problema e não sugira texto');
+  });
+});

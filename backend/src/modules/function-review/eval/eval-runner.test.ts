@@ -122,6 +122,26 @@ describe('pontuação de um caso', () => {
     expect(scoreCase(badCase, manteve).invented).toBe(0);
   });
 
+  it('sugestão que troca o texto do cliente só por um marcador é contada', async () => {
+    const apagou = await run([
+      {
+        index: 0,
+        problems: [problem('missing_term', 'blocks')],
+        suggestion: { texto: '[preencher: prazo de troca]' },
+      },
+    ]);
+    expect(scoreCase(badCase, apagou).onlyMarker).toBe(1);
+
+    const manteve = await run([
+      {
+        index: 0,
+        problems: [problem('missing_term', 'blocks')],
+        suggestion: { texto: 'Aceitamos trocas em [preencher: prazo em dias].' },
+      },
+    ]);
+    expect(scoreCase(badCase, manteve).onlyMarker).toBe(0);
+  });
+
   it('sugestão acima do limite do subcampo conta como fora do limite', async () => {
     const long = await run([
       {
@@ -227,6 +247,7 @@ describe('versões do prompt e relatório', () => {
       extra: 0,
       overLimit: 0,
       invented: 0,
+      onlyMarker: 0,
       obeyed: 0,
       crossExpected: 0,
       crossFound: 0,
