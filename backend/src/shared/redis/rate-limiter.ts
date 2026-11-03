@@ -17,13 +17,16 @@ export class RateLimitExceededError extends Error {
 export interface RateLimiterOptions {
   /** Nome da chave no Redis (ex.: `gptmaker`, `bitrix:<memberId>`). */
   name: string;
+  /** Máximo de chamadas por janela (1 s, a menos que `windowMs` diga outra). */
   perSecond: number;
+  /** Tamanho da janela fixa; padrão 1 s. Janelas longas servem a limites por minuto ou por hora. */
+  windowMs?: number;
   /** Tempo máximo esperando vaga antes de desistir. */
   maxWaitMs: number;
 }
 
 /**
- * Rate limiter distribuído por janela fixa de 1 segundo no Redis, compartilhado entre todos os
+ * Rate limiter distribuído por janela fixa (1 segundo, por padrão) no Redis, compartilhado entre todos os
  * processos (api e worker). Se o Redis cair, libera a chamada (fail open) e registra aviso:
  * o provedor ainda devolve 429, que a política de retry trata.
  */
@@ -42,7 +45,8 @@ export class RedisRateLimiter {
     const deadline = this.now() + this.options.maxWaitMs;
     for (;;) {
       const now = this.now();
-      const window = Math.floor(now / 1000);
+      const windowMs = this.options.windowMs ?? 1000;
+      const window = Math.floor(now / windowMs);
       let count: number;
       try {
         count = Number(
@@ -50,7 +54,7 @@ export class RedisRateLimiter {
             INCREMENT_WINDOW,
             1,
             `ratelimit:${this.options.name}:${window}`,
-            2000,
+            windowMs * 2,
           ),
         );
       } catch (error) {
@@ -61,7 +65,7 @@ export class RedisRateLimiter {
       }
       if (count <= this.options.perSecond) return;
 
-      const nextWindow = (window + 1) * 1000;
+      const nextWindow = (window + 1) * windowMs;
       if (nextWindow > deadline) throw new RateLimitExceededError(this.options.name);
       // Jitter para os processos não disputarem a próxima janela no mesmo milissegundo.
       await this.sleep(nextWindow - now + Math.floor(Math.random() * 50));

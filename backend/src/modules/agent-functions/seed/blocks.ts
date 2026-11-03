@@ -27,6 +27,11 @@ const comum: SeedBlock = {
         required: true,
         maxLength: 250,
         multiline: true,
+        review: {
+          minLength: 40,
+          rubric:
+            'Diz o que a empresa vende, para quem e onde atende, em uma ou duas frases, sem slogans.',
+        },
       },
       {
         kind: 'CHOICE',

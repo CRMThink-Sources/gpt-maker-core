@@ -350,3 +350,87 @@ describe('rascunho e bloco gravados antes das transferências', () => {
     expect(() => templateIssues(content)).not.toThrow();
   });
 });
+
+describe('critério de revisão (review) no template', () => {
+  const patched = (id: string, patch: Record<string, unknown>) => ({
+    ...sdrFixtureInput,
+    fields: sdrFixture.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
+  });
+  const messages = (input: unknown) => {
+    const result = functionTemplateContentSchema.safeParse(input);
+    return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  };
+
+  it('aceita review em texto, lista, base e subcampo', () => {
+    const input = {
+      ...patched('empresa.descricao', {
+        review: { minLength: 40, rubric: 'Diz o que a empresa vende.' },
+      }),
+    };
+    const withList = {
+      ...input,
+      fields: input.fields.map((field) => {
+        if (field.id === 'sdr.perguntas') return { ...field, review: { recommendedItems: 2 } };
+        if (field.id !== 'base.produtos' || field.kind !== 'KNOWLEDGE') return field;
+        return {
+          ...field,
+          review: { recommendedItems: 3, rubric: 'Cada produto tem preço e prazo.' },
+          subfields: field.subfields.map((subfield) =>
+            subfield.id === 'descricao' ? { ...subfield, review: { minLength: 80 } } : subfield,
+          ),
+        };
+      }),
+    };
+    const result = functionTemplateContentSchema.safeParse(withList);
+    expect(result.success).toBe(true);
+    if (result.success) expect(functionTemplateErrors(result.data)).toEqual([]);
+  });
+
+  it('recusa recomendado de itens acima do máximo, nomeando o campo', () => {
+    expect(messages(patched('base.produtos', { review: { recommendedItems: 6 } }))).toEqual([
+      'base.produtos: o recomendado de itens da revisão (6) passa do máximo de itens do campo (5)',
+    ]);
+    expect(messages(patched('sdr.perguntas', { review: { recommendedItems: 4 } }))).toEqual([
+      'sdr.perguntas: o recomendado de itens da revisão (4) passa do máximo de itens do campo (3)',
+    ]);
+  });
+
+  it('recusa mínimo de texto acima do limite do campo', () => {
+    expect(messages(patched('empresa.nome', { review: { minLength: 101 } }))).toEqual([
+      'empresa.nome: o mínimo da revisão (101) passa do limite de 100 caracteres do campo',
+    ]);
+  });
+
+  it('recusa mínimo do subcampo acima do limite dele', () => {
+    const input = {
+      ...sdrFixtureInput,
+      fields: sdrFixture.fields.map((field) =>
+        field.id === 'base.produtos' && field.kind === 'KNOWLEDGE'
+          ? {
+              ...field,
+              subfields: field.subfields.map((subfield) =>
+                subfield.id === 'nome' ? { ...subfield, review: { minLength: 61 } } : subfield,
+              ),
+            }
+          : field,
+      ),
+    };
+    expect(messages(input)).toEqual([
+      'base.produtos.nome: o mínimo da revisão (61) passa do limite de 60 caracteres do subcampo',
+    ]);
+  });
+
+  it('recusa rubric acima de 500 caracteres e valores fora do intervalo', () => {
+    expect(messages(patched('base.produtos', { review: { rubric: 'x'.repeat(501) } }))).not.toEqual(
+      [],
+    );
+    expect(messages(patched('base.produtos', { review: { recommendedItems: 0 } }))).not.toEqual([]);
+    expect(messages(patched('empresa.nome', { review: { minLength: 0 } }))).not.toEqual([]);
+  });
+
+  it('recusa chave que não vale para o tipo do campo', () => {
+    // Em vez de descartar em silêncio: recommendedItems não existe em texto, minLength não em lista.
+    expect(messages(patched('empresa.nome', { review: { recommendedItems: 1 } }))).not.toEqual([]);
+    expect(messages(patched('sdr.perguntas', { review: { minLength: 10 } }))).not.toEqual([]);
+  });
+});

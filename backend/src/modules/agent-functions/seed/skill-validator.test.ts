@@ -159,3 +159,74 @@ describe('validador da skill de criação de funções', () => {
     expect(result.output).toContain(message);
   });
 });
+
+describe('critério de revisão (review) na skill', () => {
+  const sdr = SEED_TEMPLATES.find((template) => template.code === 'SDR')!.draft;
+  type Raw = { id: string; subfields?: Array<{ id: string }> };
+
+  /** Troca chaves de um campo do SDR (`fields` é `unknown[]` no tipo de entrada do schema). */
+  const patched = (id: string, change: Record<string, unknown>): FunctionTemplateDraftInput => ({
+    ...sdr,
+    fields: sdr.fields.map((field) =>
+      (field as Raw).id === id ? { ...(field as Raw), ...change } : field,
+    ),
+  });
+  const withSubfieldReview = (review: unknown): FunctionTemplateDraftInput => ({
+    ...sdr,
+    fields: sdr.fields.map((field) => {
+      const raw = field as Raw;
+      if (raw.id !== 'base.produtos') return field;
+      return {
+        ...raw,
+        subfields: raw.subfields!.map((sub) => (sub.id === 'descricao' ? { ...sub, review } : sub)),
+      };
+    }),
+  });
+
+  /** O schema da publicação e o validador da skill recusam com a mesma mensagem. */
+  function refusedByBoth(draft: FunctionTemplateDraftInput, message: string) {
+    const parsed = functionTemplateDraftSchema.safeParse(draft);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error!.issues.map((issue) => issue.message)).toContain(message);
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain(message);
+  }
+
+  it('recomendado de itens acima do máximo: os dois recusam', () => {
+    refusedByBoth(
+      patched('base.produtos', { review: { recommendedItems: 16 } }),
+      'base.produtos: o recomendado de itens da revisão (16) passa do máximo de itens do campo (15)',
+    );
+  });
+
+  it('mínimo de texto acima do limite do campo: os dois recusam', () => {
+    refusedByBoth(
+      patched('sdr.perfil_ideal', { review: { minLength: 221 } }),
+      'sdr.perfil_ideal: o mínimo da revisão (221) passa do limite de 220 caracteres do campo',
+    );
+  });
+
+  it('mínimo do subcampo acima do limite dele: os dois recusam', () => {
+    refusedByBoth(
+      withSubfieldReview({ minLength: 901 }),
+      'base.produtos.descricao: o mínimo da revisão (901) passa do limite de 900 caracteres do subcampo',
+    );
+  });
+
+  it('chave que não vale para o tipo do campo: os dois recusam', () => {
+    const draft = patched('sdr.perfil_ideal', { review: { recommendedItems: 1 } });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(false);
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('review.recommendedItems não vale para TEXT');
+  });
+
+  it('rubric acima de 500 caracteres: os dois recusam', () => {
+    const draft = patched('base.produtos', { review: { rubric: 'x'.repeat(501) } });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(false);
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('review.rubric é um texto de até 500 caracteres');
+  });
+});

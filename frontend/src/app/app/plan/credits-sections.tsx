@@ -256,13 +256,20 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
               <tbody>
                 {usage.rows.map((row) => (
                   <tr
-                    key={`${row.day}:${row.agentId ?? '-'}`}
+                    key={`${row.day}:${row.agentId ?? '-'}:${row.kind}`}
                     className="border-b border-zinc-100 last:border-0"
                   >
                     <td className="py-2 pr-4 text-zinc-700">{formatDay(row.day)}</td>
-                    <td className="py-2 pr-4 text-zinc-900">{row.agentName ?? 'Sem agente'}</td>
+                    <td className="py-2 pr-4 text-zinc-900">
+                      {row.agentName ?? 'Sem agente'}
+                      {row.kind === 'FUNCTION_REVIEW' && (
+                        <span className="ml-2 text-xs text-zinc-500">Revisão da função</span>
+                      )}
+                    </td>
                     <td className="py-2 pr-4 text-right tabular-nums text-zinc-700">
-                      {credits(row.responses)}
+                      {row.kind === 'FUNCTION_REVIEW'
+                        ? `${credits(row.responses)} campos`
+                        : credits(row.responses)}
                     </td>
                     <td className="py-2 text-right tabular-nums text-zinc-900">
                       {credits(row.credits)}

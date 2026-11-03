@@ -18,7 +18,11 @@
           "help": "Em uma ou duas frases: o que vende, para quem e onde atende.",
           "required": true,
           "maxLength": 250,
-          "multiline": true
+          "multiline": true,
+          "review": {
+            "minLength": 40,
+            "rubric": "Diz o que a empresa vende, para quem e onde atende, em uma ou duas frases, sem slogans."
+          }
         },
         {
           "kind": "CHOICE",

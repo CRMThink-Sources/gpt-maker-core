@@ -187,9 +187,21 @@ export const POST_SALES: SeedTemplate = {
         help: 'Troca, devolução, garantia, prazos de entrega.',
         required: false,
         maxItems: 10,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Troca, devolução, garantia e prazos com números (dias, condições) e exceções. O agente só promete o que está escrito aqui.',
+        },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
-          { id: 'texto', label: 'Texto', required: true, maxLength: 900, multiline: true },
+          {
+            id: 'texto',
+            label: 'Texto',
+            required: true,
+            maxLength: 900,
+            multiline: true,
+            review: { minLength: 60 },
+          },
         ],
         format: 'Política: {{titulo}}\n{{texto}}',
       },
@@ -200,9 +212,21 @@ export const POST_SALES: SeedTemplate = {
         help: 'Como ativar, montar, acessar.',
         required: false,
         maxItems: 15,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Passo a passo numerado de ativação, montagem ou acesso, na ordem em que o cliente faz, com o que ele precisa ter em mãos.',
+        },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
-          { id: 'texto', label: 'Passo a passo', required: true, maxLength: 900, multiline: true },
+          {
+            id: 'texto',
+            label: 'Passo a passo',
+            required: true,
+            maxLength: 900,
+            multiline: true,
+            review: { minLength: 80 },
+          },
         ],
         format: 'Primeiros passos: {{titulo}}\n{{texto}}',
       },
@@ -212,9 +236,20 @@ export const POST_SALES: SeedTemplate = {
         label: 'Perguntas frequentes',
         required: false,
         maxItems: 20,
+        review: {
+          rubric:
+            'A pergunta está como o cliente escreveria; a resposta é direta e completa e cabe em poucas frases.',
+        },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
-          { id: 'resposta', label: 'Resposta', required: true, maxLength: 800, multiline: true },
+          {
+            id: 'resposta',
+            label: 'Resposta',
+            required: true,
+            maxLength: 800,
+            multiline: true,
+            review: { minLength: 30 },
+          },
         ],
         format: 'Pergunta: {{pergunta}}\nResposta: {{resposta}}',
       },

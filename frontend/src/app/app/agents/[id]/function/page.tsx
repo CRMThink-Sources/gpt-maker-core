@@ -8,10 +8,15 @@ import type {
   FunctionMode,
   FunctionPreview,
   FunctionPublishInput,
+  ReviewGap,
 } from '@gptmaker/contracts';
-import { FUNCTION_ADDITIONAL_INSTRUCTIONS_MAX, FUNCTION_BEHAVIOR_MAX } from '@gptmaker/contracts';
+import {
+  flattenFields,
+  FUNCTION_ADDITIONAL_INSTRUCTIONS_MAX,
+  FUNCTION_BEHAVIOR_MAX,
+} from '@gptmaker/contracts';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, Loading } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
@@ -21,6 +26,9 @@ import { useTransferAgents } from '../../use-transfer-agents';
 import { Field, inputClass } from '../../agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from '../../function-form';
 import { BehaviorDiff, FunctionPreviewView } from '../../function-preview';
+import { attentionCount, withGapItem } from '../../review-logic';
+import { ReviewPanel } from '../../review-ui';
+import { useAiKey, useFunctionReview } from '../../use-function-review';
 import { useAgent } from '../agent-context';
 
 const MODES: Record<FunctionMode, string> = {
@@ -69,6 +77,20 @@ export default function AgentFunctionPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Pontos de atenção que pedem confirmação antes da prévia (spec "Avisos não bloqueiam"). */
+  const [attention, setAttention] = useState<number | null>(null);
+  const [expectation, setExpectation] = useState('');
+  const aiKey = useAiKey(api);
+  const review = useFunctionReview(api, `/app/agents/${encodeURIComponent(agent.id)}`);
+  const ai = useMemo(
+    () => ({
+      fields: review.state.fields,
+      busy: review.running,
+      onRerun: (fieldId: string) => void review.run([fieldId], answers),
+      onApplied: review.applied,
+    }),
+    [review, answers],
+  );
 
   const base = `/app/agents/${encodeURIComponent(agent.id)}`;
   const readOnly = !session.canManage || agent.status === 'OUT_OF_SYNC';
@@ -140,6 +162,16 @@ export default function AgentFunctionPage() {
     return () => clearInterval(timer);
   }, [pending, load, settle]);
 
+  /** "Adicionar" da lacuna: o item entra no fim do campo, pelo mesmo caminho da digitação. */
+  function addGap(gap: ReviewGap, index: number) {
+    const field = flattenFields(config!.form.fields).find((entry) => entry.id === gap.fieldId);
+    if (!field) return;
+    const next = withGapItem(field, answers[field.id], gap.item, crypto.randomUUID());
+    if (next === null) return;
+    setAnswers({ ...answers, [field.id]: next });
+    review.gapAdded(index);
+  }
+
   function publishBody(): FunctionPublishInput {
     return {
       answers,
@@ -165,7 +197,15 @@ export default function AgentFunctionPage() {
     }
   }
 
-  async function openPreview() {
+  async function openPreview(confirmed = false) {
+    if (!confirmed && config) {
+      const count = attentionCount(config.form, answers);
+      if (count > 0) {
+        setAttention(count);
+        return;
+      }
+    }
+    setAttention(null);
     setError(null);
     setNotice(null);
     setBusy(true);
@@ -428,6 +468,22 @@ export default function AgentFunctionPage() {
         </Card>
       )}
 
+      {!readOnly && (
+        <ReviewPanel
+          form={config.form}
+          answers={answers}
+          aiKey={aiKey}
+          state={review.state}
+          running={review.running}
+          disabled={locked || busy}
+          canConfigureKey={session.user.isAdmin}
+          expectation={expectation}
+          onExpectation={setExpectation}
+          onAddGap={addGap}
+          onReview={(ids) => void review.run(ids, answers, expectation)}
+        />
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
         <div className="min-w-0 space-y-4">
           {mode !== 'TAKEN_OVER' && (
@@ -448,6 +504,7 @@ export default function AgentFunctionPage() {
             issues={issues}
             disabled={locked || busy}
             agents={transferAgents}
+            ai={ai}
           />
         </div>
         <aside className="hidden space-y-4 xl:sticky xl:top-6 xl:block xl:self-start">
@@ -480,7 +537,7 @@ export default function AgentFunctionPage() {
             type="button"
             className={buttonClass('primary')}
             disabled={busy || pending}
-            onClick={openPreview}
+            onClick={() => void openPreview()}
           >
             Ver prévia e publicar
           </button>
@@ -516,6 +573,37 @@ export default function AgentFunctionPage() {
           }
         >
           <p className="text-sm text-zinc-700">{modeRequest.text}</p>
+        </Modal>
+      )}
+
+      {attention !== null && (
+        <Modal
+          title={`${attention} ${attention === 1 ? 'ponto de atenção' : 'pontos de atenção'}`}
+          description="Os avisos não impedem a publicação, mas o agente atende melhor com eles resolvidos."
+          onRequestClose={() => setAttention(null)}
+          footer={
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={buttonClass('secondary')}
+                onClick={() => setAttention(null)}
+              >
+                Revisar
+              </button>
+              <button
+                type="button"
+                className={buttonClass('primary')}
+                onClick={() => void openPreview(true)}
+              >
+                Publicar mesmo assim
+              </button>
+            </div>
+          }
+        >
+          <p className="text-sm text-zinc-700">
+            Os campos com aviso estão destacados no formulário. Você pode corrigir antes ou seguir
+            para a prévia.
+          </p>
         </Modal>
       )}
 

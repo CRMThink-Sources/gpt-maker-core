@@ -55,6 +55,8 @@ describe('saldo e extrato do tenant', () => {
     agentId?: string;
     refId?: string;
     reason?: string;
+    /** Revisão da função: tipo e chave próprios (a chave leva o sufixo da carteira). */
+    review?: { field: string };
   }): Promise<void> {
     await db.insert(creditLedger).values({
       tenantId,
@@ -64,10 +66,16 @@ describe('saldo e extrato do tenant', () => {
       agentId: values.agentId,
       modelCode: values.type === 'DEBIT' ? 'GPT_5_MINI' : undefined,
       unitCost: values.type === 'DEBIT' ? -values.amount : undefined,
-      refType: values.type === 'DEBIT' ? 'message' : 'subscription',
+      refType: values.review
+        ? 'function_review'
+        : values.type === 'DEBIT'
+          ? 'message'
+          : 'subscription',
       refId: values.refId,
       reason: values.reason,
-      idempotencyKey: randomUUID(),
+      idempotencyKey: values.review
+        ? `review:${values.refId}:${values.review.field}:${values.wallet ?? 'PLAN'}`
+        : randomUUID(),
       createdBy: 'teste',
       createdAt: new Date(values.at),
     });
@@ -164,11 +172,61 @@ describe('saldo e extrato do tenant', () => {
     it('agrupa por dia do Brasil e agente; débito em duas carteiras conta uma resposta', async () => {
       expect(await statement.usage(tenantId, { from: '2026-10-02', to: '2026-10-04' })).toEqual({
         rows: [
-          { day: '2026-10-04', agentId: bia, agentName: 'Bia', responses: 1, credits: 7 },
-          { day: '2026-10-03', agentId: ana, agentName: 'Ana', responses: 2, credits: 6 },
+          {
+            day: '2026-10-04',
+            agentId: bia,
+            agentName: 'Bia',
+            kind: 'RESPONSE',
+            responses: 1,
+            credits: 7,
+          },
+          {
+            day: '2026-10-03',
+            agentId: ana,
+            agentName: 'Ana',
+            kind: 'RESPONSE',
+            responses: 2,
+            credits: 6,
+          },
         ],
         totals: { responses: 3, credits: 13 },
       });
+    });
+
+    it('revisão da função aparece à parte, com os campos revisados, e fora do total de respostas', async () => {
+      // 2 campos revisados; o segundo atravessou duas carteiras (dois lançamentos, um campo).
+      await entry({
+        at: '2026-10-03T14:00:00Z',
+        type: 'DEBIT',
+        amount: -2,
+        agentId: ana,
+        refId: 'r1',
+        review: { field: 'base.faq' },
+      });
+      await entry({
+        at: '2026-10-03T14:00:00Z',
+        type: 'DEBIT',
+        wallet: 'TRIAL',
+        amount: -1,
+        agentId: ana,
+        refId: 'r1',
+        review: { field: 'base.problemas' },
+      });
+      await entry({
+        at: '2026-10-03T14:00:00Z',
+        type: 'DEBIT',
+        wallet: 'PLAN',
+        amount: -1,
+        agentId: ana,
+        refId: 'r1',
+        review: { field: 'base.problemas' },
+      });
+      const view = await statement.usage(tenantId, { from: '2026-10-03', to: '2026-10-03' });
+      expect(view.rows.map((r) => [r.kind, r.responses, r.credits])).toEqual([
+        ['FUNCTION_REVIEW', 2, 4],
+        ['RESPONSE', 2, 6],
+      ]);
+      expect(view.totals).toEqual({ responses: 2, credits: 10 });
     });
 
     it('filtra por agente', async () => {

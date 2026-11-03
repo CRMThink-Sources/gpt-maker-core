@@ -63,6 +63,13 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         adminOnly: true,
       },
       {
+        label: 'Chave de IA',
+        icon: DatabaseIcon,
+        href: '/app/ai-key',
+        match: (path) => path.startsWith('/app/ai-key'),
+        adminOnly: true,
+      },
+      {
         label: 'Avisos',
         icon: BellIcon,
         href: '/app/notifications',

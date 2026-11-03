@@ -40,6 +40,42 @@ describe('loadEnv', () => {
     ).toMatchObject({ CRM_TOOLS_ENABLED: true, CRM_TOOLS_RATE_PER_MINUTE: 30 });
   });
 
+  it('revisão por IA: padrões e sem chave da CRMThink', () => {
+    expect(loadEnv(base)).toMatchObject({
+      VIBECODE_BASE_URL: 'https://vibecode.bitrix24.com',
+      VIBECODE_REVIEW_MODEL: 'bitrix/bitrixgpt-5.5',
+      VIBECODE_PLATFORM_RPM: 20,
+      VIBECODE_TIMEOUT_MS: 60_000,
+      REVIEW_CREDITS_PER_FIELD: 2,
+    });
+    expect(loadEnv(base).VIBECODE_PLATFORM_API_KEY).toBeUndefined();
+    // `VIBECODE_PLATFORM_API_KEY=` no .env conta como ausente.
+    expect(loadEnv({ ...base, VIBECODE_PLATFORM_API_KEY: '  ' }).VIBECODE_PLATFORM_API_KEY).toBe(
+      undefined,
+    );
+  });
+
+  it('revisão por IA: lê as variáveis', () => {
+    expect(
+      loadEnv({
+        ...base,
+        VIBECODE_PLATFORM_API_KEY: ' vibe_api_abc ',
+        VIBECODE_PLATFORM_RPM: '10',
+        VIBECODE_REVIEW_MODEL: 'bitrix/outro',
+        REVIEW_CREDITS_PER_FIELD: '0',
+      }),
+    ).toMatchObject({
+      VIBECODE_PLATFORM_API_KEY: 'vibe_api_abc',
+      VIBECODE_PLATFORM_RPM: 10,
+      VIBECODE_REVIEW_MODEL: 'bitrix/outro',
+      REVIEW_CREDITS_PER_FIELD: 0,
+    });
+    expect(() => loadEnv({ ...base, VIBECODE_PLATFORM_RPM: '0' })).toThrow(/VIBECODE_PLATFORM_RPM/);
+    expect(() => loadEnv({ ...base, REVIEW_CREDITS_PER_FIELD: '-1' })).toThrow(
+      /REVIEW_CREDITS_PER_FIELD/,
+    );
+  });
+
   it('lista variáveis ausentes', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
   });

@@ -166,6 +166,26 @@ export const envSchema = z.object({
   CRM_TOOLS_ENABLED: booleanFromString.default(false),
   /** Chamadas por minuto por agente, somando a intenção e o MCP. */
   CRM_TOOLS_RATE_PER_MINUTE: z.coerce.number().int().positive().default(60),
+
+  // Revisão do preenchimento da função por IA (spec agent-knowledge-review, design D5, D7 e D9)
+  VIBECODE_BASE_URL: z.url().default('https://vibecode.bitrix24.com'),
+  /** Modelo fixo da revisão, igual para todos os clientes. */
+  VIBECODE_REVIEW_MODEL: z.string().min(1).default('bitrix/bitrixgpt-5.5'),
+  /**
+   * Chave Vibecode da CRMThink, usada por quem não tem chave própria (cobra créditos do app).
+   * Vazia, só quem tem chave própria revisa por IA.
+   */
+  VIBECODE_PLATFORM_API_KEY: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || undefined),
+  /** Revisões de campo por minuto com a chave da CRMThink, somando todos os clientes. */
+  VIBECODE_PLATFORM_RPM: z.coerce.number().int().positive().default(20),
+  /** Por chamada ao Vibecode (a revisão de um campo é síncrona). */
+  VIBECODE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /** Créditos debitados por campo revisado com a chave da CRMThink. */
+  REVIEW_CREDITS_PER_FIELD: z.coerce.number().int().nonnegative().default(2),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -145,6 +145,16 @@ Use quando o registro do atendimento vai para um **processo inteligente** (SPA) 
 
 O cliente, no formulário, escolhe o SPA, o funil, a etapa inicial e o campo de cada valor. Valor opcional sem campo não é gravado.
 
+## Critério de revisão do formulário
+
+O cliente costuma deixar a base vazia ou rasa. O `review` (formato em `referencia/formato.md`) faz o app avisar isso antes de publicar.
+
+- Ponha `rubric` em todo campo `KNOWLEDGE` e nos textos que definem o atendimento: uma frase com o que um bom item tem ("solução em passos numerados", "prazo em dias"). Escreva para quem revisa, não para o agente.
+- Use `recommendedItems` só onde a função depende da base (problemas e políticas do Suporte, serviços do Agendamento). Numa FAQ opcional, deixe sem: campo vazio só avisa quando há `recommendedItems`.
+- Use `minLength` no subcampo que costuma ficar raso (solução, descrição, texto da política); 60 a 80 serve para a maioria.
+- O `review` não gasta orçamento e nunca bloqueia a publicação: é um aviso ao cliente.
+- Nunca use o marcador `[preencher: …]` em `placeholder` nem em texto de exemplo: ele é da revisão por IA (sugestão de itens novos) e a publicação do cliente é recusada enquanto houver um. O validador recusa.
+
 ## Orçamento na prática
 
 Com os blocos padrão, já estão reservados cerca de **1430** dos 3000 caracteres: instruções adicionais (400), texto de `crm` (355) e de `duvida` (156), `empresa.descricao` (250), nome do agente (100), `empresa.nome` (80) e tom + emojis (85). Sobram uns **1500** para o seu texto fixo e os seus campos somados. Planeje com isso antes de escrever.

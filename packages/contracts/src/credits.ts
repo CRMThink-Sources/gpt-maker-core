@@ -54,17 +54,23 @@ export const creditUsageQuerySchema = z
 
 export type CreditUsageQuery = z.infer<typeof creditUsageQuerySchema>;
 
+/** O que o consumo da linha pagou: respostas do agente ou revisões da função por IA. */
+export type CreditUsageKind = 'RESPONSE' | 'FUNCTION_REVIEW';
+
 export interface CreditUsageRow {
   /** AAAA-MM-DD no fuso de `CREDITS_TIMEZONE`. */
   day: string;
   agentId: string | null;
   agentName: string | null;
+  kind: CreditUsageKind;
+  /** Respostas entregues (`RESPONSE`) ou campos revisados (`FUNCTION_REVIEW`). */
   responses: number;
   credits: number;
 }
 
 export interface CreditUsageView {
   rows: CreditUsageRow[];
+  /** `responses` conta só respostas; os créditos somam tudo, revisões inclusive. */
   totals: { responses: number; credits: number };
 }
 

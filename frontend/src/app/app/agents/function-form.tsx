@@ -12,6 +12,7 @@ import {
   type FunctionTemplateContent,
   type KnowledgeItem,
   renderKnowledgeItem,
+  reviewFunctionAnswers,
   selectedValues,
   TRAINING_TEXT_MAX,
   validateFunctionAnswers,
@@ -28,6 +29,7 @@ import {
   SpaFields,
   UsersPicker,
 } from './bitrix-pickers';
+import { FieldNotes, FormReviewContext, type FormReview, ReviewSummary } from './review-ui';
 
 /**
  * Formulário da função do agente (spec agent-function-configuration), montado a partir da versão
@@ -42,6 +44,8 @@ type Props = {
   disabled?: boolean;
   /** Agentes que um campo "Agente" pode escolher (sem o próprio e sem removidos). */
   agents?: Array<{ id: string; name: string }>;
+  /** Revisão por IA da tela da função; sem ela, o formulário mostra só os avisos por regras fixas. */
+  ai?: FormReview['ai'];
 };
 
 /** Problema de um campo (ou de um item dele: `campo[0]`, `campo[0].sub`). */
@@ -172,13 +176,17 @@ function Group({
 /** Agentes que os campos "Agente" oferecem (D17), sem repassar por cada pergunta. */
 const FormAgents = createContext<Array<{ id: string; name: string }>>([]);
 
-export function FunctionForm({ form, answers, onChange, issues, disabled, agents }: Props) {
+export function FunctionForm({ form, answers, onChange, issues, disabled, agents, ai }: Props) {
   const set = (id: string, value: FunctionAnswerValue | undefined) => {
     const next = { ...answers };
     if (value === undefined) delete next[id];
     else next[id] = value;
     onChange(next);
   };
+  const review = useMemo<FormReview>(
+    () => ({ warnings: reviewFunctionAnswers(form, answers), form, ai }),
+    [form, answers, ai],
+  );
   const config = form.fields.filter((field) => field.kind !== 'KNOWLEDGE');
   const knowledge = form.fields.filter((field) => field.kind === 'KNOWLEDGE');
   const card = (field: FunctionField, index: number) => (
@@ -195,28 +203,31 @@ export function FunctionForm({ form, answers, onChange, issues, disabled, agents
 
   return (
     <FormAgents.Provider value={agents ?? []}>
-      <div className="space-y-8">
-        <Group
-          icon={TextIcon}
-          title="Como o agente atende"
-          description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
-          fields={config}
-          answers={answers}
-        >
-          {config.map((field, index) => card(field, index))}
-        </Group>
-        {knowledge.length > 0 && (
+      <FormReviewContext.Provider value={review}>
+        <div className="space-y-8">
+          <ReviewSummary answers={answers} />
           <Group
-            icon={BookIcon}
-            title="Base de conhecimento"
-            description="Um assunto por item. Cada item vira um treinamento do agente."
-            fields={knowledge}
+            icon={TextIcon}
+            title="Como o agente atende"
+            description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
+            fields={config}
             answers={answers}
           >
-            {knowledge.map((field, index) => card(field, config.length + index))}
+            {config.map((field, index) => card(field, index))}
           </Group>
-        )}
-      </div>
+          {knowledge.length > 0 && (
+            <Group
+              icon={BookIcon}
+              title="Base de conhecimento"
+              description="Um assunto por item. Cada item vira um treinamento do agente."
+              fields={knowledge}
+              answers={answers}
+            >
+              {knowledge.map((field, index) => card(field, config.length + index))}
+            </Group>
+          )}
+        </div>
+      </FormReviewContext.Provider>
     </FormAgents.Provider>
   );
 }
@@ -267,7 +278,22 @@ function QuestionCard({
   );
 }
 
-function FieldInput({
+function FieldInput(props: {
+  field: FunctionField;
+  answers: FunctionAnswers;
+  set: (id: string, value: FunctionAnswerValue | undefined) => void;
+  issues?: AnswerIssue[];
+  disabled?: boolean;
+}) {
+  return (
+    <>
+      <FieldControl {...props} />
+      <FieldNotes field={props.field} answers={props.answers} set={props.set} />
+    </>
+  );
+}
+
+function FieldControl({
   field,
   answers,
   set,

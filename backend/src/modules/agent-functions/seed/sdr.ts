@@ -21,6 +21,11 @@ export const SDR: SeedTemplate = {
         maxLength: 220,
         multiline: true,
         placeholder: 'Empresas com time comercial que usam ou querem usar CRM',
+        review: {
+          minLength: 30,
+          rubric:
+            'Descreve o cliente ideal com porte, segmento ou momento da empresa, não só "empresas" ou "pessoas interessadas".',
+        },
       },
       {
         kind: 'TEXT_LIST',
@@ -32,6 +37,11 @@ export const SDR: SeedTemplate = {
         maxItems: 5,
         itemMaxLength: 90,
         placeholder: 'Quantos vendedores tem o time?',
+        review: {
+          recommendedItems: 3,
+          rubric:
+            'Cada item é uma pergunta só, fácil de responder numa conversa, e ajuda a decidir se o lead é qualificado.',
+        },
       },
       {
         kind: 'TEXT',
@@ -41,6 +51,11 @@ export const SDR: SeedTemplate = {
         maxLength: 200,
         multiline: true,
         placeholder: '5 vendedores ou mais e intenção de implantar em até 3 meses',
+        review: {
+          minLength: 30,
+          rubric:
+            'O critério é objetivo (números, prazos, cargos) e usa as respostas das perguntas de qualificação.',
+        },
       },
       {
         kind: 'CHOICE',
@@ -156,9 +171,21 @@ export const SDR: SeedTemplate = {
         label: 'Produtos e serviços',
         required: false,
         maxItems: 15,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Cada item diz o que é, para quem serve e o diferencial, sem prometer preço ou prazo que a empresa não confirmou.',
+        },
         subfields: [
           { id: 'nome', label: 'Nome', required: true, maxLength: 60 },
-          { id: 'descricao', label: 'Descrição', required: true, maxLength: 900, multiline: true },
+          {
+            id: 'descricao',
+            label: 'Descrição',
+            required: true,
+            maxLength: 900,
+            multiline: true,
+            review: { minLength: 60 },
+          },
         ],
         format: 'Produto ou serviço: {{nome}}\n{{descricao}}',
       },
@@ -168,6 +195,10 @@ export const SDR: SeedTemplate = {
         label: 'Objeções frequentes',
         required: false,
         maxItems: 15,
+        review: {
+          rubric:
+            'A objeção está como o cliente diria; a resposta reconhece a dúvida, responde com um fato e convida ao próximo passo, sem pressionar.',
+        },
         subfields: [
           { id: 'objecao', label: 'Objeção', required: true, maxLength: 150 },
           {
@@ -176,6 +207,7 @@ export const SDR: SeedTemplate = {
             required: true,
             maxLength: 800,
             multiline: true,
+            review: { minLength: 60 },
           },
         ],
         format: 'Objeção: {{objecao}}\nComo responder: {{resposta}}',
@@ -186,9 +218,20 @@ export const SDR: SeedTemplate = {
         label: 'Perguntas frequentes',
         required: false,
         maxItems: 20,
+        review: {
+          rubric:
+            'A pergunta está como o cliente escreveria; a resposta é direta, completa e cabe em poucas frases.',
+        },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
-          { id: 'resposta', label: 'Resposta', required: true, maxLength: 800, multiline: true },
+          {
+            id: 'resposta',
+            label: 'Resposta',
+            required: true,
+            maxLength: 800,
+            multiline: true,
+            review: { minLength: 30 },
+          },
         ],
         format: 'Pergunta: {{pergunta}}\nResposta: {{resposta}}',
       },

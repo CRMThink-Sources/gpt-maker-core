@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hasPlaceholder } from './agent-function-placeholders';
 import type { FunctionField, FunctionTemplateContent } from './agent-functions';
 import { TRAINING_TEXT_MAX } from './trainings';
 
@@ -59,6 +60,43 @@ export interface AnswerIssue {
 }
 
 const httpUrl = z.url({ protocol: /^https?$/ });
+
+export interface PlaceholderLocation {
+  field: string;
+  /** Posição do item, nas listas e na base. */
+  item?: number;
+  /** Subcampo da base. */
+  subfield?: string;
+}
+
+/** Onde as respostas (dos campos visíveis) ainda têm um marcador `[preencher: …]`. */
+export function findPlaceholders(
+  content: Pick<FunctionTemplateContent, 'fields'>,
+  answers: FunctionAnswers,
+): PlaceholderLocation[] {
+  const found: PlaceholderLocation[] = [];
+  for (const field of visibleFields(content.fields, answers)) {
+    const value = answers[field.id];
+    if (field.kind === 'TEXT') {
+      if (typeof value === 'string' && hasPlaceholder(value)) found.push({ field: field.id });
+    } else if (field.kind === 'TEXT_LIST') {
+      if (!Array.isArray(value)) continue;
+      value.forEach((item, index) => {
+        if (typeof item === 'string' && hasPlaceholder(item))
+          found.push({ field: field.id, item: index });
+      });
+    } else if (field.kind === 'KNOWLEDGE') {
+      if (!Array.isArray(value)) continue;
+      value.forEach((item, index) => {
+        if (typeof item !== 'object' || item === null || !('values' in item)) return;
+        for (const [subfield, text] of Object.entries(item.values)) {
+          if (hasPlaceholder(text)) found.push({ field: field.id, item: index, subfield });
+        }
+      });
+    }
+  }
+  return found;
+}
 
 /** Campos visíveis com as respostas dadas: dependentes só das opções escolhidas. */
 export function visibleFields(
@@ -318,5 +356,18 @@ export function validateFunctionAnswers(
     }
   };
   visit(content.fields);
+  // Rascunho aceita; publicar e criar o agente não: o marcador viraria texto do agente.
+  if (!options.partial) {
+    for (const where of findPlaceholders(content, answers)) {
+      const at =
+        where.item === undefined
+          ? ''
+          : `[${where.item}]${where.subfield ? `.${where.subfield}` : ''}`;
+      issues.push({
+        field: `${where.field}${at}`,
+        message: 'ainda tem um trecho [preencher: …] sem preencher',
+      });
+    }
+  }
   return { answers, issues };
 }

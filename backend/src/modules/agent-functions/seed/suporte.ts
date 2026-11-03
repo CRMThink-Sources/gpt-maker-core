@@ -22,6 +22,10 @@ export const SUPPORT: SeedTemplate = {
         maxItems: 5,
         itemMaxLength: 80,
         placeholder: 'Cancelamento',
+        review: {
+          rubric:
+            'Cada item é um assunto concreto que o agente deve encaminhar sem tentar resolver (por exemplo, cancelamento ou cobrança).',
+        },
       },
       {
         kind: 'MULTI_CHOICE',
@@ -177,9 +181,21 @@ export const SUPPORT: SeedTemplate = {
         help: 'O problema como o cliente descreve e o passo a passo da solução.',
         required: false,
         maxItems: 20,
+        review: {
+          recommendedItems: 3,
+          rubric:
+            'O problema está como o cliente descreve; a solução vem em passos numerados que ele consegue seguir sozinho e diz quando abrir um chamado ou falar com um atendente. Cada item trata de um problema só.',
+        },
         subfields: [
           { id: 'problema', label: 'Problema', required: true, maxLength: 150 },
-          { id: 'solucao', label: 'Solução', required: true, maxLength: 850, multiline: true },
+          {
+            id: 'solucao',
+            label: 'Solução',
+            required: true,
+            maxLength: 850,
+            multiline: true,
+            review: { minLength: 80 },
+          },
         ],
         format: 'Problema: {{problema}}\nSolução: {{solucao}}',
       },
@@ -189,9 +205,20 @@ export const SUPPORT: SeedTemplate = {
         label: 'Perguntas frequentes',
         required: false,
         maxItems: 20,
+        review: {
+          rubric:
+            'A pergunta está como o cliente escreveria; a resposta é direta e completa, sem mandar o cliente "entrar em contato" quando a base já tem a informação.',
+        },
         subfields: [
           { id: 'pergunta', label: 'Pergunta', required: true, maxLength: 200 },
-          { id: 'resposta', label: 'Resposta', required: true, maxLength: 800, multiline: true },
+          {
+            id: 'resposta',
+            label: 'Resposta',
+            required: true,
+            maxLength: 800,
+            multiline: true,
+            review: { minLength: 30 },
+          },
         ],
         format: 'Pergunta: {{pergunta}}\nResposta: {{resposta}}',
       },
@@ -202,9 +229,21 @@ export const SUPPORT: SeedTemplate = {
         help: 'Troca, garantia, prazos, horários.',
         required: false,
         maxItems: 10,
+        review: {
+          recommendedItems: 1,
+          rubric:
+            'Cada política traz prazo, horário ou condição concreta (dias, valores, exceções). O agente só promete o que está escrito aqui, então texto genérico ou sem prazo deixa o agente sem resposta.',
+        },
         subfields: [
           { id: 'titulo', label: 'Título', required: true, maxLength: 100 },
-          { id: 'texto', label: 'Texto', required: true, maxLength: 900, multiline: true },
+          {
+            id: 'texto',
+            label: 'Texto',
+            required: true,
+            maxLength: 900,
+            multiline: true,
+            review: { minLength: 60 },
+          },
         ],
         format: 'Política: {{titulo}}\n{{texto}}',
       },
