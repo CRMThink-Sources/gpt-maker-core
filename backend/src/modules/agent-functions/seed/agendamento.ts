@@ -10,6 +10,7 @@ export const SCHEDULING: SeedTemplate = {
     agentType: 'SUPPORT',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir'],
     fields: [
       {

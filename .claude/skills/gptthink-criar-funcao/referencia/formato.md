@@ -18,6 +18,7 @@
 | `profile` | `{ jobName ≤200, jobDescription ≤500, jobSite ≤200 }` | aceita marcadores; normalmente `{{empresa.nome}}` e `{{empresa.descricao}}` |
 | `blocks` | string[] | ≤10 códigos de `blocos.json` |
 | `crmAccess` | boolean | `false` se incluir o bloco `crm` (ele já liga) |
+| `assist` | `{ enabled: boolean }` | liga a ajuda da IA (opcional; padrão desligada). Ligue quando ao menos um campo tiver `assist` |
 | `fields` | campo[] | ≥1 próprio; ≤40 de topo somando os dos blocos |
 | `behavior` | string | 1–3000 caracteres crus; pior caso compilado ≤3000 |
 | `intentions` | intenção[] | ≤10 próprias |
@@ -93,6 +94,27 @@ Chave que não vale para o tipo do campo é recusada (um `recommendedItems` num 
   ],
   "format": "Problema: {{problema}}
 Solução: {{solucao}}"
+}
+```
+
+## Ajuda da IA (`assist`)
+
+Opcional em `TEXT` e `TEXT_LIST`. O cliente que deixa o campo **vazio** pode pedir ajuda da IA: ela faz as perguntas de entrevista e propõe um texto com as respostas. Só age em campo vazio e só em `TEXT`/`TEXT_LIST`; `assist` em qualquer outro tipo é recusado pelo validador. Não entra no comportamento nem no orçamento de 3000 caracteres. Os campos `KNOWLEDGE` não têm `assist` por enquanto.
+
+| Chave | Regra |
+|---|---|
+| `assist.questions` | 1 a 5 perguntas de 1 a 200 caracteres cada, nas palavras do cliente (obrigatória) |
+| `assist.instructions` | até 500 caracteres, orientação para a IA ao redigir (opcional) |
+
+Chaves fora dessas duas são recusadas. A ajuda só aparece quando o template tem `"assist": { "enabled": true }` na raiz do `draft` e ao menos um campo com `assist`.
+
+```json
+{
+  "kind": "TEXT", "id": "sdr.criterio", "label": "Quando o lead está qualificado", "required": true, "maxLength": 200,
+  "assist": {
+    "questions": ["Que sinais fazem um lead valer uma ligação sua?"],
+    "instructions": "Use números, prazos ou cargos."
+  }
 }
 ```
 

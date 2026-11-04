@@ -10,6 +10,7 @@ export const POST_SALES: SeedTemplate = {
     agentType: 'SUPPORT',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir'],
     fields: [
       {
@@ -130,6 +131,13 @@ export const POST_SALES: SeedTemplate = {
                 label: 'O que oferecer',
                 required: true,
                 maxLength: 200,
+                assist: {
+                  questions: [
+                    'O que você gostaria que o cliente comprasse de novo ou indicasse?',
+                    'Existe algum benefício para quem volta ou indica um amigo?',
+                  ],
+                  instructions: 'Descreva a oferta em uma frase, sem prometer o que a empresa não cumpre.',
+                },
               },
               {
                 kind: 'CHOICE',

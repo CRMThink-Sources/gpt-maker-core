@@ -101,3 +101,24 @@ describe('exemplos da revisão nos seeds', () => {
     },
   );
 });
+
+describe('ajuda da IA nos seeds', () => {
+  const expanded = SEED_TEMPLATES.map((template) => {
+    const { content } = expandBlocks(functionTemplateDraftSchema.parse(template.draft), blocks);
+    return [template.code, flattenFields(content.fields), content.assist] as const;
+  });
+
+  it.each(expanded)(
+    '%s: every default function with assist.enabled has at least one field with questions',
+    (_code, fields, assist) => {
+      expect(assist.enabled).toBe(true);
+      expect(fields.some((field) => 'assist' in field && field.assist?.questions.length)).toBe(true);
+    },
+  );
+
+  it.each(expanded)('%s: every seed field with assist is TEXT or TEXT_LIST', (_code, fields) => {
+    for (const field of fields) {
+      if ('assist' in field && field.assist) expect(['TEXT', 'TEXT_LIST']).toContain(field.kind);
+    }
+  });
+});

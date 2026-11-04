@@ -23,8 +23,9 @@ Arquivos desta skill:
    - o que precisa ser registrado no Bitrix24 e quando.
 2. **Leia** `referencia/formato.md` e o exemplo mais parecido.
 3. **Escreva o JSON** no formato de saída abaixo, num arquivo (ex.: `funcao-cobranca.json`).
-4. **Valide:** `node <pasta-da-skill>/scripts/validar.mjs funcao-cobranca.json`. Corrija até aparecer `OK`. O validador mostra quanto cada campo pesa no pior caso: corte primeiro o maior.
-5. **Entregue** no formato abaixo, com o resultado do validador (pior caso / 3000).
+4. **Ajuda da IA:** para cada campo `TEXT` ou `TEXT_LIST` que um leigo acha difícil de preencher (critério, perfil do cliente, assuntos que o agente não resolve), escreva 1 a 3 perguntas de entrevista no `assist.questions`, nas palavras do próprio cliente e concretas ("Que sinais fazem um lead valer uma ligação sua?", "Cite 2 problemas que não podem esperar até amanhã"). Se quiser orientar a IA, acrescente `assist.instructions` (até 500 caracteres). Ligue `"assist": { "enabled": true }` no JSON quando ao menos um campo tiver perguntas. Formato e limites em `referencia/formato.md` (seção "Ajuda da IA").
+5. **Valide:** `node <pasta-da-skill>/scripts/validar.mjs funcao-cobranca.json`. Corrija até aparecer `OK`. O validador mostra quanto cada campo pesa no pior caso: corte primeiro o maior.
+6. **Entregue** no formato abaixo, com o resultado do validador (pior caso / 3000).
 
 ## Formato de saída
 
@@ -47,7 +48,8 @@ A aba JSON do backoffice aceita **só o rascunho** (o objeto que começa em `"ag
   "profile": { "jobName": "{{empresa.nome}}", "jobDescription": "{{empresa.descricao}}", "jobSite": "" },
   "blocks": ["comum", "registro", "duvida", "transferir", "crm"],
   "crmAccess": false,
-  "fields": [ ... ],
+  "assist": { "enabled": true },
+  "fields": [ { "kind": "TEXT", "id": "sdr.criterio", "label": "...", "required": true, "maxLength": 200, "assist": { "questions": ["Que sinais fazem um lead valer uma ligação sua?"] } }, ... ],
   "behavior": "Você é {{agente.nome}}, ...",
   "intentions": [ ... ],
   "transfers": [ ... ]

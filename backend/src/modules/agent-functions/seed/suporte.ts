@@ -10,6 +10,7 @@ export const SUPPORT: SeedTemplate = {
     agentType: 'SUPPORT',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir', 'crm'],
     fields: [
       {
@@ -22,6 +23,13 @@ export const SUPPORT: SeedTemplate = {
         maxItems: 5,
         itemMaxLength: 80,
         placeholder: 'Cancelamento',
+        assist: {
+          questions: [
+            'Que assuntos você prefere que uma pessoa do time resolva?',
+            'Cite 2 problemas que não podem esperar até amanhã',
+          ],
+          instructions: 'Cada item é um assunto curto, como cancelamento ou cobrança.',
+        },
         review: {
           rubric:
             'Cada item é um assunto concreto que o agente deve encaminhar sem tentar resolver (por exemplo, cancelamento ou cobrança).',
