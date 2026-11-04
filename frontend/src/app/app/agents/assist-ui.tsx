@@ -2,6 +2,7 @@
 
 import {
   type AiKeyView,
+  assistConfigured,
   assistFields,
   type AssistInput,
   type AssistResult,
@@ -20,7 +21,8 @@ import type { Api } from './use-function-review';
 /** Como o formulário chega à ajuda: a API da tela da função e o estado da chave de IA. */
 export interface FormAssist {
   api: Api;
-  base: string;
+  /** Endereço completo da chamada: por agente na tela da função, por código na criação. */
+  endpoint: string;
   aiKey?: AiKeyView | null;
 }
 
@@ -58,7 +60,7 @@ export function AssistPanel({
   answers,
   onApply,
   api,
-  base,
+  endpoint,
   aiKey,
   disabled,
 }: {
@@ -67,7 +69,7 @@ export function AssistPanel({
   onApply: (fieldId: string, value: FunctionAnswerValue) => void;
 } & FormAssist & { disabled?: boolean }) {
   const eligible = assistFields(form, answers);
-  const { run, state, error } = useFunctionAssist(api, base);
+  const { run, state, error } = useFunctionAssist(api, endpoint);
   const [open, setOpen] = useState(false);
   const [about, setAbout] = useState('');
   const [interview, setInterview] = useState<Record<string, string>>({});
@@ -82,7 +84,9 @@ export function AssistPanel({
     if (open) aboutRef.current?.focus();
   }, [open]);
 
-  if (eligible.length === 0 && !open) return null;
+  // Sem a ajuda configurada o formulário fica exatamente como era.
+  if (!assistConfigured(form)) return null;
+  const nothingToHelp = eligible.length === 0 && !open;
 
   const loading = state === 'loading';
   const aboutOk = about.trim().length >= EXPECTATION_MIN;
@@ -131,11 +135,14 @@ export function AssistPanel({
         className={buttonClass('secondary', 'sm')}
         aria-expanded={open}
         aria-controls={id}
-        disabled={disabled}
+        disabled={disabled || nothingToHelp}
         onClick={() => (open ? close() : setOpen(true))}
       >
         Ajuda da IA
       </button>
+      {nothingToHelp && (
+        <p className="text-xs text-zinc-500">Todos os campos com ajuda já estão preenchidos</p>
+      )}
       {open && (
         <Card className="space-y-4 p-4">
           <section

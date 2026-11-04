@@ -55,7 +55,9 @@ function Harness({
       form={form}
       answers={answers}
       onChange={setAnswers}
-      assist={api ? { api: api as Api, base: '/app/agents/a1', aiKey } : undefined}
+      assist={
+        api ? { api: api as Api, endpoint: '/app/agents/a1/function/assist', aiKey } : undefined
+      }
     />
   );
 }
@@ -82,11 +84,28 @@ const okResult = (over = {}) => ({
 });
 
 describe('ajuda da IA no formulário', () => {
-  it('button is hidden when no field is eligible', () => {
+  it('button is disabled with a reason when assist is configured but no field is empty', () => {
     render(
       <Harness form={makeForm(true)} api={vi.fn()} initial={{ 'empresa.sobre': 'escrito' }} />,
     );
+    const button = screen.getByRole('button', { name: /Ajuda da IA/ }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText('Todos os campos com ajuda já estão preenchidos')).toBeTruthy();
+  });
+
+  it('nothing renders when assist is not configured', () => {
+    const { container } = render(<Harness form={makeForm(false)} api={vi.fn()} />);
     expect(screen.queryByRole('button', { name: /Ajuda da IA/ })).toBeNull();
+    expect(container.textContent).not.toContain('Ajuda da IA');
+    expect(container.textContent).not.toContain('já estão preenchidos');
+  });
+
+  it('the hook posts to the given endpoint', async () => {
+    const api = vi.fn(async () => okResult());
+    render(<Harness form={makeForm(true)} api={api} />);
+    generate();
+    await screen.findByText('Loja de bicicletas.');
+    expect((api.mock.calls[0] as unknown[])[0]).toBe('/app/agents/a1/function/assist');
   });
 
   it('button is hidden when assist is disabled', () => {

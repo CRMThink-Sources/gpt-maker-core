@@ -11,7 +11,7 @@ import {
   type FunctionTemplateContent,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BotIcon, CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
@@ -20,6 +20,7 @@ import { credits, errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
 import { useTransferAgents } from './use-transfer-agents';
+import { useAiKey } from './use-function-review';
 import { type AgentFormValues, IdentityFields, initialValues, ModelFields } from './agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from './function-form';
 import { FunctionPreviewView } from './function-preview';
@@ -47,6 +48,7 @@ export function CreateAgentWizard({
 }) {
   const { api } = useAppSession();
   const transferAgents = useTransferAgents();
+  const aiKey = useAiKey(api);
   const [functions, setFunctions] = useState<AgentFunctionView[] | null>(null);
   const [models, setModels] = useState<AvailableModel[] | null>(null);
   const [values, setValues] = useState<AgentFormValues | null>(null);
@@ -102,6 +104,15 @@ export function CreateAgentWizard({
       setBusy(false);
     }
   }
+
+  // Ainda não há agente: a ajuda vai pelo código da função escolhida.
+  const assist = useMemo(
+    () =>
+      chosen
+        ? { api, endpoint: `/app/agent-functions/${encodeURIComponent(chosen)}/assist`, aiKey }
+        : undefined,
+    [api, chosen, aiKey],
+  );
 
   function requestClose() {
     if (busy) return;
@@ -317,11 +328,13 @@ export function CreateAgentWizard({
                     <BehaviorMeter form={form} answers={answers} agentName={values.name} />
                   </div>
                   <FunctionForm
+                    key={chosen}
                     form={form}
                     answers={answers}
                     onChange={setAnswers}
                     issues={issues}
                     agents={transferAgents}
+                    assist={assist}
                   />
                 </div>
               </>
