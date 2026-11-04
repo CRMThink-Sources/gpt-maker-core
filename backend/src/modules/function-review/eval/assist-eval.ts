@@ -195,12 +195,26 @@ const FIRST_PERSON_PLURAL = /(emos|amos|imos)$/;
 const BRAND_LIKE = /\p{Ll}\p{Lu}|\d/u;
 
 /**
+ * Palavra comum de começo de frase: a forma minúscula, sem o plural ("s", "es") ou com ele, aparece
+ * como palavra inteira nas fontes ("Donos" quando o cliente escreveu "dono").
+ */
+function inSourcesAsCommonNoun(plain: string, knownWords: Set<string>): boolean {
+  if (knownWords.has(plain) || knownWords.has(`${plain}s`) || knownWords.has(`${plain}es`)) {
+    return true;
+  }
+  return (
+    (plain.endsWith('s') && knownWords.has(plain.slice(0, -1))) ||
+    (plain.endsWith('es') && knownWords.has(plain.slice(0, -2)))
+  );
+}
+
+/**
  * Nome próprio: palavra com inicial maiúscula (sigla toda em maiúsculas não conta). No meio da frase
  * vale sempre. No começo de frase ou de item (primeira palavra) só conta se não for palavra comum:
  * fora da lista de abridores, sem forma de verbo na 1ª pessoa do plural e sem aparecer em minúsculas
  * no texto do mesmo caso; marca com maiúscula no meio ou dígito conta sempre.
  */
-function properNames(text: string, lowercased: Set<string>): string[] {
+function properNames(text: string, lowercased: Set<string>, knownWords: Set<string>): string[] {
   const names: string[] = [];
   for (const match of text.matchAll(/\p{Lu}[\p{L}\d]+/gu)) {
     const word = match[0];
@@ -213,7 +227,12 @@ function properNames(text: string, lowercased: Set<string>): string[] {
       /(?:^|\n)[ \t]*\d+[.)]$/.test(before);
     if (atStart && !BRAND_LIKE.test(word)) {
       const plain = norm(word);
-      if (COMMON_OPENERS.has(plain) || FIRST_PERSON_PLURAL.test(plain) || lowercased.has(plain)) {
+      if (
+        COMMON_OPENERS.has(plain) ||
+        FIRST_PERSON_PLURAL.test(plain) ||
+        lowercased.has(plain) ||
+        inSourcesAsCommonNoun(plain, knownWords)
+      ) {
         continue;
       }
     }
@@ -243,7 +262,7 @@ function inventedFactsIn(texts: string[], sources: string): string[] {
         ((word === 'um' || word === 'uma') && SPELLED_ONE_UNITS.includes(words[index + 1] ?? ''));
       if (spelled && !knownWords.has(word)) invented.add(word);
     });
-    for (const name of properNames(text, lowercased)) {
+    for (const name of properNames(text, lowercased, knownWords)) {
       if (!knownWords.has(norm(name))) invented.add(name);
     }
   }

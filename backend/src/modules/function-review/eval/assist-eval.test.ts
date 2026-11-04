@@ -199,6 +199,58 @@ describe('avaliador da ajuda da IA', () => {
     ]);
   });
 
+  describe('sentence-start words that are plural or singular of a source word', () => {
+    const withSources = (about: string, answer: string): AssistCase => ({
+      ...base,
+      about,
+      interview: [{ question: 'O que qualifica um lead?', answer }],
+    });
+
+    it('accepts the plural of a source word capitalised only by the sentence start', () => {
+      const dono = withSources('Vendemos CRM.', 'Dono de clínica');
+      const out = text('Donos de clínicas odontológicas que buscam atrair pacientes.');
+      expect(evaluateAssistCase(dono, out).inventedFacts).toEqual([]);
+    });
+
+    it('accepts the singular when the source has the plural', () => {
+      const plural = withSources('Vendemos CRM.', 'Clínicas com 2 a 6 dentistas');
+      expect(
+        evaluateAssistCase(plural, text('Clínica pequena, com 2 a 6 dentistas.')).inventedFacts,
+      ).toEqual([]);
+    });
+
+    it('still flags brands and names absent from the sources', () => {
+      expect(evaluateAssistCase(base, text('Salesforce é o CRM usado.')).inventedFacts).toEqual([
+        'Salesforce',
+      ]);
+      expect(evaluateAssistCase(base, text('O CRM usado é Salesforce.')).inventedFacts).toEqual([
+        'Salesforce',
+      ]);
+      expect(evaluateAssistCase(base, text('Bitrix24 guarda tudo.')).inventedFacts).toEqual([
+        'Bitrix24',
+      ]);
+    });
+
+    it('still flags a start word whose singular or plural is not in the sources', () => {
+      expect(
+        evaluateAssistCase(base, text('Parceiros premium atendem aqui.')).inventedFacts,
+      ).toEqual(['Parceiros']);
+    });
+
+    it('does not flag anything in the sdr-perfil-completa case', () => {
+      const entry = loadAssistCases().find((item) => item.id === 'sdr-perfil-completa')!;
+      const output = {
+        fields: [
+          {
+            fieldId: entry.fieldId,
+            text: 'Donos de clínicas odontológicas que buscam atrair novos pacientes. O foco são clínicas com 2 a 6 dentistas.',
+          },
+        ],
+      };
+      expect(evaluateAssistCase(entry, output).inventedFacts).toEqual([]);
+    });
+  });
+
   it('does not flag cento after por, but still checks the number', () => {
     const known: AssistCase = { ...base, about: 'Vendemos CRM. Garantimos 100 de satisfação.' };
     expect(evaluateAssistCase(known, text('Garantimos 100 por cento.')).inventedFacts).toEqual([]);
