@@ -121,6 +121,11 @@ export const SCHEDULING: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.servicos',
         label: 'Serviços',
+        assist: {
+          questions: ['Que serviços os clientes podem agendar?', 'O que cada serviço inclui?'],
+          instructions:
+            'Um item por serviço, com o nome no título e uma descrição curta. Não invente duração nem preço.',
+        },
         required: false,
         maxItems: 15,
         review: {
@@ -159,6 +164,14 @@ export const SCHEDULING: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.faq',
         label: 'Perguntas frequentes',
+        assist: {
+          questions: [
+            'Que dúvidas os clientes têm antes de agendar?',
+            'Como vocês respondem a elas?',
+          ],
+          instructions:
+            'Um item por pergunta, escrita como o cliente faria, com a resposta objetiva.',
+        },
         required: false,
         maxItems: 20,
         review: {
@@ -186,6 +199,14 @@ export const SCHEDULING: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.local',
         label: 'Local e atendimento',
+        assist: {
+          questions: [
+            'Onde vocês atendem e como o cliente chega lá?',
+            'Há alguma orientação para o dia do atendimento?',
+          ],
+          instructions:
+            'Um item por unidade ou forma de atendimento, com o nome no título e as orientações.',
+        },
         help: 'Endereço, como chegar, se é online ou presencial.',
         required: false,
         maxItems: 5,

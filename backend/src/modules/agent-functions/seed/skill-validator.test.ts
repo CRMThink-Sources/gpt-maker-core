@@ -275,6 +275,28 @@ describe('ajuda da IA (assist) na skill', () => {
     expect(validate(draft).ok).toBe(true);
   });
 
+  it('validator accepts assist on a KNOWLEDGE field', () => {
+    const draft = patched('base.produtos', {
+      assist: { questions: ['Que produtos vocês vendem?'], instructions: 'Um item por produto.' },
+    });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
+    expect(validate(draft).ok).toBe(true);
+  });
+
+  it('validator accepts knowledgeMode skeleton and rejects an unknown mode', () => {
+    const ok = {
+      ...sdr,
+      assist: { enabled: true, knowledgeMode: 'skeleton' },
+    } as unknown as FunctionTemplateDraftInput;
+    expect(functionTemplateDraftSchema.safeParse(ok).success).toBe(true);
+    expect(validate(ok).ok).toBe(true);
+    const bad = { ...sdr, assist: { enabled: true, knowledgeMode: 'tudo' } };
+    expect(functionTemplateDraftSchema.safeParse(bad).success).toBe(false);
+    const result = validate(bad as unknown as FunctionTemplateDraftInput);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('assist.knowledgeMode: write ou skeleton');
+  });
+
   it('validator accepts assist on a text list field', () => {
     const draft = patched('sdr.perguntas', { assist: { questions: ['O que você quer saber?'] } });
     expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
@@ -303,7 +325,10 @@ describe('ajuda da IA (assist) na skill', () => {
     const cases: Array<[Record<string, unknown>, string]> = [
       [{ questions: [] }, 'assist.questions: de 1 a 5 perguntas'],
       [{ questions: ['  '] }, 'assist.questions: cada pergunta tem de 1 a 200 caracteres'],
-      [{ questions: ['x'.repeat(201)] }, 'assist.questions: cada pergunta tem de 1 a 200 caracteres'],
+      [
+        { questions: ['x'.repeat(201)] },
+        'assist.questions: cada pergunta tem de 1 a 200 caracteres',
+      ],
       [
         { questions: ['a?'], instructions: 'x'.repeat(501) },
         'assist.instructions: texto de até 500 caracteres',

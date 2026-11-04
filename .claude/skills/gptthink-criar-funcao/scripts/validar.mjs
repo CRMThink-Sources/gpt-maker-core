@@ -90,11 +90,12 @@ function checkReview(owner, review, { at, id, allowed, maxItems, maxLength, scop
   }
 }
 
-// Ajuda da IA (opcional): só em TEXT e TEXT_LIST. De 1 a 5 perguntas de 1 a 200 caracteres, instruções
+// Ajuda da IA (opcional): só em TEXT, TEXT_LIST e KNOWLEDGE. De 1 a 5 perguntas de 1 a 200 caracteres, instruções
 // até 500, sem outras chaves (mesma regra do schema da publicação).
 function checkAssist(f, at) {
   if (f.assist === undefined) return;
-  if (f.kind !== 'TEXT' && f.kind !== 'TEXT_LIST') return err(`${at}: assist não vale para ${f.kind} (só TEXT e TEXT_LIST)`);
+  if (f.kind !== 'TEXT' && f.kind !== 'TEXT_LIST' && f.kind !== 'KNOWLEDGE')
+    return err(`${at}: assist não vale para ${f.kind} (só TEXT, TEXT_LIST e KNOWLEDGE)`);
   const a = f.assist;
   if (a === null || typeof a !== 'object' || Array.isArray(a)) return err(`${at}: assist precisa ser { questions, instructions? }`);
   for (const key of Object.keys(a))
@@ -185,6 +186,8 @@ function checkField(f, where) {
 if (!['SUPPORT', 'SALE', 'PERSONAL'].includes(draft.agentType)) err('agentType: SUPPORT, SALE ou PERSONAL');
 if (draft.assist !== undefined && !(draft.assist !== null && typeof draft.assist === 'object' && !Array.isArray(draft.assist) && typeof draft.assist.enabled === 'boolean'))
   err('assist: precisa ser { enabled: true/false }');
+if (draft.assist?.knowledgeMode !== undefined && !['write', 'skeleton'].includes(draft.assist.knowledgeMode))
+  err('assist.knowledgeMode: write ou skeleton');
 if (!Array.isArray(draft.fields) || draft.fields.length < 1) err('fields: pelo menos um campo próprio');
 if (!str(draft.behavior, 1, BEHAVIOR_MAX)) err('behavior: 1 a 3000 caracteres (texto cru)');
 if ((draft.intentions ?? []).length > 10) err('intentions: no máximo 10');

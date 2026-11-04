@@ -71,7 +71,8 @@ export const SDR: SeedTemplate = {
             'Que sinais fazem um lead valer uma ligação sua?',
             'Se a pessoa respondesse as perguntas, o que ela teria de dizer para você querer falar com ela?',
           ],
-          instructions: 'Use números, prazos ou cargos e relacione com as perguntas de qualificação.',
+          instructions:
+            'Use números, prazos ou cargos e relacione com as perguntas de qualificação.',
         },
         review: {
           minLength: 30,
@@ -191,6 +192,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.produtos',
         label: 'Produtos e serviços',
+        assist: {
+          questions: [
+            'Que produtos ou serviços vocês vendem?',
+            'Para cada um, o que ele faz e para quem serve?',
+          ],
+          instructions:
+            'Um item por produto ou serviço: o nome no título e uma descrição curta do que é e para quem serve.',
+        },
         required: false,
         maxItems: 15,
         review: {
@@ -219,6 +228,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.objecoes',
         label: 'Objeções frequentes',
+        assist: {
+          questions: [
+            'Que objeções os clientes costumam levantar antes de comprar?',
+            'Como vocês respondem a cada uma?',
+          ],
+          instructions:
+            'Um item por objeção: a objeção como o cliente diria e a resposta que a equipe dá.',
+        },
         required: false,
         maxItems: 15,
         review: {
@@ -246,6 +263,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.faq',
         label: 'Perguntas frequentes',
+        assist: {
+          questions: [
+            'Que perguntas os clientes mais fazem antes de comprar?',
+            'Como vocês respondem a elas?',
+          ],
+          instructions:
+            'Um item por pergunta, escrita como o cliente faria, com a resposta objetiva.',
+        },
         required: false,
         maxItems: 20,
         review: {

@@ -190,6 +190,13 @@
         "kind": "KNOWLEDGE",
         "id": "base.produtos",
         "label": "Produtos e serviços",
+        "assist": {
+          "questions": [
+            "Que produtos ou serviços vocês vendem?",
+            "Para cada um, o que ele faz e para quem serve?"
+          ],
+          "instructions": "Um item por produto ou serviço: o nome no título e uma descrição curta do que é e para quem serve."
+        },
         "required": false,
         "maxItems": 15,
         "review": {
@@ -224,6 +231,13 @@
         "kind": "KNOWLEDGE",
         "id": "base.objecoes",
         "label": "Objeções frequentes",
+        "assist": {
+          "questions": [
+            "Que objeções os clientes costumam levantar antes de comprar?",
+            "Como vocês respondem a cada uma?"
+          ],
+          "instructions": "Um item por objeção: a objeção como o cliente diria e a resposta que a equipe dá."
+        },
         "required": false,
         "maxItems": 15,
         "review": {
@@ -257,6 +271,13 @@
         "kind": "KNOWLEDGE",
         "id": "base.faq",
         "label": "Perguntas frequentes",
+        "assist": {
+          "questions": [
+            "Que perguntas os clientes mais fazem antes de comprar?",
+            "Como vocês respondem a elas?"
+          ],
+          "instructions": "Um item por pergunta, escrita como o cliente faria, com a resposta objetiva."
+        },
         "required": false,
         "maxItems": 20,
         "review": {
