@@ -204,11 +204,13 @@ export function withAssist<T extends FunctionField>(
 ): T {
   const { assist: _old, ...rest } = field as T & { assist?: unknown };
   void _old;
-  if (!assist || assist.questions.length === 0) return rest as T;
+  // Pergunta apagada (vazia ou só espaços) sai: `assist` nunca guarda pergunta em branco.
+  const questions = (assist?.questions ?? []).filter((question) => question.trim() !== '');
+  if (!assist || questions.length === 0) return rest as T;
   const instructions = assist.instructions?.trim() ? assist.instructions : undefined;
   return {
     ...rest,
-    assist: { questions: assist.questions, ...(instructions ? { instructions } : {}) },
+    assist: { questions, ...(instructions ? { instructions } : {}) },
   } as T;
 }
 

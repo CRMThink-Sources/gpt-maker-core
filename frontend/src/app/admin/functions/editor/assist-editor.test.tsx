@@ -103,6 +103,20 @@ describe('editor da ajuda da IA', () => {
     expect('assist' in latest.fields[0]!).toBe(false);
   });
 
+  it('clearing the text of a question removes it, and assist when none is left', () => {
+    const warning = 'Nenhum campo tem perguntas: a ajuda não vai aparecer para o cliente.';
+    render(<Harness initial={makeDraft({ assist: { enabled: true } })} />);
+    openField();
+    addQuestion('Primeira');
+    addQuestion('Segunda');
+    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: '   ' } });
+    expect(assistOf()).toEqual({ questions: ['Segunda'] });
+    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: '' } });
+    expect('assist' in latest.fields[0]!).toBe(false);
+    goTab('Geral');
+    expect(screen.getByText(warning)).toBeTruthy();
+  });
+
   it('toggle sets assist.enabled', () => {
     render(<Harness initial={makeDraft()} />);
     goTab('Geral');
