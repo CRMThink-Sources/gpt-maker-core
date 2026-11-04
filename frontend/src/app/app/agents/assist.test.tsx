@@ -119,6 +119,14 @@ describe('ajuda da IA no formulário', () => {
     expect(screen.getByLabelText(/Sobre a empresa/)).toBeTruthy();
   });
 
+  it('Enter in an interview question does not submit the surrounding form', () => {
+    render(<Harness form={makeForm(true)} api={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ajuda da IA/ }));
+    const question = screen.getByLabelText('O que a empresa vende?');
+    // fireEvent devolve false quando o handler chamou preventDefault.
+    expect(fireEvent.keyDown(question, { key: 'Enter' })).toBe(false);
+  });
+
   it('about shorter than 20 characters blocks generating', () => {
     const api = vi.fn();
     render(<Harness form={makeForm(true)} api={api} />);

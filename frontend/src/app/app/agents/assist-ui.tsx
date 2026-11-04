@@ -183,6 +183,9 @@ export function AssistPanel({
                       className={inputClass}
                       value={interview[key(field.id, index)] ?? ''}
                       maxLength={1000}
+                      // Enter aqui não pode enviar o formulário em volta (no assistente de criação
+                      // seria "Ver prévia" e perderia a entrevista e os rascunhos).
+                      onKeyDown={(event) => event.key === 'Enter' && event.preventDefault()}
                       onChange={(event) =>
                         setInterview((prev) => ({
                           ...prev,
