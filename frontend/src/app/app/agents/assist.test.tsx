@@ -213,3 +213,103 @@ describe('ajuda da IA no formulário', () => {
     await screen.findByText('Loja de bicicletas.');
   });
 });
+
+function makeKbForm(): FunctionTemplateContent {
+  return functionTemplateContentSchema.parse({
+    agentType: 'SUPPORT',
+    profile: { jobName: 'Suporte' },
+    behavior: 'Você é {{agente.nome}}.',
+    assist: { enabled: true },
+    fields: [
+      {
+        kind: 'KNOWLEDGE',
+        id: 'base.produtos',
+        label: 'Produtos',
+        required: false,
+        maxItems: 3,
+        format: '{{nome}}: {{descricao}}',
+        subfields: [
+          { id: 'nome', label: 'Nome', required: true, maxLength: 20, multiline: false },
+          { id: 'descricao', label: 'Descrição', required: true, maxLength: 60, multiline: true },
+        ],
+        assist: { questions: ['Que produtos vocês vendem?'] },
+      },
+    ],
+  });
+}
+
+const kbResult = (values: Record<string, string>[], over = {}) => ({
+  fields: [
+    {
+      fieldId: 'base.produtos',
+      value: values.map((v, i) => ({
+        itemKey: `3b241101-e2bb-4255-8caf-4136c566a96${i}`,
+        values: v,
+      })),
+      applicable: true,
+      markers: 0,
+      ...over,
+    },
+  ],
+  credits: 1,
+});
+
+describe('ajuda da IA na base de conhecimento', () => {
+  it('knowledge draft shows each item with its subfields', async () => {
+    const api = vi.fn(async () =>
+      kbResult([
+        { nome: 'Bike', descricao: 'Aro 29' },
+        { nome: 'Capacete', descricao: 'Tamanho M' },
+      ]),
+    );
+    render(<Harness form={makeKbForm()} api={api} />);
+    generate();
+    await screen.findByText('Bike');
+    expect(screen.getByText('Aro 29')).toBeTruthy();
+    expect(screen.getByText('Capacete')).toBeTruthy();
+    expect(screen.getAllByText('Descrição').length).toBeGreaterThan(0);
+  });
+
+  it('applying a knowledge draft writes the items into the answers', async () => {
+    const api = vi.fn(async () => kbResult([{ nome: 'Bike', descricao: 'Aro 29' }]));
+    render(<Harness form={makeKbForm()} api={api} />);
+    generate();
+    await screen.findByText('Aro 29');
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+    await waitFor(() => expect(screen.getByDisplayValue('Bike')).toBeTruthy());
+    expect(screen.getByDisplayValue('Aro 29')).toBeTruthy();
+  });
+
+  it('a skeleton-only draft shows the skeleton warning and still allows apply', async () => {
+    const api = vi.fn(async () =>
+      kbResult([{ nome: 'Produto 1', descricao: '[preencher: Descrição]' }], { markers: 1 }),
+    );
+    render(<Harness form={makeKbForm()} api={api} />);
+    generate();
+    await screen.findByText(/apenas um esqueleto/);
+    expect((screen.getByRole('button', { name: 'Aplicar' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it('a written draft does not show the skeleton warning', async () => {
+    const api = vi.fn(async () => kbResult([{ nome: 'Bike', descricao: 'Aro 29' }]));
+    render(<Harness form={makeKbForm()} api={api} />);
+    generate();
+    await screen.findByText('Aro 29');
+    expect(screen.queryByText(/apenas um esqueleto/)).toBeNull();
+  });
+
+  it('a knowledge draft over the limit disables apply and shows why', async () => {
+    const api = vi.fn(async () =>
+      kbResult([{ nome: 'Bike', descricao: 'Aro 29' }], { applicable: false }),
+    );
+    render(<Harness form={makeKbForm()} api={api} />);
+    generate();
+    await screen.findByText('Aro 29');
+    expect((screen.getByRole('button', { name: 'Aplicar' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(screen.getByText(/passa dos limites do campo/)).toBeTruthy();
+  });
+});

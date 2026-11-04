@@ -381,13 +381,13 @@ function FieldCard({
 
 const ASSIST_MAX_QUESTIONS = 5;
 
-/** Perguntas que o cliente responde para a IA ajudar a preencher o campo (campos de texto). */
+/** Perguntas que o cliente responde para a IA ajudar a preencher o campo (texto, lista e base). */
 export function AssistSection({
   field,
   disabled,
   onChange,
 }: {
-  field: Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }>;
+  field: Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' | 'KNOWLEDGE' }>;
   disabled?: boolean;
   onChange: (field: FunctionField) => void;
 }) {
@@ -1181,6 +1181,7 @@ function KnowledgeSettings({
           Item no limite: até {length} de 1028 caracteres.
         </p>
       </div>
+      <AssistSection field={field} disabled={disabled} onChange={onChange} />
     </div>
   );
 }

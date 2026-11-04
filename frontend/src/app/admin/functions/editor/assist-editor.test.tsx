@@ -209,4 +209,51 @@ describe('editor da ajuda da IA', () => {
     ]);
     expect(latest.assist).toEqual({ enabled: false });
   });
+
+  const kbDraft = () =>
+    makeDraft({
+      assist: { enabled: true },
+      fields: [
+        {
+          kind: 'KNOWLEDGE',
+          id: 'base.produtos',
+          label: 'Produtos',
+          required: false,
+          maxItems: 5,
+          format: '{{nome}}',
+          subfields: [
+            { id: 'nome', label: 'Nome', required: true, maxLength: 50, multiline: false },
+          ],
+        },
+      ] as FunctionTemplateDraft['fields'],
+    });
+
+  it('field editor edits assist questions and instructions on a KNOWLEDGE field', () => {
+    render(<Harness initial={kbDraft()} />);
+    openField();
+    addQuestion('Que produtos vocês vendem?');
+    fireEvent.change(screen.getByLabelText('Instruções para a IA (opcional)'), {
+      target: { value: 'Um item por produto.' },
+    });
+    expect(assistOf()).toEqual({
+      questions: ['Que produtos vocês vendem?'],
+      instructions: 'Um item por produto.',
+    });
+  });
+
+  it('template editor sets assist.knowledgeMode', () => {
+    render(<Harness initial={makeDraft({ assist: { enabled: true } })} />);
+    goTab('Geral');
+    const select = screen.getByLabelText('Modo da ajuda na base de conhecimento');
+    fireEvent.change(select, { target: { value: 'skeleton' } });
+    expect(latest.assist).toEqual({ enabled: true, knowledgeMode: 'skeleton' });
+    fireEvent.change(select, { target: { value: 'write' } });
+    expect(latest.assist).toEqual({ enabled: true });
+  });
+
+  it('the mode selector only shows while the help is enabled', () => {
+    render(<Harness initial={makeDraft()} />);
+    goTab('Geral');
+    expect(screen.queryByLabelText('Modo da ajuda na base de conhecimento')).toBeNull();
+  });
 });

@@ -2,6 +2,7 @@
 
 import {
   type AiKeyView,
+  type AssistField,
   assistConfigured,
   assistFields,
   type AssistInput,
@@ -26,7 +27,7 @@ export interface FormAssist {
   aiKey?: AiKeyView | null;
 }
 
-type Draft = AssistResult['fields'][number] & { label: string };
+type Draft = AssistResult['fields'][number] & { label: string; field: AssistField };
 
 const MARKER = /\[preencher:[^\]]*\]/g;
 
@@ -38,7 +39,50 @@ export function onlyMarkers(value: FunctionAnswerValue): boolean {
   );
 }
 
-function Preview({ value }: { value: FunctionAnswerValue }) {
+type KnowledgeField = Extract<AssistField, { kind: 'KNOWLEDGE' }>;
+
+/** Itens da base ainda sem texto além do título: só o esqueleto, a IA não tinha o que dizer. */
+function knowledgeSkeleton(value: FunctionAnswerValue, field: KnowledgeField): boolean {
+  const title = field.subfields[0]!.id;
+  const items = Array.isArray(value) ? value : [];
+  return items.every(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'values' in item &&
+      Object.entries(item.values).every(
+        ([id, text]) => id === title || !/[\p{L}\p{N}]/u.test(text.replace(MARKER, '')),
+      ),
+  );
+}
+
+function KnowledgePreview({ value, field }: { value: FunctionAnswerValue; field: KnowledgeField }) {
+  const items = Array.isArray(value) ? value : [];
+  return (
+    <ol className="space-y-2 text-sm text-zinc-800">
+      {items.map((item, index) => (
+        <li key={index} className="rounded-lg border border-zinc-200 bg-white p-2">
+          {field.subfields.map((sub) => {
+            const text =
+              typeof item === 'object' && item !== null && 'values' in item
+                ? item.values[sub.id]
+                : undefined;
+            return text === undefined ? null : (
+              <p key={sub.id} className="whitespace-pre-wrap">
+                <span className="text-xs font-semibold text-zinc-500">{sub.label}</span>
+                <br />
+                {text}
+              </p>
+            );
+          })}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Preview({ value, field }: { value: FunctionAnswerValue; field: AssistField }) {
+  if (field.kind === 'KNOWLEDGE') return <KnowledgePreview value={value} field={field} />;
   if (Array.isArray(value)) {
     return (
       <ol className="list-decimal space-y-1 pl-5 text-sm text-zinc-800">
@@ -111,9 +155,12 @@ export function AssistPanel({
     };
     try {
       const result = await run(input);
-      const labels = new Map(fields.map((field) => [field.id, field.label]));
+      const byId = new Map(fields.map((field) => [field.id, field]));
       setDrafts(
-        result.fields.map((item) => ({ ...item, label: labels.get(item.fieldId) ?? item.fieldId })),
+        result.fields.flatMap((item) => {
+          const field = byId.get(item.fieldId);
+          return field ? [{ ...item, label: field.label, field }] : [];
+        }),
       );
       setCredits(result.credits);
       setApplied([]);
@@ -226,7 +273,10 @@ export function AssistPanel({
               {drafts.map((draft) => {
                 const stillEmpty = eligible.some((field) => field.id === draft.fieldId);
                 const done = applied.includes(draft.fieldId);
-                const skeleton = onlyMarkers(draft.value);
+                const skeleton =
+                  draft.field.kind === 'KNOWLEDGE'
+                    ? knowledgeSkeleton(draft.value, draft.field)
+                    : onlyMarkers(draft.value);
                 const reason = done
                   ? null
                   : !stillEmpty
@@ -240,7 +290,7 @@ export function AssistPanel({
                     className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3"
                   >
                     <p className="text-xs font-semibold text-zinc-700">{draft.label}</p>
-                    <Preview value={draft.value} />
+                    <Preview value={draft.value} field={draft.field} />
                     {draft.markers > 0 && (
                       <p className="text-xs text-amber-700">
                         {draft.markers} {draft.markers === 1 ? 'trecho' : 'trechos'} [preencher: …]
