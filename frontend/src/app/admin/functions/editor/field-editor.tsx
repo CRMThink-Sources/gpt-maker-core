@@ -402,7 +402,12 @@ function AssistSection({
     setSeen(field.assist);
     const local = questions.filter((q) => q.trim() !== '');
     // Mudança vinda de fora (aba JSON, outro campo): vale o rascunho; a nossa gravação não muda.
-    if (JSON.stringify(local) !== JSON.stringify(saved)) {
+    const localInstructions = instructions.trim() ? instructions : '';
+    const questionsDiffer = JSON.stringify(local) !== JSON.stringify(saved);
+    // Sem pergunta salva, as instruções digitadas ficam só no editor.
+    const instructionsDiffer =
+      saved.length > 0 && localInstructions !== (field.assist?.instructions ?? '');
+    if (questionsDiffer || instructionsDiffer) {
       setQuestions(saved);
       setInstructions(field.assist?.instructions ?? '');
     }

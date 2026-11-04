@@ -142,6 +142,26 @@ describe('editor da ajuda da IA', () => {
     expect(assistOf()).toEqual({ questions: ['Nova'], instructions: 'Seja breve' });
   });
 
+  it('instructions edited through the JSON tab are not reverted by a later keystroke', () => {
+    render(<Harness initial={makeDraft()} />);
+    openField();
+    addQuestion('Primeira');
+    fireEvent.change(screen.getByLabelText('Instruções para a IA (opcional)'), {
+      target: { value: 'Antigas' },
+    });
+    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const edited = JSON.parse(area.value);
+    edited.fields[0].assist.instructions = 'Novas';
+    fireEvent.change(area, { target: { value: JSON.stringify(edited) } });
+    openField();
+    expect(
+      (screen.getByLabelText('Instruções para a IA (opcional)') as HTMLTextAreaElement).value,
+    ).toBe('Novas');
+    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: 'Primeira?' } });
+    expect(assistOf()).toEqual({ questions: ['Primeira?'], instructions: 'Novas' });
+  });
+
   it('toggle sets assist.enabled', () => {
     render(<Harness initial={makeDraft()} />);
     goTab('Geral');
