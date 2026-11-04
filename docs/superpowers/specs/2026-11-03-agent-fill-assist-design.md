@@ -97,6 +97,18 @@ Por isso a primeira versão é opcional, pequena e ajustável sem deploy.
 - **Critério de liberação:** nenhum caso do eval com fato inventado (preço, prazo, política) e
   nenhum texto acima do limite.
 
+## Adendo: assistente de criação do agente (decisão do usuário, 2026-11-03)
+
+- A ajuda também aparece no **assistente de criação do agente**, onde o formulário está todo vazio e o
+  cliente mais trava. A fatia 1 entregou só a tela da função de um agente já criado (decisão minha,
+  que não foi avisada na hora; corrigida aqui).
+- Como ainda não há agente, a chamada vai por **código da função**
+  (`POST /app/agent-functions/:code/assist`), com a mesma lógica, a mesma cobrança e as mesmas regras
+  de prompt. Usa a versão mais recente publicada e a disponibilidade da função para o portal.
+- O botão fica **sempre visível** quando a função tem a ajuda configurada: desabilitado, com o
+  motivo, quando não há campo vazio para ajudar. Sem a ajuda configurada, nada muda na tela.
+- Plano: `docs/superpowers/plans/2026-11-03-agent-fill-assist-creation.md`.
+
 ## Deixado para quem construir
 
 - Forma exata do contrato e do schema (campos novos no template, endpoint, formato da saída).
