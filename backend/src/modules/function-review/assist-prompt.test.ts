@@ -353,4 +353,49 @@ describe('ajuda da IA: base de conhecimento no resultado', () => {
     const values = (result!.value as Array<{ values: Record<string, string> }>)[0]!.values;
     expect(values.descricao).toMatch(/^\[preencher:[^\]]*\]$/);
   });
+
+  it('skeleton: a long marker from the model is shortened so the base stays applicable', () => {
+    const long = `[preencher: ${'q'.repeat(40)}]`;
+    const [result] = toAssistResult([base], rows({ nome: 'Bike', descricao: long }), {
+      knowledgeMode: 'skeleton',
+    });
+    const items = result!.value as Array<{ values: Record<string, string> }>;
+    expect(items[0]!.values.descricao).toBe('[preencher: Descrição]');
+    expect(result!.applicable).toBe(true);
+  });
+
+  it('skeleton: when even the label marker is too long, a bare marker is used', () => {
+    const kb = base as Extract<AssistableField, { kind: 'KNOWLEDGE' }>;
+    const narrow = {
+      ...kb,
+      subfields: [kb.subfields[0]!, { ...kb.subfields[1]!, maxLength: 15 }],
+    } as AssistableField;
+    const [result] = toAssistResult([narrow], rows({ nome: 'Bike' }), {
+      knowledgeMode: 'skeleton',
+    });
+    const items = result!.value as Array<{ values: Record<string, string> }>;
+    expect(items[0]!.values.descricao).toBe('[preencher:]');
+    expect(result!.applicable).toBe(true);
+  });
+
+  it('an item whose rendered training text passes 1028 characters is not applicable', () => {
+    const wide = functionFieldSchema.parse({
+      kind: 'KNOWLEDGE',
+      id: 'base.longa',
+      label: 'Longa',
+      required: true,
+      maxItems: 3,
+      format: '{{a}} {{b}}',
+      subfields: [
+        { id: 'a', label: 'A', required: true, maxLength: 600, multiline: true },
+        { id: 'b', label: 'B', required: true, maxLength: 600, multiline: true },
+      ],
+      assist: { questions: ['Conte?'] },
+    }) as AssistableField;
+    const [result] = toAssistResult([wide], {
+      fields: [{ fieldId: 'base.longa', rows: [{ a: 'x'.repeat(600), b: 'y'.repeat(600) }] }],
+    });
+    expect((result!.value as unknown[]).length).toBe(1);
+    expect(result!.applicable).toBe(false);
+  });
 });

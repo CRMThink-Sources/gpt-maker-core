@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  AssistField,
-  AssistInput,
-  AssistModelOutput,
-  AssistResult,
-  KnowledgeItem,
+import {
+  type AssistField,
+  type AssistInput,
+  type AssistModelOutput,
+  type AssistResult,
+  type KnowledgeItem,
+  renderKnowledgeItem,
+  TRAINING_TEXT_MAX,
 } from '@gptmaker/contracts';
 import type { VibecodeMessage } from '../vibecode';
 
@@ -162,6 +164,16 @@ function countMarkers(texts: string[]): number {
 
 const ONLY_MARKER = /^\s*\[preencher:[^\]]*\]\s*$/i;
 
+/**
+ * Marcador do subcampo no esqueleto: o da IA se for só marcador e couber no limite; senão o do
+ * rótulo; senão o marcador sem texto. Marcador comprido nunca derruba a base inteira.
+ */
+function skeletonMarker(value: string, sub: { label: string; maxLength: number }): string {
+  if (ONLY_MARKER.test(value) && value.length <= sub.maxLength) return value;
+  const byLabel = `[preencher: ${sub.label}]`;
+  return byLabel.length <= sub.maxLength ? byLabel : '[preencher:]';
+}
+
 /** Item da base: só subcampos declarados; no esqueleto, nada além do título que não seja marcador. */
 function knowledgeItem(
   field: Extract<AssistableField, { kind: 'KNOWLEDGE' }>,
@@ -174,7 +186,7 @@ function knowledgeItem(
     if (raw === undefined && mode === 'write') return;
     const value = decode(raw ?? '');
     if (mode === 'skeleton' && index > 0) {
-      values[sub.id] = ONLY_MARKER.test(value) ? value : `[preencher: ${sub.label}]`;
+      values[sub.id] = skeletonMarker(value, sub);
     } else if (value !== '') {
       values[sub.id] = value;
     }
@@ -199,6 +211,7 @@ function knowledgeResult(
       value.every(
         (item) =>
           (item.values[title] ?? '').trim() !== '' &&
+          renderKnowledgeItem(field, item).length <= TRAINING_TEXT_MAX &&
           Object.entries(item.values).every(([id, text]) => text.length <= (limits.get(id) ?? 0)),
       ),
     markers: countMarkers(value.flatMap((item) => Object.values(item.values))),
