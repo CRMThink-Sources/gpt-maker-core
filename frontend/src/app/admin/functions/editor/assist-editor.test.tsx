@@ -1,7 +1,8 @@
-import type { FunctionTemplateDraft } from '@gptmaker/contracts';
+import type { FunctionField, FunctionTemplateDraft } from '@gptmaker/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { AssistSection } from './field-editor';
 import { TemplateEditor, useLiveTemplate } from './template-editor';
 
 afterEach(cleanup);
@@ -142,24 +143,27 @@ describe('editor da ajuda da IA', () => {
     expect(assistOf()).toEqual({ questions: ['Nova'], instructions: 'Seja breve' });
   });
 
-  it('instructions edited through the JSON tab are not reverted by a later keystroke', () => {
-    render(<Harness initial={makeDraft()} />);
-    openField();
-    addQuestion('Primeira');
-    fireEvent.change(screen.getByLabelText('Instruções para a IA (opcional)'), {
-      target: { value: 'Antigas' },
+  it('resyncs instructions changed in the draft without remounting', () => {
+    type TextField = Extract<FunctionField, { kind: 'TEXT' }>;
+    const base = makeDraft().fields[0] as TextField;
+    const withInstr = (instructions: string): TextField => ({
+      ...base,
+      assist: { questions: ['Primeira'], instructions },
     });
-    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
-    const area = screen.getByRole('textbox') as HTMLTextAreaElement;
-    const edited = JSON.parse(area.value);
-    edited.fields[0].assist.instructions = 'Novas';
-    fireEvent.change(area, { target: { value: JSON.stringify(edited) } });
-    openField();
+    let saved: FunctionField | undefined;
+    const onChange = (field: FunctionField) => {
+      saved = field;
+    };
+    const { rerender } = render(<AssistSection field={withInstr('Antigas')} onChange={onChange} />);
+    rerender(<AssistSection field={withInstr('Novas')} onChange={onChange} />);
     expect(
       (screen.getByLabelText('Instruções para a IA (opcional)') as HTMLTextAreaElement).value,
     ).toBe('Novas');
     fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: 'Primeira?' } });
-    expect(assistOf()).toEqual({ questions: ['Primeira?'], instructions: 'Novas' });
+    expect((saved as TextField).assist).toEqual({
+      questions: ['Primeira?'],
+      instructions: 'Novas',
+    });
   });
 
   it('toggle sets assist.enabled', () => {

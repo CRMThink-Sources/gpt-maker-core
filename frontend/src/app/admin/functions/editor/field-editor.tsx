@@ -382,7 +382,7 @@ function FieldCard({
 const ASSIST_MAX_QUESTIONS = 5;
 
 /** Perguntas que o cliente responde para a IA ajudar a preencher o campo (campos de texto). */
-function AssistSection({
+export function AssistSection({
   field,
   disabled,
   onChange,
