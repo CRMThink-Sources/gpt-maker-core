@@ -52,13 +52,46 @@ describe('comando de avaliação', () => {
       repeat: 3,
       caseIds: ['x', 'y'],
       details: true,
+      assist: false,
     });
     expect(parseArgs([])).toEqual({
       versions: ['current'],
       repeat: 2,
       caseIds: null,
       details: false,
+      assist: false,
     });
     expect(() => parseArgs(['--repeat=0'])).toThrow(/--repeat/);
+  });
+  it('--assist avalia a ajuda da IA, sem a chave não chama nada', async () => {
+    const none = io(undefined);
+    expect(await main(['--assist'], none.io)).toBe(1);
+    expect(none.chat).not.toHaveBeenCalled();
+    const reply = JSON.stringify({
+      fields: [{ fieldId: 'sdr.criterio', text: 'Tem 99 vendedores' }],
+    });
+    const run = io(
+      'vibe_api_x',
+      vi.fn(async () => reply),
+    );
+    expect(await main(['--assist', '--repeat=1', '--cases=sdr-criterio-completa'], run.io)).toBe(1);
+    expect(run.lines.join('\n')).toContain('fatos inventados');
+    expect(run.lines.join('\n')).toContain('99');
+  });
+
+  it('--assist devolve 0 sem problemas e 1 com chamada fora do formato', async () => {
+    const clean = JSON.stringify({
+      fields: [{ fieldId: 'sdr.criterio', text: 'tem 8 vendedores' }],
+    });
+    const ok = io(
+      'vibe_api_x',
+      vi.fn(async () => clean),
+    );
+    expect(await main(['--assist', '--repeat=1', '--cases=sdr-criterio-completa'], ok.io)).toBe(0);
+    const bad = io(
+      'vibe_api_x',
+      vi.fn(async () => 'nada'),
+    );
+    expect(await main(['--assist', '--repeat=1', '--cases=sdr-criterio-completa'], bad.io)).toBe(1);
   });
 });

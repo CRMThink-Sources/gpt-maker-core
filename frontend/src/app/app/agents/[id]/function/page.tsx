@@ -94,6 +94,10 @@ export default function AgentFunctionPage() {
 
   const base = `/app/agents/${encodeURIComponent(agent.id)}`;
   const readOnly = !session.canManage || agent.status === 'OUT_OF_SYNC';
+  const assist = useMemo(
+    () => ({ api, endpoint: `${base}/function/assist`, aiKey }),
+    [api, base, aiKey],
+  );
 
   /** Mostra a configuração; com `resetForm`, o formulário volta ao que está salvo. */
   const apply = useCallback((view: AgentFunctionConfigView, resetForm: boolean) => {
@@ -506,6 +510,7 @@ export default function AgentFunctionPage() {
             disabled={locked || busy}
             agents={transferAgents}
             ai={ai}
+            assist={assist}
           />
         </div>
         <aside className="hidden space-y-4 xl:sticky xl:top-6 xl:block xl:self-start">

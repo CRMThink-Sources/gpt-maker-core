@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiRequestError } from '@/lib/platform-session';
 import { answerKey, expectationValid } from './review-logic';
 
-type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
+export type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
 
 /** Resultado de um campo: andamento, sucesso ou a falha em pt-BR. */
 export type FieldReview =
@@ -55,7 +55,7 @@ export const REVIEW_CONCURRENCY = 2;
 export const BUSY_RETRIES = 3;
 export const BUSY_DELAY_MS = 6000;
 
-async function retryWhenBusy<T>(call: () => Promise<T>, delayMs: number): Promise<T> {
+export async function retryWhenBusy<T>(call: () => Promise<T>, delayMs: number): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await call();
@@ -67,7 +67,7 @@ async function retryWhenBusy<T>(call: () => Promise<T>, delayMs: number): Promis
   }
 }
 
-function failure(error: unknown): { message: string; code: string | null } {
+export function failure(error: unknown): { message: string; code: string | null } {
   if (error instanceof ApiRequestError) return { message: error.message, code: error.code };
   return { message: 'Não foi possível revisar agora. Tente de novo.', code: null };
 }

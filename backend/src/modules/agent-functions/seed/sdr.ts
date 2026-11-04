@@ -10,6 +10,7 @@ export const SDR: SeedTemplate = {
     agentType: 'SALE',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir'],
     fields: [
       {
@@ -21,6 +22,13 @@ export const SDR: SeedTemplate = {
         maxLength: 220,
         multiline: true,
         placeholder: 'Empresas com time comercial que usam ou querem usar CRM',
+        assist: {
+          questions: [
+            'Que tipo de empresa costuma comprar de vocês?',
+            'Qual o tamanho ou o momento da empresa que mais combina com o que vocês vendem?',
+          ],
+          instructions: 'Escreva em uma ou duas frases, com porte, segmento ou momento da empresa.',
+        },
         review: {
           minLength: 30,
           rubric:
@@ -37,6 +45,13 @@ export const SDR: SeedTemplate = {
         maxItems: 5,
         itemMaxLength: 90,
         placeholder: 'Quantos vendedores tem o time?',
+        assist: {
+          questions: [
+            'O que você precisa saber de alguém para decidir se vale uma conversa?',
+            'Que informação costuma separar um cliente bom de um que não tem a ver?',
+          ],
+          instructions: 'Cada item é uma pergunta curta, fácil de responder numa conversa.',
+        },
         review: {
           recommendedItems: 3,
           rubric:
@@ -51,6 +66,14 @@ export const SDR: SeedTemplate = {
         maxLength: 200,
         multiline: true,
         placeholder: '5 vendedores ou mais e intenção de implantar em até 3 meses',
+        assist: {
+          questions: [
+            'Que sinais fazem um lead valer uma ligação sua?',
+            'Se a pessoa respondesse as perguntas, o que ela teria de dizer para você querer falar com ela?',
+          ],
+          instructions:
+            'Use números, prazos ou cargos e relacione com as perguntas de qualificação.',
+        },
         review: {
           minLength: 30,
           rubric:
@@ -169,6 +192,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.produtos',
         label: 'Produtos e serviços',
+        assist: {
+          questions: [
+            'Que produtos ou serviços vocês vendem?',
+            'Para cada um, o que ele faz e para quem serve?',
+          ],
+          instructions:
+            'Um item por produto ou serviço: o nome no título e uma descrição curta do que é e para quem serve.',
+        },
         required: false,
         maxItems: 15,
         review: {
@@ -197,6 +228,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.objecoes',
         label: 'Objeções frequentes',
+        assist: {
+          questions: [
+            'Que objeções os clientes costumam levantar antes de comprar?',
+            'Como vocês respondem a cada uma?',
+          ],
+          instructions:
+            'Um item por objeção: a objeção como o cliente diria e a resposta que a equipe dá.',
+        },
         required: false,
         maxItems: 15,
         review: {
@@ -224,6 +263,14 @@ export const SDR: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.faq',
         label: 'Perguntas frequentes',
+        assist: {
+          questions: [
+            'Que perguntas os clientes mais fazem antes de comprar?',
+            'Como vocês respondem a elas?',
+          ],
+          instructions:
+            'Um item por pergunta, escrita como o cliente faria, com a resposta objetiva.',
+        },
         required: false,
         maxItems: 20,
         review: {

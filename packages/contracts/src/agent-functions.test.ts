@@ -12,6 +12,7 @@ import {
   availableMarkers,
   templateIssues,
 } from './agent-functions';
+import { assistConfigured, assistFields, assistKnowledgeMode } from './agent-function-answers';
 import { sdrFixture, sdrFixtureInput } from './agent-functions.fixture';
 
 const withBehavior = (behavior: string): FunctionTemplateContent => ({ ...sdrFixture, behavior });
@@ -141,6 +142,26 @@ describe('rascunho a partir de uma versão', () => {
       draft.fields.map((field) => field.id),
     );
     expect(expandBlocks(collapsed!, blocks).content).toEqual(content);
+  });
+
+  it.each([
+    ['assist ligado', { enabled: true }],
+    ['assist desligado', { enabled: false }],
+  ])('reproduz a versão com %s', (_name, assist) => {
+    const withAssist = { ...content, assist };
+    const collapsed = collapseBlocks(withAssist, draft, blocks);
+    expect(collapsed).not.toBeNull();
+    expect(expandBlocks(collapsed!, blocks).content).toEqual(withAssist);
+  });
+
+  it('reproduz versão antiga, sem a chave assist', () => {
+    const { assist: _assist, ...legacy } = content;
+    const collapsed = collapseBlocks(legacy as typeof content, draft, blocks);
+    expect(collapsed).not.toBeNull();
+    expect(expandBlocks(collapsed!, blocks).content).toEqual({
+      ...legacy,
+      assist: { enabled: false },
+    });
   });
 
   it('recusa quando o texto do bloco mudou depois da versão', () => {
@@ -452,5 +473,165 @@ describe('critério de revisão (review) no template', () => {
     // Em vez de descartar em silêncio: recommendedItems não existe em texto, minLength não em lista.
     expect(messages(patched('empresa.nome', { review: { recommendedItems: 1 } }))).not.toEqual([]);
     expect(messages(patched('sdr.perguntas', { review: { minLength: 10 } }))).not.toEqual([]);
+  });
+});
+
+describe('ajuda da IA (assist) no template', () => {
+  const patched = (patches: Record<string, Record<string, unknown>>, extra = {}) => ({
+    ...sdrFixtureInput,
+    ...extra,
+    fields: sdrFixture.fields.map((field) =>
+      patches[field.id] ? { ...field, ...patches[field.id] } : field,
+    ),
+  });
+  const assist = { questions: ['O que a empresa vende?'], instructions: 'Seja direto.' };
+
+  it('accepts assist on TEXT and TEXT_LIST', () => {
+    const result = functionTemplateContentSchema.safeParse(
+      patched({ 'empresa.descricao': { assist }, 'sdr.perguntas': { assist } }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const byId = (id: string) => result.data.fields.find((field) => field.id === id);
+      expect(byId('empresa.descricao')).toMatchObject({ assist });
+      expect(byId('sdr.perguntas')).toMatchObject({ assist });
+    }
+  });
+
+  it('rejects assist with 0 or 6 questions', () => {
+    for (const questions of [[], Array.from({ length: 6 }, (_, i) => `Pergunta ${i}?`)]) {
+      const result = functionTemplateContentSchema.safeParse(
+        patched({ 'empresa.descricao': { assist: { questions } } }),
+      );
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('template assist.enabled defaults to false', () => {
+    const result = functionTemplateContentSchema.safeParse(sdrFixtureInput);
+    expect(result.success && result.data.assist).toEqual({ enabled: false });
+  });
+
+  const enabled = (extra: Record<string, unknown> = {}) =>
+    functionTemplateContentSchema.parse(
+      patched({ 'empresa.descricao': { assist }, 'sdr.perguntas': { assist } }, extra),
+    );
+
+  it('assistFields returns only empty visible text fields with assist when enabled', () => {
+    const content = enabled({ assist: { enabled: true } });
+    expect(assistFields(content, {}).map((field) => field.id)).toEqual([
+      'empresa.descricao',
+      'sdr.perguntas',
+    ]);
+    expect(
+      assistFields(content, { 'empresa.descricao': 'Já preenchido', 'sdr.perguntas': [] }).map(
+        (field) => field.id,
+      ),
+    ).toEqual(['sdr.perguntas']);
+  });
+
+  it('assistFields returns [] for a legacy content without assist', () => {
+    const legacy: Record<string, unknown> = { ...enabled({ assist: { enabled: true } }) };
+    delete legacy.assist;
+    expect(assistFields(legacy as never, {})).toEqual([]);
+  });
+
+  it('assistFields returns [] when assist.enabled is false', () => {
+    expect(assistFields(enabled(), {})).toEqual([]);
+  });
+
+  it('assistConfigured is false when assist is missing (legacy)', () => {
+    const legacy: Record<string, unknown> = { ...enabled({ assist: { enabled: true } }) };
+    delete legacy.assist;
+    expect(assistConfigured(legacy as never)).toBe(false);
+  });
+
+  it('assistConfigured is false when enabled but no field has assist', () => {
+    const content = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      assist: { enabled: true },
+    });
+    expect(assistConfigured(content)).toBe(false);
+  });
+
+  it('assistConfigured is true when enabled and a field has assist', () => {
+    expect(assistConfigured(enabled({ assist: { enabled: true } }))).toBe(true);
+    expect(assistConfigured(enabled())).toBe(false);
+  });
+
+  it('assistConfigured finds assist on an option dependent', () => {
+    const content = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      assist: { enabled: true },
+      fields: sdrFixture.fields.map((field) =>
+        field.kind === 'CHOICE'
+          ? {
+              ...field,
+              options: field.options.map((option) => ({
+                ...option,
+                dependents: (option.dependents ?? []).map((dep) =>
+                  dep.kind === 'TEXT' ? { ...dep, assist } : dep,
+                ),
+              })),
+            }
+          : field,
+      ),
+    });
+    expect(assistConfigured(content)).toBe(true);
+  });
+});
+
+describe('ajuda da IA na base de conhecimento', () => {
+  const KB = 'base.produtos';
+  const assist = {
+    questions: ['Que produtos vocês vendem?'],
+    instructions: 'Um item por produto.',
+  };
+  const withKb = (extra: Record<string, unknown> = {}, kbAssist: unknown = assist) => ({
+    ...sdrFixtureInput,
+    ...extra,
+    fields: sdrFixture.fields.map((field) =>
+      field.id === KB ? { ...field, ...(kbAssist ? { assist: kbAssist } : {}) } : field,
+    ),
+  });
+  const parse = (input: unknown) => functionTemplateContentSchema.parse(input);
+
+  it('accepts assist on KNOWLEDGE', () => {
+    const content = parse(withKb());
+    const field = content.fields.find((f) => f.id === KB);
+    expect(field).toMatchObject({ kind: 'KNOWLEDGE', assist });
+  });
+
+  it('assistKnowledgeMode defaults to write', () => {
+    expect(assistKnowledgeMode(parse(withKb({ assist: { enabled: true } })))).toBe('write');
+    const legacy: Record<string, unknown> = { ...parse(withKb()) };
+    delete legacy.assist;
+    expect(assistKnowledgeMode(legacy as never)).toBe('write');
+  });
+
+  it('accepts knowledgeMode skeleton and rejects an unknown mode', () => {
+    const ok = parse(withKb({ assist: { enabled: true, knowledgeMode: 'skeleton' } }));
+    expect(assistKnowledgeMode(ok)).toBe('skeleton');
+    const bad = functionTemplateContentSchema.safeParse(
+      withKb({ assist: { enabled: true, knowledgeMode: 'tudo' } }),
+    );
+    expect(bad.success).toBe(false);
+  });
+
+  it('assistFields includes an empty KNOWLEDGE with assist and skips a filled one', () => {
+    const content = parse(withKb({ assist: { enabled: true } }));
+    expect(assistFields(content, {}).map((f) => f.id)).toContain(KB);
+    const filled = [{ itemKey: '3b241101-e2bb-4255-8caf-4136c566a962', values: { nome: 'x' } }];
+    expect(assistFields(content, { [KB]: filled }).map((f) => f.id)).not.toContain(KB);
+  });
+
+  it('assistFields skips a KNOWLEDGE without assist', () => {
+    const content = parse(withKb({ assist: { enabled: true } }, null));
+    expect(assistFields(content, {}).map((f) => f.id)).not.toContain(KB);
+  });
+
+  it('assistConfigured is true when only a KNOWLEDGE field has assist', () => {
+    expect(assistConfigured(parse(withKb({ assist: { enabled: true } })))).toBe(true);
+    expect(assistConfigured(parse(withKb({ assist: { enabled: true } }, null)))).toBe(false);
   });
 });

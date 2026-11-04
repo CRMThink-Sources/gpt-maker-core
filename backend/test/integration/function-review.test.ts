@@ -82,6 +82,7 @@ describe('revisão por IA da função', () => {
   let chats: Array<{ apiKey: string; prompt: string }>;
   let tenantKey: string | null;
   let platformKey: string | undefined;
+  let platformFallback = true;
   let debitFails = false;
   let rpm = 600;
 
@@ -102,6 +103,9 @@ describe('revisão por IA da função', () => {
       VIBECODE_REVIEW_MODEL: MODEL,
       REVIEW_CREDITS_PER_FIELD: PRICE,
       VIBECODE_PLATFORM_RPM: rpm,
+      get VIBECODE_PLATFORM_FALLBACK() {
+        return platformFallback;
+      },
       get VIBECODE_PLATFORM_API_KEY() {
         return platformKey;
       },
@@ -244,6 +248,24 @@ describe('revisão por IA da função', () => {
       expect(await refusal(service.create(tenantId, agentId, { fieldIds: FIELDS }))).toBe(
         'AI_KEY_REQUIRED',
       );
+    });
+
+    it('com o interruptor desligado, só a chave do cliente revisa', async () => {
+      const { tenantId, agentId } = await setup();
+      tenantKey = null;
+      platformKey = 'vibe_api_plataforma';
+      platformFallback = false;
+      try {
+        expect(await refusal(service.create(tenantId, agentId, { fieldIds: FIELDS }))).toBe(
+          'AI_KEY_REQUIRED',
+        );
+        tenantKey = 'vibe_api_cliente';
+        expect(await service.create(tenantId, agentId, { fieldIds: FIELDS })).toMatchObject({
+          keySource: 'tenant',
+        });
+      } finally {
+        platformFallback = true;
+      }
     });
 
     it('recusa campo que não é de texto, lista ou base', async () => {

@@ -196,3 +196,31 @@ export function moveItem<T>(list: readonly T[], index: number, delta: -1 | 1): T
   [next[index], next[target]] = [next[target]!, next[index]!];
   return next;
 }
+
+/** Campo com `assist`: guardar `undefined` em vez de `{ questions: [] }` quando não sobra pergunta. */
+export function withAssist<T extends FunctionField>(
+  field: T,
+  assist: { questions: string[]; instructions?: string } | undefined,
+): T {
+  const { assist: _old, ...rest } = field as T & { assist?: unknown };
+  void _old;
+  // Pergunta apagada (vazia ou só espaços) sai: `assist` nunca guarda pergunta em branco.
+  const questions = (assist?.questions ?? []).filter((question) => question.trim() !== '');
+  if (!assist || questions.length === 0) return rest as T;
+  const instructions = assist.instructions?.trim() ? assist.instructions : undefined;
+  return {
+    ...rest,
+    assist: { questions, ...(instructions ? { instructions } : {}) },
+  } as T;
+}
+
+/** Algum campo (inclusive dependente de opção) tem perguntas para a ajuda da IA. */
+export function hasAssistQuestions(fields: readonly FunctionField[]): boolean {
+  return fields.some((field) => {
+    if ('assist' in field && field.assist && field.assist.questions.length > 0) return true;
+    if (field.kind === 'CHOICE' || field.kind === 'MULTI_CHOICE') {
+      return field.options.some((o) => hasAssistQuestions(o.dependents ?? []));
+    }
+    return false;
+  });
+}

@@ -101,3 +101,43 @@ describe('exemplos da revisão nos seeds', () => {
     },
   );
 });
+
+describe('ajuda da IA nos seeds', () => {
+  const expanded = SEED_TEMPLATES.map((template) => {
+    const { content } = expandBlocks(functionTemplateDraftSchema.parse(template.draft), blocks);
+    return [template.code, flattenFields(content.fields), content.assist] as const;
+  });
+
+  it.each(expanded)(
+    '%s: every default function with assist.enabled has at least one field with questions',
+    (_code, fields, assist) => {
+      expect(assist.enabled).toBe(true);
+      expect(fields.some((field) => 'assist' in field && field.assist?.questions.length)).toBe(
+        true,
+      );
+    },
+  );
+
+  it.each(expanded)(
+    '%s: every seed field with assist is TEXT, TEXT_LIST or KNOWLEDGE',
+    (_code, fields) => {
+      for (const field of fields) {
+        if ('assist' in field && field.assist) {
+          expect(['TEXT', 'TEXT_LIST', 'KNOWLEDGE']).toContain(field.kind);
+        }
+      }
+    },
+  );
+
+  it.each(expanded)(
+    '%s: every default function KNOWLEDGE field declares assist questions',
+    (code, fields) => {
+      const bases = fields.filter((field) => field.kind === 'KNOWLEDGE');
+      expect(bases.length).toBeGreaterThan(0);
+      for (const field of bases) {
+        const questions = 'assist' in field ? field.assist?.questions : undefined;
+        expect(questions?.length, `${code} ${field.id}`).toBeGreaterThan(0);
+      }
+    },
+  );
+});

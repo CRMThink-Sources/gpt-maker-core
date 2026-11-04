@@ -76,6 +76,19 @@ describe('loadEnv', () => {
     );
   });
 
+  it('revisão por IA: a chave da CRMThink só vale com o interruptor ligado (padrão desligado)', () => {
+    expect(loadEnv(base).VIBECODE_PLATFORM_FALLBACK).toBe(false);
+    expect(
+      loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: 'true' }).VIBECODE_PLATFORM_FALLBACK,
+    ).toBe(true);
+    expect(loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: '1' }).VIBECODE_PLATFORM_FALLBACK).toBe(
+      true,
+    );
+    expect(() => loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: 'talvez' })).toThrow(
+      /VIBECODE_PLATFORM_FALLBACK/,
+    );
+  });
+
   it('lista variáveis ausentes', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
   });

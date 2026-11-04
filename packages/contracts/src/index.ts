@@ -1,6 +1,7 @@
 export * from './admin';
 export * from './agent-tests';
 export * from './agent-function-answers';
+export * from './agent-function-assist';
 export * from './agent-function-placeholders';
 export * from './agent-function-check';
 export * from './agent-function-compiler';

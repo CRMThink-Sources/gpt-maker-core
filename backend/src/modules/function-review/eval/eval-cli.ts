@@ -1,3 +1,4 @@
+import { formatAssistReport, loadAssistCases, runAssistEval } from './assist-eval';
 import { type EvalCase, loadCases } from './eval-case';
 import { buildPrompts, type Chat, formatReport, runVersion } from './eval-runner';
 import { loadSeedTemplate } from './eval-template';
@@ -16,6 +17,8 @@ export interface CliOptions {
   caseIds: string[] | null;
   /** Mostra, dos casos com algo a olhar, o que a IA devolveu. */
   details: boolean;
+  /** Avalia a ajuda da IA para preencher campos, em vez da revisão. */
+  assist: boolean;
 }
 
 export function parseArgs(argv: string[]): CliOptions {
@@ -30,6 +33,7 @@ export function parseArgs(argv: string[]): CliOptions {
     repeat,
     caseIds: flag('cases')?.split(',').filter(Boolean) ?? null,
     details: argv.includes('--details'),
+    assist: argv.includes('--assist'),
   };
 }
 
@@ -52,6 +56,8 @@ export async function main(argv: string[], io: CliIo): Promise<number> {
     io.write('Falta a chave do Vibecode: defina VIBECODE_EVAL_API_KEY. Nenhuma chamada foi feita.');
     return 1;
   }
+
+  if (options.assist) return runAssist(options, io);
 
   const all = loadCases();
   const cases: EvalCase[] = options.caseIds
@@ -94,4 +100,33 @@ export async function main(argv: string[], io: CliIo): Promise<number> {
     }
   }
   return 0;
+}
+
+/** Avaliação da ajuda da IA: zero fatos inventados e nenhum texto acima do limite é o esperado. */
+async function runAssist(options: CliOptions, io: CliIo): Promise<number> {
+  const all = loadAssistCases();
+  const cases = options.caseIds ? all.filter((entry) => options.caseIds!.includes(entry.id)) : all;
+  if (cases.length === 0) {
+    io.write('Nenhum caso encontrado para os ids pedidos.');
+    return 1;
+  }
+  io.write(`Rodando ${cases.length} casos da ajuda da IA x ${options.repeat}…`);
+  const report = await runAssistEval(cases, io.makeChat(io.apiKey!), options.repeat);
+  io.write('');
+  io.write(formatAssistReport(report));
+  if (options.details) {
+    for (const entry of report.perCase.filter(
+      (item) => item.inventedFacts.length || item.overLimit || item.skeletonViolations,
+    )) {
+      io.write('');
+      io.write(`[${entry.id}] ${entry.output.join('\n--- repetição ---\n')}`);
+    }
+  }
+  // Fato inventado, texto acima do limite, prosa no esqueleto ou chamada fora do formato reprovam.
+  return report.inventedFacts > 0 ||
+    report.overLimit > 0 ||
+    report.skeletonViolations > 0 ||
+    report.failed > 0
+    ? 1
+    : 0;
 }

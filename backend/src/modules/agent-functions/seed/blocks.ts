@@ -27,6 +27,13 @@ const comum: SeedBlock = {
         required: true,
         maxLength: 250,
         multiline: true,
+        assist: {
+          questions: [
+            'Se um cliente perguntasse o que a sua empresa faz, o que você diria?',
+            'Para quem vocês vendem e em que cidades ou regiões atendem?',
+          ],
+          instructions: 'Escreva em uma ou duas frases, sem slogan.',
+        },
         review: {
           minLength: 40,
           rubric:

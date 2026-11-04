@@ -12,6 +12,9 @@
       "jobName": "{{empresa.nome}}",
       "jobDescription": "{{empresa.descricao}}"
     },
+    "assist": {
+      "enabled": true
+    },
     "blocks": [
       "comum",
       "registro",
@@ -28,6 +31,13 @@
         "maxLength": 220,
         "multiline": true,
         "placeholder": "Empresas com time comercial que usam ou querem usar CRM",
+        "assist": {
+          "questions": [
+            "Que tipo de empresa costuma comprar de vocês?",
+            "Qual o tamanho ou o momento da empresa que mais combina com o que vocês vendem?"
+          ],
+          "instructions": "Escreva em uma ou duas frases, com porte, segmento ou momento da empresa."
+        },
         "review": {
           "minLength": 30,
           "rubric": "Descreve o cliente ideal com porte, segmento ou momento da empresa, não só \"empresas\" ou \"pessoas interessadas\"."
@@ -43,6 +53,13 @@
         "maxItems": 5,
         "itemMaxLength": 90,
         "placeholder": "Quantos vendedores tem o time?",
+        "assist": {
+          "questions": [
+            "O que você precisa saber de alguém para decidir se vale uma conversa?",
+            "Que informação costuma separar um cliente bom de um que não tem a ver?"
+          ],
+          "instructions": "Cada item é uma pergunta curta, fácil de responder numa conversa."
+        },
         "review": {
           "recommendedItems": 3,
           "rubric": "Cada item é uma pergunta só, fácil de responder numa conversa, e ajuda a decidir se o lead é qualificado."
@@ -56,6 +73,13 @@
         "maxLength": 200,
         "multiline": true,
         "placeholder": "5 vendedores ou mais e intenção de implantar em até 3 meses",
+        "assist": {
+          "questions": [
+            "Que sinais fazem um lead valer uma ligação sua?",
+            "Se a pessoa respondesse as perguntas, o que ela teria de dizer para você querer falar com ela?"
+          ],
+          "instructions": "Use números, prazos ou cargos e relacione com as perguntas de qualificação."
+        },
         "review": {
           "minLength": 30,
           "rubric": "O critério é objetivo (números, prazos, cargos) e usa as respostas das perguntas de qualificação."
@@ -166,11 +190,22 @@
         "kind": "KNOWLEDGE",
         "id": "base.produtos",
         "label": "Produtos e serviços",
+        "assist": {
+          "questions": [
+            "Que produtos ou serviços vocês vendem?",
+            "Para cada um, o que ele faz e para quem serve?"
+          ],
+          "instructions": "Um item por produto ou serviço: o nome no título e uma descrição curta do que é e para quem serve."
+        },
         "required": false,
         "maxItems": 15,
         "review": {
           "recommendedItems": 1,
-          "rubric": "Cada item diz o que é, para quem serve e o diferencial, sem prometer preço ou prazo que a empresa não confirmou."
+          "rubric": "Cada item diz o que é, para quem serve e o diferencial, sem prometer preço ou prazo que a empresa não confirmou.",
+          "examples": {
+            "good": "nome: Plano Profissional\ndescricao: Sistema de agendamento para clínicas de pequeno e médio porte. Reduz faltas com lembretes automáticos por WhatsApp e integra com a agenda do profissional. Valores e condições são passados pelo time comercial.",
+            "bad": "nome: Produto\ndescricao: A melhor solução do mercado, com preço imperdível."
+          }
         },
         "subfields": [
           {
@@ -196,10 +231,21 @@
         "kind": "KNOWLEDGE",
         "id": "base.objecoes",
         "label": "Objeções frequentes",
+        "assist": {
+          "questions": [
+            "Que objeções os clientes costumam levantar antes de comprar?",
+            "Como vocês respondem a cada uma?"
+          ],
+          "instructions": "Um item por objeção: a objeção como o cliente diria e a resposta que a equipe dá."
+        },
         "required": false,
         "maxItems": 15,
         "review": {
-          "rubric": "A objeção está como o cliente diria; a resposta reconhece a dúvida, responde com um fato e convida ao próximo passo, sem pressionar."
+          "rubric": "A objeção está como o cliente diria; a resposta reconhece a dúvida, responde com um fato e convida ao próximo passo, sem pressionar.",
+          "examples": {
+            "good": "objecao: Está caro para o meu momento\nresposta: Entendo, o investimento pesa mesmo. Muitos clientes recuperam o valor nos primeiros meses ao reduzir faltas e retrabalho. Posso te mostrar como isso funciona no seu caso numa conversa rápida?",
+            "bad": "objecao: Caro\nresposta: Não é caro, é o melhor custo-benefício. Feche hoje."
+          }
         },
         "subfields": [
           {
@@ -225,10 +271,21 @@
         "kind": "KNOWLEDGE",
         "id": "base.faq",
         "label": "Perguntas frequentes",
+        "assist": {
+          "questions": [
+            "Que perguntas os clientes mais fazem antes de comprar?",
+            "Como vocês respondem a elas?"
+          ],
+          "instructions": "Um item por pergunta, escrita como o cliente faria, com a resposta objetiva."
+        },
         "required": false,
         "maxItems": 20,
         "review": {
-          "rubric": "A pergunta está como o cliente escreveria; a resposta é direta, completa e cabe em poucas frases."
+          "rubric": "A pergunta está como o cliente escreveria; a resposta é direta, completa e cabe em poucas frases.",
+          "examples": {
+            "good": "pergunta: Vocês atendem empresas de fora do estado?\nresposta: Sim, atendemos todo o Brasil. A implantação e o suporte são feitos online, sem precisar de visita presencial.",
+            "bad": "pergunta: Atendimento\nresposta: Sim."
+          }
         },
         "subfields": [
           {

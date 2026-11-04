@@ -8,7 +8,7 @@ import type {
   MarkerOption,
 } from '@gptmaker/contracts';
 import { useState, type ReactNode } from 'react';
-import { ChevronDownIcon, PlusIcon } from '@/components/icons';
+import { ChevronDownIcon, CloseIcon, PlusIcon } from '@/components/icons';
 import { Badge, buttonClass } from '@/components/ui';
 import { Field, inputClass } from '../../../app/agents/agent-fields';
 import { useFocusCard } from './focus';
@@ -38,6 +38,7 @@ import {
   type Published,
   slug,
   uniqueId,
+  withAssist,
 } from './model';
 
 /** Id ou valor de opção renomeado: o editor atualiza as referências no resto do conteúdo. */
@@ -378,6 +379,135 @@ function FieldCard({
   );
 }
 
+const ASSIST_MAX_QUESTIONS = 5;
+
+/** Perguntas que o cliente responde para a IA ajudar a preencher o campo (texto, lista e base). */
+export function AssistSection({
+  field,
+  disabled,
+  onChange,
+}: {
+  field: Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' | 'KNOWLEDGE' }>;
+  disabled?: boolean;
+  onChange: (field: FunctionField) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  // O editor mostra o que o admin digitou (inclusive linha vazia e instruções sem pergunta);
+  // `withAssist` tira o que está em branco ao gravar no rascunho.
+  const saved = field.assist?.questions ?? [];
+  const [questions, setQuestions] = useState<string[]>(saved);
+  const [instructions, setInstructions] = useState(field.assist?.instructions ?? '');
+  const [seen, setSeen] = useState(field.assist);
+  if (field.assist !== seen) {
+    setSeen(field.assist);
+    const local = questions.filter((q) => q.trim() !== '');
+    // Mudança vinda de fora (aba JSON, outro campo): vale o rascunho; a nossa gravação não muda.
+    const localInstructions = instructions.trim() ? instructions : '';
+    const questionsDiffer = JSON.stringify(local) !== JSON.stringify(saved);
+    // Sem pergunta salva, as instruções digitadas ficam só no editor.
+    const instructionsDiffer =
+      saved.length > 0 && localInstructions !== (field.assist?.instructions ?? '');
+    if (questionsDiffer || instructionsDiffer) {
+      setQuestions(saved);
+      setInstructions(field.assist?.instructions ?? '');
+    }
+  }
+  const save = (next: string[], nextInstructions: string = instructions) => {
+    setQuestions(next);
+    setInstructions(nextInstructions);
+    onChange(withAssist(field, { questions: next, instructions: nextInstructions }));
+  };
+  const add = () => {
+    const text = draft.trim();
+    if (!text || questions.length >= ASSIST_MAX_QUESTIONS) return;
+    save([...questions, text]);
+    setDraft('');
+  };
+  return (
+    <div>
+      <Label>Ajuda da IA</Label>
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          Perguntas para o cliente (1 a 5). Sem perguntas, o campo não tem ajuda da IA.
+        </p>
+        <ul className="space-y-2">
+          {questions.map((question, index) => (
+            <li key={index} className="flex items-center gap-2">
+              <input
+                className={`${inputClass} flex-1`}
+                aria-label={`Pergunta ${index + 1}`}
+                value={question}
+                maxLength={200}
+                disabled={disabled}
+                onChange={(e) => save(questions.map((q, i) => (i === index ? e.target.value : q)))}
+              />
+              <span className="w-14 text-right text-xs text-zinc-400">{question.length}/200</span>
+              {!disabled && (
+                <IconButton
+                  label="Remover pergunta da ajuda"
+                  onClick={() =>
+                    save(
+                      questions.filter((_, i) => i !== index),
+                      instructions,
+                    )
+                  }
+                >
+                  <CloseIcon className="size-4" />
+                </IconButton>
+              )}
+            </li>
+          ))}
+        </ul>
+        {questions.length < ASSIST_MAX_QUESTIONS && !disabled && (
+          <div className="flex items-center gap-2">
+            <input
+              className={`${inputClass} flex-1`}
+              aria-label="Nova pergunta"
+              placeholder="Perguntas para o cliente (1 a 5)"
+              value={draft}
+              maxLength={200}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  add();
+                }
+              }}
+            />
+            <span className="w-14 text-right text-xs text-zinc-400">{draft.length}/200</span>
+            <button
+              type="button"
+              className={buttonClass('secondary')}
+              aria-label="Adicionar pergunta à ajuda"
+              disabled={!draft.trim()}
+              onClick={add}
+            >
+              <PlusIcon className="size-4" />
+              Adicionar
+            </button>
+          </div>
+        )}
+        {questions.length > 0 && (
+          <Field label="Instruções para a IA (opcional)">
+            <textarea
+              className={inputClass}
+              rows={2}
+              aria-label="Instruções para a IA (opcional)"
+              maxLength={500}
+              value={instructions}
+              disabled={disabled}
+              onChange={(e) => save(questions, e.target.value)}
+            />
+            <span className="mt-1 block text-right text-xs text-zinc-400">
+              {instructions.length}/500
+            </span>
+          </Field>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function KindSettings({
   field,
   ctx,
@@ -391,70 +521,76 @@ function KindSettings({
   switch (field.kind) {
     case 'TEXT':
       return (
-        <div>
-          <Label>Resposta</Label>
-          <div className="flex flex-wrap items-end gap-4">
-            <NumberInput
-              label="Máximo de caracteres"
-              value={field.maxLength}
-              min={1}
-              disabled={disabled}
-              onChange={(maxLength) => onChange({ ...field, maxLength })}
-            />
-            <Field label="Exemplo (placeholder)">
-              <input
-                className={`${inputClass} w-72`}
-                value={field.placeholder ?? ''}
+        <div className="space-y-4">
+          <div>
+            <Label>Resposta</Label>
+            <div className="flex flex-wrap items-end gap-4">
+              <NumberInput
+                label="Máximo de caracteres"
+                value={field.maxLength}
+                min={1}
                 disabled={disabled}
-                onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+                onChange={(maxLength) => onChange({ ...field, maxLength })}
               />
-            </Field>
-            <div className="pb-2.5">
-              <Check
-                label="Várias linhas"
-                checked={field.multiline}
-                disabled={disabled}
-                onChange={(multiline) => onChange({ ...field, multiline })}
-              />
+              <Field label="Exemplo (placeholder)">
+                <input
+                  className={`${inputClass} w-72`}
+                  value={field.placeholder ?? ''}
+                  disabled={disabled}
+                  onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+                />
+              </Field>
+              <div className="pb-2.5">
+                <Check
+                  label="Várias linhas"
+                  checked={field.multiline}
+                  disabled={disabled}
+                  onChange={(multiline) => onChange({ ...field, multiline })}
+                />
+              </div>
             </div>
           </div>
+          <AssistSection field={field} disabled={disabled} onChange={onChange} />
         </div>
       );
     case 'TEXT_LIST':
       return (
-        <div>
-          <Label>Itens</Label>
-          <div className="flex flex-wrap items-end gap-4">
-            <NumberInput
-              label="Mínimo de itens"
-              value={field.minItems}
-              min={0}
-              disabled={disabled}
-              onChange={(minItems) => onChange({ ...field, minItems })}
-            />
-            <NumberInput
-              label="Máximo de itens"
-              value={field.maxItems}
-              min={1}
-              disabled={disabled}
-              onChange={(maxItems) => onChange({ ...field, maxItems })}
-            />
-            <NumberInput
-              label="Caracteres por item"
-              value={field.itemMaxLength}
-              min={1}
-              disabled={disabled}
-              onChange={(itemMaxLength) => onChange({ ...field, itemMaxLength })}
-            />
-            <Field label="Exemplo (placeholder)">
-              <input
-                className={`${inputClass} w-64`}
-                value={field.placeholder ?? ''}
+        <div className="space-y-4">
+          <div>
+            <Label>Itens</Label>
+            <div className="flex flex-wrap items-end gap-4">
+              <NumberInput
+                label="Mínimo de itens"
+                value={field.minItems}
+                min={0}
                 disabled={disabled}
-                onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+                onChange={(minItems) => onChange({ ...field, minItems })}
               />
-            </Field>
+              <NumberInput
+                label="Máximo de itens"
+                value={field.maxItems}
+                min={1}
+                disabled={disabled}
+                onChange={(maxItems) => onChange({ ...field, maxItems })}
+              />
+              <NumberInput
+                label="Caracteres por item"
+                value={field.itemMaxLength}
+                min={1}
+                disabled={disabled}
+                onChange={(itemMaxLength) => onChange({ ...field, itemMaxLength })}
+              />
+              <Field label="Exemplo (placeholder)">
+                <input
+                  className={`${inputClass} w-64`}
+                  value={field.placeholder ?? ''}
+                  disabled={disabled}
+                  onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })}
+                />
+              </Field>
+            </div>
           </div>
+          <AssistSection field={field} disabled={disabled} onChange={onChange} />
         </div>
       );
     case 'URL':
@@ -1045,6 +1181,7 @@ function KnowledgeSettings({
           Item no limite: até {length} de 1028 caracteres.
         </p>
       </div>
+      <AssistSection field={field} disabled={disabled} onChange={onChange} />
     </div>
   );
 }

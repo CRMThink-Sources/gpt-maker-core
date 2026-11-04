@@ -23,6 +23,7 @@ describe('chave de IA do cliente', () => {
   let db: NodePgDatabase<typeof schema>;
   let service: AiKeyService;
   let platformKey: string | undefined;
+  let platformFallback = true;
 
   // Resposta do Vibecode simulado: modelos, escopos ou uma falha.
   let models: string[] | VibecodeError = [MODEL];
@@ -45,6 +46,9 @@ describe('chave de IA do cliente', () => {
     const env = {
       VIBECODE_REVIEW_MODEL: MODEL,
       REVIEW_CREDITS_PER_FIELD: 2,
+      get VIBECODE_PLATFORM_FALLBACK() {
+        return platformFallback;
+      },
       get VIBECODE_PLATFORM_API_KEY() {
         return platformKey;
       },
@@ -89,6 +93,17 @@ describe('chave de IA do cliente', () => {
     });
     platformKey = 'vibe_api_da_crmthink';
     expect((await service.view(tenantId)).platformAvailable).toBe(true);
+  });
+
+  it('com o interruptor desligado, a chave da CRMThink não vale mesmo preenchida', async () => {
+    const tenantId = await newTenant();
+    platformKey = 'vibe_api_da_crmthink';
+    platformFallback = false;
+    try {
+      expect((await service.view(tenantId)).platformAvailable).toBe(false);
+    } finally {
+      platformFallback = true;
+    }
   });
 
   it('salva a chave válida e mostra só o final e o teste, nunca a chave', async () => {

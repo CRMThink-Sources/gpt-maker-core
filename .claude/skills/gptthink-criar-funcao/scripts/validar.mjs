@@ -90,6 +90,23 @@ function checkReview(owner, review, { at, id, allowed, maxItems, maxLength, scop
   }
 }
 
+// Ajuda da IA (opcional): só em TEXT, TEXT_LIST e KNOWLEDGE. De 1 a 5 perguntas de 1 a 200 caracteres, instruções
+// até 500, sem outras chaves (mesma regra do schema da publicação).
+function checkAssist(f, at) {
+  if (f.assist === undefined) return;
+  if (f.kind !== 'TEXT' && f.kind !== 'TEXT_LIST' && f.kind !== 'KNOWLEDGE')
+    return err(`${at}: assist não vale para ${f.kind} (só TEXT, TEXT_LIST e KNOWLEDGE)`);
+  const a = f.assist;
+  if (a === null || typeof a !== 'object' || Array.isArray(a)) return err(`${at}: assist precisa ser { questions, instructions? }`);
+  for (const key of Object.keys(a))
+    if (key !== 'questions' && key !== 'instructions') err(`${at}: assist.${key} não existe (use questions e instructions)`);
+  if (!Array.isArray(a.questions) || a.questions.length < 1 || a.questions.length > 5) err(`${at}: assist.questions: de 1 a 5 perguntas`);
+  else if (a.questions.some((q) => typeof q !== 'string' || q.trim().length < 1 || q.trim().length > 200))
+    err(`${at}: assist.questions: cada pergunta tem de 1 a 200 caracteres`);
+  if (a.instructions !== undefined && (typeof a.instructions !== 'string' || a.instructions.trim().length > 500))
+    err(`${at}: assist.instructions: texto de até 500 caracteres`);
+}
+
 function checkField(f, where) {
   const at = `${where} ${f?.id ?? '?'}`;
   if (!KINDS.includes(f?.kind)) return err(`${at}: kind inválido (${f?.kind})`);
@@ -97,6 +114,7 @@ function checkField(f, where) {
   if (!str(f.label, 1, 120)) err(`${at}: label de 1 a 120 caracteres`);
   if (f.help !== undefined && !str(f.help, 0, 300)) err(`${at}: help até 300 caracteres`);
   if (typeof f.required !== 'boolean') err(`${at}: required precisa ser true/false`);
+  checkAssist(f, at);
   switch (f.kind) {
     case 'TEXT':
       if (!int(f.maxLength) || f.maxLength < 1 || f.maxLength > BEHAVIOR_MAX) err(`${at}: maxLength de 1 a 3000`);
@@ -166,6 +184,10 @@ function checkField(f, where) {
 }
 
 if (!['SUPPORT', 'SALE', 'PERSONAL'].includes(draft.agentType)) err('agentType: SUPPORT, SALE ou PERSONAL');
+if (draft.assist !== undefined && !(draft.assist !== null && typeof draft.assist === 'object' && !Array.isArray(draft.assist) && typeof draft.assist.enabled === 'boolean'))
+  err('assist: precisa ser { enabled: true/false }');
+if (draft.assist?.knowledgeMode !== undefined && !['write', 'skeleton'].includes(draft.assist.knowledgeMode))
+  err('assist.knowledgeMode: write ou skeleton');
 if (!Array.isArray(draft.fields) || draft.fields.length < 1) err('fields: pelo menos um campo próprio');
 if (!str(draft.behavior, 1, BEHAVIOR_MAX)) err('behavior: 1 a 3000 caracteres (texto cru)');
 if ((draft.intentions ?? []).length > 10) err('intentions: no máximo 10');

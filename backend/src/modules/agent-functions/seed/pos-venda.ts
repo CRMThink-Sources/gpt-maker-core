@@ -10,6 +10,7 @@ export const POST_SALES: SeedTemplate = {
     agentType: 'SUPPORT',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir'],
     fields: [
       {
@@ -130,6 +131,14 @@ export const POST_SALES: SeedTemplate = {
                 label: 'O que oferecer',
                 required: true,
                 maxLength: 200,
+                assist: {
+                  questions: [
+                    'O que você gostaria que o cliente comprasse de novo ou indicasse?',
+                    'Existe algum benefício para quem volta ou indica um amigo?',
+                  ],
+                  instructions:
+                    'Descreva a oferta em uma frase, sem prometer o que a empresa não cumpre.',
+                },
               },
               {
                 kind: 'CHOICE',
@@ -184,6 +193,14 @@ export const POST_SALES: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.politicas',
         label: 'Políticas',
+        assist: {
+          questions: [
+            'Que regras valem depois da compra, como troca, garantia e devolução?',
+            'Quais os prazos e as condições de cada uma?',
+          ],
+          instructions:
+            'Um item por política: o título da regra e o que ela diz, só com o que o cliente informar.',
+        },
         help: 'Troca, devolução, garantia, prazos de entrega.',
         required: false,
         maxItems: 10,
@@ -213,6 +230,10 @@ export const POST_SALES: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.primeiros_passos',
         label: 'Primeiros passos',
+        assist: {
+          questions: ['O que o cliente precisa fazer logo depois de comprar?', 'Em que ordem?'],
+          instructions: 'Um item por passo, com um título curto e o que o cliente deve fazer.',
+        },
         help: 'Como ativar, montar, acessar.',
         required: false,
         maxItems: 15,
@@ -242,6 +263,14 @@ export const POST_SALES: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.faq',
         label: 'Perguntas frequentes',
+        assist: {
+          questions: [
+            'Que dúvidas os clientes têm depois da compra?',
+            'Como vocês respondem a elas?',
+          ],
+          instructions:
+            'Um item por pergunta, escrita como o cliente faria, com a resposta objetiva.',
+        },
         required: false,
         maxItems: 20,
         review: {

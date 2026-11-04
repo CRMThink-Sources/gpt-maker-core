@@ -49,7 +49,14 @@ import { IntentionList } from './intention-editor';
 import { KIND_STYLE, Section, Segmented, SettingRow, TriState, TypeIcon } from './kit';
 import { MarkerText } from './marker-text';
 import { TransferList } from './transfer-editor';
-import { allIds, KIND_LABELS, type Published, renameId, renameOption } from './model';
+import {
+  allIds,
+  hasAssistQuestions,
+  KIND_LABELS,
+  type Published,
+  renameId,
+  renameOption,
+} from './model';
 import { CompiledBehavior, PreviewTab } from './preview-tab';
 
 type Tab = 'general' | 'form' | 'behavior' | 'actions' | 'preview' | 'versions' | 'json';
@@ -810,6 +817,49 @@ export function TemplateEditor({
                     return block?.content.crmAccess ? [block.name] : [];
                   })}
                 />
+              </Section>
+
+              <Section
+                title="Ajuda da IA"
+                icon={TextIcon}
+                description="O cliente responde a perguntas e a IA sugere o texto dos campos de texto e da base de conhecimento vazios."
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <p className="text-sm font-medium text-zinc-800">Ajuda da IA para o cliente</p>
+                  <Switch
+                    label="Ajuda da IA para o cliente"
+                    checked={draft.assist?.enabled ?? false}
+                    disabled={disabled}
+                    onChange={(enabled) => set({ assist: { ...draft.assist, enabled } })}
+                  />
+                </div>
+                {draft.assist?.enabled && (
+                  <div className="mt-3">
+                    <Field label="Modo da ajuda na base de conhecimento">
+                      <select
+                        className={inputClass}
+                        value={draft.assist.knowledgeMode ?? 'write'}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          set({
+                            assist:
+                              event.target.value === 'skeleton'
+                                ? { enabled: true, knowledgeMode: 'skeleton' }
+                                : { enabled: true },
+                          })
+                        }
+                      >
+                        <option value="write">Redigir o conteúdo dos itens</option>
+                        <option value="skeleton">Só montar o esqueleto (título e perguntas)</option>
+                      </select>
+                    </Field>
+                  </div>
+                )}
+                {draft.assist?.enabled && !hasAssistQuestions(live.content.fields) && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Nenhum campo tem perguntas: a ajuda não vai aparecer para o cliente.
+                  </p>
+                )}
               </Section>
 
               <Section

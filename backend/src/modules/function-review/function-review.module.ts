@@ -6,6 +6,8 @@ import { TenancyModule } from '../tenancy';
 import { VibecodeModule } from '../vibecode';
 import { AiKeyController } from './ai-key.controller';
 import { AiKeyService } from './ai-key.service';
+import { AssistByCodeController } from './assist-by-code.controller';
+import { AssistController } from './assist.controller';
 import { FunctionReviewController } from './function-review.controller';
 import { FunctionReviewService } from './function-review.service';
 import { ReviewSessionStore } from './review-session.store';
@@ -13,7 +15,7 @@ import { ReviewSessionStore } from './review-session.store';
 /** Revisão do preenchimento da função (spec agent-knowledge-review). */
 @Module({
   imports: [AgentFunctionsModule, AgentsModule, BillingModule, TenancyModule, VibecodeModule],
-  controllers: [AiKeyController, FunctionReviewController],
+  controllers: [AiKeyController, FunctionReviewController, AssistController, AssistByCodeController],
   providers: [AiKeyService, FunctionReviewService, ReviewSessionStore],
   exports: [AiKeyService],
 })

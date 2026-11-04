@@ -29,6 +29,7 @@ import {
   SpaFields,
   UsersPicker,
 } from './bitrix-pickers';
+import { AssistPanel, type FormAssist } from './assist-ui';
 import { FieldNotes, FormReviewContext, type FormReview, ReviewSummary } from './review-ui';
 
 /**
@@ -46,6 +47,8 @@ type Props = {
   agents?: Array<{ id: string; name: string }>;
   /** Revisão por IA da tela da função; sem ela, o formulário mostra só os avisos por regras fixas. */
   ai?: FormReview['ai'];
+  /** Ajuda da IA para campos vazios; sem ela (criação, backoffice), nada muda no formulário. */
+  assist?: FormAssist;
 };
 
 /** Problema de um campo (ou de um item dele: `campo[0]`, `campo[0].sub`). */
@@ -176,7 +179,7 @@ function Group({
 /** Agentes que os campos "Agente" oferecem (D17), sem repassar por cada pergunta. */
 const FormAgents = createContext<Array<{ id: string; name: string }>>([]);
 
-export function FunctionForm({ form, answers, onChange, issues, disabled, agents, ai }: Props) {
+export function FunctionForm({ form, answers, onChange, issues, disabled, agents, ai, assist }: Props) {
   const set = (id: string, value: FunctionAnswerValue | undefined) => {
     const next = { ...answers };
     if (value === undefined) delete next[id];
@@ -206,6 +209,15 @@ export function FunctionForm({ form, answers, onChange, issues, disabled, agents
       <FormReviewContext.Provider value={review}>
         <div className="space-y-8">
           <ReviewSummary answers={answers} />
+          {assist && (
+            <AssistPanel
+              form={form}
+              answers={answers}
+              disabled={disabled}
+              onApply={(fieldId, value) => set(fieldId, value)}
+              {...assist}
+            />
+          )}
           <Group
             icon={TextIcon}
             title="Como o agente atende"

@@ -10,6 +10,7 @@ export const SUPPORT: SeedTemplate = {
     agentType: 'SUPPORT',
     settings: { enabledHumanTransfer: true, limitSubjects: true },
     profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}' },
+    assist: { enabled: true },
     blocks: ['comum', 'registro', 'duvida', 'transferir', 'crm'],
     fields: [
       {
@@ -22,6 +23,13 @@ export const SUPPORT: SeedTemplate = {
         maxItems: 5,
         itemMaxLength: 80,
         placeholder: 'Cancelamento',
+        assist: {
+          questions: [
+            'Que assuntos você prefere que uma pessoa do time resolva?',
+            'Cite 2 problemas que não podem esperar até amanhã',
+          ],
+          instructions: 'Cada item é um assunto curto, como cancelamento ou cobrança.',
+        },
         review: {
           rubric:
             'Cada item é um assunto concreto que o agente deve encaminhar sem tentar resolver (por exemplo, cancelamento ou cobrança).',
@@ -178,6 +186,14 @@ export const SUPPORT: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.problemas',
         label: 'Problemas comuns',
+        assist: {
+          questions: [
+            'Que problemas os clientes mais trazem para o suporte?',
+            'Como vocês resolvem cada um?',
+          ],
+          instructions:
+            'Um item por problema: o problema como o cliente descreveria e o passo a passo da solução.',
+        },
         help: 'O problema como o cliente descreve e o passo a passo da solução.',
         required: false,
         maxItems: 20,
@@ -207,6 +223,14 @@ export const SUPPORT: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.faq',
         label: 'Perguntas frequentes',
+        assist: {
+          questions: [
+            'Que dúvidas os clientes mais fazem ao suporte?',
+            'Como vocês respondem a elas?',
+          ],
+          instructions:
+            'Um item por pergunta, escrita como o cliente faria, com a resposta objetiva.',
+        },
         required: false,
         maxItems: 20,
         review: {
@@ -234,6 +258,14 @@ export const SUPPORT: SeedTemplate = {
         kind: 'KNOWLEDGE',
         id: 'base.politicas',
         label: 'Políticas',
+        assist: {
+          questions: [
+            'Que regras o suporte precisa seguir, como reembolso, garantia e prazos?',
+            'Quando cada regra se aplica?',
+          ],
+          instructions:
+            'Um item por política: o título da regra e o que ela diz, só com o que o cliente informar.',
+        },
         help: 'Troca, garantia, prazos, horários.',
         required: false,
         maxItems: 10,

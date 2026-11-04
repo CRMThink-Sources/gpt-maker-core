@@ -256,3 +256,104 @@ describe('critério de revisão (review) na skill', () => {
     }
   });
 });
+
+describe('ajuda da IA (assist) na skill', () => {
+  const sdr = SEED_TEMPLATES.find((template) => template.code === 'SDR')!.draft;
+  type Raw = { id: string };
+  const patched = (id: string, change: Record<string, unknown>): FunctionTemplateDraftInput => ({
+    ...sdr,
+    fields: sdr.fields.map((field) =>
+      (field as Raw).id === id ? { ...(field as Raw), ...change } : field,
+    ),
+  });
+
+  it('validator accepts assist on a text field', () => {
+    const draft = patched('sdr.perfil_ideal', {
+      assist: { questions: ['Quem é o seu cliente ideal?'], instructions: 'Seja breve.' },
+    });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
+    expect(validate(draft).ok).toBe(true);
+  });
+
+  it('validator accepts assist on a KNOWLEDGE field', () => {
+    const draft = patched('base.produtos', {
+      assist: { questions: ['Que produtos vocês vendem?'], instructions: 'Um item por produto.' },
+    });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
+    expect(validate(draft).ok).toBe(true);
+  });
+
+  it('validator accepts knowledgeMode skeleton and rejects an unknown mode', () => {
+    const ok = {
+      ...sdr,
+      assist: { enabled: true, knowledgeMode: 'skeleton' },
+    } as unknown as FunctionTemplateDraftInput;
+    expect(functionTemplateDraftSchema.safeParse(ok).success).toBe(true);
+    expect(validate(ok).ok).toBe(true);
+    const bad = { ...sdr, assist: { enabled: true, knowledgeMode: 'tudo' } };
+    expect(functionTemplateDraftSchema.safeParse(bad).success).toBe(false);
+    const result = validate(bad as unknown as FunctionTemplateDraftInput);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('assist.knowledgeMode: write ou skeleton');
+  });
+
+  it('validator accepts assist on a text list field', () => {
+    const draft = patched('sdr.perguntas', { assist: { questions: ['O que você quer saber?'] } });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(true);
+    expect(validate(draft).ok).toBe(true);
+  });
+
+  it('validator rejects assist on a CHOICE field', () => {
+    // O schema da publicação ignora a chave em silêncio; o validador da skill recusa de propósito.
+    const draft = patched('sdr.qualificado', { assist: { questions: ['Pergunta?'] } });
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('assist não vale para CHOICE');
+  });
+
+  it('validator rejects 6 questions', () => {
+    const draft = patched('sdr.perfil_ideal', {
+      assist: { questions: ['a?', 'b?', 'c?', 'd?', 'e?', 'f?'] },
+    });
+    expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(false);
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('assist.questions: de 1 a 5 perguntas');
+  });
+
+  it('validator rejects empty or long questions, long instructions and unknown keys', () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ questions: [] }, 'assist.questions: de 1 a 5 perguntas'],
+      [{ questions: ['  '] }, 'assist.questions: cada pergunta tem de 1 a 200 caracteres'],
+      [
+        { questions: ['x'.repeat(201)] },
+        'assist.questions: cada pergunta tem de 1 a 200 caracteres',
+      ],
+      [
+        { questions: ['a?'], instructions: 'x'.repeat(501) },
+        'assist.instructions: texto de até 500 caracteres',
+      ],
+      [{ questions: ['a?'], extra: 1 }, 'assist.extra não existe'],
+    ];
+    for (const [assist, message] of cases) {
+      const draft = patched('sdr.perfil_ideal', { assist });
+      expect(functionTemplateDraftSchema.safeParse(draft).success).toBe(false);
+      const result = validate(draft);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain(message);
+    }
+  });
+
+  it('validator checks the template-level assist', () => {
+    const ok = { ...sdr, assist: { enabled: true } };
+    expect(functionTemplateDraftSchema.safeParse(ok).success).toBe(true);
+    expect(validate(ok).ok).toBe(true);
+    for (const assist of [{ enabled: 'sim' }, {}, true]) {
+      const bad = { ...sdr, assist } as unknown as FunctionTemplateDraftInput;
+      expect(functionTemplateDraftSchema.safeParse(bad).success).toBe(false);
+      const result = validate(bad);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain('assist: precisa ser { enabled: true/false }');
+    }
+  });
+});

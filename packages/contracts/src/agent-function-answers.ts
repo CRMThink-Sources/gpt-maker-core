@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hasPlaceholder } from './agent-function-placeholders';
+import { flattenFields } from './agent-functions';
 import type { FunctionField, FunctionTemplateContent } from './agent-functions';
 import { TRAINING_TEXT_MAX } from './trainings';
 
@@ -113,6 +114,48 @@ export function visibleFields(
   });
 }
 
+/** Modo da ajuda na base; versões antigas, sem o atributo, redigem o conteúdo. */
+export function assistKnowledgeMode(
+  content: Pick<FunctionTemplateContent, 'assist'>,
+): 'write' | 'skeleton' {
+  return content.assist?.knowledgeMode ?? 'write';
+}
+
+/** Campos que a ajuda da IA preenche. */
+export type AssistField = Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' | 'KNOWLEDGE' }>;
+
+const ASSIST_KINDS = new Set(['TEXT', 'TEXT_LIST', 'KNOWLEDGE']);
+
+/**
+ * A função tem a ajuda da IA ligada e ao menos um campo de texto ou base (dependentes inclusive) com
+ * `assist`. Não olha respostas: serve para decidir se o botão existe.
+ */
+export function assistConfigured(
+  content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
+): boolean {
+  // Versões publicadas antes da ajuda da IA não têm `assist`.
+  if (!content.assist?.enabled) return false;
+  return flattenFields(content.fields).some(
+    (field) => ASSIST_KINDS.has(field.kind) && 'assist' in field && field.assist !== undefined,
+  );
+}
+
+/** Campos de texto e bases visíveis e vazios com ajuda da IA; vazio se o template a desligou. */
+export function assistFields(
+  content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
+  answers: FunctionAnswers,
+): AssistField[] {
+  // Versões publicadas antes da ajuda da IA não têm `assist`.
+  if (!content.assist?.enabled) return [];
+  return visibleFields(content.fields, answers).filter(
+    (field): field is AssistField =>
+      ASSIST_KINDS.has(field.kind) &&
+      'assist' in field &&
+      field.assist !== undefined &&
+      isEmpty(answers[field.id]),
+  );
+}
+
 /** Valores escolhidos de uma escolha única ou múltipla. */
 export function selectedValues(value: FunctionAnswerValue | undefined): string[] {
   if (typeof value === 'string') return value ? [value] : [];
@@ -143,7 +186,7 @@ export function renderKnowledgeItem(
     .trim();
 }
 
-function isEmpty(value: FunctionAnswerValue | undefined): boolean {
+export function isEmpty(value: FunctionAnswerValue | undefined): boolean {
   if (value === undefined) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (Array.isArray(value)) return value.length === 0;
