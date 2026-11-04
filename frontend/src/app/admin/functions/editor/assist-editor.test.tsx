@@ -103,18 +103,43 @@ describe('editor da ajuda da IA', () => {
     expect('assist' in latest.fields[0]!).toBe(false);
   });
 
-  it('clearing the text of a question removes it, and assist when none is left', () => {
+  it('clearing a question keeps the row and focus; the draft never holds an empty question', () => {
     const warning = 'Nenhum campo tem perguntas: a ajuda não vai aparecer para o cliente.';
     render(<Harness initial={makeDraft({ assist: { enabled: true } })} />);
     openField();
     addQuestion('Primeira');
     addQuestion('Segunda');
-    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: '   ' } });
+    const first = screen.getByLabelText('Pergunta 1') as HTMLInputElement;
+    first.focus();
+    fireEvent.change(first, { target: { value: '   ' } });
     expect(assistOf()).toEqual({ questions: ['Segunda'] });
-    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: '' } });
+    expect(screen.getByLabelText('Pergunta 1')).toBe(first);
+    expect(document.activeElement).toBe(first);
+    expect(screen.getByLabelText('Pergunta 2')).toBeTruthy();
+    fireEvent.change(first, { target: { value: '' } });
+    expect(JSON.stringify(latest.fields[0])).not.toContain('""');
+    expect(assistOf()).toEqual({ questions: ['Segunda'] });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remover pergunta da ajuda' })[1]!);
     expect('assist' in latest.fields[0]!).toBe(false);
     goTab('Geral');
     expect(screen.getByText(warning)).toBeTruthy();
+  });
+
+  it('clearing the only question keeps the instructions for the session and restores them', () => {
+    render(<Harness initial={makeDraft()} />);
+    openField();
+    addQuestion('Única');
+    fireEvent.change(screen.getByLabelText('Instruções para a IA (opcional)'), {
+      target: { value: 'Seja breve' },
+    });
+    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: '' } });
+    expect('assist' in latest.fields[0]!).toBe(false);
+    expect(screen.getByLabelText('Pergunta 1')).toBeTruthy();
+    expect(
+      (screen.getByLabelText('Instruções para a IA (opcional)') as HTMLTextAreaElement).value,
+    ).toBe('Seja breve');
+    fireEvent.change(screen.getByLabelText('Pergunta 1'), { target: { value: 'Nova' } });
+    expect(assistOf()).toEqual({ questions: ['Nova'], instructions: 'Seja breve' });
   });
 
   it('toggle sets assist.enabled', () => {

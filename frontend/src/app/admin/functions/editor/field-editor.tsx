@@ -392,10 +392,26 @@ function AssistSection({
   onChange: (field: FunctionField) => void;
 }) {
   const [draft, setDraft] = useState('');
-  const questions = field.assist?.questions ?? [];
-  const instructions = field.assist?.instructions ?? '';
-  const save = (next: string[], nextInstructions: string = instructions) =>
+  // O editor mostra o que o admin digitou (inclusive linha vazia e instruções sem pergunta);
+  // `withAssist` tira o que está em branco ao gravar no rascunho.
+  const saved = field.assist?.questions ?? [];
+  const [questions, setQuestions] = useState<string[]>(saved);
+  const [instructions, setInstructions] = useState(field.assist?.instructions ?? '');
+  const [seen, setSeen] = useState(field.assist);
+  if (field.assist !== seen) {
+    setSeen(field.assist);
+    const local = questions.filter((q) => q.trim() !== '');
+    // Mudança vinda de fora (aba JSON, outro campo): vale o rascunho; a nossa gravação não muda.
+    if (JSON.stringify(local) !== JSON.stringify(saved)) {
+      setQuestions(saved);
+      setInstructions(field.assist?.instructions ?? '');
+    }
+  }
+  const save = (next: string[], nextInstructions: string = instructions) => {
+    setQuestions(next);
+    setInstructions(nextInstructions);
     onChange(withAssist(field, { questions: next, instructions: nextInstructions }));
+  };
   const add = () => {
     const text = draft.trim();
     if (!text || questions.length >= ASSIST_MAX_QUESTIONS) return;
