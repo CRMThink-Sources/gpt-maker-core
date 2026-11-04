@@ -122,5 +122,6 @@ async function runAssist(options: CliOptions, io: CliIo): Promise<number> {
       io.write(`[${entry.id}] ${entry.output.join('\n--- repetição ---\n')}`);
     }
   }
-  return 0;
+  // Fato inventado, texto acima do limite ou chamada fora do formato reprovam a avaliação.
+  return report.inventedFacts > 0 || report.overLimit > 0 || report.failed > 0 ? 1 : 0;
 }

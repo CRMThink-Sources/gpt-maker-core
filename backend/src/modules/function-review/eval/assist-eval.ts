@@ -7,7 +7,6 @@ import {
 } from '@gptmaker/contracts';
 import { z } from 'zod';
 import { type AssistableField, assistMessages, toAssistResult } from '../assist-prompt';
-import { numbersIn } from './eval-metrics';
 import type { Chat } from './eval-runner';
 import { loadSeedTemplate } from './eval-template';
 
@@ -52,35 +51,178 @@ export interface AssistEvaluation {
 }
 
 const MARKER = /\[preencher:[^\]]*\]/gi;
-const TIME_TERMS =
-  /\b(segunda|terça|quarta|quinta|sexta|sábado|domingo|janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/giu;
 
-/** Nome próprio: palavra com inicial maiúscula fora do começo de frase (sigla toda em maiúsculas não conta). */
+/** Minúsculas e sem acento, para comparar palavras sem depender de grafia. */
+function norm(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+const wordsOf = (text: string): string[] => norm(text).match(/[\p{L}\d]+/gu) ?? [];
+
+/**
+ * Números do texto como fichas: "45", "5000", "1.299,90" (preço, sem o R$) e "14h30" (hora, uma
+ * ficha só). Dígito colado numa palavra (Bitrix24) é nome, não quantidade. Em texto gerado a
+ * numeração de lista só vale no começo da linha ("1. ", "1) "); "R$ 5000. Depois" conta.
+ */
+function numberTokens(text: string, stripListNumbering: boolean): Set<string> {
+  const body = stripListNumbering ? text.replace(/^[ \t]*\d+[.)][ \t]+/gm, '') : text;
+  return new Set(body.match(/(?<![\p{L}\d])(?:\d+h\d+|\d+(?:[.,]\d+)*)/gu) ?? []);
+}
+
+/** Dia da semana e mês: prazo que o cliente não disse. */
+const TIME_TERMS = [
+  'segunda',
+  'terca',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sabado',
+  'domingo',
+  'janeiro',
+  'fevereiro',
+  'marco',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+/** Números por extenso (sem acento). "um/uma" ficam de fora: são artigo (ver SPELLED_ONE). */
+const SPELLED_NUMBERS = [
+  'dois',
+  'duas',
+  'tres',
+  'quatro',
+  'cinco',
+  'seis',
+  'sete',
+  'oito',
+  'nove',
+  'dez',
+  'onze',
+  'doze',
+  'treze',
+  'catorze',
+  'quatorze',
+  'quinze',
+  'dezesseis',
+  'dezessete',
+  'dezoito',
+  'dezenove',
+  'vinte',
+  'trinta',
+  'quarenta',
+  'cinquenta',
+  'sessenta',
+  'setenta',
+  'oitenta',
+  'noventa',
+  'cem',
+  'cento',
+  'duzentos',
+  'duzentas',
+  'trezentos',
+  'trezentas',
+  'quatrocentos',
+  'quatrocentas',
+  'quinhentos',
+  'quinhentas',
+  'seiscentos',
+  'seiscentas',
+  'setecentos',
+  'setecentas',
+  'oitocentos',
+  'oitocentas',
+  'novecentos',
+  'novecentas',
+  'mil',
+  'duzia',
+];
+
+/** "um/uma" só é fato quando vem logo antes de uma unidade de tempo ou quantidade (lista curta). */
+const SPELLED_ONE_UNITS = [
+  'dia',
+  'dias',
+  'semana',
+  'semanas',
+  'mes',
+  'meses',
+  'ano',
+  'anos',
+  'hora',
+  'horas',
+  'minuto',
+  'minutos',
+  'real',
+  'reais',
+  'vez',
+  'vezes',
+  'cliente',
+  'clientes',
+  'vendedor',
+  'vendedores',
+];
+
+/**
+ * Abridores de frase comuns (sem acento) que não contam como nome próprio no começo de frase ou de
+ * item: artigos, preposições, pronomes, conjunções, verbos do vocabulário do prompt e palavras
+ * típicas de campo de agente. Fora do começo de frase, só vale o texto do cliente.
+ */
+const COMMON_OPENERS = new Set(
+  [
+    'o a os as um uma uns umas de da do das dos em no na nos nas por pelo pela para pra com sem sobre ate',
+    'eu voce vocês voces nos ele ela eles elas isso isto esse essa este esta aquele aquela',
+    'nosso nossa nossos nossas seu sua seus suas meu minha',
+    'e ou mas se quando como que onde porque enquanto caso apos antes depois',
+    'quem qual quais quanto quanta quantos quantas quanto tambem todo toda todos todas',
+    'pergunte atenda encaminhe transfira oriente responda registre colete confirme explique ajude use',
+    'envie informe peca verifique identifique agende fale diga tente evite nunca sempre',
+    'qualificado qualificada cliente clientes lead leads empresa empresas assunto assuntos',
+    'fecha atende custa paga fala tem quer usa vende compra precisa busca possui trabalha',
+    'cancelamento pedido pedidos atendimento suporte time equipe',
+  ]
+    .join(' ')
+    .split(/\s+/)
+    .map(norm),
+);
+
+/** Nome próprio: palavra com inicial maiúscula (sigla toda em maiúsculas não conta). */
 function properNames(text: string): string[] {
   const names: string[] = [];
   for (const match of text.matchAll(/\p{Lu}[\p{L}\d]+/gu)) {
     const word = match[0];
     if (word === word.toUpperCase()) continue;
-    const before = text.slice(0, match.index).trimEnd();
-    if (before === '' || /[.!?:;\n\-•(]$/.test(before)) continue;
+    if (COMMON_OPENERS.has(norm(word))) continue;
     names.push(word);
   }
   return names;
 }
 
-/** Fatos da saída (número, preço, prazo, nome próprio) que não estão em `about` nem nas respostas. */
+/** Fatos da saída (número, preço, hora, prazo, nome próprio) que não estão em `about` nem nas respostas. */
 function inventedFactsIn(texts: string[], sources: string): string[] {
-  const known = sources.toLowerCase();
-  const knownNumbers = numbersIn(sources);
+  const knownWords = new Set(wordsOf(sources));
+  const knownNumbers = numberTokens(sources, false);
   const invented = new Set<string>();
   for (const raw of texts) {
     const text = raw.replace(MARKER, ' ');
-    for (const number of numbersIn(text)) if (!knownNumbers.has(number)) invented.add(number);
-    for (const term of text.toLowerCase().match(TIME_TERMS) ?? []) {
-      if (!known.includes(term)) invented.add(term);
+    for (const number of numberTokens(text, true)) {
+      if (!knownNumbers.has(number)) invented.add(number);
     }
+    const words = wordsOf(text);
+    words.forEach((word, index) => {
+      const spelled =
+        SPELLED_NUMBERS.includes(word) ||
+        TIME_TERMS.includes(word) ||
+        ((word === 'um' || word === 'uma') && SPELLED_ONE_UNITS.includes(words[index + 1] ?? ''));
+      if (spelled && !knownWords.has(word)) invented.add(word);
+    });
     for (const name of properNames(text)) {
-      if (!known.includes(name.toLowerCase())) invented.add(name);
+      if (!knownWords.has(norm(name))) invented.add(name);
     }
   }
   return [...invented];
