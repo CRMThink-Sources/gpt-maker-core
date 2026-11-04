@@ -180,4 +180,43 @@ describe('ajuda da IA: leitura da saída', () => {
     });
     expect(results.map((result) => result.applicable)).toEqual([false, false]);
   });
+
+  it('system prompt tells the model to read and write plain characters, not entities', () => {
+    const prompt = system(
+      assistMessages({ fields: [text], about: 'Clínica', interview: [], context }),
+    );
+    expect(prompt).toContain('&amp;');
+    expect(prompt).toContain('&lt;');
+    expect(prompt).toContain('&gt;');
+    expect(prompt).toContain('&quot;');
+    expect(prompt).toMatch(/nunca as entidades/i);
+  });
+
+  it('decodes echoed entities before applicable, length and markers', () => {
+    const [one] = toAssistResult([text], {
+      fields: [{ fieldId: text.id, text: 'Silva &amp; Filhos &quot;X&quot; &lt;a&gt;' }],
+    });
+    expect(one!.value).toBe('Silva & Filhos "X" <a>');
+    const [long] = toAssistResult([text], {
+      fields: [{ fieldId: text.id, text: `${'a'.repeat(44)} &amp;&amp;&amp;` }],
+    });
+    expect(long!.value).toBe(`${'a'.repeat(44)} &&&`);
+    expect(long!.applicable).toBe(true);
+    const [marked] = toAssistResult([text], {
+      fields: [{ fieldId: text.id, text: '[preencher: a &amp; b]' }],
+    });
+    expect(marked!.value).toBe('[preencher: a & b]');
+    expect(marked!.markers).toBe(1);
+    const [items] = toAssistResult([list], {
+      fields: [{ fieldId: list.id, items: ['Silva &amp; Filhos'] }],
+    });
+    expect(items!.value).toEqual(['Silva & Filhos']);
+  });
+
+  it('decodes only one level of entities', () => {
+    const [one] = toAssistResult([text], {
+      fields: [{ fieldId: text.id, text: 'Use &amp;amp; e &amp;lt;' }],
+    });
+    expect(one!.value).toBe('Use &amp; e &lt;');
+  });
 });

@@ -32,6 +32,7 @@ Regras:
 - O texto vai direto para o agente, que o lê antes de cada conversa: diga o que fazer, de forma concreta, sem enfeite e sem repetir a pergunta.
 - Respeite o limite de cada campo (caracteres do texto; número de itens e caracteres por item nas listas). Prefira escrever menos a passar do limite; o sistema não corta texto.
 - Siga as instruções de cada campo, quando houver.
+- Os quadros de dados escrevem os caracteres & < > " como &amp; &lt; &gt; &quot;. Leia essas entidades como os caracteres comuns e escreva sempre os caracteres comuns na resposta (por exemplo Silva & Filhos), nunca as entidades &amp;, &lt;, &gt; ou &quot;.
 - Devolva todos os campos pedidos, cada um com o seu "fieldId".
 
 Responda SOMENTE com um objeto JSON neste formato:
@@ -102,6 +103,15 @@ export function assistMessages(input: AssistPromptInput): VibecodeMessage[] {
   ];
 }
 
+/** Desfaz as quatro entidades que `esc` usa, caso o modelo as devolva; `&amp;` por último. */
+function decode(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
 const MARKER = /\[preencher:[^\]]*\]/gi;
 
 function countMarkers(texts: string[]): number {
@@ -120,7 +130,7 @@ export function toAssistResult(
   return fields.map((field) => {
     const entry = byId.get(field.id);
     if (field.kind === 'TEXT') {
-      const value = entry?.text ?? '';
+      const value = decode(entry?.text ?? '');
       return {
         fieldId: field.id,
         value,
@@ -128,7 +138,7 @@ export function toAssistResult(
         markers: countMarkers([value]),
       };
     }
-    const value = entry?.items ?? [];
+    const value = (entry?.items ?? []).map(decode);
     return {
       fieldId: field.id,
       value,
