@@ -28,6 +28,7 @@ const {
   agent,
   agentFunctionConfig,
   agentFunctionTemplate,
+  agentFunctionTemplateTenant,
   agentFunctionTemplateVersion,
   aiModel,
   creditLedger,
@@ -242,7 +243,13 @@ describe('ajuda da IA para preencher a função', () => {
         amount: credits,
       });
     }
-    return { tenantId, agentId: created!.id, content: version!.content };
+    return {
+      tenantId,
+      agentId: created!.id,
+      content: version!.content,
+      templateId: template!.id,
+      templateCode: template!.code,
+    };
   }
 
   const debits = (tenantId: string) =>
@@ -260,6 +267,64 @@ describe('ajuda da IA para preencher a função', () => {
     about: ABOUT,
     interview: [],
     answers: answers as never,
+  });
+
+  describe('por código da função, sem agente', () => {
+    it('by code: returns a result with the latest published version', async () => {
+      const { tenantId, templateCode } = await setup(100, 'disabled', 'enabled');
+      queue.push(JSON.stringify({ fields: [{ fieldId: TEXT_ID, text: 'Loja online.' }] }));
+      const result = await service.assistByCode(tenantId, templateCode, input([TEXT_ID]));
+      expect(result.fields).toEqual([
+        { fieldId: TEXT_ID, value: 'Loja online.', applicable: true, markers: 0 },
+      ]);
+      expect(chats[0]!.prompt).not.toContain('Agente:');
+    });
+
+    it('by code: inactive function gives 422 FUNCTION_NOT_AVAILABLE and does not call the AI', async () => {
+      const { tenantId, templateId, templateCode } = await setup();
+      await db
+        .update(agentFunctionTemplate)
+        .set({ active: false })
+        .where(eq(agentFunctionTemplate.id, templateId));
+      expect(await refusal(service.assistByCode(tenantId, templateCode, input([TEXT_ID])))).toBe(
+        'FUNCTION_NOT_AVAILABLE',
+      );
+      expect(chats).toHaveLength(0);
+      expect(await debits(tenantId)).toHaveLength(0);
+    });
+
+    it('by code: function restricted to another tenant gives 422 and does not call the AI', async () => {
+      const { tenantId, templateId, templateCode } = await setup();
+      const other = await setup();
+      await db
+        .insert(agentFunctionTemplateTenant)
+        .values({ templateId, tenantId: other.tenantId });
+      expect(await refusal(service.assistByCode(tenantId, templateCode, input([TEXT_ID])))).toBe(
+        'FUNCTION_NOT_AVAILABLE',
+      );
+      expect(chats).toHaveLength(0);
+      expect(await debits(tenantId)).toHaveLength(0);
+    });
+
+    it('by code: charges one debit without agent id', async () => {
+      const { tenantId, templateCode } = await setup();
+      queue.push(JSON.stringify({ fields: [{ fieldId: TEXT_ID, text: 'Loja online.' }] }));
+      const result = await service.assistByCode(tenantId, templateCode, input([TEXT_ID]));
+      expect(result.credits).toBe(PRICE);
+      const entries = await debits(tenantId);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.agentId).toBeNull();
+      expect(entries[0]!.amount).toBe(-PRICE);
+    });
+
+    it('by code: disabled assist gives 422 ASSIST_NOT_ENABLED', async () => {
+      const { tenantId, templateCode } = await setup(100, 'disabled');
+      expect(await refusal(service.assistByCode(tenantId, templateCode, input([TEXT_ID])))).toBe(
+        'ASSIST_NOT_ENABLED',
+      );
+      expect(chats).toHaveLength(0);
+      expect(await debits(tenantId)).toHaveLength(0);
+    });
   });
 
   it('refuses a filled field with 422 and does not call the AI', async () => {

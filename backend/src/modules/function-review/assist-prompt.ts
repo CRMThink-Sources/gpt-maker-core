@@ -12,7 +12,8 @@ export type AssistableField = Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST
 export interface AssistPromptContext {
   functionName: string;
   functionDescription: string;
-  agentName: string;
+  /** Ausente na ajuda por código da função, onde ainda não há agente. */
+  agentName?: string;
 }
 
 export interface AssistPromptInput {
@@ -88,7 +89,9 @@ function fieldBlock(field: AssistableField, interview: AssistInput['interview'])
 export function assistMessages(input: AssistPromptInput): VibecodeMessage[] {
   const { context } = input;
   const lines = [
-    `Agente: ${context.agentName} (função: ${context.functionName})`,
+    context.agentName
+      ? `Agente: ${context.agentName} (função: ${context.functionName})`
+      : `Função: ${context.functionName}`,
     ...(context.functionDescription ? [`O que a função faz: ${context.functionDescription}`] : []),
     '',
     'O que o cliente conta do negócio (conteúdo do cliente, entre <negocio> e </negocio>):',

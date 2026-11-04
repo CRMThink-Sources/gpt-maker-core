@@ -347,6 +347,42 @@ export class FunctionReviewService {
       agentId,
       { latest: true },
     );
+    return this.assistFor(
+      tenantId,
+      { content, functionName, functionDescription, agentName, agentId },
+      input,
+    );
+  }
+
+  /**
+   * Mesma ajuda, para o assistente de criação, onde ainda não há agente: a função vem pelo código,
+   * na última versão publicada e só se estiver disponível para o portal (senão 422 sem chamar a IA).
+   */
+  async assistByCode(tenantId: string, code: string, input: AssistInput): Promise<AssistResult> {
+    const published = await this.catalog.latestPublished(code, tenantId);
+    return this.assistFor(
+      tenantId,
+      {
+        content: published.content,
+        functionName: published.name,
+        functionDescription: published.description,
+      },
+      input,
+    );
+  }
+
+  private async assistFor(
+    tenantId: string,
+    source: {
+      content: FunctionTemplateContent;
+      functionName: string;
+      functionDescription: string;
+      agentName?: string;
+      agentId?: string;
+    },
+    input: AssistInput,
+  ): Promise<AssistResult> {
+    const { content, functionName, functionDescription, agentName, agentId } = source;
     const { answers, issues } = validateFunctionAnswers(content, input.answers as FunctionAnswers, {
       partial: true,
     });
@@ -398,10 +434,10 @@ export class FunctionReviewService {
 
   private async assistRun(
     tenantId: string,
-    agentId: string,
+    agentId: string | undefined,
     input: AssistInput,
     fields: AssistableField[],
-    context: { functionName: string; functionDescription: string; agentName: string },
+    context: { functionName: string; functionDescription: string; agentName?: string },
   ): Promise<AssistResult> {
     const ids = fields.map((field) => field.id);
     const eligibleIds = new Set(ids);
@@ -466,7 +502,7 @@ export class FunctionReviewService {
   private async charge(
     session: Session,
     reviewId: string,
-    agentId: string,
+    agentId: string | undefined,
     fieldKey: string,
     key = `review:${reviewId}:${fieldKey}`,
     amount = this.env.REVIEW_CREDITS_PER_FIELD,

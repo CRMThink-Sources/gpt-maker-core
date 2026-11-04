@@ -66,6 +66,15 @@ describe('ajuda da IA: prompt', () => {
     expect(prompt).toContain('"fields"');
   });
 
+  it('prompt without agentName prints only the function', () => {
+    const { agentName: _omitted, ...noAgent } = context;
+    const body = user(
+      assistMessages({ fields: [text], about: 'Clínica', interview: [], context: noAgent }),
+    );
+    expect(body).toContain(`Função: ${context.functionName}`);
+    expect(body).not.toContain('Agente:');
+  });
+
   it('empty interview still produces a messages array without answers', () => {
     const messages = assistMessages({
       fields: [text],
