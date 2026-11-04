@@ -394,7 +394,10 @@ export class FunctionReviewService {
         issues,
       );
     }
-    const eligible = assistFields(content, answers);
+    // A base de conhecimento entra na Task 2 do plano da fatia 2; por ora só texto.
+    const eligible = assistFields(content, answers).filter(
+      (field): field is AssistableField => field.kind === 'TEXT' || field.kind === 'TEXT_LIST',
+    );
     if (!content.assist?.enabled || eligible.length === 0) {
       throw new DomainError(
         'ASSIST_NOT_ENABLED',

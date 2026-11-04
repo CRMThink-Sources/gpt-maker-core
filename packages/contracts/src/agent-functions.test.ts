@@ -12,7 +12,7 @@ import {
   availableMarkers,
   templateIssues,
 } from './agent-functions';
-import { assistConfigured, assistFields } from './agent-function-answers';
+import { assistConfigured, assistFields, assistKnowledgeMode } from './agent-function-answers';
 import { sdrFixture, sdrFixtureInput } from './agent-functions.fixture';
 
 const withBehavior = (behavior: string): FunctionTemplateContent => ({ ...sdrFixture, behavior });
@@ -158,7 +158,10 @@ describe('rascunho a partir de uma versão', () => {
     const { assist: _assist, ...legacy } = content;
     const collapsed = collapseBlocks(legacy as typeof content, draft, blocks);
     expect(collapsed).not.toBeNull();
-    expect(expandBlocks(collapsed!, blocks).content).toEqual({ ...legacy, assist: { enabled: false } });
+    expect(expandBlocks(collapsed!, blocks).content).toEqual({
+      ...legacy,
+      assist: { enabled: false },
+    });
   });
 
   it('recusa quando o texto do bloco mudou depois da versão', () => {
@@ -575,5 +578,60 @@ describe('ajuda da IA (assist) no template', () => {
       ),
     });
     expect(assistConfigured(content)).toBe(true);
+  });
+});
+
+describe('ajuda da IA na base de conhecimento', () => {
+  const KB = 'base.produtos';
+  const assist = {
+    questions: ['Que produtos vocês vendem?'],
+    instructions: 'Um item por produto.',
+  };
+  const withKb = (extra: Record<string, unknown> = {}, kbAssist: unknown = assist) => ({
+    ...sdrFixtureInput,
+    ...extra,
+    fields: sdrFixture.fields.map((field) =>
+      field.id === KB ? { ...field, ...(kbAssist ? { assist: kbAssist } : {}) } : field,
+    ),
+  });
+  const parse = (input: unknown) => functionTemplateContentSchema.parse(input);
+
+  it('accepts assist on KNOWLEDGE', () => {
+    const content = parse(withKb());
+    const field = content.fields.find((f) => f.id === KB);
+    expect(field).toMatchObject({ kind: 'KNOWLEDGE', assist });
+  });
+
+  it('assistKnowledgeMode defaults to write', () => {
+    expect(assistKnowledgeMode(parse(withKb({ assist: { enabled: true } })))).toBe('write');
+    const legacy: Record<string, unknown> = { ...parse(withKb()) };
+    delete legacy.assist;
+    expect(assistKnowledgeMode(legacy as never)).toBe('write');
+  });
+
+  it('accepts knowledgeMode skeleton and rejects an unknown mode', () => {
+    const ok = parse(withKb({ assist: { enabled: true, knowledgeMode: 'skeleton' } }));
+    expect(assistKnowledgeMode(ok)).toBe('skeleton');
+    const bad = functionTemplateContentSchema.safeParse(
+      withKb({ assist: { enabled: true, knowledgeMode: 'tudo' } }),
+    );
+    expect(bad.success).toBe(false);
+  });
+
+  it('assistFields includes an empty KNOWLEDGE with assist and skips a filled one', () => {
+    const content = parse(withKb({ assist: { enabled: true } }));
+    expect(assistFields(content, {}).map((f) => f.id)).toContain(KB);
+    const filled = [{ itemKey: '3b241101-e2bb-4255-8caf-4136c566a962', values: { nome: 'x' } }];
+    expect(assistFields(content, { [KB]: filled }).map((f) => f.id)).not.toContain(KB);
+  });
+
+  it('assistFields skips a KNOWLEDGE without assist', () => {
+    const content = parse(withKb({ assist: { enabled: true } }, null));
+    expect(assistFields(content, {}).map((f) => f.id)).not.toContain(KB);
+  });
+
+  it('assistConfigured is true when only a KNOWLEDGE field has assist', () => {
+    expect(assistConfigured(parse(withKb({ assist: { enabled: true } })))).toBe(true);
+    expect(assistConfigured(parse(withKb({ assist: { enabled: true } }, null)))).toBe(false);
   });
 });

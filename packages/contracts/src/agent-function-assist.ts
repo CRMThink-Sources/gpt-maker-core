@@ -34,13 +34,15 @@ export const assistInputSchema = z.object({
 });
 export type AssistInput = z.infer<typeof assistInputSchema>;
 
-/** O que a IA devolve: `text` em campo de texto, `items` em lista. O backend valida e filtra. */
+/** O que a IA devolve: `text` em campo de texto, `items` em lista, `rows` na base. O backend valida e filtra. */
 export const assistModelOutputSchema = z.object({
   fields: z.array(
     z.object({
       fieldId: z.string(),
       text: z.string().optional(),
       items: z.array(z.string()).optional(),
+      /** Base de conhecimento: um objeto por item, chave = id do subcampo. */
+      rows: z.array(z.record(z.string(), z.string())).optional(),
     }),
   ),
 });

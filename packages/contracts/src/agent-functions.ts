@@ -187,6 +187,7 @@ export type FunctionField =
       /** Texto do treinamento de cada item, com `{{subcampo}}`. */
       format: string;
       review?: FunctionListReview;
+      assist?: FunctionFieldAssist;
     };
 
 export interface FunctionOption {
@@ -375,6 +376,7 @@ export const functionFieldSchema: z.ZodType<FunctionField> = z.lazy(() =>
         subfields: z.array(knowledgeSubfieldSchema).min(1).max(6),
         format: z.string().min(1).max(500),
         review: reviewListSchema.optional(),
+        assist: assistSchema.optional(),
       })
       .superRefine((field, ctx) => {
         if (
@@ -481,8 +483,13 @@ export const functionTemplateContentSchema = z.object({
    * MCP, spec agent-crm-tools): a publicação no agente o ativa, se ainda não estiver ativo.
    */
   crmAccess: z.boolean().default(false),
-  /** Liga a ajuda da IA para os campos de texto vazios que declaram `assist`. */
-  assist: z.object({ enabled: z.boolean() }).default({ enabled: false }),
+  /**
+   * Liga a ajuda da IA para os campos de texto e a base vazios que declaram `assist`. Na base,
+   * `knowledgeMode` escolhe redigir o conteúdo (`write`, o padrão) ou só montar o esqueleto.
+   */
+  assist: z
+    .object({ enabled: z.boolean(), knowledgeMode: z.enum(['write', 'skeleton']).optional() })
+    .default({ enabled: false }),
 });
 export type FunctionTemplateContent = z.output<typeof functionTemplateContentSchema>;
 export type FunctionTemplateContentInput = z.input<typeof functionTemplateContentSchema>;

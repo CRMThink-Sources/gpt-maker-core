@@ -114,8 +114,20 @@ export function visibleFields(
   });
 }
 
+/** Modo da ajuda na base; versões antigas, sem o atributo, redigem o conteúdo. */
+export function assistKnowledgeMode(
+  content: Pick<FunctionTemplateContent, 'assist'>,
+): 'write' | 'skeleton' {
+  return content.assist?.knowledgeMode ?? 'write';
+}
+
+/** Campos que a ajuda da IA preenche. */
+export type AssistField = Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' | 'KNOWLEDGE' }>;
+
+const ASSIST_KINDS = new Set(['TEXT', 'TEXT_LIST', 'KNOWLEDGE']);
+
 /**
- * A função tem a ajuda da IA ligada e ao menos um campo de texto (dependentes inclusive) com
+ * A função tem a ajuda da IA ligada e ao menos um campo de texto ou base (dependentes inclusive) com
  * `assist`. Não olha respostas: serve para decidir se o botão existe.
  */
 export function assistConfigured(
@@ -124,20 +136,21 @@ export function assistConfigured(
   // Versões publicadas antes da ajuda da IA não têm `assist`.
   if (!content.assist?.enabled) return false;
   return flattenFields(content.fields).some(
-    (field) => (field.kind === 'TEXT' || field.kind === 'TEXT_LIST') && field.assist !== undefined,
+    (field) => ASSIST_KINDS.has(field.kind) && 'assist' in field && field.assist !== undefined,
   );
 }
 
-/** Campos de texto visíveis e vazios com ajuda da IA; vazio se o template a desligou. */
+/** Campos de texto e bases visíveis e vazios com ajuda da IA; vazio se o template a desligou. */
 export function assistFields(
   content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
   answers: FunctionAnswers,
-): Array<Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }>> {
+): AssistField[] {
   // Versões publicadas antes da ajuda da IA não têm `assist`.
   if (!content.assist?.enabled) return [];
   return visibleFields(content.fields, answers).filter(
-    (field): field is Extract<FunctionField, { kind: 'TEXT' | 'TEXT_LIST' }> =>
-      (field.kind === 'TEXT' || field.kind === 'TEXT_LIST') &&
+    (field): field is AssistField =>
+      ASSIST_KINDS.has(field.kind) &&
+      'assist' in field &&
       field.assist !== undefined &&
       isEmpty(answers[field.id]),
   );

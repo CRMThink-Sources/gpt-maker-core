@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { EXPECTATION_MIN } from './agent-knowledge-review';
-import { assistInputSchema, assistResultSchema } from './agent-function-assist';
+import {
+  assistInputSchema,
+  assistModelOutputSchema,
+  assistResultSchema,
+} from './agent-function-assist';
 
 const about = 'a'.repeat(EXPECTATION_MIN);
 const valid = { fieldIds: ['f1'], about, interview: [], answers: {} };
@@ -27,5 +31,17 @@ describe('agent-function-assist', () => {
       credits: 0,
     });
     expect(r.success).toBe(false);
+  });
+
+  it('output accepts rows per field', () => {
+    const r = assistModelOutputSchema.safeParse({
+      fields: [
+        {
+          fieldId: 'base.produtos',
+          rows: [{ nome: 'Plano', descricao: '[preencher: o que inclui]' }],
+        },
+      ],
+    });
+    expect(r.success && r.data.fields[0]?.rows?.[0]?.nome).toBe('Plano');
   });
 });
