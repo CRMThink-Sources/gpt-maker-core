@@ -41,6 +41,8 @@ const ABOUT =
   'Vendemos roupas femininas pela internet para todo o Brasil, com entrega em até 5 dias.';
 const TEXT_ID = 'empresa.descricao';
 const LIST_ID = 'suporte.excluidos';
+const KB_ID = 'base.problemas';
+const KB_PLAIN_ID = 'base.faq';
 
 const GOOD = JSON.stringify({
   fields: [
@@ -49,7 +51,7 @@ const GOOD = JSON.stringify({
   ],
 });
 
-type Variant = 'enabled' | 'disabled' | 'legacy' | 'no-assist-fields';
+type Variant = 'enabled' | 'disabled' | 'legacy' | 'no-assist-fields' | 'skeleton';
 
 /** Campo sem `assist`, inclusive nos dependentes das opções (os seeds já trazem `assist`). */
 function stripAssist(field: FunctionField): FunctionField {
@@ -76,6 +78,14 @@ function withAssist(content: FunctionTemplateContent, variant: Variant): Functio
           if (field.id === TEXT_ID || field.id === LIST_ID) {
             return { ...field, assist: { questions: ['O que a empresa faz?'] } } as FunctionField;
           }
+          if (field.id === KB_ID) {
+            return {
+              ...field,
+              assist: { questions: ['Que problemas os clientes têm?'] },
+            } as FunctionField;
+          }
+          // Base de apoio sem `assist`, qualquer que seja o seed.
+          if (field.id === KB_PLAIN_ID) return stripAssist(field);
           return field;
         });
   if (variant === 'legacy') {
@@ -84,7 +94,11 @@ function withAssist(content: FunctionTemplateContent, variant: Variant): Functio
     delete legacy.assist;
     return legacy as FunctionTemplateContent;
   }
-  return { ...content, fields, assist: { enabled: variant !== 'disabled' } };
+  const assist =
+    variant === 'skeleton'
+      ? { enabled: true, knowledgeMode: 'skeleton' as const }
+      : { enabled: variant !== 'disabled' };
+  return { ...content, fields, assist };
 }
 
 // Ajuda da IA para preencher campos de texto vazios da função.
@@ -269,6 +283,91 @@ describe('ajuda da IA para preencher a função', () => {
     answers: answers as never,
   });
 
+  describe('base de conhecimento', () => {
+    const row = (problema: string, solucao?: string) => ({
+      problema,
+      ...(solucao === undefined ? {} : { solucao }),
+    });
+    const kb = (...rows: Array<Record<string, string>>) =>
+      JSON.stringify({ fields: [{ fieldId: KB_ID, rows }] });
+
+    it('knowledge: returns items with itemKey and charges one field', async () => {
+      const { tenantId, agentId } = await setup();
+      queue.push(
+        kb(row('Não entra na conta', 'Use "Esqueci a senha". [preencher: prazo do link]')),
+      );
+      const result = await service.assist(tenantId, agentId, input([KB_ID]));
+      expect(result.credits).toBe(PRICE);
+      const [entry] = result.fields;
+      expect(entry).toMatchObject({ fieldId: KB_ID, applicable: true, markers: 1 });
+      const items = entry!.value as Array<{ itemKey: string; values: Record<string, string> }>;
+      expect(items).toHaveLength(1);
+      expect(items[0]!.itemKey).toMatch(/^[0-9a-f-]{36}$/);
+      expect(items[0]!.values.problema).toBe('Não entra na conta');
+      expect(await debits(tenantId)).toHaveLength(1);
+    });
+
+    it('knowledge: a base that already has items gives 422 and does not call the AI', async () => {
+      const { tenantId, agentId } = await setup();
+      const filled = [
+        {
+          itemKey: '3b241101-e2bb-4255-8caf-4136c566a962',
+          values: { problema: 'Já escrito', solucao: 'Já escrito pelo cliente.' },
+        },
+      ];
+      const code = await refusal(
+        service.assist(tenantId, agentId, input([KB_ID], { [KB_ID]: filled })),
+      );
+      expect(code).toBe('ASSIST_FIELD_NOT_ELIGIBLE');
+      expect(chats).toHaveLength(0);
+      expect(await debits(tenantId)).toHaveLength(0);
+    });
+
+    it('knowledge: skeleton mode returns only title text even if the model writes content', async () => {
+      const { tenantId, agentId } = await setup(100, 'skeleton');
+      queue.push(kb(row('Não entra na conta', 'Troque a senha em 5 minutos.')));
+      const result = await service.assist(tenantId, agentId, input([KB_ID]));
+      const items = result.fields[0]!.value as Array<{ values: Record<string, string> }>;
+      expect(items[0]!.values).toEqual({
+        problema: 'Não entra na conta',
+        solucao: '[preencher: Solução]',
+      });
+      expect(chats[0]!.prompt).toMatch(/Modo esqueleto/);
+    });
+
+    it('knowledge: a KNOWLEDGE field without assist is not eligible', async () => {
+      const { tenantId, agentId } = await setup();
+      expect(await refusal(service.assist(tenantId, agentId, input([KB_PLAIN_ID])))).toBe(
+        'ASSIST_FIELD_NOT_ELIGIBLE',
+      );
+      expect(chats).toHaveLength(0);
+    });
+
+    it('knowledge: a version without knowledgeMode answers in write mode', async () => {
+      const { tenantId, agentId } = await setup(100, 'enabled');
+      queue.push(kb(row('Não entra na conta', 'Troque a senha.')));
+      const result = await service.assist(tenantId, agentId, input([KB_ID]));
+      const items = result.fields[0]!.value as Array<{ values: Record<string, string> }>;
+      expect(items[0]!.values.solucao).toBe('Troque a senha.');
+      expect(chats[0]!.prompt).toMatch(/Modo redação/);
+    });
+
+    it('knowledge: output over maxItems is returned whole, not applicable', async () => {
+      const { tenantId, agentId } = await setup();
+      queue.push(kb(...Array.from({ length: 21 }, (_, i) => row(`Problema ${i}`, 'x'))));
+      const result = await service.assist(tenantId, agentId, input([KB_ID]));
+      expect((result.fields[0]!.value as unknown[]).length).toBe(21);
+      expect(result.fields[0]!.applicable).toBe(false);
+    });
+
+    it('knowledge: a skeleton of only markers is charged as a generated field', async () => {
+      const { tenantId, agentId } = await setup(100, 'skeleton');
+      queue.push(kb(row('Problema de acesso')));
+      const result = await service.assist(tenantId, agentId, input([KB_ID]));
+      expect(result.credits).toBe(PRICE);
+    });
+  });
+
   describe('por código da função, sem agente', () => {
     it('by code: returns a result with the latest published version', async () => {
       const { tenantId, templateCode } = await setup(100, 'disabled', 'enabled');
@@ -296,9 +395,7 @@ describe('ajuda da IA para preencher a função', () => {
     it('by code: function restricted to another tenant gives 422 and does not call the AI', async () => {
       const { tenantId, templateId, templateCode } = await setup();
       const other = await setup();
-      await db
-        .insert(agentFunctionTemplateTenant)
-        .values({ templateId, tenantId: other.tenantId });
+      await db.insert(agentFunctionTemplateTenant).values({ templateId, tenantId: other.tenantId });
       expect(await refusal(service.assistByCode(tenantId, templateCode, input([TEXT_ID])))).toBe(
         'FUNCTION_NOT_AVAILABLE',
       );

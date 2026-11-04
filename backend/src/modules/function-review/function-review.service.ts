@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   assistFields,
+  assistKnowledgeMode,
   type AssistInput,
   assistModelOutputSchema,
   type AssistResult,
@@ -41,7 +42,12 @@ import { FunctionCatalog } from '../agent-functions';
 import { BalanceReader, CreditAlerts, LedgerService } from '../billing';
 import { VibecodeClient, VibecodeError, type VibecodeMessage } from '../vibecode';
 import { AiKeyService } from './ai-key.service';
-import { type AssistableField, assistMessages, toAssistResult } from './assist-prompt';
+import {
+  type AssistableField,
+  assistMessages,
+  type KnowledgeMode,
+  toAssistResult,
+} from './assist-prompt';
 import {
   crossMessages,
   type FieldPromptContext,
@@ -394,10 +400,7 @@ export class FunctionReviewService {
         issues,
       );
     }
-    // A base de conhecimento entra na Task 2 do plano da fatia 2; por ora só texto.
-    const eligible = assistFields(content, answers).filter(
-      (field): field is AssistableField => field.kind === 'TEXT' || field.kind === 'TEXT_LIST',
-    );
+    const eligible = assistFields(content, answers);
     if (!content.assist?.enabled || eligible.length === 0) {
       throw new DomainError(
         'ASSIST_NOT_ENABLED',
@@ -425,11 +428,14 @@ export class FunctionReviewService {
     }
     const fields = eligible.filter((field) => ids.includes(field.id));
     try {
-      return await this.assistRun(tenantId, agentId, input, fields, {
-        functionName,
-        functionDescription,
-        agentName,
-      });
+      return await this.assistRun(
+        tenantId,
+        agentId,
+        input,
+        fields,
+        { functionName, functionDescription, agentName },
+        assistKnowledgeMode(content),
+      );
     } catch (error) {
       throw helpWording(error);
     }
@@ -441,6 +447,7 @@ export class FunctionReviewService {
     input: AssistInput,
     fields: AssistableField[],
     context: { functionName: string; functionDescription: string; agentName?: string },
+    knowledgeMode: KnowledgeMode,
   ): Promise<AssistResult> {
     const ids = fields.map((field) => field.id);
     const eligibleIds = new Set(ids);
@@ -462,6 +469,7 @@ export class FunctionReviewService {
         about: input.about,
         interview: input.interview,
         context,
+        knowledgeMode,
       }),
       assistModelOutputSchema,
     );
@@ -475,13 +483,21 @@ export class FunctionReviewService {
         return fieldId ? [{ ...entry, fieldId }] : [];
       }),
     };
-    const result = toAssistResult(fields, normalized);
+    const result = toAssistResult(fields, normalized, { knowledgeMode });
 
-    // Campo gerado = valor não vazio (texto acima do limite conta); um débito só por chamada.
+    // Campo gerado = valor não vazio (texto acima do limite conta; base com algum valor conta);
+    // um débito só por chamada.
+    const filled = (item: unknown): boolean =>
+      typeof item === 'string'
+        ? item.trim() !== ''
+        : typeof item === 'object' &&
+          item !== null &&
+          'values' in item &&
+          Object.values((item as { values: Record<string, string> }).values).some(
+            (text) => text.trim() !== '',
+          );
     const generated = result.filter((entry) =>
-      Array.isArray(entry.value)
-        ? entry.value.some((item) => typeof item === 'string' && item.trim() !== '')
-        : typeof entry.value === 'string' && entry.value.trim() !== '',
+      Array.isArray(entry.value) ? entry.value.some(filled) : filled(entry.value),
     ).length;
     const assistId = randomUUID();
     const amount = session.keySource === 'platform' ? price * generated : 0;
@@ -714,9 +730,10 @@ export class FunctionReviewService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const published = config.versionId && !options.latest
-      ? await this.catalog.versionById(config.versionId)
-      : await this.catalog.latestOfTemplate(config.templateId);
+    const published =
+      config.versionId && !options.latest
+        ? await this.catalog.versionById(config.versionId)
+        : await this.catalog.latestOfTemplate(config.templateId);
     return {
       content: published.content,
       functionName: published.name,
