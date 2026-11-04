@@ -144,6 +144,23 @@ describe('rascunho a partir de uma versão', () => {
     expect(expandBlocks(collapsed!, blocks).content).toEqual(content);
   });
 
+  it.each([
+    ['assist ligado', { enabled: true }],
+    ['assist desligado', { enabled: false }],
+  ])('reproduz a versão com %s', (_name, assist) => {
+    const withAssist = { ...content, assist };
+    const collapsed = collapseBlocks(withAssist, draft, blocks);
+    expect(collapsed).not.toBeNull();
+    expect(expandBlocks(collapsed!, blocks).content).toEqual(withAssist);
+  });
+
+  it('reproduz versão antiga, sem a chave assist', () => {
+    const { assist: _assist, ...legacy } = content;
+    const collapsed = collapseBlocks(legacy as typeof content, draft, blocks);
+    expect(collapsed).not.toBeNull();
+    expect(expandBlocks(collapsed!, blocks).content).toEqual({ ...legacy, assist: { enabled: false } });
+  });
+
   it('recusa quando o texto do bloco mudou depois da versão', () => {
     const changed = new Map([['duvida', { ...block, behavior: 'Registre a dúvida e avise.' }]]);
     expect(collapseBlocks(content, draft, changed)).toBeNull();

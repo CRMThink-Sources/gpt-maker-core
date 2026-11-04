@@ -1056,7 +1056,9 @@ export function collapseBlocks(
     return null;
   }
   const { content: expanded, errors } = expandBlocks(draft, blocks);
-  return errors.length === 0 && stableStringify(expanded) === stableStringify(content)
+  // Versões publicadas antes da ajuda da IA não têm `assist`; a expansão sempre o devolve.
+  const normalized = { ...content, assist: content.assist ?? { enabled: false } };
+  return errors.length === 0 && stableStringify(expanded) === stableStringify(normalized)
     ? draft
     : null;
 }
