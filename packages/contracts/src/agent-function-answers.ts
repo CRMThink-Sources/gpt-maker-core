@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hasPlaceholder } from './agent-function-placeholders';
+import { flattenFields } from './agent-functions';
 import type { FunctionField, FunctionTemplateContent } from './agent-functions';
 import { TRAINING_TEXT_MAX } from './trainings';
 
@@ -111,6 +112,20 @@ export function visibleFields(
       .flatMap((option) => option.dependents ?? []);
     return [field, ...visibleFields(dependents, answers)];
   });
+}
+
+/**
+ * A função tem a ajuda da IA ligada e ao menos um campo de texto (dependentes inclusive) com
+ * `assist`. Não olha respostas: serve para decidir se o botão existe.
+ */
+export function assistConfigured(
+  content: Pick<FunctionTemplateContent, 'fields' | 'assist'>,
+): boolean {
+  // Versões publicadas antes da ajuda da IA não têm `assist`.
+  if (!content.assist?.enabled) return false;
+  return flattenFields(content.fields).some(
+    (field) => (field.kind === 'TEXT' || field.kind === 'TEXT_LIST') && field.assist !== undefined,
+  );
 }
 
 /** Campos de texto visíveis e vazios com ajuda da IA; vazio se o template a desligou. */

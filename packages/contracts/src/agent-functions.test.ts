@@ -12,7 +12,7 @@ import {
   availableMarkers,
   templateIssues,
 } from './agent-functions';
-import { assistFields } from './agent-function-answers';
+import { assistConfigured, assistFields } from './agent-function-answers';
 import { sdrFixture, sdrFixtureInput } from './agent-functions.fixture';
 
 const withBehavior = (behavior: string): FunctionTemplateContent => ({ ...sdrFixture, behavior });
@@ -535,5 +535,45 @@ describe('ajuda da IA (assist) no template', () => {
 
   it('assistFields returns [] when assist.enabled is false', () => {
     expect(assistFields(enabled(), {})).toEqual([]);
+  });
+
+  it('assistConfigured is false when assist is missing (legacy)', () => {
+    const legacy: Record<string, unknown> = { ...enabled({ assist: { enabled: true } }) };
+    delete legacy.assist;
+    expect(assistConfigured(legacy as never)).toBe(false);
+  });
+
+  it('assistConfigured is false when enabled but no field has assist', () => {
+    const content = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      assist: { enabled: true },
+    });
+    expect(assistConfigured(content)).toBe(false);
+  });
+
+  it('assistConfigured is true when enabled and a field has assist', () => {
+    expect(assistConfigured(enabled({ assist: { enabled: true } }))).toBe(true);
+    expect(assistConfigured(enabled())).toBe(false);
+  });
+
+  it('assistConfigured finds assist on an option dependent', () => {
+    const content = functionTemplateContentSchema.parse({
+      ...sdrFixtureInput,
+      assist: { enabled: true },
+      fields: sdrFixture.fields.map((field) =>
+        field.kind === 'CHOICE'
+          ? {
+              ...field,
+              options: field.options.map((option) => ({
+                ...option,
+                dependents: (option.dependents ?? []).map((dep) =>
+                  dep.kind === 'TEXT' ? { ...dep, assist } : dep,
+                ),
+              })),
+            }
+          : field,
+      ),
+    });
+    expect(assistConfigured(content)).toBe(true);
   });
 });
