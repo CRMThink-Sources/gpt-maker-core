@@ -30,6 +30,7 @@ const STARTER = {
   agentType: 'SUPPORT',
   settings: { enabledHumanTransfer: true, limitSubjects: true },
   profile: { jobName: '{{empresa.nome}}', jobDescription: '{{empresa.descricao}}', jobSite: '' },
+  assist: { enabled: false },
   blocks: ['comum', 'registro', 'duvida', 'transferir'],
   fields: [
     {
