@@ -60,6 +60,7 @@ import {
   type ReviewableField,
   toFieldResult,
 } from './review-prompt';
+import { platformKey } from './platform-key';
 import { reviewError } from './review-errors';
 import { ReviewSessionStore } from './review-session.store';
 
@@ -682,14 +683,14 @@ export class FunctionReviewService {
     const key =
       session.keySource === 'tenant'
         ? await this.keys.find(session.tenantId)
-        : this.env.VIBECODE_PLATFORM_API_KEY;
+        : platformKey(this.env);
     if (!key) throw reviewError('AI_KEY_REQUIRED');
     return key;
   }
 
   private async chooseKey(tenantId: string): Promise<ReviewKeySource> {
     if (await this.keys.find(tenantId)) return 'tenant';
-    if (this.env.VIBECODE_PLATFORM_API_KEY) return 'platform';
+    if (platformKey(this.env)) return 'platform';
     throw reviewError('AI_KEY_REQUIRED');
   }
 

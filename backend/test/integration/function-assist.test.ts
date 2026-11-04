@@ -115,6 +115,7 @@ describe('ajuda da IA para preencher a função', () => {
   let chats: Array<{ apiKey: string; prompt: string }>;
   let tenantKey: string | null;
   let platformKey: string | undefined;
+  let platformFallback = true;
 
   const vibecode = {
     chat: async (call: { apiKey: string; messages: Array<{ content: string }> }) => {
@@ -142,6 +143,9 @@ describe('ajuda da IA para preencher a função', () => {
       VIBECODE_REVIEW_MODEL: MODEL,
       REVIEW_CREDITS_PER_FIELD: PRICE,
       VIBECODE_PLATFORM_RPM: 600,
+      get VIBECODE_PLATFORM_FALLBACK() {
+        return platformFallback;
+      },
       get VIBECODE_PLATFORM_API_KEY() {
         return platformKey;
       },
@@ -635,6 +639,13 @@ describe('ajuda da IA para preencher a função', () => {
     expect(keyError.message).not.toMatch(/revis/i);
 
     platformKey = 'vibe_api_plataforma';
+    platformFallback = false;
+    const switchedOff = (await service
+      .assist(noKey.tenantId, noKey.agentId, input([TEXT_ID]))
+      .catch((error: Failure) => error)) as Failure;
+    expect(switchedOff.code).toBe('AI_KEY_REQUIRED');
+    platformFallback = true;
+
     const filled = await setup();
     const notEligible = (await service
       .assist(filled.tenantId, filled.agentId, input([TEXT_ID], { [TEXT_ID]: 'Já preenchido' }))

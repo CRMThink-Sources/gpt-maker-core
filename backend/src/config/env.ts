@@ -180,6 +180,12 @@ export const envSchema = z.object({
     .trim()
     .optional()
     .transform((value) => value || undefined),
+  /**
+   * Interruptor da chave da CRMThink. Desligado (padrão), a ajuda e a revisão por IA só funcionam
+   * para quem cadastrou chave própria, mesmo com `VIBECODE_PLATFORM_API_KEY` preenchida. Ligar
+   * reativa a chave da CRMThink para os demais, sem deploy de código.
+   */
+  VIBECODE_PLATFORM_FALLBACK: booleanFromString.default(false),
   /** Revisões de campo por minuto com a chave da CRMThink, somando todos os clientes. */
   VIBECODE_PLATFORM_RPM: z.coerce.number().int().positive().default(200),
   /** Por chamada ao Vibecode (a revisão de um campo é síncrona). */

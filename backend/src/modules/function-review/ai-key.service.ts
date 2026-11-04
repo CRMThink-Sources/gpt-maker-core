@@ -7,6 +7,7 @@ import { DB, type Database } from '../../shared/database/database.module';
 import { tenantAiKey } from '../../shared/database/schema/index';
 import { VibecodeClient } from '../vibecode';
 import { verifyAiKey } from './ai-key-check';
+import { platformKey } from './platform-key';
 
 /**
  * Chave de IA do cliente (spec agent-knowledge-review, "Chave de IA do cliente"; design D6): uma
@@ -30,7 +31,7 @@ export class AiKeyService {
       last4: row?.last4 ?? null,
       verifiedAt: row?.verifiedAt.toISOString() ?? null,
       creditsPerField: this.env.REVIEW_CREDITS_PER_FIELD,
-      platformAvailable: !!this.env.VIBECODE_PLATFORM_API_KEY,
+      platformAvailable: !!platformKey(this.env),
     };
   }
 
