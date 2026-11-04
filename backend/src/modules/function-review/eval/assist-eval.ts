@@ -144,10 +144,11 @@ const SPELLED_NUMBERS = [
   'duzia',
 ];
 
-/** "um/uma" só é fato quando vem logo antes de uma unidade de tempo ou quantidade (lista curta). */
+/**
+ * "um/uma" só é fato logo antes de uma unidade de tempo ou de valor. Ficam de fora dia, vez e as
+ * unidades de contagem (cliente, vendedor): "um dia", "de uma vez" e "um cliente" são fala comum.
+ */
 const SPELLED_ONE_UNITS = [
-  'dia',
-  'dias',
   'semana',
   'semanas',
   'mes',
@@ -160,44 +161,58 @@ const SPELLED_ONE_UNITS = [
   'minutos',
   'real',
   'reais',
-  'vez',
-  'vezes',
-  'cliente',
-  'clientes',
-  'vendedor',
-  'vendedores',
 ];
 
 /**
- * Abridores de frase comuns (sem acento) que não contam como nome próprio no começo de frase ou de
- * item: artigos, preposições, pronomes, conjunções, verbos do vocabulário do prompt e palavras
- * típicas de campo de agente. Fora do começo de frase, só vale o texto do cliente.
+ * Palavras comuns (sem acento) que abrem frase ou item: artigos, preposições, pronomes, conjunções,
+ * advérbios, verbos do vocabulário do prompt e palavras típicas de campo de agente. Só valem no
+ * começo de frase: no meio dela, palavra com inicial maiúscula é checada contra o texto do cliente.
  */
 const COMMON_OPENERS = new Set(
   [
-    'o a os as um uma uns umas de da do das dos em no na nos nas por pelo pela para pra com sem sobre ate',
-    'eu voce vocês voces nos ele ela eles elas isso isto esse essa este esta aquele aquela',
+    'o a os as um uma uns umas de da do das dos em no na nos nas por pelo pela para pra com sem sobre ate ao aos',
+    'eu voce voces ele ela eles elas isso isto esse essa este esta aquele aquela',
     'nosso nossa nossos nossas seu sua seus suas meu minha',
     'e ou mas se quando como que onde porque enquanto caso apos antes depois',
-    'quem qual quais quanto quanta quantos quantas quanto tambem todo toda todos todas',
-    'pergunte atenda encaminhe transfira oriente responda registre colete confirme explique ajude use',
-    'envie informe peca verifique identifique agende fale diga tente evite nunca sempre',
+    'quem qual quais quanto quanta quantos quantas tambem todo toda todos todas cada',
+    'nao sim ja so ha ola nunca sempre seja',
+    'pergunte perguntar atenda encaminhe transfira oriente responda registre colete confirme explique ajude use',
+    'envie informe peca verifique identifique agende fale diga tente evite faca solicite ofereca',
+    'cumprimente mantenha',
     'qualificado qualificada cliente clientes lead leads empresa empresas assunto assuntos',
     'fecha atende custa paga fala tem quer usa vende compra precisa busca possui trabalha',
-    'cancelamento pedido pedidos atendimento suporte time equipe',
+    'cancelamento pedido pedidos atendimento suporte time equipe pos horario preco',
   ]
     .join(' ')
     .split(/\s+/)
     .map(norm),
 );
 
-/** Nome próprio: palavra com inicial maiúscula (sigla toda em maiúsculas não conta). */
-function properNames(text: string): string[] {
+/** Terminações de verbo na 1ª pessoa do plural ("Atendemos", "Fazemos", "Trabalhamos", "Partimos"). */
+const FIRST_PERSON_PLURAL = /(emos|amos|imos)$/;
+
+/** Marca ou produto: letra maiúscula no meio ("WhatsApp", "HubSpot") ou dígito ("Bitrix24"). */
+const BRAND_LIKE = /\p{Ll}\p{Lu}|\d/u;
+
+/**
+ * Nome próprio: palavra com inicial maiúscula (sigla toda em maiúsculas não conta). No meio da frase
+ * vale sempre. No começo de frase ou de item (primeira palavra) só conta se não for palavra comum:
+ * fora da lista de abridores, sem forma de verbo na 1ª pessoa do plural e sem aparecer em minúsculas
+ * no texto do mesmo caso; marca com maiúscula no meio ou dígito conta sempre.
+ */
+function properNames(text: string, lowercased: Set<string>): string[] {
   const names: string[] = [];
   for (const match of text.matchAll(/\p{Lu}[\p{L}\d]+/gu)) {
     const word = match[0];
     if (word === word.toUpperCase()) continue;
-    if (COMMON_OPENERS.has(norm(word))) continue;
+    const before = text.slice(0, match.index).trimEnd();
+    const atStart = before === '' || /[.!?:;\n\-•(]$/.test(before);
+    if (atStart && !BRAND_LIKE.test(word)) {
+      const plain = norm(word);
+      if (COMMON_OPENERS.has(plain) || FIRST_PERSON_PLURAL.test(plain) || lowercased.has(plain)) {
+        continue;
+      }
+    }
     names.push(word);
   }
   return names;
@@ -208,6 +223,9 @@ function inventedFactsIn(texts: string[], sources: string): string[] {
   const knownWords = new Set(wordsOf(sources));
   const knownNumbers = numberTokens(sources, false);
   const invented = new Set<string>();
+  const lowercased = new Set(
+    texts.flatMap((raw) => (raw.match(/(?<![\p{L}\d])\p{Ll}[\p{L}\d]*/gu) ?? []).map(norm)),
+  );
   for (const raw of texts) {
     const text = raw.replace(MARKER, ' ');
     for (const number of numberTokens(text, true)) {
@@ -216,12 +234,12 @@ function inventedFactsIn(texts: string[], sources: string): string[] {
     const words = wordsOf(text);
     words.forEach((word, index) => {
       const spelled =
-        SPELLED_NUMBERS.includes(word) ||
+        (SPELLED_NUMBERS.includes(word) && !(word === 'cento' && words[index - 1] === 'por')) ||
         TIME_TERMS.includes(word) ||
         ((word === 'um' || word === 'uma') && SPELLED_ONE_UNITS.includes(words[index + 1] ?? ''));
       if (spelled && !knownWords.has(word)) invented.add(word);
     });
-    for (const name of properNames(text)) {
+    for (const name of properNames(text, lowercased)) {
       if (!knownWords.has(norm(name))) invented.add(name);
     }
   }

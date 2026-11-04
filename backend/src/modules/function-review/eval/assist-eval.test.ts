@@ -96,9 +96,7 @@ describe('avaliador da ajuda da IA', () => {
     expect(
       evaluateAssistCase(base, text('Uma pessoa fala com um bom atendente.')).inventedFacts,
     ).toEqual([]);
-    expect(evaluateAssistCase(base, text('Atende um cliente por vez.')).inventedFacts).toEqual([
-      'um',
-    ]);
+    expect(evaluateAssistCase(base, text('Atende um cliente por vez.')).inventedFacts).toEqual([]);
   });
 
   it('checks proper names at the start of a sentence or list item', () => {
@@ -131,6 +129,59 @@ describe('avaliador da ajuda da IA', () => {
     };
     expect(
       evaluateAssistCase(known, text('Atende às 14h30 por R$ 1.299,90.')).inventedFacts,
+    ).toEqual([]);
+  });
+
+  it('does not flag common sentence openers as invented names', () => {
+    for (const phrase of [
+      'Não prometa prazo.',
+      'Ao receber o lead, pergunte o porte.',
+      'Pergunte o porte da empresa.',
+      'Atendemos clientes B2B.',
+      'Sim. Já atenda só quem pergunta. Há regras. Olá! Cada caso conta.',
+      'Faça a triagem. Solicite o CPF. Pós-venda. Horário. Preço.',
+      'Cumprimente e mantenha o tom. Seja direto. Perguntar é grátis.',
+      'Fazemos a triagem e trabalhamos rápido.',
+    ]) {
+      expect(evaluateAssistCase(base, text(phrase)).inventedFacts, phrase).toEqual([]);
+    }
+    // palavra que aparece em minúsculas no mesmo texto não é nome
+    expect(
+      evaluateAssistCase(base, text('Fechamento rápido. O fechamento é hoje.')).inventedFacts,
+    ).toEqual([]);
+  });
+
+  it('still flags brand-like openers and capitalised words mid-sentence', () => {
+    expect(evaluateAssistCase(base, text('WhatsApp é o canal.')).inventedFacts).toEqual([
+      'WhatsApp',
+    ]);
+    expect(evaluateAssistCase(base, text('Bitrix24 guarda tudo.')).inventedFacts).toEqual([
+      'Bitrix24',
+    ]);
+    expect(evaluateAssistCase(base, text('Use o Zapier para avisar.')).inventedFacts).toEqual([
+      'Zapier',
+    ]);
+    expect(evaluateAssistCase(base, text('Use o Cliente para avisar.')).inventedFacts).toEqual([
+      'Cliente',
+    ]);
+  });
+
+  it('um/uma only count before time or value units', () => {
+    for (const phrase of [
+      'Quando um cliente perguntar, responda.',
+      'Responda de uma vez.',
+      'Um dia o lead volta.',
+      'Atenda um vendedor por vez.',
+      'Dê cem por cento de atenção.'.replace('cem', 'tem'),
+    ]) {
+      expect(evaluateAssistCase(base, text(phrase)).inventedFacts, phrase).toEqual([]);
+    }
+    expect(evaluateAssistCase(base, text('Uma semana de prazo.')).inventedFacts).toEqual(['uma']);
+    expect(
+      evaluateAssistCase(
+        { ...base, about: 'Prazo de uma semana. Vendemos CRM.' },
+        text('Uma semana de prazo.'),
+      ).inventedFacts,
     ).toEqual([]);
   });
 
