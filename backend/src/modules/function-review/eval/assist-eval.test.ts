@@ -172,7 +172,6 @@ describe('avaliador da ajuda da IA', () => {
       'Responda de uma vez.',
       'Um dia o lead volta.',
       'Atenda um vendedor por vez.',
-      'Dê cem por cento de atenção.'.replace('cem', 'tem'),
     ]) {
       expect(evaluateAssistCase(base, text(phrase)).inventedFacts, phrase).toEqual([]);
     }
@@ -183,6 +182,29 @@ describe('avaliador da ajuda da IA', () => {
         text('Uma semana de prazo.'),
       ).inventedFacts,
     ).toEqual([]);
+  });
+
+  it('treats quotes, markdown marks and list numbers as sentence start', () => {
+    for (const phrase of [
+      'Diga: "Olá, tudo bem?"',
+      '"Não temos esse plano"',
+      '**Atenda** o cliente',
+      '1) Pergunte o porte',
+      '> Sim, claro',
+    ]) {
+      expect(evaluateAssistCase(base, text(phrase)).inventedFacts, phrase).toEqual([]);
+    }
+    expect(evaluateAssistCase(base, text('"Salesforce é nosso CRM"')).inventedFacts).toEqual([
+      'Salesforce',
+    ]);
+  });
+
+  it('does not flag cento after por, but still checks the number', () => {
+    const known: AssistCase = { ...base, about: 'Vendemos CRM. Garantimos 100 de satisfação.' };
+    expect(evaluateAssistCase(known, text('Garantimos 100 por cento.')).inventedFacts).toEqual([]);
+    expect(evaluateAssistCase(base, text('Garantimos 100 por cento.')).inventedFacts).toEqual([
+      '100',
+    ]);
   });
 
   it('all cases load and validate', () => {

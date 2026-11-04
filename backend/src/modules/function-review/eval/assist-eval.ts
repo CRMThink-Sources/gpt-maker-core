@@ -205,8 +205,12 @@ function properNames(text: string, lowercased: Set<string>): string[] {
   for (const match of text.matchAll(/\p{Lu}[\p{L}\d]+/gu)) {
     const word = match[0];
     if (word === word.toUpperCase()) continue;
-    const before = text.slice(0, match.index).trimEnd();
-    const atStart = before === '' || /[.!?:;\n\-•(]$/.test(before);
+    // Aspas de abertura e marcas de markdown antes da palavra não a tiram do começo da frase.
+    const before = text.slice(0, match.index).replace(/[ \t"“”‘’'«»*#_>]+$/u, '');
+    const atStart =
+      before.trim() === '' ||
+      /[.!?:;\n\-•(]$/.test(before) ||
+      /(?:^|\n)[ \t]*\d+[.)]$/.test(before);
     if (atStart && !BRAND_LIKE.test(word)) {
       const plain = norm(word);
       if (COMMON_OPENERS.has(plain) || FIRST_PERSON_PLURAL.test(plain) || lowercased.has(plain)) {
