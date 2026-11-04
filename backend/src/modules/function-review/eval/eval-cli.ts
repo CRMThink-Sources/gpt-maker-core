@@ -116,12 +116,17 @@ async function runAssist(options: CliOptions, io: CliIo): Promise<number> {
   io.write(formatAssistReport(report));
   if (options.details) {
     for (const entry of report.perCase.filter(
-      (item) => item.inventedFacts.length || item.overLimit,
+      (item) => item.inventedFacts.length || item.overLimit || item.skeletonViolations,
     )) {
       io.write('');
       io.write(`[${entry.id}] ${entry.output.join('\n--- repetição ---\n')}`);
     }
   }
-  // Fato inventado, texto acima do limite ou chamada fora do formato reprovam a avaliação.
-  return report.inventedFacts > 0 || report.overLimit > 0 || report.failed > 0 ? 1 : 0;
+  // Fato inventado, texto acima do limite, prosa no esqueleto ou chamada fora do formato reprovam.
+  return report.inventedFacts > 0 ||
+    report.overLimit > 0 ||
+    report.skeletonViolations > 0 ||
+    report.failed > 0
+    ? 1
+    : 0;
 }

@@ -59,6 +59,7 @@ describe('avaliador da ajuda da IA', () => {
       inventedFacts: [],
       overLimit: false,
       markers: 0,
+      skeletonViolations: 0,
     });
   });
 
@@ -284,5 +285,86 @@ describe('avaliador da ajuda da IA', () => {
     expect(formatAssistReport(report)).toContain('teste');
     const broken = await runAssistEval(cases, async () => 'nada', 1);
     expect(broken.perCase[0]!.failed).toBe(1);
+  });
+});
+
+describe('avaliador da ajuda da IA: base de conhecimento', () => {
+  const kb: AssistCase = {
+    id: 'teste-base',
+    template: 'SDR',
+    fieldId: 'base.produtos',
+    kind: 'complete',
+    about: 'Vendemos CRM para clínicas.',
+    questions: ['Que produtos vocês vendem?'],
+    interview: [{ question: 'Que produtos vocês vendem?', answer: 'Plano Pro para equipes' }],
+  };
+  const rows = (...items: Array<Record<string, string>>) => ({
+    fields: [{ fieldId: 'base.produtos', rows: items }],
+  });
+
+  it('eval loads knowledge cases of each kind', () => {
+    const cases = loadAssistCases().filter((entry) => {
+      const field = assistFieldOf(entry);
+      return field.kind === 'KNOWLEDGE';
+    });
+    for (const kind of ['complete', 'empty', 'unknown', 'skeleton'] as const) {
+      expect(
+        cases.some((entry) => entry.kind === kind),
+        kind,
+      ).toBe(true);
+    }
+    expect(new Set(cases.map((entry) => entry.template))).toEqual(new Set(['SDR', 'SUPPORT']));
+  });
+
+  it('eval flags an invented number in a knowledge item as invented', () => {
+    const result = evaluateAssistCase(
+      kb,
+      rows({ nome: 'Plano Pro', descricao: 'Para equipes, custa R$ 299 por mês.' }),
+    );
+    expect(result.inventedFacts).toEqual(['299']);
+  });
+
+  it('accepts a knowledge item built only from the sources and markers', () => {
+    const result = evaluateAssistCase(
+      kb,
+      rows({ nome: 'Plano Pro', descricao: 'Para equipes. [preencher: preço]' }),
+    );
+    expect(result.inventedFacts).toEqual([]);
+    expect(result.markers).toBe(1);
+  });
+
+  it('eval flags an item over the limit', () => {
+    const result = evaluateAssistCase(kb, rows({ nome: 'a'.repeat(61), descricao: 'ok' }));
+    expect(result.overLimit).toBe(true);
+  });
+
+  it('skeleton case: a subfield with prose beyond the title counts as a failure', () => {
+    const skeleton: AssistCase = { ...kb, kind: 'skeleton' };
+    const prose = evaluateAssistCase(
+      skeleton,
+      rows({ nome: 'Plano Pro', descricao: 'Dá desconto.' }),
+    );
+    expect(prose.skeletonViolations).toBe(1);
+    const clean = evaluateAssistCase(
+      skeleton,
+      rows({ nome: 'Plano Pro', descricao: '[preencher: o que inclui]' }),
+    );
+    expect(clean.skeletonViolations).toBe(0);
+    // Fora do modo esqueleto a prosa é o esperado.
+    expect(
+      evaluateAssistCase(kb, rows({ nome: 'Plano Pro', descricao: 'Para equipes.' }))
+        .skeletonViolations,
+    ).toBe(0);
+  });
+
+  it('the report counts skeleton violations and fails the run', async () => {
+    const skeleton: AssistCase = { ...kb, kind: 'skeleton' };
+    const report = await runAssistEval(
+      [skeleton],
+      async () => JSON.stringify(rows({ nome: 'Plano Pro', descricao: 'Dá desconto.' })),
+      1,
+    );
+    expect(report.skeletonViolations).toBe(1);
+    expect(formatAssistReport(report)).toContain('prosa no esqueleto');
   });
 });

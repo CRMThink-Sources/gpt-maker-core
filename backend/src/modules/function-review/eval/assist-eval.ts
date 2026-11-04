@@ -20,8 +20,11 @@ export const assistCaseSchema = z.object({
   /** Código do template do seed de onde vem o campo. */
   template: z.enum(['SDR', 'SUPPORT']),
   fieldId: z.string().min(1),
-  /** Entrevista completa, vazia ou respondida com "não sei". */
-  kind: z.enum(['complete', 'empty', 'unknown']),
+  /**
+   * Entrevista completa, vazia ou respondida com "não sei". `skeleton` (só na base) roda a ajuda no
+   * modo esqueleto, com a entrevista completa: a IA não pode redigir conteúdo.
+   */
+  kind: z.enum(['complete', 'empty', 'unknown', 'skeleton']),
   about: z.string().min(20),
   /** Perguntas de `assist` do campo (o seed ainda não as declara). */
   questions: z.array(z.string().min(1)).min(1).max(5),
@@ -34,12 +37,15 @@ export function loadAssistCases(): AssistCase[] {
   return z.array(assistCaseSchema).parse(raw);
 }
 
-/** Campo de texto do seed, com as perguntas do caso como `assist`. */
+/** Campo de texto ou base do seed, com as perguntas do caso como `assist`. */
 export function assistFieldOf(testCase: AssistCase): AssistableField {
   const template = loadSeedTemplate(testCase.template);
   const field = flattenFields(template.fields).find((entry) => entry.id === testCase.fieldId);
-  if (!field || (field.kind !== 'TEXT' && field.kind !== 'TEXT_LIST')) {
-    throw new Error(`campo de texto não encontrado: ${testCase.fieldId}`);
+  if (
+    !field ||
+    (field.kind !== 'TEXT' && field.kind !== 'TEXT_LIST' && field.kind !== 'KNOWLEDGE')
+  ) {
+    throw new Error(`campo de texto ou base não encontrado: ${testCase.fieldId}`);
   }
   return { ...field, assist: { questions: testCase.questions } };
 }
@@ -48,6 +54,8 @@ export interface AssistEvaluation {
   inventedFacts: string[];
   overLimit: boolean;
   markers: number;
+  /** Modo esqueleto: subcampos além do título com texto que não é marcador, como a IA devolveu. */
+  skeletonViolations: number;
 }
 
 const MARKER = /\[preencher:[^\]]*\]/gi;
@@ -269,19 +277,54 @@ function inventedFactsIn(texts: string[], sources: string): string[] {
   return [...invented];
 }
 
+const ONLY_MARKER = /^\s*\[preencher:[^\]]*\]\s*$/i;
+
+const knowledgeMode = (testCase: AssistCase) =>
+  testCase.kind === 'skeleton' ? ('skeleton' as const) : ('write' as const);
+
+/** Textos do rascunho: um texto, os itens da lista ou os valores de cada item da base. */
+function textsOf(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) =>
+    typeof item === 'string'
+      ? [item]
+      : Object.values((item as { values: Record<string, string> }).values),
+  );
+}
+
+/** O que a IA escreveu além do título quando só devia montar o esqueleto (antes de o sistema corrigir). */
+function skeletonViolationsIn(
+  testCase: AssistCase,
+  field: AssistableField,
+  output: AssistModelOutput,
+): number {
+  if (testCase.kind !== 'skeleton' || field.kind !== 'KNOWLEDGE') return 0;
+  const beyondTitle = field.subfields.slice(1).map((sub) => sub.id);
+  const rows = output.fields.find((entry) => entry.fieldId === field.id)?.rows ?? [];
+  return rows.reduce(
+    (sum, row) =>
+      sum +
+      beyondTitle.filter((id) => (row[id] ?? '').trim() !== '' && !ONLY_MARKER.test(row[id]!))
+        .length,
+    0,
+  );
+}
+
 export function evaluateAssistCase(
   testCase: AssistCase,
   output: AssistModelOutput,
 ): AssistEvaluation {
   const field = assistFieldOf(testCase);
-  const result = toAssistResult([field], output)[0]!;
-  const texts = typeof result.value === 'string' ? [result.value] : (result.value as string[]);
+  const result = toAssistResult([field], output, { knowledgeMode: knowledgeMode(testCase) })[0]!;
+  const texts = textsOf(result.value);
   const sources = [testCase.about, ...testCase.interview.map((entry) => entry.answer)].join('\n');
   return {
     inventedFacts: inventedFactsIn(texts, sources),
     // Campo que a IA não devolveu vira vazio: não é passar do limite.
     overLimit: !result.applicable && texts.some((text) => text.trim() !== ''),
     markers: result.markers,
+    skeletonViolations: skeletonViolationsIn(testCase, field, output),
   };
 }
 
@@ -291,6 +334,7 @@ export interface AssistCaseReport {
   inventedFacts: string[];
   overLimit: number;
   markers: number;
+  skeletonViolations: number;
   output: string[];
 }
 
@@ -298,6 +342,7 @@ export interface AssistReport {
   perCase: AssistCaseReport[];
   inventedFacts: number;
   overLimit: number;
+  skeletonViolations: number;
   failed: number;
 }
 
@@ -314,6 +359,7 @@ async function askAssist(chat: Chat, testCase: AssistCase) {
       functionDescription: template.description,
       agentName: 'Agente de teste',
     },
+    knowledgeMode: knowledgeMode(testCase),
   });
   for (let attempt = 1; attempt <= 2; attempt++) {
     const content = await chat(messages);
@@ -340,6 +386,7 @@ export async function runAssistEval(
       inventedFacts: [],
       overLimit: 0,
       markers: 0,
+      skeletonViolations: 0,
       output: [],
     };
     for (let run = 0; run < repeat; run++) {
@@ -352,6 +399,7 @@ export async function runAssistEval(
       entry.inventedFacts.push(...evaluation.inventedFacts);
       if (evaluation.overLimit) entry.overLimit++;
       entry.markers += evaluation.markers;
+      entry.skeletonViolations += evaluation.skeletonViolations;
       entry.output.push(answer.content);
     }
     perCase.push(entry);
@@ -362,13 +410,14 @@ export async function runAssistEval(
     perCase,
     inventedFacts: sum((entry) => entry.inventedFacts.length),
     overLimit: sum((entry) => entry.overLimit),
+    skeletonViolations: sum((entry) => entry.skeletonViolations),
     failed: sum((entry) => entry.failed),
   };
 }
 
 export function formatAssistReport(report: AssistReport): string {
   const rows = [
-    ['caso', 'fatos inventados', 'acima do limite', 'marcadores', 'falhas'],
+    ['caso', 'fatos inventados', 'acima do limite', 'marcadores', 'prosa no esqueleto', 'falhas'],
     ...report.perCase.map((entry) => [
       entry.id,
       entry.inventedFacts.length
@@ -376,6 +425,7 @@ export function formatAssistReport(report: AssistReport): string {
         : '0',
       String(entry.overLimit),
       String(entry.markers),
+      String(entry.skeletonViolations),
       String(entry.failed),
     ]),
     [
@@ -383,6 +433,7 @@ export function formatAssistReport(report: AssistReport): string {
       String(report.inventedFacts),
       String(report.overLimit),
       String(report.perCase.reduce((sum, entry) => sum + entry.markers, 0)),
+      String(report.skeletonViolations),
       String(report.failed),
     ],
   ];
