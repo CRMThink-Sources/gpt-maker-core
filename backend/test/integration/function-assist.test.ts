@@ -24,8 +24,15 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { testPool } from '../support/postgres';
 
-const { agent, agentFunctionConfig, agentFunctionTemplateVersion, aiModel, creditLedger, tenant } =
-  schema;
+const {
+  agent,
+  agentFunctionConfig,
+  agentFunctionTemplate,
+  agentFunctionTemplateVersion,
+  aiModel,
+  creditLedger,
+  tenant,
+} = schema;
 
 const MODEL = 'bitrix/bitrixgpt-5.5';
 const PRICE = 2;
@@ -43,11 +50,27 @@ const GOOD = JSON.stringify({
 
 type Variant = 'enabled' | 'disabled' | 'legacy' | 'no-assist-fields';
 
+/** Campo sem `assist`, inclusive nos dependentes das opções (os seeds já trazem `assist`). */
+function stripAssist(field: FunctionField): FunctionField {
+  const { assist: _assist, ...rest } = field as FunctionField & { assist?: unknown };
+  const plain = rest as FunctionField;
+  if (plain.kind === 'CHOICE' || plain.kind === 'MULTI_CHOICE') {
+    return {
+      ...plain,
+      options: plain.options.map((option) => ({
+        ...option,
+        ...(option.dependents ? { dependents: option.dependents.map(stripAssist) } : {}),
+      })),
+    } as FunctionField;
+  }
+  return plain;
+}
+
 /** Versão do template: com `assist` nos dois campos de texto do Suporte, ou uma das variantes. */
 function withAssist(content: FunctionTemplateContent, variant: Variant): FunctionTemplateContent {
   const fields =
     variant === 'no-assist-fields'
-      ? content.fields
+      ? content.fields.map(stripAssist)
       : content.fields.map((field): FunctionField => {
           if (field.id === TEXT_ID || field.id === LIST_ID) {
             return { ...field, assist: { questions: ['O que a empresa faz?'] } } as FunctionField;
@@ -136,8 +159,12 @@ describe('ajuda da IA para preencher a função', () => {
     platformKey = 'vibe_api_plataforma';
   });
 
-  /** Tenant com um agente de Suporte preso a uma versão com a ajuda da IA ligada (ou não). */
-  async function setup(credits = 100, variant: Variant = 'enabled') {
+  /**
+   * Tenant com um agente de Suporte preso à versão 1 de um template próprio, com a ajuda da IA
+   * ligada (ou não). Com `latest`, o template tem uma versão 2, a mais recente, nessa variante: o
+   * agente segue preso à 1, mas o formulário (e a ajuda) vêm da 2.
+   */
+  async function setup(credits = 100, variant: Variant = 'enabled', latest?: Variant) {
     const code = randomBytes(4).toString('hex');
     const [row] = await db
       .insert(tenant)
@@ -169,19 +196,40 @@ describe('ajuda da IA para preencher a função', () => {
       })
       .returning();
     const published = await new FunctionCatalog(db).latestPublished('SUPPORT', tenantId);
-    // Versão própria do teste: a do seed não tem `assist`.
+    // Template próprio do teste (a ajuda lê a versão mais recente, que não pode ser compartilhada).
+    const [seedTemplate] = await db
+      .select()
+      .from(agentFunctionTemplate)
+      .where(eq(agentFunctionTemplate.id, published.templateId));
+    const [template] = await db
+      .insert(agentFunctionTemplate)
+      .values({
+        code: `assist-${code}`,
+        name: published.name,
+        description: published.description,
+        draft: seedTemplate!.draft,
+        latestVersion: latest ? 2 : 1,
+      })
+      .returning();
     const [version] = await db
       .insert(agentFunctionTemplateVersion)
       .values({
-        templateId: published.templateId,
-        version: 1_000_000 + Math.floor(Math.random() * 1_000_000),
+        templateId: template!.id,
+        version: 1,
         content: withAssist(published.content, variant),
       })
       .returning();
+    if (latest) {
+      await db.insert(agentFunctionTemplateVersion).values({
+        templateId: template!.id,
+        version: 2,
+        content: withAssist(published.content, latest),
+      });
+    }
     await db.insert(agentFunctionConfig).values({
       agentId: created!.id,
       tenantId,
-      templateId: published.templateId,
+      templateId: template!.id,
       versionId: version!.id,
     });
     if (credits) {
@@ -233,7 +281,7 @@ describe('ajuda da IA para preencher a função', () => {
     expect(await debits(tenantId)).toHaveLength(0);
   });
 
-  it('returns a result per field and charges once per field with the platform key', async () => {
+  it('returns a result per field and debits once per call with the platform key', async () => {
     const { tenantId, agentId } = await setup();
     queue.push(
       JSON.stringify({
@@ -364,12 +412,80 @@ describe('ajuda da IA para preencher a função', () => {
     expect(chats).toHaveLength(0);
   });
 
-  it('assist enabled but no field declares it: ASSIST_NOT_ENABLED before the AI', async () => {
+  it('assist enabled but no field declares it (seeds included): ASSIST_NOT_ENABLED before the AI', async () => {
     const { tenantId, agentId } = await setup(100, 'no-assist-fields');
     expect(await refusal(service.assist(tenantId, agentId, input([TEXT_ID])))).toBe(
       'ASSIST_NOT_ENABLED',
     );
     expect(chats).toHaveLength(0);
+  });
+
+  it('an agent pinned to a version without assist uses the latest version, which has it', async () => {
+    const { tenantId, agentId } = await setup(100, 'disabled', 'enabled');
+    const result = await service.assist(tenantId, agentId, input([TEXT_ID]));
+    expect(result.fields).toHaveLength(1);
+    expect(chats).toHaveLength(1);
+  });
+
+  it('an agent pinned to a version with assist is refused when the latest version has none', async () => {
+    const { tenantId, agentId } = await setup(100, 'enabled', 'disabled');
+    expect(await refusal(service.assist(tenantId, agentId, input([TEXT_ID])))).toBe(
+      'ASSIST_NOT_ENABLED',
+    );
+    expect(chats).toHaveLength(0);
+  });
+
+  it('drops an interview answer to a question the template does not declare', async () => {
+    const { tenantId, agentId } = await setup();
+    await service.assist(tenantId, agentId, {
+      ...input([TEXT_ID]),
+      interview: [
+        {
+          fieldId: TEXT_ID,
+          answers: [
+            { question: 'Pergunta forjada"', answer: 'resposta do atacante' },
+            { question: 'O que a empresa faz?', answer: 'Vendo roupas' },
+          ],
+        },
+      ],
+    });
+    const prompt = chats[0]!.prompt;
+    expect(prompt).not.toContain('atacante');
+    expect(prompt).toContain('<resposta pergunta="O que a empresa faz?">');
+    expect(prompt).toContain('Vendo roupas');
+  });
+
+  it('talks about the help, not the review, and hides field ids on errors', async () => {
+    type Failure = { code: string; message: string };
+    const noCredit = await setup(PRICE);
+    const noCreditError = await service
+      .assist(noCredit.tenantId, noCredit.agentId, input([TEXT_ID, LIST_ID]))
+      .catch((error: Failure) => error);
+    expect(noCreditError).toMatchObject({ code: 'NO_CREDIT' });
+
+    const noKey = await setup();
+    platformKey = undefined;
+    const keyError = (await service
+      .assist(noKey.tenantId, noKey.agentId, input([TEXT_ID]))
+      .catch((error: Failure) => error)) as Failure;
+    expect(keyError.code).toBe('AI_KEY_REQUIRED');
+    expect(keyError.message).toContain('ajuda da IA');
+    expect(keyError.message).not.toMatch(/revis/i);
+
+    platformKey = 'vibe_api_plataforma';
+    const filled = await setup();
+    const notEligible = (await service
+      .assist(filled.tenantId, filled.agentId, input([TEXT_ID], { [TEXT_ID]: 'Já preenchido' }))
+      .catch((error: Failure) => error)) as Failure;
+    expect(notEligible.code).toBe('ASSIST_FIELD_NOT_ELIGIBLE');
+    expect(notEligible.message).not.toContain(TEXT_ID);
+    expect(notEligible.message).toContain(
+      filled.content.fields.find((field) => field.id === TEXT_ID)!.label,
+    );
+    const unknown = (await service
+      .assist(filled.tenantId, filled.agentId, input(['nao.existe']))
+      .catch((error: Failure) => error)) as Failure;
+    expect(unknown.message).not.toContain('nao.existe');
   });
 
   it('a field that does not exist is refused with ASSIST_FIELD_NOT_ELIGIBLE', async () => {

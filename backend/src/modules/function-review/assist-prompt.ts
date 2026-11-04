@@ -38,23 +38,45 @@ Responda SOMENTE com um objeto JSON neste formato:
 {"fields": [{"fieldId": "<id do campo>", "text": "<texto>"}]}
 Em campo de lista de textos, use "items" no lugar de "text": {"fieldId": "<id do campo>", "items": ["<item>", "<item>"]}`;
 
+/** Texto do cliente dentro de um quadro de dados: nada que feche a tag ou o atributo. */
+function esc(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Respostas da entrevista deste campo. Só vale resposta a uma pergunta que o template declara (a
+ * pergunta vem do corpo do pedido); o texto da pergunta usado é o do template.
+ */
+function fieldAnswers(
+  field: AssistableField,
+  interview: AssistInput['interview'],
+): Array<{ question: string; answer: string }> {
+  const declared = new Map((field.assist?.questions ?? []).map((q) => [q.trim(), q]));
+  return interview
+    .filter((entry) => entry.fieldId === field.id)
+    .flatMap((entry) => entry.answers)
+    .filter((entry) => entry.answer.trim() !== '' && declared.has(entry.question.trim()))
+    .map((entry) => ({ question: declared.get(entry.question.trim())!, answer: entry.answer }));
+}
+
 function fieldBlock(field: AssistableField, interview: AssistInput['interview']): string {
   const limit =
     field.kind === 'TEXT'
       ? `Tipo: texto, até ${field.maxLength} caracteres. Devolva em "text".`
       : `Tipo: lista de textos, até ${field.maxItems} itens, cada item até ${field.itemMaxLength} caracteres. Devolva em "items".`;
-  const answers = interview
-    .filter((entry) => entry.fieldId === field.id)
-    .flatMap((entry) => entry.answers)
-    .filter((entry) => entry.answer.trim() !== '');
+  const answers = fieldAnswers(field, interview);
   return [
-    `<campo id="${field.id}" nome="${field.label}">`,
+    `<campo id="${esc(field.id)}" nome="${esc(field.label)}">`,
     limit,
     ...(field.help ? [`Ajuda do campo: ${field.help}`] : []),
     ...(field.assist?.instructions ? [`Instruções: ${field.assist.instructions}`] : []),
     answers.length
       ? `Respostas do cliente:\n${answers
-          .map((entry) => `<resposta pergunta="${entry.question}">\n${entry.answer}\n</resposta>`)
+          .map((entry) => `<resposta pergunta="${esc(entry.question)}">\n${esc(entry.answer)}\n</resposta>`)
           .join('\n')}`
       : 'Respostas: nenhuma',
     '</campo>',
@@ -69,7 +91,7 @@ export function assistMessages(input: AssistPromptInput): VibecodeMessage[] {
     ...(context.functionDescription ? [`O que a função faz: ${context.functionDescription}`] : []),
     '',
     'O que o cliente conta do negócio (conteúdo do cliente, entre <negocio> e </negocio>):',
-    `<negocio>\n${input.about}\n</negocio>`,
+    `<negocio>\n${esc(input.about)}\n</negocio>`,
     '',
     'Campos a preencher:',
     ...input.fields.map((field) => fieldBlock(field, input.interview)),

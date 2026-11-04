@@ -41,7 +41,7 @@ import { FunctionCatalog } from '../agent-functions';
 import { BalanceReader, CreditAlerts, LedgerService } from '../billing';
 import { VibecodeClient, VibecodeError, type VibecodeMessage } from '../vibecode';
 import { AiKeyService } from './ai-key.service';
-import { assistMessages, toAssistResult } from './assist-prompt';
+import { type AssistableField, assistMessages, toAssistResult } from './assist-prompt';
 import {
   crossMessages,
   type FieldPromptContext,
@@ -337,13 +337,15 @@ export class FunctionReviewService {
   }
 
   /**
-   * Ajuda da IA: rascunho dos campos de texto vazios, sem sessão. A chave é escolhida na hora; cada
-   * campo gerado é cobrado à parte (chave `assist:<id>:<campo>`), só depois da saída válida.
+   * Ajuda da IA: rascunho dos campos de texto vazios, sem sessão. A chave é escolhida na hora; a
+   * chamada gera um débito só (chave `assist:<uuid>`, preço por campo gerado), depois da saída válida.
+   * Usa a versão mais recente do template, a mesma do formulário que o cliente vê.
    */
   async assist(tenantId: string, agentId: string, input: AssistInput): Promise<AssistResult> {
     const { content, functionName, functionDescription, agentName } = await this.template(
       tenantId,
       agentId,
+      { latest: true },
     );
     const { answers, issues } = validateFunctionAnswers(content, input.answers as FunctionAnswers, {
       partial: true,
@@ -368,14 +370,41 @@ export class FunctionReviewService {
     const eligibleIds = new Set(eligible.map((field) => field.id));
     const refused = ids.filter((id) => !eligibleIds.has(id));
     if (refused.length) {
+      const labels = new Map(flattenFields(content.fields).map((field) => [field.id, field.label]));
+      const names = refused.flatMap((id) => {
+        const label = labels.get(id);
+        return label ? [label] : [];
+      });
+      const refusedMessage = names.length
+        ? `A ajuda da IA não se aplica a estes campos: ${names.join(', ')}`
+        : 'A ajuda da IA não se aplica a estes campos';
       throw new DomainError(
         'ASSIST_FIELD_NOT_ELIGIBLE',
-        `A ajuda da IA não se aplica a estes campos: ${refused.join(', ')}`,
+        refusedMessage,
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
     const fields = eligible.filter((field) => ids.includes(field.id));
+    try {
+      return await this.assistRun(tenantId, agentId, input, fields, {
+        functionName,
+        functionDescription,
+        agentName,
+      });
+    } catch (error) {
+      throw helpWording(error);
+    }
+  }
 
+  private async assistRun(
+    tenantId: string,
+    agentId: string,
+    input: AssistInput,
+    fields: AssistableField[],
+    context: { functionName: string; functionDescription: string; agentName: string },
+  ): Promise<AssistResult> {
+    const ids = fields.map((field) => field.id);
+    const eligibleIds = new Set(ids);
     const session: Session = { tenantId, keySource: await this.chooseKey(tenantId) };
     await this.tenantLimit(tenantId);
     const price = this.env.REVIEW_CREDITS_PER_FIELD;
@@ -393,7 +422,7 @@ export class FunctionReviewService {
         fields,
         about: input.about,
         interview: input.interview,
-        context: { functionName, functionDescription, agentName },
+        context,
       }),
       assistModelOutputSchema,
     );
@@ -620,10 +649,11 @@ export class FunctionReviewService {
     return session;
   }
 
-  /** Template da versão a que a configuração do agente está presa. */
+  /** Template da versão a que a configuração do agente está presa (ou a mais recente, com `latest`). */
   private async template(
     tenantId: string,
     agentId: string,
+    options: { latest?: boolean } = {},
   ): Promise<{
     content: FunctionTemplateContent;
     functionName: string;
@@ -645,7 +675,7 @@ export class FunctionReviewService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const published = config.versionId
+    const published = config.versionId && !options.latest
       ? await this.catalog.versionById(config.versionId)
       : await this.catalog.latestOfTemplate(config.templateId);
     return {
@@ -655,6 +685,24 @@ export class FunctionReviewService {
       agentName: agent.name,
     };
   }
+}
+
+/** Mensagens da ajuda da IA no lugar das da revisão; o `code` e o status não mudam. */
+const HELP_WORDING: Partial<Record<string, string>> = {
+  AI_KEY_REQUIRED: 'Para usar a ajuda da IA, informe a chave do Vibecode.',
+  AI_MODEL_UNAVAILABLE:
+    'A chave não tem acesso ao modelo usado na ajuda da IA, ou ele está fora do ar.',
+  AI_UNAVAILABLE: 'A ajuda da IA está fora do ar agora. Tente de novo em instantes.',
+  AI_BUSY: 'Muitos pedidos de ajuda agora. Tente de novo em instantes.',
+  AI_FIELD_TOO_LARGE: 'Este texto é grande demais para a ajuda da IA.',
+  AI_BAD_OUTPUT: 'Não foi possível gerar o texto. Tente de novo.',
+  REVIEW_RATE_LIMITED: 'Muitos pedidos de ajuda em pouco tempo. Aguarde alguns minutos.',
+};
+
+function helpWording(error: unknown): unknown {
+  if (!(error instanceof DomainError)) return error;
+  const message = HELP_WORDING[error.code];
+  return message ? new DomainError(error.code, message, error.getStatus(), error.details) : error;
 }
 
 function isReviewable(field: { kind: string }): field is ReviewableField {
