@@ -229,3 +229,128 @@ describe('ajuda da IA: leitura da saída', () => {
     expect(one!.value).toBe('Use &amp; e &lt;');
   });
 });
+
+const base = functionFieldSchema.parse({
+  kind: 'KNOWLEDGE',
+  id: 'base.produtos',
+  label: 'Produtos',
+  required: true,
+  maxItems: 2,
+  format: '{{nome}}: {{descricao}}',
+  subfields: [
+    { id: 'nome', label: 'Nome', required: true, maxLength: 10, multiline: false },
+    { id: 'descricao', label: 'Descrição', required: true, maxLength: 30, multiline: true },
+  ],
+  assist: { questions: ['Que produtos vocês vendem?'], instructions: 'Um item por produto.' },
+}) as AssistableField;
+
+const rows = (...items: Array<Record<string, string>>) => ({
+  fields: [{ fieldId: base.id, rows: items }],
+});
+const KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+describe('ajuda da IA: base de conhecimento no prompt', () => {
+  const ask = (knowledgeMode?: 'write' | 'skeleton') =>
+    assistMessages({
+      fields: [base],
+      about: 'Loja de bicicletas.',
+      interview: [],
+      context,
+      knowledgeMode,
+    });
+
+  it('knowledge prompt lists the subfields, the item limit and asks for rows', () => {
+    const messages = ask();
+    const body = user(messages);
+    expect(body).toContain('base.produtos');
+    expect(body).toContain('até 2 itens');
+    expect(body).toContain('nome');
+    expect(body).toContain('até 10 caracteres');
+    expect(body).toContain('descricao');
+    expect(body).toContain('Um item por produto.');
+    expect(system(messages)).toContain('"rows"');
+  });
+
+  it('the mode rule reaches the prompt', () => {
+    expect(user(ask('skeleton'))).toMatch(/só no primeiro subcampo/i);
+    expect(user(ask('write'))).toMatch(/redija/i);
+  });
+});
+
+describe('ajuda da IA: base de conhecimento no resultado', () => {
+  it('write mode keeps the written content and gives each item its own itemKey', () => {
+    const [result] = toAssistResult(
+      [base],
+      rows(
+        { nome: 'Bike', descricao: 'Aro 29' },
+        { nome: 'Capacete', descricao: '[preencher: preço]' },
+      ),
+      { knowledgeMode: 'write' },
+    );
+    const items = result!.value as Array<{ itemKey: string; values: Record<string, string> }>;
+    expect(items.map((item) => item.values)).toEqual([
+      { nome: 'Bike', descricao: 'Aro 29' },
+      { nome: 'Capacete', descricao: '[preencher: preço]' },
+    ]);
+    expect(items[0]!.itemKey).toMatch(KEY);
+    expect(items[0]!.itemKey).not.toBe(items[1]!.itemKey);
+    expect(result).toMatchObject({ applicable: true, markers: 1 });
+  });
+
+  it('skeleton mode keeps only the title text and turns the rest into markers', () => {
+    const [result] = toAssistResult(
+      [base],
+      rows(
+        { nome: 'Bike', descricao: 'Aro 29, R$ 3000' },
+        { nome: 'Capa', descricao: '[preencher: material]' },
+      ),
+      { knowledgeMode: 'skeleton' },
+    );
+    const items = result!.value as Array<{ values: Record<string, string> }>;
+    expect(items[0]!.values).toEqual({ nome: 'Bike', descricao: '[preencher: Descrição]' });
+    // Marcador que o modelo já escreveu (com a pergunta guia) é mantido.
+    expect(items[1]!.values.descricao).toBe('[preencher: material]');
+    expect(result).toMatchObject({ applicable: true, markers: 2 });
+  });
+
+  it('rows over maxItems or a value over maxLength is not applicable and returned whole', () => {
+    const tooMany = toAssistResult([base], rows({ nome: 'a' }, { nome: 'b' }, { nome: 'c' }))[0]!;
+    expect((tooMany.value as unknown[]).length).toBe(3);
+    expect(tooMany.applicable).toBe(false);
+    const long = 'x'.repeat(11);
+    const tooLong = toAssistResult([base], rows({ nome: long, descricao: 'ok' }))[0]!;
+    expect((tooLong.value as Array<{ values: Record<string, string> }>)[0]!.values.nome).toBe(long);
+    expect(tooLong.applicable).toBe(false);
+  });
+
+  it('unknown subfield keys are dropped and entities are decoded', () => {
+    const [result] = toAssistResult([base], rows({ nome: 'A &amp; B', extra: 'x' }));
+    expect((result!.value as Array<{ values: Record<string, string> }>)[0]!.values).toEqual({
+      nome: 'A & B',
+    });
+  });
+
+  it('a missing or empty answer is empty and not applicable', () => {
+    expect(toAssistResult([base], { fields: [] })[0]).toEqual({
+      fieldId: base.id,
+      value: [],
+      applicable: false,
+      markers: 0,
+    });
+  });
+
+  it('an item without a title is not applicable', () => {
+    const [result] = toAssistResult([base], rows({ nome: '  ', descricao: 'x' }));
+    expect(result!.applicable).toBe(false);
+  });
+
+  it('empty interview and about: only a generic title and markers, nothing else in skeleton', () => {
+    const [result] = toAssistResult(
+      [base],
+      rows({ nome: 'Produto 1', descricao: 'Vende por R$ 99 em 3 dias' }),
+      { knowledgeMode: 'skeleton' },
+    );
+    const values = (result!.value as Array<{ values: Record<string, string> }>)[0]!.values;
+    expect(values.descricao).toMatch(/^\[preencher:[^\]]*\]$/);
+  });
+});
