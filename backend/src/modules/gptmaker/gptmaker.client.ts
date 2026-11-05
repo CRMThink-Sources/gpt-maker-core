@@ -18,12 +18,22 @@ import {
   GptMakerCreateTraining,
   GptMakerCreditsSpent,
   GptMakerIntention,
+  GptMakerMcpAdd,
+  GptMakerMcpTool,
   GptMakerWriteIntention,
   intentionListSchema,
   intentionWriteAckSchema,
+  mcpAddAckSchema,
+  mcpAddSchema,
+  mcpToolListSchema,
   GptMakerNewAgent,
   GptMakerTraining,
   GptMakerTrainingType,
+  GptMakerTransferRule,
+  GptMakerWriteTransferRule,
+  transferRuleListSchema,
+  transferRuleSchema,
+  writeTransferRuleSchema,
   GptMakerUpdateAgentSettings,
   GptMakerUpdateTextTraining,
   GptMakerWebhooks,
@@ -31,7 +41,7 @@ import {
   GptMakerWorkspaceCredits,
   newAssistantSchema,
   successSchema,
-  trainingSchema,
+  trainingListSchema,
   updateAgentSettingsSchema,
   writeIntentionSchema,
   updateTextTrainingSchema,
@@ -193,7 +203,7 @@ export class GptMakerClient {
       method: 'GET',
       path: `/agent/${enc(agentId)}/trainings`,
       query: { type, page: page.page, pageSize: page.pageSize, query: page.query },
-      response: trainingSchema.array(),
+      response: trainingListSchema,
     });
   }
 
@@ -227,12 +237,25 @@ export class GptMakerClient {
     return { id: id ?? null };
   }
 
-  /** Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. */
+  /**
+   * Só treinamentos `TEXT` podem ser editados; os demais são removidos e recriados. Desde
+   * 2026-10-28 a resposta é o treinamento atualizado (antes `{ success }`): só `success: false`
+   * é falha.
+   */
   async updateTextTraining(trainingId: string, input: GptMakerUpdateTextTraining): Promise<void> {
-    await this.success('training.update', 'PUT', `/training/${enc(trainingId)}`, {
-      type: 'TEXT',
-      ...updateTextTrainingSchema.parse(input),
+    const body = await this.request({
+      operation: 'training.update',
+      method: 'PUT',
+      path: `/training/${enc(trainingId)}`,
+      body: { type: 'TEXT', ...updateTextTrainingSchema.parse(input) },
+      response: z.unknown(),
     });
+    if (asRecord(body)?.success === false) {
+      throw new GptMakerError('UNKNOWN', 'training.update', 'provedor respondeu success=false', {
+        status: 200,
+        body,
+      });
+    }
   }
 
   async deleteTraining(trainingId: string): Promise<void> {
@@ -295,6 +318,96 @@ export class GptMakerClient {
 
   async deleteIntention(intentionId: string): Promise<void> {
     await this.success('intention.delete', 'DELETE', `/intention/${enc(intentionId)}`);
+  }
+
+  // ---- Regras de transferência entre agentes (design D17)
+
+  listTransferRules(agentId: string): Promise<GptMakerTransferRule[]> {
+    return this.request({
+      operation: 'transferRule.list',
+      method: 'GET',
+      path: `/agent/${enc(agentId)}/transfer-rules`,
+      response: transferRuleListSchema,
+    });
+  }
+
+  /** Id da regra criada (a resposta traz a regra inteira). */
+  async createTransferRule(agentId: string, input: GptMakerWriteTransferRule): Promise<string> {
+    const rule = await this.request({
+      operation: 'transferRule.create',
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/transfer-rules`,
+      body: transferRuleBody(input),
+      response: transferRuleSchema,
+    });
+    return rule.id;
+  }
+
+  /** Responde 204 sem corpo. */
+  async updateTransferRule(
+    agentId: string,
+    ruleId: string,
+    input: GptMakerWriteTransferRule,
+  ): Promise<void> {
+    await this.request({
+      operation: 'transferRule.update',
+      method: 'PUT',
+      path: `/agent/${enc(agentId)}/transfer-rules/${enc(ruleId)}`,
+      body: transferRuleBody(input),
+      response: z.unknown(),
+    });
+  }
+
+  async deleteTransferRule(agentId: string, ruleId: string): Promise<void> {
+    await this.request({
+      operation: 'transferRule.delete',
+      method: 'DELETE',
+      path: `/agent/${enc(agentId)}/transfer-rules/${enc(ruleId)}`,
+      response: z.unknown(),
+    });
+  }
+
+  // ---- MCP (docs/gptmaker-mcp.md)
+
+  /** Conecta um servidor MCP ao agente; devolve o id da conexão (necessário para remover). */
+  async addMcp(agentId: string, input: GptMakerMcpAdd): Promise<string> {
+    const operation = 'mcp.add';
+    const ack = await this.request({
+      operation,
+      method: 'POST',
+      path: `/agent/${enc(agentId)}/mcp/add`,
+      body: mcpAddSchema.parse(input),
+      response: mcpAddAckSchema,
+    });
+    if (ack.success === false || !ack.id) {
+      throw new GptMakerError('UNKNOWN', operation, 'conexão MCP não criada', {
+        status: 200,
+        body: ack,
+      });
+    }
+    return ack.id;
+  }
+
+  listMcpTools(mcpId: string): Promise<GptMakerMcpTool[]> {
+    return this.request({
+      operation: 'mcp.tools',
+      method: 'GET',
+      path: `/mcp/${enc(mcpId)}/tools`,
+      response: mcpToolListSchema,
+    });
+  }
+
+  async activateMcpTool(mcpId: string, toolId: string): Promise<void> {
+    await this.success('mcp.tool.active', 'GET', `/mcp/${enc(mcpId)}/tool/${enc(toolId)}/active`);
+  }
+
+  /** Relê as ferramentas do servidor (nome, descrição e esquema só mudam assim). */
+  async syncMcpTools(mcpId: string): Promise<void> {
+    await this.success('mcp.sync-tools', 'GET', `/mcp/${enc(mcpId)}/sync-tools`);
+  }
+
+  async deleteMcp(mcpId: string): Promise<void> {
+    await this.success('mcp.delete', 'DELETE', `/mcp/${enc(mcpId)}`);
   }
 
   // ---- Webhooks
@@ -451,6 +564,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function truncated(payload: unknown): unknown {
   const json = JSON.stringify(payload ?? null) ?? 'null';
   return json.length > 2000 ? `${json.slice(0, 2000)}…` : payload;
+}
+
+/** Regra para outro agente: `userId` vai nulo, como a API documenta. */
+function transferRuleBody(input: GptMakerWriteTransferRule) {
+  return { ...writeTransferRuleSchema.parse(input), userId: null };
 }
 
 function enc(value: string): string {

@@ -93,6 +93,7 @@ describe('retentativa e DLQ das mensagens do chatbot', () => {
       GPTMAKER_API_TOKEN: 't',
       GPTMAKER_WORKSPACE_ID: 'ws',
       PLATFORM_URL: 'http://127.0.0.1:1',
+      APP_CODE: 'crmthink.thinkflow',
       PLATFORM_API_KEY: 'k',
       PLATFORM_WEBHOOK_SECRETS: 's',
       STORAGE_ENDPOINT: 'http://127.0.0.1:1',

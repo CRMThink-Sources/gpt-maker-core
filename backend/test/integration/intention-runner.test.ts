@@ -4,9 +4,10 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PendingHandoffs } from '../../src/modules/channel/pending-handoff';
+import { ActionRotation } from '../../src/modules/triggers/actions/action-rotation';
 import { IntentionRunner } from '../../src/modules/intentions/intention-runner';
 import type { ActionContext } from '../../src/modules/triggers/actions/action-executor';
 import { ActionError } from '../../src/modules/triggers/actions/action-error';
@@ -14,6 +15,7 @@ import type { TriggerActionExecutor } from '../../src/modules/triggers';
 import { configureFieldCipher, fieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const { agent, agentIntention, aiModel, intentionExecution, tenant } = schema;
 const TOKEN = 'token-da-intencao-1234567890';
@@ -45,7 +47,7 @@ describe('intenção com ações no Bitrix24', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const executor = {
@@ -56,7 +58,13 @@ describe('intenção com ações no Bitrix24', () => {
         return action.type === 'CREATE_LEAD' ? { leadId: 77 } : { commentId: 5 };
       },
     } as unknown as TriggerActionExecutor;
-    runner = new IntentionRunner(executor, new PendingHandoffs(redis), db, redis);
+    runner = new IntentionRunner(
+      executor,
+      new PendingHandoffs(redis),
+      new ActionRotation(redis),
+      db,
+      redis,
+    );
   });
 
   beforeEach(async () => {
@@ -155,6 +163,23 @@ describe('intenção com ações no Bitrix24', () => {
     ]);
   });
 
+  it('conversa de teste do app: ações simuladas, nada executado no portal', async () => {
+    const outcome = await runner.run(
+      intentionId,
+      TOKEN,
+      body({ chat: `public-api-gm-x-${tenantId}:t-0a1b2c3d4e` }),
+    );
+    expect(outcome).toMatchObject({
+      kind: 'reply',
+      reply: {
+        ok: true,
+        message: expect.stringContaining('Seriam: lead criado; comentário registrado no CRM'),
+      },
+    });
+    expect(calls).toEqual([]);
+    expect(await executions()).toEqual([expect.objectContaining({ status: 'SUCCESS' })]);
+  });
+
   it('chamada repetida devolve o mesmo resultado sem executar de novo', async () => {
     await runner.run(intentionId, TOKEN, body());
     const again = await runner.run(intentionId, TOKEN, body());
@@ -213,6 +238,80 @@ describe('intenção com ações no Bitrix24', () => {
     );
     expect(noChat).toMatchObject({
       reply: { ok: false, results: [{ ok: true }, { type: 'TRANSFER_TO_HUMAN', ok: false }] },
+    });
+  });
+
+  it('item de SPA que falha não impede a transferência seguinte', async () => {
+    failOn = 'CREATE_SPA_ITEM';
+    await db
+      .update(agentIntention)
+      .set({
+        actions: [
+          {
+            type: 'CREATE_SPA_ITEM',
+            config: { entityTypeId: 1204, title: 'Chamado', fields: { ufCrm136_1: 'CHAT' } },
+          },
+          { type: 'TRANSFER_TO_HUMAN', config: { target: 'USER', userId: 9 } },
+        ],
+      })
+      .where(eq(agentIntention.id, intentionId));
+    const outcome = await runner.run(intentionId, TOKEN, body());
+    expect(outcome).toMatchObject({
+      reply: {
+        ok: false,
+        results: [
+          { type: 'CREATE_SPA_ITEM', ok: false },
+          { type: 'TRANSFER_TO_HUMAN', ok: true },
+        ],
+      },
+    });
+    expect(calls[0]!.context.template.dialog).toEqual({ id: 'chat9498', chatId: '9498' });
+    expect(await new PendingHandoffs(redis).peek(tenantId, 'chat9498')).toMatchObject({
+      userId: 9,
+    });
+  });
+
+  describe('vários usuários e canal aberto (D15, D16)', () => {
+    const transfer = (config: Record<string, unknown>) =>
+      db
+        .update(agentIntention)
+        .set({ actions: [{ type: 'TRANSFER_TO_HUMAN', config }] })
+        .where(eq(agentIntention.id, intentionId));
+    const pending = () => new PendingHandoffs(redis).peek(tenantId, 'chat9498');
+    const call = (pedido: string) =>
+      runner.run(intentionId, TOKEN, body({ fields: { nome: 'M', pedido } }));
+
+    it('transferência com lista gira entre os usuários', async () => {
+      await transfer({ target: 'USER', userId: [3, 5] });
+      await call('1');
+      expect(await pending()).toMatchObject({ userId: 3 });
+      await call('2');
+      expect(await pending()).toMatchObject({ userId: 5 });
+      await call('3');
+      expect(await pending()).toMatchObject({ userId: 3 });
+    });
+
+    it('chamada repetida não gira o rodízio', async () => {
+      await transfer({ target: 'USER', userId: [3, 5] });
+      await call('1');
+      await call('1');
+      expect(await pending()).toMatchObject({ userId: 3 });
+      await call('2');
+      expect(await pending()).toMatchObject({ userId: 5 });
+    });
+
+    it('transferência para canal aberto agenda o canal', async () => {
+      await transfer({ target: 'LINE', lineId: 12 });
+      await call('1');
+      expect(await pending()).toMatchObject({ lineId: 12 });
+    });
+
+    it('agenda com o chat recebido (o do agente de origem, D17)', async () => {
+      await transfer({ target: 'OPERATOR' });
+      await call('1');
+      expect(await pending()).toMatchObject({
+        gptmakerChatId: `public-api-gm-x-${tenantId}:chat9498`,
+      });
     });
   });
 

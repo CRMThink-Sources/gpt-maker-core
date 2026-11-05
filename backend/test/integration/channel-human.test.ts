@@ -1,12 +1,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { Nack } from '@golevelup/nestjs-rabbitmq';
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Tenant } from '../../src/modules/tenancy/tenant.service';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
@@ -20,10 +19,12 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, agentBot, aiModel, dialogState, tenant } = schema;
 const GM_AGENT = 'GM-AGENT-1';
 const OPERATOR = '/rest/imopenlines.bot.session.operator.json';
+const TRANSFER = '/rest/imopenlines.bot.session.transfer.json';
 
 // Transferência para humano e volta do agente (spec bitrix-chatbot-channel).
 describe('atendimento humano', () => {
@@ -47,6 +48,7 @@ describe('atendimento humano', () => {
       request: { method: 'POST', urlPath: OPERATOR },
       response: overrides.operator ?? ok(true),
     });
+    await wiremock.stub({ request: { method: 'POST', urlPath: TRANSFER }, response: ok(true) });
     await wiremock.stub({
       request: { method: 'PUT', urlPathPattern: '/v2/chat/.+/(start|stop)-human' },
       response: { status: 200, jsonBody: { success: true } },
@@ -69,7 +71,7 @@ describe('atendimento humano', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const bitrix = new BitrixClient(
@@ -158,6 +160,8 @@ describe('atendimento humano', () => {
     expect(await human.isActive(owner.id, 'chat9498')).toBe(true);
     expect(await wiremock.bodies('POST', OPERATOR)).toMatchObject([{ CHAT_ID: 9498 }]);
     expect(await wiremock.count('PUT', chatPath('chat9498', 'start-human'))).toBe(1);
+    // O atendimento do agente é encerrado no GPTMaker (RESOLVED), para as métricas.
+    expect(await wiremock.count('PUT', chatPath('chat9498', 'stop-human'))).toBe(1);
   });
 
   it('diálogo já com operador (recusa do Bitrix): segue para o GPTMaker', async () => {
@@ -175,11 +179,12 @@ describe('atendimento humano', () => {
 
     expect(await stateOf('chat2')).toMatchObject({ humanActive: false, humanStartedAt: null });
     expect(await human.isActive(owner.id, 'chat2')).toBe(false);
-    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(1);
+    // Um na transferência (encerra o atendimento do agente) e um no fim do atendimento humano.
+    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(2);
 
     // Repetir não chama o GPTMaker de novo.
     await expect(handoff.stop({ tenantId: owner.id, dialogId: 'chat2' })).resolves.toBe('skipped');
-    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(1);
+    expect(await wiremock.count('PUT', chatPath('chat2', 'stop-human'))).toBe(2);
   });
 
   it('diálogo que nunca teve humano: nada a encerrar', async () => {
@@ -188,8 +193,57 @@ describe('atendimento humano', () => {
     expect(await wiremock.count('PUT', chatPath('chat3', 'stop-human'))).toBe(0);
   });
 
+  it('canal aberto: transfere para a fila do canal (D16)', async () => {
+    await stubAll();
+    await handoff.start({ tenantId: owner.id, agentId, dialogId: 'chat10', lineId: 12 });
+    expect(await wiremock.bodies('POST', TRANSFER)).toMatchObject([
+      { CHAT_ID: 10, QUEUE_ID: 12, LEAVE: 'N' },
+    ]);
+    expect(await wiremock.count('POST', OPERATOR)).toBe(0);
+  });
+
+  it('intenção do agente de destino: usa o chat recebido e grava o agente de origem (D17)', async () => {
+    await stubAll();
+    const [destino] = await db
+      .insert(agent)
+      .values({
+        tenantId: owner.id,
+        gptmakerAgentId: 'GM-AGENT-2',
+        name: 'Bia',
+        type: 'SALE',
+        communicationType: 'NORMAL',
+        modelId: (await db.select().from(aiModel))[0]!.id,
+        webhookTokenHash: randomUUID(),
+      })
+      .returning();
+    const chat = gptmakerChatIdFor(GM_AGENT, owner.id, 'chat11');
+    await handoff.start({
+      tenantId: owner.id,
+      agentId: destino!.id,
+      dialogId: 'chat11',
+      gptmakerChatId: chat,
+    });
+    expect(await stateOf('chat11')).toMatchObject({ agentId, gptmakerChatId: chat });
+    expect(await wiremock.count('PUT', chatPath('chat11', 'start-human'))).toBe(1);
+  });
+
+  it('chat recebido de agente desconhecido: usa o chat do agente da intenção', async () => {
+    await stubAll();
+    await handoff.start({
+      tenantId: owner.id,
+      agentId,
+      dialogId: 'chat12',
+      gptmakerChatId: 'formato-inesperado:chat12',
+    });
+    expect(await stateOf('chat12')).toMatchObject({
+      agentId,
+      gptmakerChatId: gptmakerChatIdFor(GM_AGENT, owner.id, 'chat12'),
+    });
+    expect(await wiremock.count('PUT', chatPath('chat12', 'start-human'))).toBe(1);
+  });
+
   describe('consumidor do onTransfer', () => {
-    const consumer = () => new TransferConsumer(handoff);
+    const consumer = () => new TransferConsumer();
     const event = (dialogId: string | null) => ({
       agentEventId: randomUUID(),
       tenantId: owner.id,
@@ -198,22 +252,16 @@ describe('atendimento humano', () => {
       dialogId,
     });
 
-    it('com diálogo, transfere', async () => {
+    it('troca de agente no GPTMaker: só registra, sem atendimento humano (D18)', async () => {
       await stubAll();
       await expect(consumer().process(event('chat4'))).resolves.toBeUndefined();
-      expect((await stateOf('chat4'))?.humanActive).toBe(true);
+      expect(await stateOf('chat4')).toBeUndefined();
+      expect(await wiremock.count('POST', OPERATOR)).toBe(0);
     });
 
     it('sem diálogo (payload sem contextId): não faz nada', async () => {
       await expect(consumer().process(event(null))).resolves.toBeUndefined();
       expect(await wiremock.count('POST', OPERATOR)).toBe(0);
-    });
-
-    it('falha que os clientes não resolvem: DLQ', async () => {
-      await stubAll({ operator: { status: 503, jsonBody: { error: 'x' } } });
-      const result = await consumer().process(event('chat5'));
-      expect(result).toBeInstanceOf(Nack);
-      expect((result as Nack).requeue).toBe(false);
     });
   });
 

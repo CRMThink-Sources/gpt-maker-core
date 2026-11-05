@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import type { Env } from '../../src/config/env';
@@ -25,6 +25,7 @@ import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, dialogState, messageLog, tenant, tenantBalance } = schema;
 
@@ -142,7 +143,7 @@ describe('gate das mensagens do chatbot', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     gate = new InboundGate(db, new HumanAttendance(db, redis), new BalanceReader(db, redis));

@@ -10,7 +10,7 @@ import type { Tenant, TenantService } from './tenant.service';
 const claims = (overrides: Partial<SessionClaims> = {}) =>
   ({
     sub: '7',
-    aud: 'crmthink.gptmaker',
+    aud: 'crmthink.thinkflow',
     installationId: 1001,
     memberId: 'm-1',
     domain: 'acme.bitrix24.com.br',

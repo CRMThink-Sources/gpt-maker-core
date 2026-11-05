@@ -6,6 +6,7 @@ import { ApiModule } from './api.module';
 import { loadEnv } from './config/env';
 import { contextMiddleware } from './shared/context/context.middleware';
 import { configureFieldCipher } from './shared/crypto/field-cipher';
+import { corsOptions } from './shared/http/cors';
 import { runMigrations } from './shared/database/migrate';
 import { initMetrics } from './shared/metrics/metrics';
 
@@ -25,13 +26,8 @@ async function bootstrap(): Promise<void> {
   app.use(contextMiddleware);
   // Frontend (app.) chama a API (api.) com o JWT da sessão no header; sem cookies. O backoffice
   // (/admin) passa pelo repasse do próprio frontend (mesma origem), então também não precisa.
-  app.enableCors({
-    origin: env.FRONTEND_ORIGINS,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
-    exposedHeaders: ['x-trace-id'],
-    maxAge: 600,
-  });
+  // O servidor MCP (/mcp) aceita qualquer origem: ver shared/http/cors.ts.
+  app.enableCors(corsOptions(env.FRONTEND_ORIGINS));
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   await app.listen(env.PORT);

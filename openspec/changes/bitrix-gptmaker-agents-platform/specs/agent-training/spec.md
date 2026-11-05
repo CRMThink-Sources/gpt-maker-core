@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Cadastro de treinamento
-O sistema MUST permitir adicionar treinamentos a um agente nos tipos `TEXT`, `WEBSITE`, `VIDEO` e `DOCUMENT`, enviando-os ao GPTMaker via `POST /agents/{id}/trainings` e persistindo localmente tipo, conteúdo/URL e status. Treinamentos e re-treinamentos MUST NOT consumir créditos do tenant (os limites de treinamento são definidos pelo plano).
+O sistema MUST permitir adicionar treinamentos a um agente nos tipos `TEXT`, `WEBSITE`, `VIDEO` e `DOCUMENT`, enviando-os ao GPTMaker via `POST /agents/{id}/trainings` e persistindo localmente tipo, conteúdo/URL e status. Treinamentos e re-treinamentos MUST NOT consumir créditos do tenant (os limites de treinamento são definidos pelo plano). O texto de um treinamento `TEXT` MUST ter no máximo 1028 caracteres, na criação e na edição.
 
 #### Scenario: Treinamento não debita créditos
 - **WHEN** um treinamento é criado, reprocessado ou re-treinado automaticamente

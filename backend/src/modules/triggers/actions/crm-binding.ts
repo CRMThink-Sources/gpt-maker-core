@@ -54,3 +54,13 @@ export function bizprocDocumentId(type: CrmEntityType, id: number): [string, str
   const object = `CCrmDocument${upper.charAt(0)}${upper.slice(1).toLowerCase()}`;
   return ['crm', object, `${upper}_${id}`];
 }
+
+/**
+ * Sessão atual da Linha Aberta: 6º segmento de `entity_data_1` do chat
+ * (`Y|DEAL|39808|N|N|2008|1793305311|0|0|0` ⇒ `2008`; `docs/bitrix-observado.md`).
+ */
+export function parseSessionId(entityData1: unknown): string | null {
+  if (typeof entityData1 !== 'string') return null;
+  const segment = entityData1.split('|')[5]?.trim() ?? '';
+  return /^[1-9]\d*$/.test(segment) ? segment : null;
+}

@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AgentItemMirror } from '../../src/modules/payments/agent-item.mirror';
 import {
@@ -16,6 +16,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { PlatformApiClient } from '../../src/shared/platform/platform-api.client';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, paymentsOutbox, subscriptionState, tenant } = schema;
 const SUB = 501;
@@ -103,7 +104,7 @@ describe('outbox de pagamentos: agentes como itens de assinatura', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     const platform = new PlatformApiClient({
       baseUrl: wiremock.baseUrl,

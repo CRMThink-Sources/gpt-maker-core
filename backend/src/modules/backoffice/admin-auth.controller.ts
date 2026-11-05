@@ -22,7 +22,14 @@ import type { Request, Response } from 'express';
 import { createZodDto } from 'nestjs-zod';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
-import { ADMIN_COOKIE, AdminAuth, CurrentOperator, sessionToken } from './admin-auth.guard';
+import {
+  ADMIN_COOKIE,
+  AdminAuth,
+  CurrentOperator,
+  sessionToken,
+  TRUSTED_DEVICE_COOKIE,
+  trustedDeviceToken,
+} from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
 import type { Operator } from './operator.service';
 
@@ -44,9 +51,16 @@ export class AdminAuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Req() req: Request, @Body() body: LoginDto): Promise<AdminLoginStep> {
+  async login(
+    @Req() req: Request,
+    @Body() body: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AdminLoginStep> {
     requireHeader(req);
-    return this.auth.login(body.email, body.password);
+    const result = await this.auth.login(body.email, body.password, trustedDeviceToken(req));
+    if ('challenge' in result) return result.challenge;
+    this.setCookie(res, ADMIN_COOKIE, result.session.token, this.env.BACKOFFICE_SESSION_MAX_HOURS);
+    return { step: 'authenticated', ...sessionView(result.session.operator) };
   }
 
   @Post('totp')
@@ -57,14 +71,20 @@ export class AdminAuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AdminSessionView> {
     requireHeader(req);
-    const { operator, token } = await this.auth.verify(body.challenge, body.code);
-    res.cookie(ADMIN_COOKIE, token, {
-      httpOnly: true,
-      secure: this.env.BACKOFFICE_COOKIE_SECURE,
-      sameSite: 'strict',
-      path: '/admin',
-      maxAge: this.env.BACKOFFICE_SESSION_MAX_HOURS * 3_600_000,
-    });
+    const { operator, token, deviceToken } = await this.auth.verify(
+      body.challenge,
+      body.code,
+      body.rememberDevice,
+    );
+    this.setCookie(res, ADMIN_COOKIE, token, this.env.BACKOFFICE_SESSION_MAX_HOURS);
+    if (deviceToken) {
+      this.setCookie(
+        res,
+        TRUSTED_DEVICE_COOKIE,
+        deviceToken,
+        this.env.BACKOFFICE_TRUSTED_DEVICE_DAYS * 24,
+      );
+    }
     return sessionView(operator);
   }
 
@@ -93,6 +113,16 @@ export class AdminAuthController {
     await this.auth.changePassword(operator, body.current, body.next);
     // Todas as sessões caem, inclusive esta: o operador entra de novo com a senha nova.
     res.clearCookie(ADMIN_COOKIE, { path: '/admin' });
+  }
+
+  private setCookie(res: Response, name: string, value: string, hours: number): void {
+    res.cookie(name, value, {
+      httpOnly: true,
+      secure: this.env.BACKOFFICE_COOKIE_SECURE,
+      sameSite: 'strict',
+      path: '/admin',
+      maxAge: hours * 3_600_000,
+    });
   }
 }
 

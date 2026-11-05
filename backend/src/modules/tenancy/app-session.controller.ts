@@ -1,6 +1,18 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { AppAuth, type AppSession, CurrentSession } from './app-session.guard';
 import { type GrantedUser, PermissionService } from './permission.service';
@@ -14,7 +26,10 @@ class GrantDto extends createZodDto(
 /** Rotas do frontend embutido: sessão atual e concessão de permissões (admin do portal). */
 @Controller('app')
 export class AppSessionController {
-  constructor(private readonly permissions: PermissionService) {}
+  constructor(
+    private readonly permissions: PermissionService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
 
   @Get('session')
   @AppAuth()
@@ -23,6 +38,8 @@ export class AppSessionController {
       user: { id: session.userId, name: session.userName, isAdmin: session.isAdmin },
       tenant: { code: session.tenantCode, status: session.tenantStatus },
       canManage: session.canManage,
+      /** Recursos ligados no ambiente (o painel esconde as telas dos desligados). */
+      features: { crmTools: this.env.CRM_TOOLS_ENABLED },
     };
   }
 

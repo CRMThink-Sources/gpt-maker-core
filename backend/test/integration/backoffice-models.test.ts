@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AuditService } from '../../src/modules/backoffice/audit.service';
@@ -15,6 +15,7 @@ import { previousDays } from '../../src/modules/reconciliation/reconciliation.se
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const {
   reconciliationAdjustment,
@@ -45,7 +46,7 @@ describe('backoffice: modelos de IA', () => {
     postgres = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     const gptmaker = {
       updateAgentSettings: async (agentId: string, settings: { prefferModel: unknown }) => {

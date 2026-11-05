@@ -8,8 +8,6 @@ import {
   Param,
   Patch,
   Post,
-  UploadedFile,
-  UseInterceptors,
 } from '@nestjs/common';
 import {
   type CreateTrainingInput,
@@ -19,9 +17,7 @@ import {
   updateTrainingSchema,
 } from '@gptmaker/contracts';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
-import { DomainError } from '../../shared/http/api-exception.filter';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
-import { DocumentUploadInterceptor } from './document-upload.interceptor';
 import { TrainingService } from './training.service';
 
 class UpdateTrainingDto extends createZodDto(updateTrainingSchema) {}
@@ -44,7 +40,7 @@ export class TrainingsController {
     return { trainings, usage };
   }
 
-  /** Texto, site ou vídeo (JSON). */
+  /** Texto, site ou vídeo (JSON); documento não é mais aceito (spec agent-training). */
   @Post()
   @AppAuth('manage')
   create(
@@ -54,28 +50,6 @@ export class TrainingsController {
     @Body(new ZodValidationPipe(createTrainingSchema)) body: CreateTrainingInput,
   ): Promise<TrainingView> {
     return this.trainings.create(session.tenantId, agentId, body);
-  }
-
-  /** Documento (`multipart/form-data`, campo `file`). */
-  @Post('document')
-  @AppAuth('manage')
-  @UseInterceptors(DocumentUploadInterceptor)
-  createDocument(
-    @CurrentSession() session: AppSession,
-    @Param('agentId') agentId: string,
-    @UploadedFile() file: Express.Multer.File | undefined,
-  ): Promise<TrainingView> {
-    if (!file) {
-      throw new DomainError(
-        'TRAINING_FILE_INVALID',
-        'Envie o arquivo no campo "file"',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    return this.trainings.createDocument(session.tenantId, agentId, {
-      originalName: file.originalname,
-      buffer: file.buffer,
-    });
   }
 
   /** Só treinamentos de texto. */

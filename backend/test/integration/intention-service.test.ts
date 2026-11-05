@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentEvents } from '../../src/modules/agents/agent-events';
@@ -17,6 +17,7 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, agentIntention, aiModel, tenant } = schema;
 const REMOTE_AGENT = 'gm-agent-int';
@@ -83,7 +84,7 @@ describe('serviço de intenções', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const client = new GptMakerClient(
@@ -244,6 +245,15 @@ describe('serviço de intenções', () => {
     expect(await db.select().from(agentIntention)).toEqual([]);
   });
 
+  it('GPTMaker não consegue treinar (500 "Fail on train assistant."): recusa clara, nada gravado', async () => {
+    await wiremock.stub({
+      request: { method: 'POST', urlPath: LIST },
+      response: { status: 500, jsonBody: { error: 'Fail on train assistant.' } },
+    });
+    expect(await errorOf(service.create(tenantId, agentId, form()))).toBe('GPTMAKER_TRAIN_FAILED');
+    expect(await db.select().from(agentIntention)).toEqual([]);
+  });
+
   it('remove (ausente no GPTMaker conta como removida); agente removido leva as intenções', async () => {
     await stubWrite('POST', LIST);
     await stubList([
@@ -350,6 +360,36 @@ describe('serviço de intenções', () => {
       form({ fields: [], url: 'https://api.exemplo.com/cotacao' }),
     );
     expect(updated.fields).toEqual([]);
+  });
+
+  it('intenção gerada pela função: tela não edita nem remove; nome não se repete', async () => {
+    const [row] = await db
+      .insert(agentIntention)
+      .values({
+        tenantId,
+        agentId,
+        gptmakerIntentionId: 'int-func',
+        kind: 'WEBHOOK',
+        name: 'Registrar dúvida',
+        whenToUse: 'Quando não souber',
+        httpMethod: 'POST',
+        url: 'https://app.exemplo.com/x',
+        responseMode: 'API',
+        managed: true,
+      })
+      .returning();
+
+    expect(await errorOf(service.update(tenantId, agentId, row!.id, form()))).toBe(
+      'INTENTION_MANAGED_BY_FUNCTION',
+    );
+    expect(await errorOf(service.remove(tenantId, agentId, row!.id))).toBe(
+      'INTENTION_MANAGED_BY_FUNCTION',
+    );
+    expect(
+      await errorOf(service.create(tenantId, agentId, form({ name: 'registrar dúvida' }))),
+    ).toBe('INTENTION_NAME_TAKEN');
+    expect((await service.list(tenantId, agentId))[0]).toMatchObject({ managed: true });
+    expect(await wiremock.unmatched()).toEqual([]);
   });
 
   it('agente de outro tenant responde como inexistente', async () => {

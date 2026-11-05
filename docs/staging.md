@@ -111,6 +111,7 @@ Secrets:
 
 `ENV_FILE`: copie `infra/.env.prod.example` e preencha:
 
+- `APP_CODE=crmthink.homolog-thinkflow` (o código do app no cadastro da plataforma de staging)
 - domínios `thinkflow-staging.crmthink.com.br` e `api.thinkflow-staging.crmthink.com.br`; `API_PUBLIC_URL`, `FRONTEND_ORIGINS` e `PUBLIC_API_BASE_URL` com eles
 - senhas novas do Postgres e do RabbitMQ (`openssl rand -hex 24`), repetidas na `DATABASE_URL` e na `RABBITMQ_URL`
 - GPTMaker do workspace de staging; plataforma de staging; Spaces do bucket de staging
@@ -141,3 +142,19 @@ curl -fsSI https://thinkflow-staging.crmthink.com.br/app | head -n1
 3. Instalar o app no portal de teste e criar um agente. O backoffice → Workspace deve mostrar
    status ativo e nenhum órfão.
 4. Ver logs: `docker compose -f docker-compose.prod.yml --env-file .env logs -f backend-api backend-worker`.
+
+## 9. Funções do agente: descarte dos agentes de teste
+
+Os agentes criados antes das funções (sem configuração de função) são de teste e saem antes do
+lançamento do novo fluxo de criação. O script passa pela mesma remoção da tela: apaga no
+GPTMaker, marca `DELETED`, espelha na assinatura e avisa chatbot e intenções. Agentes com função
+nunca entram na lista, então rodar de novo não afeta agentes reais.
+
+```sh
+# Só lista o que seria removido
+ssh deploy@<IP> 'cd /opt/gptmaker && docker compose -f docker-compose.prod.yml --env-file .env exec backend-api node dist/cli/discard-legacy-agents.js'
+# Remove
+ssh deploy@<IP> 'cd /opt/gptmaker && docker compose -f docker-compose.prod.yml --env-file .env exec backend-api node dist/cli/discard-legacy-agents.js --apply'
+```
+
+Falhas (GPTMaker fora, por exemplo) aparecem por agente e o comando sai com código 1; rode de novo.

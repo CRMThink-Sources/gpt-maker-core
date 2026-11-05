@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Cadastro de intenção
-O sistema MUST permitir que o administrador do app cadastre intenções em um agente: a descrição do que o cliente final quer (quando o agente deve usar a intenção), os campos que o agente deve coletar na conversa (opcionais; cada um com nome, descrição opcional — sem ela o nome orienta o agente —, tipo `STRING` | `URL` | `DATE_TIME` | `DATE` | `NUMBER` | `BOOLEAN` e obrigatoriedade) e a chamada a ser feita (`GET` ou `POST`, URL, cabeçalhos, parâmetros e corpo, com geração automática opcional de parâmetros e corpo pelo agente). A intenção MUST ser criada no GPTMaker (`POST /agent/{id}/intentions`) e registrada localmente; o registro local é a fonte da verdade da tela.
+O sistema MUST permitir que o administrador do app cadastre intenções em um agente: a descrição do que o cliente final quer (quando o agente deve usar a intenção), os campos que o agente deve coletar na conversa (opcionais; cada um com nome, descrição opcional — sem ela o nome orienta o agente —, tipo `STRING` | `URL` | `DATE_TIME` | `DATE` | `NUMBER` | `BOOLEAN` e obrigatoriedade) e a chamada a ser feita (`GET` ou `POST`, URL, cabeçalhos, parâmetros e corpo, com geração automática opcional de parâmetros e corpo pelo agente). A intenção MUST ser criada no GPTMaker (`POST /agent/{id}/intentions`) e registrada localmente; o registro local é a fonte da verdade da tela. O nome da intenção MUST ter no máximo 255 caracteres e o "quando usar", no máximo 512.
 
 #### Scenario: Intenção criada
 - **WHEN** o administrador salva uma intenção válida em um agente do tenant

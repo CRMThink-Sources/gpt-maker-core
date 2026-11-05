@@ -1,11 +1,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import type { CreateAgentInput } from '@gptmaker/contracts';
+import type { AgentProvisionInput } from '@gptmaker/contracts';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { AgentAccessPolicy } from '../../src/modules/agents/agent-access.policy';
@@ -22,11 +22,15 @@ import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runWithContext } from '../../src/shared/context/request-context';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { discardLegacyAgents } from '../../src/cli/legacy-agents';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const {
   agent,
   agentCreationAttempt,
+  agentFunctionConfig,
+  agentFunctionTemplate,
   aiModel,
   paymentsOutbox,
   planAllowedModel,
@@ -60,12 +64,13 @@ describe('serviço de agentes', () => {
       .select({ operation: paymentsOutbox.operation, status: paymentsOutbox.status })
       .from(paymentsOutbox)
       .where(eq(paymentsOutbox.aggregateRef, agentId));
-  const form = (extra: Partial<CreateAgentInput> = {}): CreateAgentInput => ({
+  const form = (extra: Partial<AgentProvisionInput> = {}): AgentProvisionInput => ({
     name: 'Atendente',
     behavior: 'Seja cordial',
     type: 'SUPPORT',
     communicationType: 'NORMAL',
     jobName: 'Loja Exemplo',
+    jobDescription: 'Roupas femininas',
     ...extra,
   });
 
@@ -140,7 +145,7 @@ describe('serviço de agentes', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const client = new GptMakerClient(
@@ -200,6 +205,7 @@ describe('serviço de agentes', () => {
     await wiremock.reset();
     await redis.flushall();
     await db.delete(paymentsOutbox);
+    await db.delete(agentFunctionConfig);
     await db.delete(agent);
     await db.delete(agentCreationAttempt);
     await db.delete(subscriptionState);
@@ -228,7 +234,7 @@ describe('serviço de agentes', () => {
       type: 'SUPPORT',
       communicationType: 'NORMAL',
       jobName: 'Loja Exemplo',
-      jobDescription: '',
+      jobDescription: 'Roupas femininas',
     });
     expect(await wiremock.bodies('PUT', `/v2/agent/${REMOTE_ID}/settings`)).toEqual([
       { prefferModel: 'GPT_5_MINI' },
@@ -494,25 +500,21 @@ describe('serviço de agentes', () => {
     it('dados: envia o perfil completo e não mexe nas settings', async () => {
       await stubEdit();
 
-      const view = await service.update(owner, existing.id, {
-        name: 'Vendedor',
-        behavior: null,
-        type: 'SALE',
-      });
+      const view = await service.update(owner, existing.id, { name: 'Vendedor' });
 
       expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
         {
           name: 'Vendedor',
-          behavior: '',
-          type: 'SALE',
+          behavior: 'Seja cordial',
+          type: 'SUPPORT',
           communicationType: 'NORMAL',
           jobName: 'Loja Exemplo',
           jobDescription: '',
         },
       ]);
       expect((await remoteCalls()).settings).toBe(0);
-      expect(view).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
-      expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: null, type: 'SALE' });
+      expect(view).toMatchObject({ name: 'Vendedor', behavior: 'Seja cordial' });
+      expect(await stored()).toMatchObject({ name: 'Vendedor', behavior: 'Seja cordial' });
       // Nome mudou: o título do item de assinatura acompanha.
       expect(await mirrorsOf(existing.id)).toEqual([
         { operation: 'agent-item.sync', status: 'PENDING' },
@@ -523,17 +525,57 @@ describe('serviço de agentes', () => {
       ]);
     });
 
+    it('perfil da função: comportamento, tipo e settings derivados', async () => {
+      await stubEdit();
+
+      const view = await service.applyFunctionProfile(owner, existing.id, {
+        profile: {
+          behavior: 'Venda com calma',
+          type: 'SALE',
+          communicationType: 'FORMAL',
+          jobName: 'Loja Exemplo',
+          jobSite: null,
+          jobDescription: 'Roupas femininas',
+        },
+        settings: { enabledEmoji: false, limitSubjects: true },
+      });
+
+      expect(await wiremock.bodies('PUT', PROFILE_PATH)).toEqual([
+        {
+          name: 'Atendente',
+          behavior: 'Venda com calma',
+          type: 'SALE',
+          communicationType: 'FORMAL',
+          jobName: 'Loja Exemplo',
+          jobDescription: 'Roupas femininas',
+        },
+      ]);
+      expect(view).toMatchObject({ behavior: 'Venda com calma', type: 'SALE' });
+      expect(view.settings).toMatchObject({ enabledEmoji: false, limitSubjects: true });
+      // Só o nome espelha a assinatura: comportamento não gera espelho nem aviso ao chatbot.
+      expect(await mirrorsOf(existing.id)).toEqual([]);
+      expect(changes).toEqual([]);
+    });
+
+    it('edição direta recusa campo gerenciado pela função', async () => {
+      await stubEdit();
+      const error = await errorOf(service.update(owner, existing.id, { behavior: 'x' } as never));
+      expect(error).toBeInstanceOf(Error);
+      expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+    });
+
     it('settings: mescla com as atuais e reenvia o prefferModel do modelo atual', async () => {
       await stubEdit();
 
       const view = await service.update(owner, existing.id, {
-        settings: { enabledEmoji: false, maxDailyMessages: 100 },
+        settings: { splitMessages: false, maxDailyMessages: 100 },
       });
 
       expect(await wiremock.bodies('PUT', SETTINGS_PATH)).toEqual([
         {
           timezone: 'America/Sao_Paulo',
-          enabledEmoji: false,
+          enabledEmoji: true,
+          splitMessages: false,
           maxDailyMessages: 100,
           prefferModel: 'GPT_5_MINI',
         },
@@ -541,7 +583,8 @@ describe('serviço de agentes', () => {
       expect((await remoteCalls()).profile).toBe(0);
       expect(view.settings).toEqual({
         timezone: 'America/Sao_Paulo',
-        enabledEmoji: false,
+        enabledEmoji: true,
+        splitMessages: false,
         maxDailyMessages: 100,
       });
       expect(await mirrorsOf(existing.id)).toEqual([]);
@@ -584,7 +627,7 @@ describe('serviço de agentes', () => {
       await stubEdit();
       await service.update(owner, existing.id, {
         name: 'Atendente',
-        settings: { enabledEmoji: true },
+        settings: { timezone: 'America/Sao_Paulo' },
       });
       expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
     });
@@ -593,7 +636,7 @@ describe('serviço de agentes', () => {
       await stubEdit({ settings: 500 });
 
       const error = await errorOf(
-        service.update(owner, existing.id, { name: 'Novo', settings: { enabledEmoji: false } }),
+        service.update(owner, existing.id, { name: 'Novo', settings: { splitMessages: true } }),
       );
 
       expect(error).toMatchObject({ code: 'GPTMAKER_UNAVAILABLE' });
@@ -910,6 +953,40 @@ describe('serviço de agentes', () => {
       expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
       expect(await wiremock.count('DELETE', `/v2/agent/${other.gptmakerAgentId}`)).toBe(0);
       expect((await stored(other.id)).status).toBe('ACTIVE');
+    });
+
+    it('descarte dos agentes de teste: só os sem função, idempotente', async () => {
+      await stubDelete();
+      const legacy = await agentWith();
+      const withFunction = await agentWith('ACTIVE', `gm-${randomUUID()}`);
+      const [template] = await db
+        .insert(agentFunctionTemplate)
+        .values({
+          code: `SDR_${randomBytes(3).toString('hex').toUpperCase()}`,
+          name: 'SDR',
+          description: 'Qualifica',
+          draft: {} as never,
+        })
+        .returning();
+      await db.insert(agentFunctionConfig).values({
+        agentId: withFunction.id,
+        tenantId: owner.tenantId,
+        templateId: template!.id,
+      });
+      const lines: string[] = [];
+      const run = (apply: boolean) =>
+        discardLegacyAgents({ db, agents: service, apply, log: (line) => lines.push(line) });
+
+      expect(await run(false)).toEqual({ removed: 0, pending: 1, failed: 0 });
+      expect((await stored(legacy.id)).status).toBe('ACTIVE');
+
+      expect(await run(true)).toEqual({ removed: 1, pending: 0, failed: 0 });
+      expect((await stored(legacy.id)).status).toBe('DELETED');
+      expect((await stored(withFunction.id)).status).toBe('ACTIVE');
+      expect(changes).toEqual([{ agentId: legacy.id, tenantId: owner.tenantId, kind: 'removed' }]);
+
+      expect(await run(true)).toEqual({ removed: 0, pending: 0, failed: 0 });
+      expect(await wiremock.count('DELETE', DELETE_PATH)).toBe(1);
     });
   });
 

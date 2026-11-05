@@ -4,7 +4,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { LedgerService } from '../../src/modules/billing/ledger.service';
@@ -14,6 +14,7 @@ import { ReconciliationService } from '../../src/modules/reconciliation/reconcil
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const {
   agent,
@@ -83,7 +84,7 @@ describe('reconciliação diária', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     ledger = new LedgerService(db, redis);
@@ -231,6 +232,56 @@ describe('reconciliação diária', () => {
     const retried = await service.retryPending();
     expect(retried.find((o) => o.agentId === row.id)).toMatchObject({ real: 8, posted: -8 });
     expect(await redis.smembers('reconciliation:pending')).toEqual([]);
+  });
+
+  it('agente removido que sumiu do GPTMaker (400): sai da fila sem retentar para sempre', async () => {
+    await db
+      .update(agent)
+      .set({ status: 'DELETED', deletedAt: new Date() })
+      .where(eq(agent.id, row.id));
+    spent.set(
+      row.gptmakerAgentId,
+      new GptMakerError('VALIDATION', 'agent.credits-spent', 'HTTP 400', { status: 400 }),
+    );
+    const outcomes = await service.reconcileDays([DAY]);
+    expect(outcomes.find((o) => o.agentId === row.id)).toBeUndefined();
+    expect(await redis.smembers('reconciliation:pending')).not.toContain(`${row.id}|${DAY}`);
+  });
+
+  it('pendência que não para de falhar sai da fila 14 dias depois da primeira falha', async () => {
+    spent.set(row.gptmakerAgentId, new GptMakerError('UNAVAILABLE', 'agent.credits-spent', 'fora'));
+    await service.reconcileDays([DAY]);
+    expect(await redis.smembers('reconciliation:pending')).toContain(`${row.id}|${DAY}`);
+    const fifteenDaysAgo = Date.now() - 15 * 86_400_000;
+    await redis.hset('reconciliation:pending:since', `${row.id}|${DAY}`, String(fifteenDaysAgo));
+    await service.retryPending();
+    expect(await redis.smembers('reconciliation:pending')).toEqual([]);
+    expect(await redis.hlen('reconciliation:pending:since')).toBe(0);
+  });
+
+  it('pendência antiga (como a deixada antes da correção) é limpa na retentativa', async () => {
+    await db
+      .update(agent)
+      .set({ status: 'DELETED', deletedAt: new Date() })
+      .where(eq(agent.id, row.id));
+    await redis.sadd('reconciliation:pending', `${row.id}|${DAY}`);
+    spent.set(
+      row.gptmakerAgentId,
+      new GptMakerError('VALIDATION', 'agent.credits-spent', 'HTTP 400', { status: 400 }),
+    );
+    await service.retryPending();
+    expect(await redis.smembers('reconciliation:pending')).toEqual([]);
+  });
+
+  it('agente ativo com 400 continua pendente (400 é genérico no GPTMaker)', async () => {
+    spent.set(
+      row.gptmakerAgentId,
+      new GptMakerError('VALIDATION', 'agent.credits-spent', 'HTTP 400', { status: 400 }),
+    );
+    await service.reconcileDays([DAY]);
+    expect((await redis.smembers('reconciliation:pending')).some((e) => e.startsWith(row.id))).toBe(
+      true,
+    );
   });
 
   describe('revisão pelo operador', () => {

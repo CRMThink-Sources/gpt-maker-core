@@ -1,10 +1,20 @@
-import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Logger,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import type { PlatformEvent } from '@crmthink-sources/platform-sdk';
-import { APP_CODE } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { TenantService } from '../tenancy';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { enrichContext } from '../../shared/context/request-context';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { EXCHANGES } from '../../shared/messaging/topology';
@@ -48,6 +58,7 @@ export class PlatformEventsController {
     private readonly store: PlatformEventStore,
     private readonly tenants: TenantService,
     private readonly amqp: AmqpConnection,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   @Post('events')
@@ -55,7 +66,7 @@ export class PlatformEventsController {
   @UseGuards(PlatformSignatureGuard)
   async receive(@Body() body: PlatformEventDto): Promise<{ received: true; duplicate: boolean }> {
     const event = body as PlatformEvent;
-    if (event.appCode !== APP_CODE) {
+    if (event.appCode !== this.env.APP_CODE) {
       throw new DomainError('APP_CODE_MISMATCH', 'Evento de outro app', HttpStatus.BAD_REQUEST);
     }
     const tenant = await this.tenants.findByInstallationId(event.installationId);

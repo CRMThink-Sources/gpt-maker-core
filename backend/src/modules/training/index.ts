@@ -1,3 +1,9 @@
 // API pública do módulo: outros módulos só importam daqui.
 export { TrainingModule } from './training.module';
-export { hashCallbackToken, TrainingService } from './training.service';
+export { type ManagedTrainingGoneListener, TrainingSyncService } from './training-sync.service';
+export {
+  hashCallbackToken,
+  type ManagedAccess,
+  type TrainingMediaPolicy,
+  TrainingService,
+} from './training.service';

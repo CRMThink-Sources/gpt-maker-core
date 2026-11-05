@@ -1,6 +1,6 @@
 // Só tipos do SDK: a entrada dele usa `node:crypto` e não entra no bundle do navegador.
 import type { components, PlatformErrorBody } from '@crmthink-sources/platform-sdk';
-import { APP_CODE, type ApiError } from '@gptmaker/contracts';
+import type { ApiError } from '@gptmaker/contracts';
 import { bx24Auth } from './bx24';
 
 type PlatformSession = components['schemas']['Session'];
@@ -8,6 +8,8 @@ type PlatformSession = components['schemas']['Session'];
 export interface ClientConfig {
   /** Base do crmthink-platform (`POST /v1/sessions`). */
   platformUrl: string;
+  /** Código do app no cadastro da plataforma, um por ambiente (`aud` do JWT). */
+  appCode: string;
   /** Base da API do app. */
   apiBaseUrl: string;
   /** Chave publicável do Stripe (`pk_test_…`/`pk_live_…`) para o checkout embutido; sem ela, a venda fica indisponível. */
@@ -86,7 +88,7 @@ export class PlatformSessionClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        appCode: APP_CODE,
+        appCode: this.config.appCode,
         accessToken: auth.access_token,
         domain: auth.domain,
         memberId: auth.member_id,

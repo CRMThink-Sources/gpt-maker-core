@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { TemplateContext } from '@gptmaker/contracts';
+import { dialogChatId, isUserList, type TemplateContext } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { fieldCipher } from '../../shared/crypto/field-cipher';
@@ -12,8 +12,14 @@ import {
   tenant,
 } from '../../shared/database/schema/index';
 import { REDIS } from '../../shared/redis/redis.module';
+import { isTestDialog } from '../agent-test';
 import { PendingHandoffs } from '../channel';
-import { ActionError, type ExecutableAction, TriggerActionExecutor } from '../triggers';
+import {
+  ActionError,
+  ActionRotation,
+  type ExecutableAction,
+  TriggerActionExecutor,
+} from '../triggers';
 
 /** Repetição da mesma chamada (GPTMaker refazendo após demora) devolve o resultado guardado. */
 const DEDUPE_SECONDS = 5 * 60;
@@ -27,6 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
   TIMELINE_COMMENT: 'comentário registrado no CRM',
   CREATE_TASK: 'tarefa criada',
   START_BIZPROC: 'processo iniciado',
+  CREATE_SPA_ITEM: 'item criado no processo inteligente do CRM',
   TRANSFER_TO_HUMAN: 'transferência para um atendente agendada',
 };
 
@@ -58,6 +65,20 @@ export function dialogFromChat(chat: string, tenantId: string): string | null {
   return at >= 0 ? chat.slice(at + marker.length) || null : null;
 }
 
+/** Resposta na conversa de teste: nada é executado no portal (spec agent-test-chat). */
+export function simulated(actions: Array<{ type: string }>): IntentionReply {
+  const labels = actions.map((action) => ACTION_LABELS[action.type] ?? action.type);
+  return {
+    ok: true,
+    message: `Conversa de teste: as ações não foram executadas no CRM. Seriam: ${labels.join('; ')}. Responda ao cliente como se tivessem sido feitas.`,
+    results: actions.map((action) => ({
+      type: action.type,
+      ok: true,
+      result: { simulated: true },
+    })),
+  };
+}
+
 /** Resumo para o agente: o que foi feito e o que falhou, sem detalhe técnico. */
 export function summarize(results: IntentionReply['results']): string {
   const done = results.filter((r) => r.ok).map((r) => ACTION_LABELS[r.type] ?? r.type);
@@ -85,6 +106,7 @@ export class IntentionRunner {
   constructor(
     private readonly executor: TriggerActionExecutor,
     private readonly handoffs: PendingHandoffs,
+    private readonly rotation: ActionRotation,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
@@ -161,6 +183,14 @@ export class IntentionRunner {
       });
     }
 
+    if (isTestDialog(dialogId)) {
+      this.logger.log(
+        { intentionId: intention.id },
+        'intenção em conversa de teste: ações simuladas',
+      );
+      return record('SUCCESS', simulated(intention.actions));
+    }
+
     // A versão da intenção entra na chave: depois de editar, a mesma chamada roda de novo.
     const dedupeKey = `intention:run:${createHash('sha256')
       .update(
@@ -186,7 +216,7 @@ export class IntentionRunner {
       message: { text: null, role: null },
       agent: { id: intention.agentId, name: row.agentName },
       event: { name: 'intention', date: new Date(started).toISOString() },
-      dialog: { id: dialogId },
+      dialog: { id: dialogId, chatId: dialogChatId(dialogId) },
       interaction: { id: null, protocol: null },
       payload: body,
       fields,
@@ -197,10 +227,16 @@ export class IntentionRunner {
         if (action.type === 'TRANSFER_TO_HUMAN') {
           // Agendada: o canal transfere depois de entregar a resposta que o agente está montando.
           if (!dialogId) throw new Error('conversa do Bitrix não identificada na chamada');
-          const userId = (action.config as { userId?: number }).userId;
+          const config = action.config as { userId?: number | number[]; lineId?: number };
+          // Vários usuários: o próximo da lista (D15); a deduplicação acima não deixa girar duas vezes.
+          const userId = isUserList(config.userId)
+            ? await this.rotation.next(`${intention.id}:${index}`, config.userId)
+            : config.userId;
           await this.handoffs.schedule(intention.tenantId, dialogId, {
             agentId: intention.agentId,
+            gptmakerChatId: chat,
             ...(userId ? { userId } : {}),
+            ...(config.lineId ? { lineId: config.lineId } : {}),
           });
           results.push({ type: action.type, ok: true, result: { scheduled: true } });
           continue;

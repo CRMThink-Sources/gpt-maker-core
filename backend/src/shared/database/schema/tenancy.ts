@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, timestamptz, updatedAt } from '../columns';
 
 export const tenantStatus = pgEnum('tenant_status', [
@@ -20,6 +20,8 @@ export const tenant = pgTable(
     /** Código curto e estável do tenant (suporte e backoffice; antes prefixava o nome dos agentes no GPTMaker). */
     tenantCode: text('tenant_code').notNull(),
     status: tenantStatus('status').notNull().default('ACTIVE'),
+    /** Parceiro: pode assumir o controle do comportamento dos agentes (spec admin-backoffice). */
+    isPartner: boolean('is_partner').notNull().default(false),
     suspendedReason: text('suspended_reason'),
     installedAt: timestamptz('installed_at').notNull().defaultNow(),
     uninstalledAt: timestamptz('uninstalled_at'),

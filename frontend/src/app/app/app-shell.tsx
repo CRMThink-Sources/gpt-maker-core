@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import {
   BellIcon,
-  BoltIcon,
   BotIcon,
   CloseIcon,
+  DatabaseIcon,
   MenuIcon,
   UsersIcon,
   WalletIcon,
@@ -23,6 +23,8 @@ interface NavItem {
   /** Prefixos de rota que marcam o item como atual. */
   match?: (path: string) => boolean;
   adminOnly?: boolean;
+  /** Só aparece com as ferramentas do CRM ligadas no ambiente (`features.crmTools` da sessão). */
+  requiresCrm?: boolean;
 }
 
 const NAV: Array<{ title?: string; items: NavItem[] }> = [
@@ -34,8 +36,14 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         href: '/app',
         match: (path) => path === '/app' || path.startsWith('/app/agents'),
       },
-      // Treinamentos ficam em cada agente (aba). Seções seguintes (10 e 12) entram quando existirem.
-      { label: 'Gatilhos', icon: BoltIcon },
+      {
+        label: 'CRM para o agente',
+        icon: DatabaseIcon,
+        href: '/app/crm',
+        match: (path) => path.startsWith('/app/crm'),
+        requiresCrm: true,
+      },
+      // Treinamentos, intenções e gatilhos ficam em cada agente (abas).
       {
         label: 'Créditos e plano',
         icon: WalletIcon,
@@ -52,6 +60,13 @@ const NAV: Array<{ title?: string; items: NavItem[] }> = [
         icon: UsersIcon,
         href: '/app/permissions',
         match: (path) => path.startsWith('/app/permissions'),
+        adminOnly: true,
+      },
+      {
+        label: 'Chave de IA',
+        icon: DatabaseIcon,
+        href: '/app/ai-key',
+        match: (path) => path.startsWith('/app/ai-key'),
         adminOnly: true,
       },
       {
@@ -75,6 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { session } = useAppSession();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const crmEnabled = session.features?.crmTools === true;
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -94,7 +110,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
         {NAV.map((group, index) => {
-          const items = group.items.filter((item) => !item.adminOnly || session.user.isAdmin);
+          const items = group.items.filter(
+            (item) =>
+              (!item.adminOnly || session.user.isAdmin) && (!item.requiresCrm || crmEnabled),
+          );
           if (items.length === 0) return null;
           return (
             <div key={group.title ?? index}>

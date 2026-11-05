@@ -68,6 +68,10 @@ export const ACTION_TYPES: Record<AnyActionType, { label: string; description: s
     label: 'Chamar URL externa',
     description: 'Envia o evento para outro sistema (POST assinado).',
   },
+  CREATE_SPA_ITEM: {
+    label: 'Criar item de SPA',
+    description: 'Novo item num processo inteligente, com os campos escolhidos pelo cliente.',
+  },
   TRANSFER_TO_HUMAN: {
     label: 'Transferir para atendente',
     description: 'Depois da resposta do agente, a conversa passa para uma pessoa da equipe.',
@@ -109,6 +113,11 @@ export function newAction(type: AnyActionType): AnyActionInput {
       return { type, config: { templateId: 0, documentType: 'DEAL' } };
     case 'OUTBOUND_WEBHOOK':
       return { type, config: { url: '' } };
+    case 'CREATE_SPA_ITEM':
+      return {
+        type,
+        config: { entityTypeId: 0, title: 'Chamado de {{contact.name}}', fields: {} },
+      };
     case 'TRANSFER_TO_HUMAN':
       return { type, config: { target: 'OPERATOR' } };
   }
@@ -131,6 +140,7 @@ export function resultSummary(execution: TriggerExecutionView): string | null {
   if (result.commentId)
     return `Comentário em ${String(result.entityType)} #${String(result.entityId)}`;
   if (result.taskId) return `Tarefa #${String(result.taskId)}`;
+  if (result.itemId) return `Item de SPA #${String(result.itemId)}`;
   if (result.workflowId) return `Processo ${String(result.workflowId)}`;
   if (result.status) return `HTTP ${String(result.status)}`;
   return null;

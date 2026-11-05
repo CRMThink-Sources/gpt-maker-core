@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
 import { BitrixError } from '../../src/modules/bitrix/bitrix.errors';
@@ -19,6 +19,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { EXCHANGES, USAGE_EVENTS } from '../../src/shared/messaging/topology';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, messageLog, tenant } = schema;
 const SEND = '/rest/imbot.v2.Chat.Message.send.json';
@@ -93,7 +94,7 @@ describe('publicação da resposta no Bitrix', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const bitrix = new BitrixClient(

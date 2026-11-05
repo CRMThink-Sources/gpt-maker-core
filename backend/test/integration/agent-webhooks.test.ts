@@ -5,7 +5,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../src/config/env';
 import { hashWebhookToken, webhookUrlsFor } from '../../src/modules/agents/agent.service';
@@ -21,6 +21,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { EXCHANGES } from '../../src/shared/messaging/topology';
 import { WireMock } from '../support/wiremock';
+import { testPool } from '../support/postgres';
 
 const { agent, agentEvent, aiModel, tenant } = schema;
 const BASE = 'https://api.exemplo.com';
@@ -71,7 +72,7 @@ describe('webhooks dos agentes', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const gptmaker = new GptMakerClient(
@@ -150,6 +151,18 @@ describe('webhooks dos agentes', () => {
           },
         },
       ]);
+    });
+
+    it('conversa de teste do app: grava o evento, mas não dispara gatilhos', async () => {
+      await newAgent('tok-1');
+      const dialog = 't-0a1b2c3d4e';
+      const outcome = await intake.receive('onFinishInteraction', 'tok-1', {
+        contextId: `public-api-GM-${tenantId}:${dialog}`,
+      });
+      expect(outcome).toMatchObject({ kind: 'accepted' });
+      const [stored] = await db.select().from(agentEvent);
+      expect(stored).toMatchObject({ event: 'onFinishInteraction', dialogId: dialog });
+      expect(published).toEqual([]);
     });
 
     it('token inválido ou ausente: nada gravado', async () => {

@@ -128,3 +128,14 @@ describe('intenções: validação', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('limite da descrição de campo no GPTMaker', () => {
+  it('255 passa, 256 não', () => {
+    const withDescription = (description: string) =>
+      messages({ ...base, fields: [{ ...base.fields[0]!, description }] });
+    expect(withDescription('a'.repeat(255))).toEqual([]);
+    expect(withDescription('a'.repeat(256))).toEqual([
+      'fields.0.description: use até 255 caracteres na descrição (limite do GPTMaker)',
+    ]);
+  });
+});

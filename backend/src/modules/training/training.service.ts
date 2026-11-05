@@ -4,8 +4,6 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   createTrainingSchema,
   type CreateTrainingInput,
-  TRAINING_DOCUMENT_MAX_BYTES,
-  TRAINING_DOCUMENT_TYPES,
   type TrainingInterval,
   type TrainingUsage,
   type TrainingView,
@@ -36,10 +34,18 @@ import { listRemoteTrainings, matcherFor, sameUrl, type Training } from './train
 
 export type { Training };
 
-/** Arquivo recebido no upload (já em memória, dentro do limite de tamanho). */
-export interface UploadedDocument {
-  originalName: string;
-  buffer: Buffer;
+/**
+ * Que treinamentos o cliente cria à mão num agente (spec agent-training: com função, texto só pelo
+ * formulário; site e vídeo só no modo avançado). Registrada pelo módulo das funções, que não pode
+ * ser importado daqui (ele depende deste). Devolve o motivo da recusa, ou `null`.
+ */
+export interface TrainingMediaPolicy {
+  refusal(agentId: string, type: 'TEXT' | 'WEBSITE' | 'VIDEO'): Promise<string | null>;
+}
+
+/** Acesso da publicação da função: só ela cria, edita e remove os treinamentos gerados. */
+export interface ManagedAccess {
+  managed?: boolean;
 }
 
 // Criação, listagem para achar o id e o eventual desfazer, com retentativas do GPTMaker.
@@ -58,6 +64,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class TrainingService {
   private readonly logger = new Logger(TrainingService.name);
   private readonly lock: DistributedLock;
+  private mediaPolicy: TrainingMediaPolicy | null = null;
 
   constructor(
     private readonly agents: AgentRepository,
@@ -68,6 +75,10 @@ export class TrainingService {
     @Inject(ENV) private readonly env: Env,
   ) {
     this.lock = new DistributedLock(redis);
+  }
+
+  registerMediaPolicy(policy: TrainingMediaPolicy): void {
+    this.mediaPolicy = policy;
   }
 
   async list(tenantId: string, agentId: string): Promise<TrainingView[]> {
@@ -104,17 +115,32 @@ export class TrainingService {
     };
   }
 
-  /** Texto, site ou vídeo. */
-  async create(tenantId: string, agentId: string, raw: CreateTrainingInput): Promise<TrainingView> {
+  /** Texto, site ou vídeo; com `managed`, texto gerado pela função do agente. */
+  async create(
+    tenantId: string,
+    agentId: string,
+    raw: CreateTrainingInput,
+    access: ManagedAccess = {},
+  ): Promise<TrainingView> {
     const input = createTrainingSchema.parse(raw);
     const owner = await this.trainableAgent(tenantId, agentId);
+    const refusal =
+      access.managed || !this.mediaPolicy
+        ? null
+        : await this.mediaPolicy.refusal(owner.id, input.type);
+    if (refusal) throw new DomainError(refusal, REFUSALS[refusal] ?? refusal, HttpStatus.CONFLICT);
     const callback = this.newCallback();
 
     switch (input.type) {
       case 'TEXT':
         return this.createRemoteAndLocal(
           owner,
-          { type: 'TEXT', content: input.text, callbackTokenHash: callback.hash },
+          {
+            type: 'TEXT',
+            content: input.text,
+            callbackTokenHash: callback.hash,
+            managed: access.managed === true,
+          },
           { type: 'TEXT', text: input.text, callbackUrl: callback.url },
           (remote) => remote.text?.trim() === input.text,
         );
@@ -148,57 +174,6 @@ export class TrainingService {
   }
 
   /**
-   * Documento: valida tipo e conteúdo, grava no storage com chave aleatória e entrega ao
-   * GPTMaker a URL pré-assinada. Recusado antes de qualquer chamada externa se inválido.
-   */
-  async createDocument(
-    tenantId: string,
-    agentId: string,
-    file: UploadedDocument,
-  ): Promise<TrainingView> {
-    const owner = await this.trainableAgent(tenantId, agentId);
-    const name = documentName(file.originalName);
-    const mimetype = validateDocument(name, file.buffer);
-    // Antes do upload, para não gravar no storage o que será recusado; reconfere no lock.
-    await this.assertWithinLimits(tenantId, file.buffer.length);
-    const key = this.storage.newTrainingKey(tenantId, name);
-    await this.storage.put({
-      key,
-      body: file.buffer,
-      contentType: mimetype,
-      contentLength: file.buffer.length,
-      fileName: name,
-    });
-
-    try {
-      const url = await this.storage.presignedUrl(key);
-      const callback = this.newCallback();
-      return await this.createRemoteAndLocal(
-        owner,
-        {
-          type: 'DOCUMENT',
-          documentKey: key,
-          documentName: name,
-          documentMimetype: mimetype,
-          documentSizeBytes: file.buffer.length,
-          callbackTokenHash: callback.hash,
-        },
-        {
-          type: 'DOCUMENT',
-          documentUrl: url,
-          documentName: name,
-          documentMimetype: mimetype,
-          callbackUrl: callback.url,
-        },
-        (remote) => remote.documentUrl === url || remote.documentName === name,
-      );
-    } catch (error) {
-      await this.discardObject(key);
-      throw error;
-    }
-  }
-
-  /**
    * Edita o texto de um treinamento `TEXT` (o GPTMaker só edita esse tipo). O GPTMaker é
    * atualizado antes do registro local; texto igual ao atual não chama nada.
    */
@@ -207,11 +182,13 @@ export class TrainingService {
     agentId: string,
     id: string,
     raw: UpdateTrainingInput,
+    access: ManagedAccess = {},
   ): Promise<TrainingView> {
     const input = updateTrainingSchema.parse(raw);
     const owner = await this.trainableAgent(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
+      assertAccess(row, access);
       if (row.type !== 'TEXT') {
         throw new DomainError(
           'TRAINING_NOT_EDITABLE',
@@ -245,10 +222,16 @@ export class TrainingService {
    * Remove no GPTMaker e marca o registro local como removido; o documento sai do storage. Já
    * ausente no GPTMaker (ou agente fora de sincronia, sem treinamentos lá) só remove aqui.
    */
-  async remove(tenantId: string, agentId: string, id: string): Promise<void> {
+  async remove(
+    tenantId: string,
+    agentId: string,
+    id: string,
+    access: ManagedAccess = {},
+  ): Promise<void> {
     const owner = await this.agents.getById(tenantId, agentId);
     await this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
+      assertAccess(row, access);
       if (owner.status !== 'OUT_OF_SYNC') {
         const remoteId = await this.remoteIdOf(owner, row);
         if (remoteId) {
@@ -675,75 +658,29 @@ function truncatedJson(payload: unknown): string {
   return json.length > 2000 ? `${json.slice(0, 2000)}…` : json;
 }
 
-/** Nome sem caminho e sem caracteres de controle; o multer entrega em latin1. */
-function documentName(original: string): string {
-  const utf8 = Buffer.from(original, 'latin1').toString('utf8');
-  const name = (utf8.includes('�') ? original : utf8)
-    .split(/[\\/]/)
-    .pop()!
-    // eslint-disable-next-line no-control-regex -- remove justamente os caracteres de controle
-    .replace(/[\u0000-\u001f\u007f]/g, '')
-    .trim()
-    .slice(0, 200);
-  return name || 'documento';
-}
-
-const MAGIC: Partial<Record<keyof typeof TRAINING_DOCUMENT_TYPES, number[]>> = {
-  pdf: [0x25, 0x50, 0x44, 0x46], // %PDF
-  docx: [0x50, 0x4b, 0x03, 0x04], // zip
-  xlsx: [0x50, 0x4b, 0x03, 0x04],
-  pptx: [0x50, 0x4b, 0x03, 0x04],
-  doc: [0xd0, 0xcf, 0x11, 0xe0], // OLE
+const REFUSALS: Record<string, string> = {
+  TRAINING_FORM_ONLY:
+    'A base de conhecimento deste agente é feita pelos itens do formulário da função',
+  TRAINING_ADVANCED_ONLY: 'Treinamento por site ou vídeo só no modo avançado do agente',
 };
 
-/**
- * Tipo pela extensão, conferido pelo início do arquivo (o MIME enviado pelo navegador não é
- * confiável). Textos precisam ser UTF-8 sem bytes nulos.
- */
-function validateDocument(name: string, buffer: Buffer): string {
-  const extension = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() as
-    keyof typeof TRAINING_DOCUMENT_TYPES | undefined;
-  const mimetype = extension ? TRAINING_DOCUMENT_TYPES[extension] : undefined;
-  if (!extension || !mimetype) {
+/** Treinamento gerado pela função só muda pela publicação dela (spec agent-training). */
+function assertAccess(row: Training, access: ManagedAccess): void {
+  if (row.managed && access.managed !== true) {
     throw new DomainError(
-      'TRAINING_FILE_TYPE',
-      `Formato não aceito. Envie ${Object.keys(TRAINING_DOCUMENT_TYPES).join(', ')}`,
-      HttpStatus.UNPROCESSABLE_ENTITY,
-      { accepted: Object.keys(TRAINING_DOCUMENT_TYPES) },
+      'TRAINING_MANAGED_BY_FUNCTION',
+      'Este treinamento vem do formulário da função do agente; altere o item por lá',
+      HttpStatus.CONFLICT,
     );
   }
-  if (buffer.length === 0) {
-    throw new DomainError('TRAINING_FILE_EMPTY', 'O arquivo está vazio');
-  }
-  if (buffer.length > TRAINING_DOCUMENT_MAX_BYTES) throw fileTooLarge();
-
-  const magic = MAGIC[extension];
-  const textual = mimetype.startsWith('text/');
-  const valid = magic
-    ? magic.every((byte, index) => buffer[index] === byte)
-    : textual && !buffer.includes(0) && !buffer.toString('utf8').includes('�');
-  if (!valid) {
-    throw new DomainError(
-      'TRAINING_FILE_TYPE',
-      'O conteúdo do arquivo não corresponde à extensão. Confira se o arquivo não está corrompido',
-    );
-  }
-  return mimetype;
 }
-
-export const fileTooLarge = () =>
-  new DomainError(
-    'TRAINING_FILE_TOO_LARGE',
-    `O arquivo passa do limite de ${TRAINING_DOCUMENT_MAX_BYTES / 1024 / 1024} MB`,
-    HttpStatus.PAYLOAD_TOO_LARGE,
-    { maxBytes: TRAINING_DOCUMENT_MAX_BYTES },
-  );
 
 function toView(row: Training): TrainingView {
   return {
     id: row.id,
     type: row.type,
     status: row.status,
+    managed: row.managed,
     text: row.content,
     url: row.url,
     trainingSubPages: row.trainingSubPages,

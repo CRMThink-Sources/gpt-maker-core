@@ -11,8 +11,12 @@ export interface TemplateContext {
   message: { text: string | null; role: string | null };
   agent: { id: string; name: string };
   event: { name: string; date: string };
-  /** Diálogo do Bitrix (ex.: `chat9498`), quando o evento traz o `contextId` do app. */
-  dialog: { id: string | null };
+  /**
+   * Diálogo do Bitrix (ex.: `chat9498`), quando o evento traz o `contextId` do app; `chatId` é o
+   * número do chat (`9498`) e `sessionId` a sessão atual da Linha Aberta (lida no Bitrix, só
+   * quando uma ação cita).
+   */
+  dialog: { id: string | null; chatId?: string | null; sessionId?: string | null };
   /** Atendimento no GPTMaker (`onFirstInteraction`, `onStartInteraction`...). */
   interaction: { id: string | null; protocol: string | null };
   /** Corpo do webhook como chegou, para campos que não estão acima. */
@@ -31,7 +35,9 @@ export const TEMPLATE_VARIABLES = [
   { path: 'agent.id', description: 'Id do agente no app' },
   { path: 'event.name', description: 'Evento que disparou o gatilho' },
   { path: 'event.date', description: 'Data e hora do evento (ISO 8601)' },
-  { path: 'dialog.id', description: 'Diálogo da Linha Aberta no Bitrix24' },
+  { path: 'dialog.id', description: 'Diálogo da Linha Aberta no Bitrix24 (chat9498)' },
+  { path: 'dialog.chatId', description: 'Número do chat da Linha Aberta, sem "chat" (9498)' },
+  { path: 'dialog.sessionId', description: 'Sessão atual da Linha Aberta no Bitrix24' },
   { path: 'interaction.id', description: 'Atendimento no GPTMaker' },
   { path: 'interaction.protocol', description: 'Protocolo do atendimento no GPTMaker' },
 ] as const;
@@ -129,4 +135,16 @@ export function templateFieldNames(template: string): string[] {
     if (FIELD_PATH.test(trimmed)) names.push(trimmed.slice('fields.'.length));
   }
   return [...new Set(names)];
+}
+
+/** Número do chat de um diálogo da Linha Aberta (`chat9498` ⇒ `9498`). */
+export function dialogChatId(dialogId: string | null): string | null {
+  return /^chat(\d+)$/.exec(dialogId ?? '')?.[1] ?? null;
+}
+
+/** Algum dos templates cita a variável (ex.: `dialog.sessionId`, que custa uma chamada ao Bitrix). */
+export function templatesUse(templates: readonly string[], path: string): boolean {
+  return templates.some((template) =>
+    [...template.matchAll(PLACEHOLDER)].some(([, found]) => (found ?? '').trim() === path),
+  );
 }

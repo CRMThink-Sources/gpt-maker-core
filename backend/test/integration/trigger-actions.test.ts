@@ -2,6 +2,7 @@ import type { TemplateContext } from '@gptmaker/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
 import { ActionError } from '../../src/modules/triggers/actions/action-error';
+import type { ActionRotation } from '../../src/modules/triggers/actions/action-rotation';
 import {
   type ActionContext,
   type ExecutableAction,
@@ -65,7 +66,16 @@ describe('ações dos gatilhos', () => {
       },
       { timeoutMs: 5000, maxAttempts: 1, acquire: async () => {} },
     );
-    executor = new TriggerActionExecutor(bitrix);
+    // Rodízio em memória: a contagem no Redis tem teste próprio (action-rotation.test.ts).
+    const turns = new Map<string, number>();
+    const rotation = {
+      next: async (actionId: string, ids: readonly number[]) => {
+        const turn = turns.get(actionId) ?? 0;
+        turns.set(actionId, turn + 1);
+        return ids[turn % ids.length]!;
+      },
+    } as ActionRotation;
+    executor = new TriggerActionExecutor(bitrix, rotation);
   }, 180_000);
 
   beforeEach(async () => {
@@ -206,6 +216,20 @@ describe('ações dos gatilhos', () => {
     expect(deadline - before).toBeGreaterThanOrEqual(2 * 86_400_000 - 1000);
   });
 
+  it('tarefa com vários responsáveis: um por vez, em rodízio (D15)', async () => {
+    await stub('tasks.task.add', { task: { id: 903 } });
+    const task = action({
+      type: 'CREATE_TASK',
+      config: { title: 'x', responsibleId: [4, 6] },
+    } as Omit<ExecutableAction, 'id' | 'secret'>);
+    await executor.execute({ ...task, id: 'rodizio' }, context({ dialogId: null }));
+    await executor.execute({ ...task, id: 'rodizio' }, context({ dialogId: null }));
+    expect((await bodies('tasks.task.add')).map((body) => body.fields)).toMatchObject([
+      { RESPONSIBLE_ID: 4 },
+      { RESPONSIBLE_ID: 6 },
+    ]);
+  });
+
   it('tarefa sem diálogo: sem vínculo, sem consultar o CRM', async () => {
     await stub('tasks.task.add', { task: { id: 902 } });
     await executor.execute(
@@ -292,5 +316,112 @@ describe('ações dos gatilhos', () => {
     expect(calls[0]!.headers['X-GPTMaker-Signature']).toBe(
       signPayload('seg', calls[0]!.body, 1_700_000_000),
     );
+  });
+  describe('item de SPA', () => {
+    const fieldsMeta = {
+      fields: {
+        title: { type: 'string' },
+        ufCrm136_1: { type: 'string' },
+        ufCrm136_2: {
+          type: 'enumeration',
+          items: [
+            { ID: '101', VALUE: 'LOW' },
+            { ID: '102', VALUE: 'Normal' },
+            { ID: '103', VALUE: 'Alta' },
+          ],
+        },
+        ufCrm136_3: { type: 'string' },
+        ufCrm136_4: { type: 'string' },
+        ufCrm136_5: { type: 'string' },
+      },
+    };
+    const spa = (overrides: Record<string, unknown> = {}) =>
+      action({
+        type: 'CREATE_SPA_ITEM',
+        config: {
+          entityTypeId: 1204,
+          categoryId: 180,
+          stageId: 'DT1204_180:NEW',
+          title: 'Chamado de {{contact.name}}',
+          fields: {
+            ufCrm136_1: 'CHAT',
+            ufCrm136_2: '{{fields.prioridade}}',
+            ufCrm136_3: '{{dialog.chatId}}',
+            ufCrm136_4: '{{dialog.id}}',
+            ufCrm136_5: '{{dialog.sessionId}}',
+          },
+          lists: { ufCrm136_2: { HIGH: 103 } },
+          ...overrides,
+        },
+      });
+    const spaContext = (prioridade: string) =>
+      context({
+        template: {
+          ...template,
+          dialog: { id: 'chat9498', chatId: '9498' },
+          fields: { prioridade },
+        },
+      });
+
+    it('cria no funil e etapa, lista pela ligação do formulário, chat e sessão', async () => {
+      await stub('imopenlines.dialog.get', {
+        dialog_id: 'chat9498',
+        entity_data_1: 'Y|DEAL|39808|N|N|2008|1793305311|0|0|0',
+        entity_data_2: 'LEAD|0|COMPANY|0|CONTACT|0|DEAL|39808',
+      });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 55 } });
+      await expect(executor.execute(spa(), spaContext('HIGH'))).resolves.toEqual({
+        itemId: 55,
+        entityTypeId: 1204,
+      });
+      expect(await bodies('crm.item.fields')).toMatchObject([{ entityTypeId: 1204 }]);
+      expect(await bodies('crm.item.add')).toMatchObject([
+        {
+          entityTypeId: 1204,
+          fields: {
+            title: 'Chamado de Maria',
+            categoryId: 180,
+            stageId: 'DT1204_180:NEW',
+            ufCrm136_1: 'CHAT',
+            ufCrm136_2: 103,
+            ufCrm136_3: '9498',
+            ufCrm136_4: 'chat9498',
+            ufCrm136_5: '2008',
+          },
+        },
+      ]);
+    });
+
+    it('lista pelo valor do item, sem diferenciar maiúsculas; sem sessão citada, não lê o diálogo', async () => {
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 56 } });
+      const fields = { ...(spa().config as { fields: Record<string, string> }).fields };
+      delete fields.ufCrm136_5;
+      await executor.execute(spa({ fields, lists: undefined }), spaContext('normal'));
+      expect((await bodies('crm.item.add'))[0]!.fields).toMatchObject({ ufCrm136_2: 102 });
+      expect(await bodies('imopenlines.dialog.get')).toEqual([]);
+    });
+
+    it('valor fora da lista: cria sem o campo e avisa', async () => {
+      await stub('imopenlines.dialog.get', { entity_data_1: 'Y|DEAL|1|N|N|2008|0|0|0|0' });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', { item: { id: 57 } });
+      await expect(executor.execute(spa(), spaContext('URGENTE'))).resolves.toEqual({
+        itemId: 57,
+        entityTypeId: 1204,
+        warnings: ['"URGENTE" não é um item da lista ufCrm136_2; o campo ficou vazio'],
+      });
+      expect((await bodies('crm.item.add'))[0]!.fields).not.toHaveProperty('ufCrm136_2');
+    });
+
+    it('recusa do Bitrix é definitiva', async () => {
+      await stub('imopenlines.dialog.get', { entity_data_1: '' });
+      await stub('crm.item.fields', fieldsMeta);
+      await stub('crm.item.add', 'NOT_FOUND', 400);
+      const error = await executor.execute(spa(), spaContext('HIGH')).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ActionError);
+      expect((error as ActionError).transient).toBe(false);
+    });
   });
 });

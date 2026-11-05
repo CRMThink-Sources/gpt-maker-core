@@ -8,6 +8,7 @@ const base = {
   DATA_ENCRYPTION_KEY: 'a2V5',
   GPTMAKER_API_TOKEN: 'token',
   GPTMAKER_WORKSPACE_ID: 'ws',
+  APP_CODE: 'crmthink.thinkflow',
   PLATFORM_URL: 'https://platform.exemplo.com.br',
   PLATFORM_API_KEY: 'key',
   PLATFORM_WEBHOOK_SECRETS: 's1',
@@ -27,6 +28,65 @@ describe('loadEnv', () => {
   it('converte tipos', () => {
     const env = loadEnv({ ...base, APP_ROLE: 'worker', PORT: '8080', LOG_PRETTY: 'true' });
     expect(env).toMatchObject({ APP_ROLE: 'worker', PORT: 8080, LOG_PRETTY: true });
+  });
+
+  it('ferramentas do CRM desligadas por padrão', () => {
+    expect(loadEnv(base)).toMatchObject({
+      CRM_TOOLS_ENABLED: false,
+      CRM_TOOLS_RATE_PER_MINUTE: 60,
+    });
+    expect(
+      loadEnv({ ...base, CRM_TOOLS_ENABLED: 'true', CRM_TOOLS_RATE_PER_MINUTE: '30' }),
+    ).toMatchObject({ CRM_TOOLS_ENABLED: true, CRM_TOOLS_RATE_PER_MINUTE: 30 });
+  });
+
+  it('revisão por IA: padrões e sem chave da CRMThink', () => {
+    expect(loadEnv(base)).toMatchObject({
+      VIBECODE_BASE_URL: 'https://vibecode.bitrix24.com',
+      VIBECODE_REVIEW_MODEL: 'bitrix/bitrixgpt-5.5',
+      VIBECODE_PLATFORM_RPM: 200,
+      VIBECODE_TIMEOUT_MS: 60_000,
+      REVIEW_CREDITS_PER_FIELD: 2,
+    });
+    expect(loadEnv(base).VIBECODE_PLATFORM_API_KEY).toBeUndefined();
+    // `VIBECODE_PLATFORM_API_KEY=` no .env conta como ausente.
+    expect(loadEnv({ ...base, VIBECODE_PLATFORM_API_KEY: '  ' }).VIBECODE_PLATFORM_API_KEY).toBe(
+      undefined,
+    );
+  });
+
+  it('revisão por IA: lê as variáveis', () => {
+    expect(
+      loadEnv({
+        ...base,
+        VIBECODE_PLATFORM_API_KEY: ' vibe_api_abc ',
+        VIBECODE_PLATFORM_RPM: '10',
+        VIBECODE_REVIEW_MODEL: 'bitrix/outro',
+        REVIEW_CREDITS_PER_FIELD: '0',
+      }),
+    ).toMatchObject({
+      VIBECODE_PLATFORM_API_KEY: 'vibe_api_abc',
+      VIBECODE_PLATFORM_RPM: 10,
+      VIBECODE_REVIEW_MODEL: 'bitrix/outro',
+      REVIEW_CREDITS_PER_FIELD: 0,
+    });
+    expect(() => loadEnv({ ...base, VIBECODE_PLATFORM_RPM: '0' })).toThrow(/VIBECODE_PLATFORM_RPM/);
+    expect(() => loadEnv({ ...base, REVIEW_CREDITS_PER_FIELD: '-1' })).toThrow(
+      /REVIEW_CREDITS_PER_FIELD/,
+    );
+  });
+
+  it('revisão por IA: a chave da CRMThink só vale com o interruptor ligado (padrão desligado)', () => {
+    expect(loadEnv(base).VIBECODE_PLATFORM_FALLBACK).toBe(false);
+    expect(
+      loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: 'true' }).VIBECODE_PLATFORM_FALLBACK,
+    ).toBe(true);
+    expect(loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: '1' }).VIBECODE_PLATFORM_FALLBACK).toBe(
+      true,
+    );
+    expect(() => loadEnv({ ...base, VIBECODE_PLATFORM_FALLBACK: 'talvez' })).toThrow(
+      /VIBECODE_PLATFORM_FALLBACK/,
+    );
   });
 
   it('lista variáveis ausentes', () => {

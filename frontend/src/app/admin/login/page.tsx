@@ -9,6 +9,8 @@ import { ApiRequestError } from '@/lib/platform-session';
 import { Field, inputClass } from '../../app/agents/agent-fields';
 import { useAdmin } from '../admin-provider';
 
+type CodeStep = Exclude<AdminLoginStep, { step: 'authenticated' }>;
+
 function message(e: unknown, fallback: string): string {
   return e instanceof ApiRequestError && !e.code.startsWith('HTTP_') ? e.message : fallback;
 }
@@ -18,8 +20,9 @@ export default function AdminLoginPage() {
   const { api, signedIn } = useAdmin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [step, setStep] = useState<AdminLoginStep | null>(null);
+  const [step, setStep] = useState<CodeStep | null>(null);
   const [code, setCode] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,13 +43,14 @@ export default function AdminLoginPage() {
     setBusy(true);
     setError(null);
     try {
-      setStep(
-        await api<AdminLoginStep>('/admin/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email, password }),
-        }),
-      );
+      const next = await api<AdminLoginStep>('/admin/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
       setPassword('');
+      // Navegador lembrado: a sessão já foi aberta, sem pedir o código.
+      if (next.step === 'authenticated') signedIn(next.operator);
+      else setStep(next);
     } catch (e) {
       setError(message(e, 'Não foi possível entrar.'));
     } finally {
@@ -62,7 +66,7 @@ export default function AdminLoginPage() {
     try {
       const { operator } = await api<AdminSessionView>('/admin/auth/totp', {
         method: 'POST',
-        body: JSON.stringify({ challenge: step.challenge, code }),
+        body: JSON.stringify({ challenge: step.challenge, code, rememberDevice }),
       });
       signedIn(operator);
     } catch (e) {
@@ -162,6 +166,20 @@ export default function AdminLoginPage() {
                 autoFocus
               />
             </Field>
+            <label className="flex items-start gap-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                className="mt-0.5 size-4 rounded border-zinc-300"
+              />
+              <span>
+                Lembrar este navegador por 30 dias
+                <span className="block text-xs text-zinc-500">
+                  Nos próximos logins aqui, só a senha. Não marque em computador compartilhado.
+                </span>
+              </span>
+            </label>
             <button
               type="submit"
               disabled={busy || code.length !== 6}

@@ -19,15 +19,19 @@ export const adminLoginSchema = z.object({
 export const adminTotpSchema = z.object({
   challenge: z.string().min(1).max(200),
   code: z.string().regex(/^\d{6}$/, 'Código de 6 dígitos'),
+  /** Lembrar este navegador: os próximos logins nele pedem só a senha, por alguns dias. */
+  rememberDevice: z.boolean().optional(),
 });
 
 /**
  * Resposta do primeiro passo. `totp`: pedir o código do app autenticador. `totp-setup`: primeiro
  * acesso, mostrar o QR (`otpauthUrl`) e o segredo; o código confirma a configuração.
+ * `authenticated`: navegador lembrado, a sessão já foi aberta sem pedir o código.
  */
 export type AdminLoginStep =
   | { step: 'totp'; challenge: string }
-  | { step: 'totp-setup'; challenge: string; otpauthUrl: string; secret: string };
+  | { step: 'totp-setup'; challenge: string; otpauthUrl: string; secret: string }
+  | ({ step: 'authenticated' } & AdminSessionView);
 
 export interface OperatorView {
   id: string;
@@ -155,6 +159,8 @@ export interface AdminTenantRow {
   tenantCode: string;
   installationId: string;
   status: TenantStatusView;
+  /** Parceiro: pode assumir o controle do comportamento dos agentes. */
+  isPartner: boolean;
   subscription: {
     status: SubscriptionStatusView;
     planId: string | null;
@@ -205,6 +211,9 @@ export interface AdminTenantDetail extends AdminTenantRow {
 export const suspendTenantSchema = z.object({
   reason: z.string().trim().min(5, 'Explique o motivo (mínimo 5 caracteres)').max(500),
 });
+
+/** Marca ou desmarca o portal como parceiro (spec admin-backoffice, "Tenant parceiro"). */
+export const setTenantPartnerSchema = z.object({ partner: z.boolean() });
 
 export const grantCreditsSchema = z.object({
   amount: z.number().int().positive().max(1_000_000),
