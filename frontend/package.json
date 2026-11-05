@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint",
+    "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -20,12 +21,15 @@
   "devDependencies": {
     "@crmthink-sources/platform-sdk": "^1.1.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "jsdom": "^30.1.3",
     "tailwindcss": "^4",
     "typescript": "6.0.3"
   }

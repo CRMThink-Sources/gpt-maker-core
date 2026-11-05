@@ -1,12 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  type AgentSettings,
   agentTypeSchema,
   type AgentView,
   type AvailableModel,
   communicationTypeSchema,
-  createAgentSchema,
-  type CreateAgentInput,
+  agentProvisionSchema,
+  type AgentProvisionInput,
   updateAgentSchema,
   type UpdateAgentInput,
 } from '@gptmaker/contracts';
@@ -123,8 +124,8 @@ export class AgentService {
    * aponta os webhooks para esta API e só então grava o registro local `ACTIVE`. Criações do mesmo
    * tenant são serializadas para o limite de agentes valer sob concorrência.
    */
-  async create(owner: AgentOwner, raw: CreateAgentInput): Promise<AgentView> {
-    const input = createAgentSchema.parse(raw);
+  async create(owner: AgentOwner, raw: AgentProvisionInput): Promise<AgentView> {
+    const input = agentProvisionSchema.parse(raw);
     const outcome = await this.lock.runExclusive(
       `agent-create:${owner.tenantId}`,
       CREATE_LOCK_TTL_MS,
@@ -251,11 +252,39 @@ export class AgentService {
   }
 
   /**
-   * Edita dados, modelo e settings. O GPTMaker é atualizado antes do registro local; se a
-   * segunda chamada falhar, a primeira é desfeita, e o registro local fica como estava.
+   * Edita nome, avatar, modelo e settings operacionais; o resto vem da publicação da função. O
+   * GPTMaker é atualizado antes do registro local; se a segunda chamada falhar, a primeira é
+   * desfeita, e o registro local fica como estava.
    */
   async update(owner: AgentOwner, id: string, raw: UpdateAgentInput): Promise<AgentView> {
     const input = updateAgentSchema.parse(raw);
+    return this.applyUpdate(owner, id, {
+      profile: { name: input.name, avatarUrl: input.avatarUrl },
+      modelId: input.modelId,
+      settings: input.settings,
+    });
+  }
+
+  /**
+   * Aplica o resultado compilado da função (design D5): comportamento, tipo, tom, dados da empresa
+   * e settings derivados. Só a publicação da função chama.
+   */
+  async applyFunctionProfile(
+    owner: AgentOwner,
+    id: string,
+    patch: {
+      profile: Omit<Profile, 'name' | 'avatarUrl'>;
+      settings: AgentSettings;
+    },
+  ): Promise<AgentView> {
+    return this.applyUpdate(owner, id, { profile: patch.profile, settings: patch.settings });
+  }
+
+  private async applyUpdate(
+    owner: AgentOwner,
+    id: string,
+    input: { profile: Partial<Profile>; modelId?: string; settings?: AgentSettings },
+  ): Promise<AgentView> {
     return this.withAgentLock(owner.tenantId, id, async () => {
       const current = await this.agents.getById(owner.tenantId, id);
       if (current.status === 'OUT_OF_SYNC') throw outOfSync();
@@ -266,15 +295,16 @@ export class AgentService {
         ? await this.resolveModel(owner.tenantId, input.modelId)
         : (await this.modelsById()).get(current.modelId)!;
 
+      const next = input.profile;
       const profile: Profile = {
-        name: input.name ?? current.name,
-        avatarUrl: keep(input.avatarUrl, current.avatarUrl),
-        behavior: keep(input.behavior, current.behavior),
-        type: input.type ?? current.type,
-        communicationType: input.communicationType ?? current.communicationType,
-        jobName: keep(input.jobName, current.jobName),
-        jobSite: keep(input.jobSite, current.jobSite),
-        jobDescription: keep(input.jobDescription, current.jobDescription),
+        name: next.name ?? current.name,
+        avatarUrl: keep(next.avatarUrl, current.avatarUrl),
+        behavior: keep(next.behavior, current.behavior),
+        type: next.type ?? current.type,
+        communicationType: next.communicationType ?? current.communicationType,
+        jobName: keep(next.jobName, current.jobName),
+        jobSite: keep(next.jobSite, current.jobSite),
+        jobDescription: keep(next.jobDescription, current.jobDescription),
       };
       const settings = { ...current.settings, ...input.settings };
       const profileChanged = PROFILE_FIELDS.some((field) => profile[field] !== current[field]);
@@ -454,7 +484,7 @@ export class AgentService {
 
   private async createRemoteAndLocal(
     owner: AgentOwner,
-    input: ReturnType<typeof createAgentSchema.parse>,
+    input: ReturnType<typeof agentProvisionSchema.parse>,
     model: AiModel,
   ): Promise<Agent> {
     // Sem o prefixo no nome, é este registro que aponta o dono se a criação deixar um órfão.
@@ -495,7 +525,10 @@ export class AgentService {
     const webhookToken = randomBytes(32).toString('base64url');
     try {
       await this.callGptMaker(() =>
-        this.gptmaker.updateAgentSettings(remote.id, { prefferModel: model.code }),
+        this.gptmaker.updateAgentSettings(remote.id, {
+          ...input.settings,
+          prefferModel: model.code,
+        }),
       );
       await this.callGptMaker(() =>
         this.gptmaker.updateWebhooks(
@@ -518,6 +551,7 @@ export class AgentService {
             jobSite: input.jobSite ?? null,
             jobDescription: input.jobDescription ?? null,
             modelId: model.id,
+            settings: input.settings ?? {},
             status: 'ACTIVE',
             webhookTokenHash: hashWebhookToken(webhookToken),
           },

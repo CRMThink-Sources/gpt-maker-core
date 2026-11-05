@@ -1,11 +1,15 @@
 ## ADDED Requirements
 
 ### Requirement: Criação de agente
-O sistema MUST permitir que o tenant crie um agente informando nome, avatar, comportamento, tipo (`SUPPORT`, `SALE`, `PERSONAL`), tom de comunicação (`FORMAL`, `NORMAL`, `RELAXED`), dados da empresa (`jobName`, `jobSite`, `jobDescription`) e modelo de IA (entre os permitidos pelo plano, padrão do catálogo se omitido), criando o agente correspondente no workspace partner do GPTMaker e persistindo o vínculo `tenantId` ↔ `gptmakerAgentId`.
+O sistema MUST permitir que o tenant crie um agente informando nome, avatar, comportamento, tipo (`SUPPORT`, `SALE`, `PERSONAL`), tom de comunicação (`FORMAL`, `NORMAL`, `RELAXED`), dados da empresa (`jobName`, `jobSite`, `jobDescription`) e modelo de IA (entre os permitidos pelo plano, padrão do catálogo se omitido), criando o agente correspondente no workspace partner do GPTMaker e persistindo o vínculo `tenantId` ↔ `gptmakerAgentId`. Comportamento (até 3000 caracteres) e descrição da empresa (`jobDescription`, até 500 caracteres) MUST ser obrigatórios na criação e na edição.
 
 #### Scenario: Criação com sucesso
 - **WHEN** um administrador do tenant envia o formulário válido de novo agente e o tenant está abaixo do limite de agentes
 - **THEN** o sistema registra a criação em andamento, cria o agente no GPTMaker com o nome dado pelo cliente, aplica o modelo via `prefferModel` nas settings, persiste o registro local com status `ACTIVE`, configura os webhooks do agente apontando para o backend e retorna o agente criado
+
+#### Scenario: Textos obrigatórios ausentes ou longos
+- **WHEN** o formulário omite o comportamento ou a descrição da empresa, ou excede 3000 e 500 caracteres respectivamente
+- **THEN** o sistema recusa com erro de validação sem chamar o GPTMaker
 
 #### Scenario: Modelo não permitido
 - **WHEN** o formulário informa modelo inativo ou não permitido pelo plano

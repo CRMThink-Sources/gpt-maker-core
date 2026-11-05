@@ -44,10 +44,23 @@ export function intentionPlaceholders(text: string | null | undefined): string[]
 
 const httpUrl = z.url({ protocol: /^https?$/ });
 
+/**
+ * Limite da descrição de um campo coletado no GPTMaker: acima disso a criação da intenção responde
+ * 500 "Fail on train assistant." (medido em 2026-10-30, docs/gptmaker-api.md §10).
+ */
+export const INTENTION_FIELD_DESCRIPTION_MAX = 255;
+
 const fieldSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome do campo').max(60),
   /** Opcional: sem ela, o agente se guia pelo nome. */
-  description: z.string().trim().max(500).default(''),
+  description: z
+    .string()
+    .trim()
+    .max(
+      INTENTION_FIELD_DESCRIPTION_MAX,
+      `use até ${INTENTION_FIELD_DESCRIPTION_MAX} caracteres na descrição (limite do GPTMaker)`,
+    )
+    .default(''),
   type: intentionFieldTypeSchema,
   required: z.boolean(),
 });
@@ -74,14 +87,26 @@ const paramSchema = z.object({ name: pairName, value: z.string().max(4000) });
  * Intenção do agente (spec agent-intentions; tarefa 17): o agente coleta os campos na conversa,
  * chama a URL e responde com base no retorno da API ou numa instrução própria.
  */
+/** Limites dos textos que o agente lê para decidir usar a intenção. */
+export const INTENTION_NAME_MAX = 255;
+export const INTENTION_WHEN_TO_USE_MAX = 512;
+
 export const intentionInputSchema = z
   .object({
     /** Nome curto que identifica a intenção (`description` no GPTMaker). Único por agente. */
     /** `WEBHOOK`: chama a API do cliente; `BITRIX`: o app executa ações no portal. */
     kind: z.enum(['WEBHOOK', 'BITRIX']).default('WEBHOOK'),
-    name: z.string().trim().min(1, 'Dê um nome à intenção').max(255),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Dê um nome à intenção')
+      .max(INTENTION_NAME_MAX, `Use até ${INTENTION_NAME_MAX} caracteres`),
     /** Quando o agente deve usar a intenção (`details`). */
-    whenToUse: z.string().trim().min(1, 'Explique quando usar').max(2000),
+    whenToUse: z
+      .string()
+      .trim()
+      .min(1, 'Explique quando usar')
+      .max(INTENTION_WHEN_TO_USE_MAX, `Use até ${INTENTION_WHEN_TO_USE_MAX} caracteres`),
     fields: z.array(fieldSchema).max(INTENTION_MAX_FIELDS),
     httpMethod: z.enum(['GET', 'POST']),
     /** Só na intenção `WEBHOOK` (na `BITRIX` a URL é do app). */
@@ -183,6 +208,8 @@ export type IntentionInput = z.input<typeof intentionInputSchema>;
 export interface IntentionView {
   id: string;
   kind: 'WEBHOOK' | 'BITRIX';
+  /** Gerada pela função do agente: só muda pelo formulário dela. */
+  managed: boolean;
   /** Ações no portal (intenção `BITRIX`). */
   actions: IntentionActionInput[];
   name: string;

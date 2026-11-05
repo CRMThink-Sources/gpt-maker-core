@@ -1,17 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import {
+  isUserList,
   renderFields,
   renderTemplate,
+  type SpaItemActionInput,
   type TemplateContext,
+  templatesUse,
   type TriggerActionInput,
 } from '@gptmaker/contracts';
 import { BitrixClient, BitrixError } from '../../bitrix';
 import { ActionError } from './action-error';
+import { ActionRotation } from './action-rotation';
 import {
   bizprocDocumentId,
   type CrmBinding,
   type CrmEntityType,
   parseCrmBinding,
+  parseSessionId,
   primaryEntity,
   TASK_CRM_PREFIX,
 } from './crm-binding';
@@ -20,7 +25,23 @@ import { sendOutboundWebhook } from './outbound-webhook';
 /** Campos multivalorados do CRM: o template dá um texto, o Bitrix quer `[{VALUE, VALUE_TYPE}]`. */
 const MULTI_FIELDS = new Set(['PHONE', 'EMAIL', 'WEB', 'IM']);
 
-export type ExecutableAction = TriggerActionInput & { id: string; secret: string | null };
+/** Ações dos gatilhos e as que só existem nas intenções (item de SPA). */
+export type ExecutableAction = (TriggerActionInput | SpaItemActionInput) & {
+  id: string;
+  secret: string | null;
+};
+
+/** Diálogo da Linha Aberta lido no Bitrix: vínculo com o CRM e sessão atual. */
+interface DialogInfo {
+  crm: CrmBinding;
+  sessionId: string | null;
+}
+
+/** Campo de um item de SPA (`crm.item.fields`), o que a tradução das listas precisa. */
+interface SpaFieldMeta {
+  type?: string;
+  items?: Array<{ ID?: number | string; VALUE?: string; XML_ID?: string }>;
+}
 
 export interface ActionContext {
   installationId: number;
@@ -54,12 +75,15 @@ export class TriggerActionExecutor {
   /** Troca nos testes. */
   webhookDeps: Parameters<typeof sendOutboundWebhook>[1] = {};
 
-  constructor(private readonly bitrix: BitrixClient) {}
+  constructor(
+    private readonly bitrix: BitrixClient,
+    private readonly rotation: ActionRotation,
+  ) {}
 
   async execute(action: ExecutableAction, context: ActionContext): Promise<ActionResult> {
-    const binding = lazy(() => this.crmBinding(context));
+    const dialog = lazy(() => this.dialogInfo(context));
     try {
-      return await this.run(action, context, binding);
+      return await this.run(action, context, dialog);
     } catch (error) {
       if (error instanceof ActionError) throw error;
       if (error instanceof BitrixError) {
@@ -75,9 +99,10 @@ export class TriggerActionExecutor {
   private async run(
     action: ExecutableAction,
     context: ActionContext,
-    binding: () => Promise<CrmBinding>,
+    dialog: () => Promise<DialogInfo>,
   ): Promise<ActionResult> {
     const { installationId, template } = context;
+    const binding = async () => (await dialog()).crm;
     switch (action.type) {
       case 'CREATE_LEAD': {
         const { result } = await this.bitrix.call<number>(installationId, 'crm.lead.add', {
@@ -144,7 +169,10 @@ export class TriggerActionExecutor {
               ...(action.config.description
                 ? { DESCRIPTION: renderTemplate(action.config.description, template) }
                 : {}),
-              RESPONSIBLE_ID: action.config.responsibleId,
+              // Vários responsáveis: o próximo da lista (D15).
+              RESPONSIBLE_ID: isUserList(action.config.responsibleId)
+                ? await this.rotation.next(action.id, action.config.responsibleId)
+                : action.config.responsibleId,
               ...(deadline ? { DEADLINE: deadline } : {}),
               ...(entity ? { UF_CRM_TASK: [`${TASK_CRM_PREFIX[entity.type]}_${entity.id}`] } : {}),
             },
@@ -174,6 +202,9 @@ export class TriggerActionExecutor {
         );
         return { workflowId: String(result), entityType: type, entityId: id };
       }
+
+      case 'CREATE_SPA_ITEM':
+        return this.createSpaItem(action.config, context, dialog);
 
       case 'OUTBOUND_WEBHOOK': {
         if (!action.secret) {
@@ -212,18 +243,101 @@ export class TriggerActionExecutor {
     return binding();
   }
 
-  private async crmBinding(context: ActionContext): Promise<CrmBinding> {
-    const { result } = await this.bitrix.call<{ entity_data_2?: unknown }>(
+  private async dialogInfo(context: ActionContext): Promise<DialogInfo> {
+    const { result } = await this.bitrix.call<{ entity_data_1?: unknown; entity_data_2?: unknown }>(
       context.installationId,
       'imopenlines.dialog.get',
       { DIALOG_ID: context.dialogId },
     );
-    return parseCrmBinding(result?.entity_data_2);
+    return {
+      crm: parseCrmBinding(result?.entity_data_2),
+      sessionId: parseSessionId(result?.entity_data_1),
+    };
+  }
+
+  /**
+   * Item num processo inteligente (`crm.item.add`). A sessão da Linha Aberta só é lida quando um
+   * texto a cita. Campo lista recebe o id do item: pela ligação feita no formulário, senão pelo
+   * item de mesmo valor ou id externo; sem correspondência, sai do item e vira aviso.
+   */
+  private async createSpaItem(
+    config: SpaItemActionInput['config'],
+    context: ActionContext,
+    dialog: () => Promise<DialogInfo>,
+  ): Promise<ActionResult> {
+    const { installationId } = context;
+    let template = context.template;
+    if (
+      context.dialogId &&
+      templatesUse([config.title, ...Object.values(config.fields)], 'dialog.sessionId')
+    ) {
+      const { sessionId } = await dialog();
+      template = { ...template, dialog: { ...template.dialog, sessionId } };
+    }
+    const values = Object.entries(renderFields(config.fields, template))
+      .map(([code, value]) => [code, value.trim()] as const)
+      .filter(([, value]) => value !== '');
+    const meta = values.length ? await this.spaFields(installationId, config.entityTypeId) : {};
+    const fields: Record<string, unknown> = {};
+    const warnings: string[] = [];
+    for (const [code, value] of values) {
+      const field = meta[code];
+      if (field?.type !== 'enumeration') {
+        fields[code] = value;
+        continue;
+      }
+      const id = config.lists?.[code]?.[value] ?? listItemId(field, value);
+      if (id) fields[code] = id;
+      else warnings.push(`"${value}" não é um item da lista ${code}; o campo ficou vazio`);
+    }
+    const title = renderTemplate(config.title, template).trim();
+    const { result } = await this.bitrix.call<{ item?: { id?: number | string } }>(
+      installationId,
+      'crm.item.add',
+      {
+        entityTypeId: config.entityTypeId,
+        fields: {
+          ...fields,
+          ...(title ? { title } : {}),
+          ...(config.categoryId !== undefined ? { categoryId: config.categoryId } : {}),
+          ...(config.stageId ? { stageId: config.stageId } : {}),
+        },
+      },
+    );
+    return {
+      itemId: Number(result?.item?.id),
+      entityTypeId: config.entityTypeId,
+      ...(warnings.length ? { warnings } : {}),
+    };
+  }
+
+  private async spaFields(
+    installationId: number,
+    entityTypeId: number,
+  ): Promise<Record<string, SpaFieldMeta>> {
+    const { result } = await this.bitrix.call<{ fields?: Record<string, SpaFieldMeta> }>(
+      installationId,
+      'crm.item.fields',
+      { entityTypeId },
+    );
+    return result?.fields ?? {};
   }
 }
 
 const noCrmEntity = () =>
   new ActionError('diálogo sem entidade vinculada no CRM', { transient: false });
+
+/** Item da lista com o mesmo valor ou id externo, sem diferenciar maiúsculas. */
+function listItemId(field: SpaFieldMeta, value: string): number | undefined {
+  const wanted = value.toLowerCase();
+  const item = (field.items ?? []).find(
+    (candidate) =>
+      candidate.VALUE?.trim().toLowerCase() === wanted ||
+      candidate.XML_ID?.trim().toLowerCase() === wanted,
+  );
+  const id = Number(item?.ID);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
 
 /** Uma chamada só, e só se alguém pedir. */
 function lazy<T>(load: () => Promise<T>): () => Promise<T> {

@@ -17,6 +17,6 @@ import { UsageDebitConsumer } from './usage-debit.consumer';
     LedgerService,
     UsageDebitConsumer,
   ],
-  exports: [BalanceReader, CreditCycleService, CreditStatementService, LedgerService],
+  exports: [BalanceReader, CreditAlerts, CreditCycleService, CreditStatementService, LedgerService],
 })
 export class BillingModule {}

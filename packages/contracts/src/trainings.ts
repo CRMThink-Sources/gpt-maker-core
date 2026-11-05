@@ -23,9 +23,12 @@ const httpUrl = z
   .url({ protocol: /^https?$/, message: 'informe um endereço http ou https' })
   .max(2000);
 
+/** Tamanho máximo do texto de um treinamento (criação e edição). */
+export const TRAINING_TEXT_MAX = 1028;
+
 /** Treinamentos sem arquivo; documento vai por upload (`multipart/form-data`, campo `file`). */
 export const createTrainingSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('TEXT'), text: z.string().trim().min(1).max(50_000) }),
+  z.object({ type: z.literal('TEXT'), text: z.string().trim().min(1).max(TRAINING_TEXT_MAX) }),
   z.object({
     type: z.literal('WEBSITE'),
     url: httpUrl,
@@ -38,26 +41,10 @@ export const createTrainingSchema = z.discriminatedUnion('type', [
 export type CreateTrainingInput = z.input<typeof createTrainingSchema>;
 
 /** Só treinamentos de texto são editáveis; os demais são removidos e criados de novo. */
-export const updateTrainingSchema = z.object({ text: z.string().trim().min(1).max(50_000) });
+export const updateTrainingSchema = z.object({
+  text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
+});
 export type UpdateTrainingInput = z.input<typeof updateTrainingSchema>;
-
-/**
- * Documentos aceitos, por extensão. O GPTMaker não documenta formatos nem tamanho; a lista cobre
- * os formatos de texto comuns e deve ser confirmada em staging.
- */
-export const TRAINING_DOCUMENT_TYPES = {
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  doc: 'application/msword',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  txt: 'text/plain',
-  md: 'text/markdown',
-  csv: 'text/csv',
-} as const;
-
-/** Tamanho máximo de um documento de treinamento. */
-export const TRAINING_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
 /** Uso dos limites de treinamento do plano, somando todos os agentes do tenant. */
 export interface TrainingUsage {
@@ -70,6 +57,8 @@ export interface TrainingView {
   id: string;
   type: z.infer<typeof trainingTypeSchema>;
   status: z.infer<typeof trainingStatusSchema>;
+  /** Gerado pela função do agente: só muda pelo formulário dela. */
+  managed: boolean;
   /** Texto do `TEXT`. */
   text: string | null;
   /** Endereço do `WEBSITE` ou do `VIDEO`. */

@@ -13,6 +13,7 @@ export default async function ClientAppLayout({ children }: LayoutProps<'/app'>)
   await connection();
   const config = {
     platformUrl: process.env.PUBLIC_PLATFORM_URL ?? 'https://platform-staging.crmthink.com.br',
+    appCode: process.env.PUBLIC_APP_CODE || 'crmthink.homolog-thinkflow',
     apiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? 'http://localhost:3001',
     stripePublishableKey: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || null,
   };

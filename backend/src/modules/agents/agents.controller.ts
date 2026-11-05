@@ -9,20 +9,17 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import {
-  type AgentView,
-  type AvailableModel,
-  createAgentSchema,
-  updateAgentSchema,
-} from '@gptmaker/contracts';
+import { type AgentView, type AvailableModel, updateAgentSchema } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { AgentService } from './agent.service';
 
-class CreateAgentDto extends createZodDto(createAgentSchema) {}
 class UpdateAgentDto extends createZodDto(updateAgentSchema) {}
 
-/** Agentes do tenant da sessão; agente de outro tenant responde 404 (spec agent-management). */
+/**
+ * Agentes do tenant da sessão; agente de outro tenant responde 404 (spec agent-management). A
+ * criação fica com a função do agente (`AgentFunctionsController`, design D6).
+ */
 @Controller('app/agents')
 export class AgentsController {
   constructor(private readonly agents: AgentService) {}
@@ -37,12 +34,6 @@ export class AgentsController {
   @AppAuth()
   get(@CurrentSession() session: AppSession, @Param('id') id: string): Promise<AgentView> {
     return this.agents.get(session.tenantId, id);
-  }
-
-  @Post()
-  @AppAuth('manage')
-  create(@CurrentSession() session: AppSession, @Body() body: CreateAgentDto): Promise<AgentView> {
-    return this.agents.create(session, body);
   }
 
   @Patch(':id')

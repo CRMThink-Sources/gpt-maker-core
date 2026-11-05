@@ -2,9 +2,14 @@ import { TenancyModule } from './tenancy';
 import { BitrixModule } from './bitrix';
 import { GptMakerModule } from './gptmaker';
 import { ModelsModule } from './models';
+import { SemanticModule } from './semantic';
 import { AgentsModule } from './agents';
 import { TrainingModule } from './training';
 import { IntentionsModule } from './intentions';
+import { AgentTestModule } from './agent-test';
+import { CrmToolsModule } from './crm-tools';
+import { AgentFunctionsModule } from './agent-functions';
+import { FunctionReviewModule } from './function-review';
 import { ChannelModule } from './channel';
 import { TriggersModule } from './triggers';
 import { NotificationsModule } from './notifications';
@@ -19,9 +24,14 @@ export const DOMAIN_MODULES = [
   BitrixModule,
   GptMakerModule,
   ModelsModule,
+  SemanticModule,
   AgentsModule,
   TrainingModule,
   IntentionsModule,
+  AgentTestModule,
+  CrmToolsModule,
+  AgentFunctionsModule,
+  FunctionReviewModule,
   ChannelModule,
   TriggersModule,
   NotificationsModule,

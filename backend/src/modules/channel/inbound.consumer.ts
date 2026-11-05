@@ -171,6 +171,8 @@ export class InboundConsumer implements OnApplicationBootstrap {
       agentId: pending.agentId,
       dialogId: message.dialogId,
       userId: pending.userId,
+      lineId: pending.lineId,
+      gptmakerChatId: pending.gptmakerChatId,
     });
     await this.handoffs.clear(message.tenantId, message.dialogId);
   }

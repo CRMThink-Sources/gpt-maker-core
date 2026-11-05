@@ -3,13 +3,14 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { TRIGGER_MAX_PER_AGENT, type CreateTriggerInput } from '@gptmaker/contracts';
 import { eq, sql } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
 import { TriggerService } from '../../src/modules/triggers/trigger.service';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
+import { testPool } from '../support/postgres';
 
 const { agent, aiModel, tenant, trigger, triggerAction } = schema;
 
@@ -69,7 +70,7 @@ describe('gatilhos do agente', () => {
     postgres = await new PostgreSqlContainer('postgres:16-alpine').start();
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     service = new TriggerService(new AgentRepository(db), db);
     const [model] = await db

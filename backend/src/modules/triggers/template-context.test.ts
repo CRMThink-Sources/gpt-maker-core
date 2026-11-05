@@ -42,7 +42,7 @@ describe('contexto dos templates', () => {
       message: { text: 'Boa tarde', role: 'user' },
       agent,
       event: { name: 'onNewMessage', date: '2026-10-01T17:26:56.376Z' },
-      dialog: { id: 'chat9498' },
+      dialog: { id: 'chat9498', chatId: '9498' },
       interaction: { id: null, protocol: null },
     });
     expect(

@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { APP_CODE } from '@gptmaker/contracts';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { PlatformApiClient } from './platform-api.client';
@@ -29,7 +28,7 @@ import { SESSION_VERIFIER, sessionVerifier } from './session-verifier';
       useFactory: (env: Env) =>
         sessionVerifier({
           platformUrl: env.PLATFORM_URL,
-          appCode: APP_CODE,
+          appCode: env.APP_CODE,
           issuer: env.PLATFORM_JWT_ISSUER,
         }),
     },

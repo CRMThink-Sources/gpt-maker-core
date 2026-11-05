@@ -30,7 +30,8 @@ export type HandoffOutcome = 'started' | 'stopped' | 'skipped';
 /**
  * Atendimento humano num diálogo (spec bitrix-chatbot-channel: transferência para humano).
  * `start` (o GPTMaker pediu, `onTransfer`): marca o diálogo como humano (o worker para de
- * encaminhar), transfere ao operador livre da Linha Aberta e avisa o GPTMaker (`start-human`).
+ * encaminhar), transfere ao operador livre da Linha Aberta e, no GPTMaker, marca a transferência
+ * (`start-human`) e encerra o atendimento do agente (`stop-human`).
  * `stop` (o atendimento humano terminou): desmarca e avisa o GPTMaker (`stop-human`), e o agente
  * volta a responder. Cada passo é idempotente; recusas definitivas (diálogo já com operador, chat
  * inexistente no GPTMaker) só vão para o log.
@@ -52,16 +53,30 @@ export class HumanHandoff {
     dialogId: string;
     /** Usuário do Bitrix que recebe a conversa (intenção); ausente ⇒ operador livre da linha. */
     userId?: number;
+    /** Canal aberto que recebe a conversa (intenção, design D16). */
+    lineId?: number;
+    /** Chat recebido pela intenção; o dono dele é o agente do diálogo (design D17). */
+    gptmakerChatId?: string;
   }): Promise<HandoffOutcome> {
-    const owner = await this.owner(input.tenantId, input.agentId);
+    // Depois de uma troca de agente no GPTMaker, a intenção é do destino, mas o chat e o diálogo
+    // continuam do agente de origem: é ele que fica no estado do diálogo.
+    const origin = input.gptmakerChatId
+      ? await this.chatOwner(input.tenantId, input.gptmakerChatId)
+      : null;
+    const agentId = origin ?? input.agentId;
+    const owner = await this.owner(input.tenantId, agentId);
     if (!owner) {
       this.logger.warn(input, 'transferência para humano de agente desconhecido; ignorada');
       return 'skipped';
     }
-    const gptmakerChatId = gptmakerChatIdFor(owner.gptmakerAgentId, input.tenantId, input.dialogId);
+    // Só o chat de um agente reconhecido: formato inesperado volta ao chat calculado.
+    const gptmakerChatId =
+      origin && input.gptmakerChatId
+        ? input.gptmakerChatId
+        : gptmakerChatIdFor(owner.gptmakerAgentId, input.tenantId, input.dialogId);
     await this.human.set({
       tenantId: input.tenantId,
-      agentId: input.agentId,
+      agentId,
       dialogId: input.dialogId,
       gptmakerChatId,
       active: true,
@@ -75,18 +90,31 @@ export class HumanHandoff {
       );
     } else {
       await this.tolerant('transferência ao operador', () =>
-        input.userId
+        input.lineId
           ? this.bitrix.call(owner.installationId, 'imopenlines.bot.session.transfer', {
               CHAT_ID: chatId,
-              USER_ID: input.userId,
+              QUEUE_ID: input.lineId,
               LEAVE: 'N',
             })
-          : this.bitrix.call(owner.installationId, 'imopenlines.bot.session.operator', {
-              CHAT_ID: chatId,
-            }),
+          : input.userId
+            ? this.bitrix.call(owner.installationId, 'imopenlines.bot.session.transfer', {
+                CHAT_ID: chatId,
+                USER_ID: input.userId,
+                LEAVE: 'N',
+              })
+            : this.bitrix.call(owner.installationId, 'imopenlines.bot.session.operator', {
+                CHAT_ID: chatId,
+              }),
       );
     }
     await this.tolerant('start-human no GPTMaker', () => this.gptmaker.startHuman(gptmakerChatId));
+    // O atendimento do agente acaba na transferência: `stop-human` o deixa RESOLVED no GPTMaker
+    // (com o `transferAt` do passo anterior), e as métricas de tempo de atendimento fecham. O
+    // agente não volta a responder: enquanto o diálogo está com humano, o app não repassa as
+    // mensagens (docs/gptmaker-api.md §7).
+    await this.tolerant('encerrar o atendimento no GPTMaker', () =>
+      this.gptmaker.stopHuman(gptmakerChatId),
+    );
     this.logger.log({ dialogId: input.dialogId }, 'diálogo transferido para atendimento humano');
     return 'started';
   }
@@ -124,6 +152,17 @@ export class HumanHandoff {
       'atendimento humano encerrado; agente volta a responder',
     );
     return 'stopped';
+  }
+
+  /** Agente do portal dono de um chat `public-api-<agente no GPTMaker>-…`. */
+  private async chatOwner(tenantId: string, gptmakerChatId: string): Promise<string | null> {
+    const match = /^public-api-(.+)-[0-9a-f-]{36}:/.exec(gptmakerChatId);
+    if (!match) return null;
+    const [row] = await this.db
+      .select({ id: agent.id })
+      .from(agent)
+      .where(and(eq(agent.tenantId, tenantId), eq(agent.gptmakerAgentId, match[1]!)));
+    return row?.id ?? null;
   }
 
   private async owner(

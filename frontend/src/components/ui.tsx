@@ -70,6 +70,7 @@ const TONES = {
   zinc: 'bg-zinc-100 text-zinc-600 ring-zinc-500/20',
   amber: 'bg-amber-50 text-amber-800 ring-amber-600/20',
   brand: 'bg-brand-50 text-brand-700 ring-brand-600/20',
+  red: 'bg-red-50 text-red-700 ring-red-600/20',
 } as const;
 
 const DOTS = {
@@ -77,6 +78,7 @@ const DOTS = {
   zinc: 'bg-zinc-400',
   amber: 'bg-amber-500',
   brand: 'bg-brand-500',
+  red: 'bg-red-500',
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -139,6 +141,40 @@ export function EmptyState({
       {description && <p className="mt-1 max-w-sm text-sm text-zinc-500">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
+  );
+}
+
+/** Chave liga/desliga (`role="switch"`). */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  /** Nome acessível (a chave não tem texto visível). */
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked ? 'bg-brand-600' : 'bg-zinc-200'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-4.5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
   );
 }
 

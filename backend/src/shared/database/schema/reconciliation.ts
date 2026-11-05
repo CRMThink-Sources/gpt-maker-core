@@ -102,6 +102,17 @@ export const workspaceFindingKind = pgEnum('workspace_finding_kind', [
   'STATUS_MISMATCH',
 ]);
 
+/**
+ * Agentes do workspace que não pertencem a tenant nenhum por desenho (ex.: o sandbox dos templates
+ * de função, design D8): a sincronização não os trata como órfãos.
+ */
+export const workspaceReservedAgent = pgTable('workspace_reserved_agent', {
+  gptmakerAgentId: text('gptmaker_agent_id').primaryKey(),
+  /** Para que serve (ex.: `function-sandbox`); único por propósito. */
+  purpose: text('purpose').notNull().unique(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
 /** Divergências entre o workspace GPTMaker e o registro local (job workspace-sync). */
 export const workspaceSyncFinding = pgTable(
   'workspace_sync_finding',

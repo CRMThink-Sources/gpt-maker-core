@@ -1,8 +1,12 @@
 // Tabelas por domínio. Ficam em shared/ porque os módulos não podem depender uns dos outros
 // e as chaves estrangeiras cruzam domínios; cada módulo acessa só as tabelas que são suas.
+export * from './agent-tests';
+export * from './ai-keys';
+export * from './agent-functions';
 export * from './agents';
 export * from './backoffice';
 export * from './billing';
+export * from './crm';
 export * from './models';
 export * from './notifications';
 export * from './payments';

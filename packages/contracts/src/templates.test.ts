@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { renderFields, renderTemplate, type TemplateContext, templateErrors } from './templates';
+import {
+  dialogChatId,
+  renderFields,
+  renderTemplate,
+  type TemplateContext,
+  templateErrors,
+  templatesUse,
+} from './templates';
 import { createTriggerSchema } from './triggers';
 
 const context: TemplateContext = {
@@ -56,5 +63,29 @@ describe('templates dos gatilhos', () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe('variável desconhecida: {{cliente.nome}}');
+  });
+});
+
+describe('chat e sessão da Linha Aberta', () => {
+  it('variáveis aceitas e vazias sem valor', () => {
+    expect(templateErrors('{{dialog.chatId}} {{dialog.sessionId}}')).toEqual([]);
+    expect(renderTemplate('[{{dialog.chatId}}|{{dialog.sessionId}}]', context)).toBe('[|]');
+    expect(
+      renderTemplate('{{dialog.id}} {{dialog.chatId}} {{dialog.sessionId}}', {
+        ...context,
+        dialog: { id: 'chat9500', chatId: '9500', sessionId: '2008' },
+      }),
+    ).toBe('chat9500 9500 2008');
+  });
+
+  it('número do chat', () => {
+    expect(dialogChatId('chat9498')).toBe('9498');
+    expect(dialogChatId('test:abc')).toBeNull();
+    expect(dialogChatId(null)).toBeNull();
+  });
+
+  it('templates que citam a sessão', () => {
+    expect(templatesUse(['a', 'sessão {{ dialog.sessionId }}'], 'dialog.sessionId')).toBe(true);
+    expect(templatesUse(['{{dialog.id}}'], 'dialog.sessionId')).toBe(false);
   });
 });

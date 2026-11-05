@@ -7,7 +7,7 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ENV } from '../../src/config/config.module';
@@ -25,6 +25,7 @@ import { runMigrations } from '../../src/shared/database/migrate';
 import * as schema from '../../src/shared/database/schema/index';
 import { ApiExceptionFilter } from '../../src/shared/http/api-exception.filter';
 import { REDIS } from '../../src/shared/redis/redis.module';
+import { testPool } from '../support/postgres';
 
 const H = { 'X-Backoffice': '1' };
 const currentStep = () => Math.floor(Date.now() / 30_000);
@@ -38,6 +39,7 @@ describe('backoffice: autenticação', () => {
   let db: NodePgDatabase<typeof schema>;
   let app: INestApplication;
   let operators: OperatorService;
+  let auth: AdminAuthService;
   let email: string;
   let password: string;
 
@@ -70,12 +72,13 @@ describe('backoffice: autenticação', () => {
     ]);
     configureFieldCipher(randomBytes(32).toString('base64'));
     await runMigrations(postgres.getConnectionUri());
-    pool = new Pool({ connectionString: postgres.getConnectionUri() });
+    pool = testPool(postgres.getConnectionUri());
     db = drizzle(pool, { schema });
     redis = new Redis(redisContainer.getConnectionUrl());
     const env = {
       BACKOFFICE_SESSION_IDLE_MINUTES: 120,
       BACKOFFICE_SESSION_MAX_HOURS: 12,
+      BACKOFFICE_TRUSTED_DEVICE_DAYS: 30,
       BACKOFFICE_COOKIE_SECURE: false,
       BACKOFFICE_TOTP_ISSUER: 'ThinkFlow AI Backoffice',
     } as Env;
@@ -96,6 +99,7 @@ describe('backoffice: autenticação', () => {
     app = moduleRef.createNestApplication();
     await app.init();
     operators = moduleRef.get(OperatorService);
+    auth = moduleRef.get(AdminAuthService);
   }, 120_000);
 
   beforeEach(async () => {
@@ -275,6 +279,84 @@ describe('backoffice: autenticação', () => {
       .expect(204);
     await request(app.getHttpServer()).get('/admin/auth/me').set('Cookie', cookie).expect(401);
     await signIn(email, 'uma-senha-bem-longa', secret, currentStep() + 1);
+  });
+
+  /** Login completo pedindo para lembrar o navegador; devolve o cookie do navegador lembrado. */
+  async function signInRemembering(
+    step = currentStep(),
+  ): Promise<{ device: string; secret: string }> {
+    const first = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .send({ email, password })
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .post('/admin/auth/totp')
+      .set(H)
+      .send({
+        challenge: first.body.challenge,
+        code: totpCode(first.body.secret, step),
+        rememberDevice: true,
+      })
+      .expect(200);
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const device = cookies.find((c) => c.startsWith('gm_admin_device='))!;
+    expect(device).toContain('HttpOnly');
+    return { device: device.split(';')[0]!, secret: first.body.secret };
+  }
+
+  it('navegador lembrado: o próximo login pede só a senha; senha errada continua recusada', async () => {
+    const { device } = await signInRemembering();
+    const login = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .set('Cookie', device)
+      .send({ email, password })
+      .expect(200);
+    expect(login.body).toMatchObject({ step: 'authenticated', operator: { email } });
+    const session = String(login.headers['set-cookie']).split(';')[0]!;
+    expect(session).toMatch(/^gm_admin=/);
+    await request(app.getHttpServer()).get('/admin/auth/me').set('Cookie', session).expect(200);
+
+    await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .set('Cookie', device)
+      .send({ email, password: 'errada-123456' })
+      .expect(401);
+    // Sem o cookie (outro navegador), o código volta a ser pedido.
+    const other = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .send({ email, password })
+      .expect(200);
+    expect(other.body.step).toBe('totp');
+  });
+
+  it('navegador lembrado não vale para outro operador nem depois de revogar as sessões', async () => {
+    const { device } = await signInRemembering();
+    const other = await operators.create({
+      email: `duda-${randomBytes(3).toString('hex')}@empresa.com`,
+      name: 'Duda',
+      role: 'SUPPORT',
+    });
+    const asOther = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .set('Cookie', device)
+      .send({ email: other.operator.email, password: other.temporaryPassword })
+      .expect(200);
+    expect(asOther.body.step).toBe('totp-setup');
+
+    const self = (await operators.findByEmail(email))!;
+    await auth.revokeAll(self.id);
+    const again = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set(H)
+      .set('Cookie', device)
+      .send({ email, password })
+      .expect(200);
+    expect(again.body.step).toBe('totp');
   });
 
   it('logout encerra a sessão', async () => {

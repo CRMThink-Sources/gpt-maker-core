@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { CurrentSubscription, PlatformEvent } from '@crmthink-sources/platform-sdk';
-import { APP_CODE } from '@gptmaker/contracts';
 import { Cron } from '@nestjs/schedule';
 import { and, asc, eq, gt, ne } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import { ENV } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
 import { subscriptionState, tenant } from '../../shared/database/schema/index';
@@ -166,6 +167,7 @@ export class SubscriptionConsistencyService {
     private readonly subscriptions: SubscriptionEventsService,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.lock = new DistributedLock(redis);
   }
@@ -265,7 +267,7 @@ export class SubscriptionConsistencyService {
     const event = {
       eventId: randomUUID(),
       type: result.type,
-      appCode: APP_CODE,
+      appCode: this.env.APP_CODE,
       installationId,
       memberId: row.memberId,
       occurredAt: now.toISOString(),

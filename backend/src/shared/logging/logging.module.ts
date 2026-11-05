@@ -18,8 +18,13 @@ import { currentContext } from '../context/request-context';
           autoLogging: {
             ignore: (req) => req.url?.startsWith('/health') === true || req.url === '/metrics',
           },
+          // Tokens na URL (`?t=` dos webhooks e da conexão MCP) nunca vão para o log.
+          serializers: {
+            req: (req: { url?: string }) => ({ ...req, url: redactUrlToken(req.url) }),
+          },
           redact: [
             'req.headers.authorization',
+            'req.query.t',
             'req.headers.cookie',
             'req.headers["x-platform-signature"]',
           ],
@@ -32,3 +37,8 @@ import { currentContext } from '../context/request-context';
   ],
 })
 export class LoggingModule {}
+
+/** `/mcp?t=segredo&x=1` ⇒ `/mcp?t=[redacted]&x=1`. */
+export function redactUrlToken(url: string | undefined): string | undefined {
+  return url?.replace(/([?&]t=)[^&#]*/g, '$1[redacted]');
+}

@@ -9,13 +9,15 @@
     "start:api": "node dist/main.api.js",
     "start:worker": "node dist/main.worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "review:eval": "tsx scripts/review-eval.ts",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "backoffice:create-operator": "node --env-file=.env dist/src/cli/create-operator.js",
-    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js"
+    "agents:strip-prefix": "node --env-file=.env dist/src/cli/strip-agent-prefix.js",
+    "agents:discard-legacy": "node --env-file=.env dist/src/cli/discard-legacy-agents.js"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",
@@ -45,6 +47,7 @@
     "@crmthink-sources/platform-sdk": "^1.1.0",
     "@golevelup/nestjs-rabbitmq": "^9.0.2",
     "@gptmaker/contracts": "*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@nestjs/common": "^11.2.6",
     "@nestjs/core": "^11.2.6",
     "@nestjs/platform-express": "^11.2.6",

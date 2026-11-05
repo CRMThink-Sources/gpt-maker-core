@@ -265,7 +265,7 @@ export default function AgentsPage() {
       {creating && session.canManage && (
         <CreateAgentWizard
           onClose={closeWizard}
-          onCreated={(agent) => router.push(`/app/agents/${agent.id}?created=1`)}
+          onCreated={(agent) => router.push(`/app/agents/${agent.id}/function?created=1`)}
         />
       )}
     </>

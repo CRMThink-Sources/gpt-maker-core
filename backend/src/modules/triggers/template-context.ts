@@ -1,4 +1,4 @@
-import type { TemplateContext } from '@gptmaker/contracts';
+import { dialogChatId, type TemplateContext } from '@gptmaker/contracts';
 
 type Payload = Record<string, unknown>;
 
@@ -32,7 +32,7 @@ export function buildTemplateContext(
     message: { text: text(payload, 'message', 'prompt'), role: text(payload, 'role') },
     agent: { id: agent.id, name: agent.name },
     event: { name: event.event, date: event.receivedAt.toISOString() },
-    dialog: { id: event.dialogId },
+    dialog: { id: event.dialogId, chatId: dialogChatId(event.dialogId) },
     interaction: { id: text(payload, 'interactionId'), protocol: text(payload, 'protocol') },
     payload: event.payload,
   };

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { AdminProvider } from './admin-provider';
 
-export const metadata: Metadata = { title: 'Backoffice ThinkFlow AI', robots: { index: false } };
+export const metadata: Metadata = { title: 'Backoffice GPT Think AI', robots: { index: false } };
 
 /**
  * Backoffice interno (spec admin-backoffice, design D17): operadores com senha + TOTP, fora do

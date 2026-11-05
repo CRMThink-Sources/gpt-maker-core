@@ -35,6 +35,8 @@ export const envSchema = z.object({
   BACKOFFICE_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(120),
   /** Duração máxima da sessão, mesmo em uso. */
   BACKOFFICE_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
+  /** Dias em que um navegador lembrado entra só com a senha, sem o código do autenticador. */
+  BACKOFFICE_TRUSTED_DEVICE_DAYS: z.coerce.number().int().positive().default(30),
   /** Cookie só por HTTPS; desligar apenas em desenvolvimento local (http://localhost). */
   BACKOFFICE_COOKIE_SECURE: booleanFromString.default(true),
   /** Nome que aparece no app autenticador. */
@@ -85,6 +87,11 @@ export const envSchema = z.object({
     .transform((value) => value.replace(/\/+$/, '')),
 
   // crmthink-platform: instalação, tokens do Bitrix, sessão do iframe e cobrança (design D3/D9)
+  /**
+   * Código do app no cadastro da plataforma, um por ambiente (ex.: `crmthink.thinkflow` e
+   * `crmthink.homolog-thinkflow`): `aud` do JWT e `appCode` do instalador e dos eventos.
+   */
+  APP_CODE: z.string().min(1),
   PLATFORM_URL: z.url(),
   /** Chave de API do app (`credentials.apiKey` do cadastro). */
   PLATFORM_API_KEY: z.string().min(1),
@@ -150,6 +157,41 @@ export const envSchema = z.object({
   /** Chamadas por segundo por portal Bitrix24 (limite do plano ~2 req/s, design D13). */
   BITRIX_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(2),
   BITRIX_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
+  // Ferramentas do agente sobre o CRM (spec agent-crm-tools, design S9)
+  /**
+   * Liga a intenção "Consultar cliente no CRM" e o servidor MCP. Desligado, as rotas respondem
+   * 404, a ativação é recusada e o painel esconde as telas.
+   */
+  CRM_TOOLS_ENABLED: booleanFromString.default(false),
+  /** Chamadas por minuto por agente, somando a intenção e o MCP. */
+  CRM_TOOLS_RATE_PER_MINUTE: z.coerce.number().int().positive().default(60),
+
+  // Revisão do preenchimento da função por IA (spec agent-knowledge-review, design D5, D7 e D9)
+  VIBECODE_BASE_URL: z.url().default('https://vibecode.bitrix24.com'),
+  /** Modelo fixo da revisão, igual para todos os clientes. */
+  VIBECODE_REVIEW_MODEL: z.string().min(1).default('bitrix/bitrixgpt-5.5'),
+  /**
+   * Chave Vibecode da CRMThink, usada por quem não tem chave própria (cobra créditos do app).
+   * Vazia, só quem tem chave própria revisa por IA.
+   */
+  VIBECODE_PLATFORM_API_KEY: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || undefined),
+  /**
+   * Interruptor da chave da CRMThink. Desligado (padrão), a ajuda e a revisão por IA só funcionam
+   * para quem cadastrou chave própria, mesmo com `VIBECODE_PLATFORM_API_KEY` preenchida. Ligar
+   * reativa a chave da CRMThink para os demais, sem deploy de código.
+   */
+  VIBECODE_PLATFORM_FALLBACK: booleanFromString.default(false),
+  /** Revisões de campo por minuto com a chave da CRMThink, somando todos os clientes. */
+  VIBECODE_PLATFORM_RPM: z.coerce.number().int().positive().default(200),
+  /** Por chamada ao Vibecode (a revisão de um campo é síncrona). */
+  VIBECODE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /** Créditos debitados por campo revisado com a chave da CRMThink. */
+  REVIEW_CREDITS_PER_FIELD: z.coerce.number().int().nonnegative().default(2),
 });
 
 export type Env = z.infer<typeof envSchema>;

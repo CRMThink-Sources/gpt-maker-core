@@ -3,6 +3,7 @@ import { AgentsModule } from '../agents';
 import { BitrixModule } from '../bitrix';
 import { TenancyModule } from '../tenancy';
 import { TriggerActionExecutor } from './actions/action-executor';
+import { ActionRotation } from './actions/action-rotation';
 import { AgentEventIntake } from './agent-event.intake';
 import { GptMakerWebhooksController } from './gptmaker-webhooks.controller';
 import { TriggerEvaluationConsumer } from './trigger-evaluation.consumer';
@@ -17,10 +18,11 @@ import { TriggersController } from './triggers.controller';
   providers: [
     AgentEventIntake,
     TriggerActionExecutor,
+    ActionRotation,
     TriggerEvaluationConsumer,
     TriggerRunner,
     TriggerService,
   ],
-  exports: [TriggerService, TriggerActionExecutor],
+  exports: [TriggerService, TriggerActionExecutor, ActionRotation],
 })
 export class TriggersModule {}
