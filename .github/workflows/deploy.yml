@@ -45,6 +45,7 @@ jobs:
           ssh-host: ${{ vars.DEPLOY_HOST }}
           ssh-user: ${{ vars.DEPLOY_USER }}
           deploy-dir: ${{ vars.DEPLOY_DIR }}
+          environment: ${{ env.TARGET_ENV }}
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
           ssh-known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           env-file: ${{ secrets.ENV_FILE }}

@@ -1,8 +1,11 @@
 # Staging: roteiro de provisionamento
 
-Staging roda num Droplet próprio com o mesmo `infra/docker-compose.prod.yml` da produção (design
+Staging roda com o mesmo `infra/docker-compose.prod.yml` da produção (design
 D18/D19). Cada push em `develop` gera as imagens (`release.yml`) e faz o deploy automático
 (`deploy.yml`, GitHub Environment `staging`), com health check e volta para a tag anterior se falhar.
+
+> Staging e produção dividem o mesmo Droplet, com um proxy único: veja `docs/producao.md`. O Droplet
+> próprio e o Caddy por stack descritos abaixo valem só para o provisionamento inicial.
 
 Valores do staging:
 

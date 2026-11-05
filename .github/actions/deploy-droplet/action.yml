@@ -6,6 +6,7 @@ inputs:
   ssh-host: { description: 'Host do Droplet', required: true }
   ssh-user: { description: 'Usuário SSH', required: true }
   deploy-dir: { description: 'Diretório da stack no Droplet', required: true }
+  environment: { description: 'Ambiente (staging ou production)', required: true }
   ssh-private-key: { description: 'Chave privada SSH', required: true }
   ssh-known-hosts: { description: 'Linha(s) do known_hosts do Droplet', required: true }
   env-file: { description: 'Conteúdo do .env do ambiente', required: true }
@@ -31,13 +32,19 @@ runs:
       env:
         ENV_FILE: ${{ inputs.env-file }}
         IMAGE_TAG: ${{ inputs.image-tag }}
+        TARGET_ENV: ${{ inputs.environment }}
       run: |
         mkdir -p bundle/rabbitmq
-        cp infra/docker-compose.prod.yml infra/Caddyfile infra/deploy/deploy.sh bundle/
+        cp infra/docker-compose.prod.yml infra/deploy/deploy.sh bundle/
+        cp -r infra/edge bundle/edge
         cp infra/rabbitmq/enabled_plugins bundle/rabbitmq/
+        # Escritos por último: valem mesmo que o ENV_FILE traga os mesmos nomes (o Compose usa o último).
+        # Isolam stack e dados quando staging e produção dividem o Droplet.
         {
           printf '%s\n' "$ENV_FILE"
           echo "GHCR_OWNER=${GITHUB_REPOSITORY_OWNER,,}"
+          echo "STACK_NAME=gptmaker-${TARGET_ENV}"
+          echo "DATA_DIR=/mnt/gptmaker-data/${TARGET_ENV}"
         } > bundle/.env
         chmod 600 bundle/.env
 

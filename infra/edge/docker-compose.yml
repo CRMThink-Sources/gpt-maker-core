@@ -1,0 +1,28 @@
+# Proxy reverso único do Droplet: dono das portas 80/443 e dos certificados de todos os ambientes.
+# Cada ambiente (docker-compose.prod.yml) entra na rede `edge` e ganha um arquivo em caddy/sites/.
+# Subido e atualizado pelo deploy.sh; ACME_EMAIL vem do .env do ambiente.
+name: gptmaker-edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    logging:
+      driver: json-file
+      options: { max-size: 20m, max-file: '5' }
+
+networks:
+  edge:
+    name: edge
+
+volumes:
+  caddy-data:
+  caddy-config:

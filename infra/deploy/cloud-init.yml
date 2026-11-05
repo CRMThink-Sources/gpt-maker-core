@@ -49,8 +49,8 @@ runcmd:
       mkdir -p /mnt/gptmaker-data
       echo "AVISO: nenhum Volume montado em /mnt; os dados ficam no disco do Droplet" > /root/VOLUME_AUSENTE
     fi
-    mkdir -p /mnt/gptmaker-data/postgres /mnt/gptmaker-data/rabbitmq /mnt/gptmaker-data/redis
-  # Diretório da stack (DEPLOY_DIR no GitHub Environment)
-  - install -d -o deploy -g deploy /opt/gptmaker
+    mkdir -p /mnt/gptmaker-data/staging /mnt/gptmaker-data/production
+  # Diretórios das stacks (DEPLOY_DIR de cada GitHub Environment) e do proxy único (infra/edge)
+  - install -d -o deploy -g deploy /opt/gptmaker /opt/gptthink /opt/edge
   - systemctl restart ssh
   - dpkg-reconfigure -f noninteractive unattended-upgrades

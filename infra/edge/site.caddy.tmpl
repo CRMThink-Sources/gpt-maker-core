@@ -1,35 +1,23 @@
-{
-	email {$ACME_EMAIL}
-}
-
-(security_headers) {
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options nosniff
-		Referrer-Policy strict-origin-when-cross-origin
-		-Server
-	}
-}
-
 # Frontend. `/app` é carregado no iframe do portal Bitrix24, cujo domínio não é conhecido de
 # antemão (qualquer TLD do Bitrix24 cloud, domínio próprio ou on-premise): aceita qualquer origem
 # HTTPS. Não há sessão por cookie para sequestrar num clickjacking: a sessão nasce da auth do BX24
 # dentro do iframe, verificada no servidor pela plataforma. O resto (ex.: `/admin`) não embute.
-{$APP_DOMAIN} {
+# Gerado pelo deploy.sh: __STACK__ é o nome da stack; -web e -api são aliases na rede `edge`.
+__APP_DOMAIN__ {
 	import security_headers
 	@bitrix_iframe path /app /app/*
 	header @bitrix_iframe Content-Security-Policy "frame-ancestors https:"
 	@not_bitrix_iframe not path /app /app/*
 	header @not_bitrix_iframe Content-Security-Policy "frame-ancestors 'self'"
 	encode zstd gzip
-	reverse_proxy frontend:3000
+	reverse_proxy __STACK__-web:3000
 }
 
 # Backend: API do frontend e webhooks (Bitrix, GPTMaker, crmthink-platform).
-{$API_DOMAIN} {
+__API_DOMAIN__ {
 	import security_headers
 	encode zstd gzip
 	# Métricas só na rede interna (Prometheus); nunca expostas.
 	respond /metrics 404
-	reverse_proxy backend-api:3001
+	reverse_proxy __STACK__-api:3001
 }
