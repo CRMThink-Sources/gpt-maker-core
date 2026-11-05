@@ -6,7 +6,12 @@ inputs:
   ssh-host: { description: 'Host do Droplet', required: true }
   ssh-user: { description: 'Usuário SSH', required: true }
   deploy-dir: { description: 'Diretório da stack no Droplet', required: true }
-  environment: { description: 'Ambiente (staging ou production)', required: true }
+  environment:
+    {
+      description: 'Ambiente (staging ou production); vazio = deduzido do evento',
+      required: false,
+      default: '',
+    }
   ssh-private-key: { description: 'Chave privada SSH', required: true }
   ssh-known-hosts: { description: 'Linha(s) do known_hosts do Droplet', required: true }
   env-file: { description: 'Conteúdo do .env do ambiente', required: true }
@@ -32,8 +37,14 @@ runs:
       env:
         ENV_FILE: ${{ inputs.env-file }}
         IMAGE_TAG: ${{ inputs.image-tag }}
-        TARGET_ENV: ${{ inputs.environment }}
+        # Num evento workflow_run vale o deploy.yml da branch padrão (master), que pode não passar o
+        # input: por isso o ambiente também é deduzido aqui, com a mesma regra do deploy.yml.
+        TARGET_ENV: ${{ inputs.environment != '' && inputs.environment || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.event.workflow_run.head_branch == 'master' && 'production' || 'staging')) }}
       run: |
+        case "$TARGET_ENV" in
+          staging|production) ;;
+          *) echo "ambiente inválido: '$TARGET_ENV'" >&2; exit 1 ;;
+        esac
         mkdir -p bundle/rabbitmq
         cp infra/docker-compose.prod.yml infra/deploy/deploy.sh bundle/
         cp -r infra/edge bundle/edge
