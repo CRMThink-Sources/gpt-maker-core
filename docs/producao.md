@@ -9,11 +9,11 @@ Staging e produção dividem o Droplet. O que muda em relação ao `docs/staging
 - **Dados separados**: `/mnt/gptmaker-data/staging` e `/mnt/gptmaker-data/production`.
 - Diretórios: staging em `/opt/gptmaker`, produção em `/opt/gptthink`.
 
-| Item       | Produção                                   |
-| ---------- | ------------------------------------------ |
-| App        | `gptthink.crmthink.com.br`                 |
-| API        | `api.gptthink.crmthink.com.br`             |
-| `APP_CODE` | `crmthink.thinkflow`                       |
+| Item       | Produção                       |
+| ---------- | ------------------------------ |
+| App        | `gptthink.crmthink.com.br`     |
+| API        | `api.gptthink.crmthink.com.br` |
+| `APP_CODE` | `crmthink.thinkflow`           |
 
 ## 1. Migrar o staging (uma vez, antes do primeiro deploy desta mudança)
 
@@ -78,12 +78,12 @@ Variables (já criadas): `DEPLOY_HOST=159.89.95.146`, `DEPLOY_USER=deploy`, `DEP
 
 Secrets:
 
-| Nome                 | Valor                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| `DEPLOY_SSH_KEY`     | a mesma chave privada do staging (o Droplet e o usuário `deploy` são os mesmos)    |
-| `DEPLOY_KNOWN_HOSTS` | saída de `ssh-keyscan -t ed25519 159.89.95.146`                                    |
-| `GHCR_PULL_TOKEN`    | o mesmo token do staging                                                           |
-| `ENV_FILE`           | o `.env` de produção (abaixo)                                                      |
+| Nome                 | Valor                                                                           |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `DEPLOY_SSH_KEY`     | a mesma chave privada do staging (o Droplet e o usuário `deploy` são os mesmos) |
+| `DEPLOY_KNOWN_HOSTS` | saída de `ssh-keyscan -t ed25519 159.89.95.146`                                 |
+| `GHCR_PULL_TOKEN`    | o mesmo token do staging                                                        |
+| `ENV_FILE`           | o `.env` de produção (abaixo)                                                   |
 
 Ative **Required reviewers** no Environment: o `deploy.yml` já espera essa aprovação antes de produção.
 
