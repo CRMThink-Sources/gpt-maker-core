@@ -1,3 +1,4 @@
+import type { BusinessHours } from '@gptmaker/contracts';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -48,6 +49,10 @@ export const agent = pgTable(
       .references(() => aiModel.id),
     /** Demais settings enviadas ao GPTMaker (`PUT /agents/{id}/settings`). */
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    /** Horário de funcionamento; `null` = atende 24h (spec agent-business-hours). */
+    businessHours: jsonb('business_hours').$type<BusinessHours>(),
+    /** Aviso enviado ao cliente que escreve fora do horário; `null` = silêncio. */
+    outOfHoursMessage: text('out_of_hours_message'),
     status: agentStatus('status').notNull().default('ACTIVE'),
     inactiveReason: agentInactiveReason('inactive_reason'),
     /** Hash SHA-256 do token dos webhooks do agente (`?t=`); o token em claro nunca é guardado. */
@@ -257,6 +262,7 @@ export const messageStatus = pgEnum('message_status', [
   'BLOCKED_NO_CREDIT',
   'SKIPPED_HUMAN',
   'SKIPPED_INACTIVE',
+  'SKIPPED_OUT_OF_HOURS',
   'FAILED',
 ]);
 

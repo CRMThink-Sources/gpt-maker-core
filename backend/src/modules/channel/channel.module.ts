@@ -17,6 +17,7 @@ import { InboundGate } from './inbound-gate';
 import { InboundRetry } from './inbound-retry';
 import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
+import { OutOfHoursHandler } from './out-of-hours.handler';
 import { PendingHandoffs } from './pending-handoff';
 import { ReplyPublisher } from './reply-publisher';
 import { TransferConsumer } from './transfer.consumer';
@@ -38,6 +39,7 @@ import { TransferConsumer } from './transfer.consumer';
     InboundConsumer,
     InboundRetry,
     NoCreditHandler,
+    OutOfHoursHandler,
     PendingHandoffs,
     ReplyPublisher,
     TransferConsumer,

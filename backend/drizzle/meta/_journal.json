@@ -148,6 +148,13 @@
       "when": 1793673832961,
       "tag": "0020_tenant_ai_key",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793920656692,
+      "tag": "0021_agent_business_hours",
+      "breakpoints": true
     }
   ]
 }

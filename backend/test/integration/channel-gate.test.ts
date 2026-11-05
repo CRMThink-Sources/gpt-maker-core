@@ -20,6 +20,7 @@ import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import type { InboundRetry } from '../../src/modules/channel/inbound-retry';
 import type { DeliveryFailureHandler } from '../../src/modules/channel/delivery-failure.handler';
 import type { NoCreditHandler } from '../../src/modules/channel/no-credit.handler';
+import type { OutOfHoursHandler } from '../../src/modules/channel/out-of-hours.handler';
 import type { ReplyPublisher } from '../../src/modules/channel/reply-publisher';
 import { GptMakerError } from '../../src/modules/gptmaker/gptmaker.errors';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
@@ -97,10 +98,18 @@ describe('gate das mensagens do chatbot', () => {
       tenantStatus?: (typeof tenant.$inferInsert)['status'];
       agentStatus?: (typeof agent.$inferInsert)['status'];
       balance?: [number, number, number] | null;
+      businessHours?: (typeof agent.$inferInsert)['businessHours'];
+      outOfHoursMessage?: string;
     } = {},
   ) {
     const owner = await newTenant(options.tenantStatus);
     const bot = await newAgent(owner.id, options.agentStatus ?? 'ACTIVE');
+    if (options.businessHours !== undefined || options.outOfHoursMessage !== undefined) {
+      await db
+        .update(agent)
+        .set({ businessHours: options.businessHours, outOfHoursMessage: options.outOfHoursMessage })
+        .where(eq(agent.id, bot.id));
+    }
     if (options.balance !== null) await setBalance(owner.id, ...(options.balance ?? [0, 10, 0]));
     const message: InboundMessage = {
       tenantId: owner.id,
@@ -125,6 +134,26 @@ describe('gate das mensagens do chatbot', () => {
     };
     return { owner, bot, message };
   }
+
+  /** Horário sem nenhum intervalo: sempre fechado. */
+  const NEVER_OPEN = {
+    timezone: 'America/Sao_Paulo',
+    days: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] },
+  };
+  const allDay = [{ start: '00:00', end: '24:00' }];
+  /** Horário que cobre o dia todo, todos os dias. */
+  const ALWAYS_OPEN = {
+    timezone: 'America/Sao_Paulo',
+    days: {
+      mon: allDay,
+      tue: allDay,
+      wed: allDay,
+      thu: allDay,
+      fri: allDay,
+      sat: allDay,
+      sun: allDay,
+    },
+  };
 
   async function startHuman(message: InboundMessage) {
     await db.insert(dialogState).values({
@@ -174,6 +203,40 @@ describe('gate das mensagens do chatbot', () => {
           installationId: Number(owner.installationId),
           modelCode: 'GPT_5_MINI',
         },
+      });
+    });
+
+    describe('horário de funcionamento', () => {
+      it('dentro do horário ⇒ encaminha', async () => {
+        const { message } = await scenario({ businessHours: ALWAYS_OPEN });
+        expect((await gate.check(message)).kind).toBe('forward');
+      });
+
+      it('fora do horário ⇒ não consulta saldo e leva o aviso', async () => {
+        const { owner, message } = await scenario({
+          businessHours: NEVER_OPEN,
+          outOfHoursMessage: 'Voltamos às 9h',
+          balance: [0, 0, 0],
+        });
+        await expect(gate.check(message)).resolves.toEqual({
+          kind: 'skip-out-of-hours',
+          notice: 'Voltamos às 9h',
+          installationId: Number(owner.installationId),
+        });
+      });
+
+      it('agente inativo prevalece sobre o horário', async () => {
+        const { message } = await scenario({ agentStatus: 'INACTIVE', businessHours: NEVER_OPEN });
+        await expect(gate.check(message)).resolves.toEqual({
+          kind: 'skip-inactive',
+          reason: 'agent',
+        });
+      });
+
+      it('operador atendendo prevalece sobre o horário', async () => {
+        const { message } = await scenario({ businessHours: NEVER_OPEN });
+        await startHuman(message);
+        await expect(gate.check(message)).resolves.toEqual({ kind: 'skip-human' });
       });
     });
 
@@ -328,6 +391,13 @@ describe('gate das mensagens do chatbot', () => {
         return 'notified';
       },
     } as unknown as NoCreditHandler;
+    const outOfHoursCalls: Array<{ message: InboundMessage; notice: string | null }> = [];
+    const outOfHours = {
+      handle: async (message: InboundMessage, _installationId: number, notice: string | null) => {
+        outOfHoursCalls.push({ message, notice });
+        return 'silent';
+      },
+    } as unknown as OutOfHoursHandler;
     const failed: Array<{ message: InboundMessage; attempts: number }> = [];
     const failures = {
       handle: async (message: InboundMessage, attempts: number) => {
@@ -350,6 +420,7 @@ describe('gate das mensagens do chatbot', () => {
         c,
         replies,
         noCredit,
+        outOfHours,
         failures,
         new PendingHandoffs(redis),
         handoff,
@@ -374,6 +445,7 @@ describe('gate das mensagens do chatbot', () => {
       asked.length = 0;
       published.length = 0;
       blocked.length = 0;
+      outOfHoursCalls.length = 0;
       failed.length = 0;
       publishFails = false;
     });
@@ -403,6 +475,18 @@ describe('gate das mensagens do chatbot', () => {
       expect(asked.map((m) => m.messageId)).toEqual([ok.message.messageId]);
       expect(published.map((m) => m.messageId)).toEqual([ok.message.messageId]);
       expect(blocked.map((m) => m.messageId)).toEqual([broke.message.messageId]);
+    });
+
+    it('fora do horário não chama o GPTMaker e passa pelo aviso', async () => {
+      const { message } = await scenario({
+        businessHours: NEVER_OPEN,
+        outOfHoursMessage: 'Fechado',
+      });
+      await consumerWith(gate).process(message, 0);
+      expect(asked).toEqual([]);
+      expect(outOfHoursCalls).toMatchObject([
+        { message: { messageId: message.messageId }, notice: 'Fechado' },
+      ]);
     });
 
     it('transferência pedida por intenção sai depois da resposta, uma vez', async () => {

@@ -557,6 +557,57 @@ describe('serviço de agentes', () => {
       expect(changes).toEqual([]);
     });
 
+    describe('horário de funcionamento', () => {
+      const hours = {
+        timezone: 'America/Sao_Paulo',
+        days: {
+          mon: [{ start: '09:00', end: '18:00' }],
+          tue: [],
+          wed: [],
+          thu: [],
+          fri: [],
+          sat: [],
+          sun: [],
+        },
+      };
+
+      it('salva, altera e remove sem chamar o GPTMaker', async () => {
+        const saved = await service.update(owner, existing.id, {
+          businessHours: hours,
+          outOfHoursMessage: 'Voltamos às 9h',
+        });
+        expect(saved).toMatchObject({ businessHours: hours, outOfHoursMessage: 'Voltamos às 9h' });
+        expect(await stored()).toMatchObject({ businessHours: hours });
+
+        // Campo ausente mantém o horário.
+        await service.update(owner, existing.id, {
+          outOfHoursMessage: 'Atendemos de seg a sex',
+        });
+        expect(await stored()).toMatchObject({
+          businessHours: hours,
+          outOfHoursMessage: 'Atendemos de seg a sex',
+        });
+
+        const removed = await service.update(owner, existing.id, {
+          businessHours: null,
+          outOfHoursMessage: null,
+        });
+        expect(removed).toMatchObject({ businessHours: null, outOfHoursMessage: null });
+        expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+      });
+
+      it('payload inválido é recusado e o horário salvo não muda', async () => {
+        await service.update(owner, existing.id, { businessHours: hours });
+        const invalid = {
+          ...hours,
+          days: { ...hours.days, mon: [{ start: '18:00', end: '09:00' }] },
+        };
+        const error = await errorOf(service.update(owner, existing.id, { businessHours: invalid }));
+        expect(error).toBeInstanceOf(Error);
+        expect(await stored()).toMatchObject({ businessHours: hours });
+      });
+    });
+
     it('edição direta recusa campo gerenciado pela função', async () => {
       await stubEdit();
       const error = await errorOf(service.update(owner, existing.id, { behavior: 'x' } as never));

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { businessHoursSchema, outOfHoursMessageSchema, type BusinessHours } from './business-hours';
 
 export const agentTypeSchema = z.enum(['SUPPORT', 'SALE', 'PERSONAL']);
 export const communicationTypeSchema = z.enum(['FORMAL', 'NORMAL', 'RELAXED']);
@@ -113,6 +114,9 @@ export const updateAgentSchema = z
     avatarUrl: z.url().max(2000).nullable(),
     modelId: z.uuid(),
     settings: operationalSettingsSchema,
+    /** `null` remove o horário (24h) / a mensagem fora do horário. */
+    businessHours: businessHoursSchema.nullable(),
+    outOfHoursMessage: outOfHoursMessageSchema.nullable(),
   })
   .partial()
   .strict()
@@ -144,6 +148,8 @@ export interface AgentView {
   jobDescription: string | null;
   model: { id: string; code: string; displayName: string; creditsPerResponse: number };
   settings: AgentSettings;
+  businessHours: BusinessHours | null;
+  outOfHoursMessage: string | null;
   status: z.infer<typeof agentStatusSchema>;
   inactiveReason: string | null;
   createdAt: string;

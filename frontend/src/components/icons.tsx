@@ -193,3 +193,7 @@ export const LogoutIcon = (p: P) => (
 export const ShieldIcon = (p: P) => (
   <Icon {...p} d="M12 3 4.5 6v5.5c0 4.6 3.2 8.3 7.5 9.5 4.3-1.2 7.5-4.9 7.5-9.5V6L12 3Z" />
 );
+
+export const ClockIcon = (p: P) => (
+  <Icon {...p} d="M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+);
