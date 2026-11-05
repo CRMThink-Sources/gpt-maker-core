@@ -262,6 +262,8 @@ export class AgentService {
       profile: { name: input.name, avatarUrl: input.avatarUrl },
       modelId: input.modelId,
       settings: input.settings,
+      businessHours: input.businessHours,
+      outOfHoursMessage: input.outOfHoursMessage,
     });
   }
 
@@ -283,7 +285,14 @@ export class AgentService {
   private async applyUpdate(
     owner: AgentOwner,
     id: string,
-    input: { profile: Partial<Profile>; modelId?: string; settings?: AgentSettings },
+    input: {
+      profile: Partial<Profile>;
+      modelId?: string;
+      settings?: AgentSettings;
+      /** `undefined` mantém; `null` remove (24h). Só local: o GPTMaker não conhece o horário. */
+      businessHours?: Agent['businessHours'];
+      outOfHoursMessage?: string | null;
+    },
   ): Promise<AgentView> {
     return this.withAgentLock(owner.tenantId, id, async () => {
       const current = await this.agents.getById(owner.tenantId, id);
@@ -334,7 +343,15 @@ export class AgentService {
         }
       }
 
-      const patch = { ...profile, modelId: model.id, settings };
+      const patch = {
+        ...profile,
+        modelId: model.id,
+        settings,
+        ...(input.businessHours !== undefined && { businessHours: input.businessHours }),
+        ...(input.outOfHoursMessage !== undefined && {
+          outOfHoursMessage: input.outOfHoursMessage,
+        }),
+      };
       // O item de assinatura só leva o título: outras edições não mudam o espelho.
       const updated =
         profile.name !== current.name
@@ -719,6 +736,8 @@ function toView(row: Agent, model: AiModel): AgentView {
       creditsPerResponse: model.creditsPerResponse,
     },
     settings: row.settings,
+    businessHours: row.businessHours,
+    outOfHoursMessage: row.outOfHoursMessage,
     status: row.status as AgentView['status'],
     inactiveReason: row.inactiveReason,
     createdAt: row.createdAt.toISOString(),

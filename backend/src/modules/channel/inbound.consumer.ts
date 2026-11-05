@@ -13,6 +13,7 @@ import type { InboundMessage } from './inbound-message';
 import { attemptOf, InboundRetry, type RetryOutcome } from './inbound-retry';
 import { DeliveryFailureHandler } from './delivery-failure.handler';
 import { NoCreditHandler } from './no-credit.handler';
+import { OutOfHoursHandler } from './out-of-hours.handler';
 import { HumanHandoff } from './human-handoff';
 import { PendingHandoffs } from './pending-handoff';
 import { ReplyPublisher } from './reply-publisher';
@@ -54,6 +55,7 @@ export class InboundConsumer implements OnApplicationBootstrap {
     private readonly conversation: ConversationService,
     private readonly replies: ReplyPublisher,
     private readonly noCredit: NoCreditHandler,
+    private readonly outOfHours: OutOfHoursHandler,
     private readonly failures: DeliveryFailureHandler,
     private readonly handoffs: PendingHandoffs,
     private readonly handoff: HumanHandoff,
@@ -138,6 +140,9 @@ export class InboundConsumer implements OnApplicationBootstrap {
           })
           .onConflictDoNothing();
         this.logger.log({ messageId: message.messageId, decision }, 'mensagem não encaminhada');
+        return;
+      case 'skip-out-of-hours':
+        await this.outOfHours.handle(message, decision.installationId, decision.notice, attempt);
         return;
       case 'no-credit':
         await this.noCredit.handle(message, decision.installationId, attempt);
