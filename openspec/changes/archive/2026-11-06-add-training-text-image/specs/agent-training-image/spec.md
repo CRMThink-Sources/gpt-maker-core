@@ -88,15 +88,27 @@ O sistema MUST permitir anexar uma imagem opcional a cada item da base de conhec
 - **THEN** o treinamento e a imagem do item são removidos
 
 ### Requirement: Envio da imagem ao GPTMaker e reenvio
-O sistema MUST enviar a imagem ao GPTMaker por uma URL de leitura temporária, sem tornar o arquivo público. O reenvio de um treinamento com falha MUST gerar uma URL nova a partir do arquivo guardado. Falha no GPTMaker ao criar ou editar com imagem MUST deixar o treinamento e o arquivo no estado anterior, sem arquivos órfãos.
+O sistema MUST enviar a imagem ao GPTMaker por uma URL pública **estável** da própria aplicação, que o GPTMaker guarda e busca (`GET` e `HEAD`), sem expor o armazenamento: o endereço contém um identificador aleatório e impossível de adivinhar, serve a imagem para exibição e MUST deixar de responder quando a imagem é apagada. O reenvio de um treinamento com falha MUST usar a mesma imagem guardada. Falha no GPTMaker ao criar ou editar com imagem MUST deixar o treinamento e o arquivo no estado anterior, sem arquivos órfãos: se o GPTMaker pode ter criado o treinamento antes de falhar (erro do provedor, tempo esgotado ou rede), o sistema MUST remover do GPTMaker o treinamento que casa exatamente com o conteúdo enviado e ainda não tem registro local.
+
+#### Scenario: URL estável e privada
+- **WHEN** um treinamento de texto com imagem é enviado ao GPTMaker
+- **THEN** a imagem vai como o endereço público da aplicação com identificador aleatório, o GPTMaker consegue buscá-la por `GET` e `HEAD` e o armazenamento continua privado
+
+#### Scenario: Imagem apagada
+- **WHEN** a imagem é removida do treinamento e o endereço antigo é aberto
+- **THEN** a aplicação responde que a imagem não foi encontrada
 
 #### Scenario: Reenvio após falha
 - **WHEN** um treinamento de texto com imagem falha no GPTMaker e o administrador pede para reenviar
-- **THEN** o sistema reenvia o mesmo texto e a mesma imagem com uma URL nova
+- **THEN** o sistema reenvia o mesmo texto e a mesma imagem
 
 #### Scenario: GPTMaker recusa
 - **WHEN** o GPTMaker recusa a criação de um treinamento com imagem
 - **THEN** o treinamento não é criado, o administrador vê o erro e a imagem enviada continua disponível para nova tentativa
+
+#### Scenario: GPTMaker cria e depois falha
+- **WHEN** o GPTMaker cria o treinamento mas responde com erro ao processar a imagem
+- **THEN** o administrador vê o erro, nada fica registrado localmente e o treinamento que ficou no GPTMaker é removido de lá, sem tocar em treinamentos que já têm registro local ou que têm outro texto
 
 ### Requirement: Remoção e limpeza das imagens
 O sistema MUST apagar a imagem do armazenamento quando o treinamento é removido ou quando a imagem é trocada ou removida. Imagens enviadas e não ligadas a nenhum treinamento por mais de 24 horas MUST ser apagadas automaticamente. Apagar o arquivo MUST NOT falhar a operação do usuário: a falha é registrada e a limpeza é repetida depois.
