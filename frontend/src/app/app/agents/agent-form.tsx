@@ -101,7 +101,7 @@ const SECTIONS: Array<{
     icon: ClockIcon,
     title: 'Horário de funcionamento',
     description: 'Dias e horários em que o agente responde. Fora deles, ele não atende.',
-    fields: ['businessHours', 'outOfHoursMessage'],
+    fields: ['businessHours', 'outOfHoursMessage', 'outOfHoursTransfer'],
   },
 ];
 

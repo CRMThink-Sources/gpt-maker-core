@@ -38,4 +38,13 @@ describe('updateAgentSchema (horário de funcionamento)', () => {
       false,
     );
   });
+
+  it('aceita transferência ligada ou desligada e recusa valor não booleano', () => {
+    expect(updateAgentSchema.parse({ outOfHoursTransfer: true }).outOfHoursTransfer).toBe(true);
+    expect(updateAgentSchema.parse({ outOfHoursTransfer: false }).outOfHoursTransfer).toBe(false);
+    expect(updateAgentSchema.safeParse({ outOfHoursTransfer: 'sim' }).success).toBe(false);
+  });
+  it('transferência ausente não altera', () => {
+    expect('outOfHoursTransfer' in updateAgentSchema.parse({ name: 'Ana' })).toBe(false);
+  });
 });

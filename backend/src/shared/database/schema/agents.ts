@@ -54,6 +54,8 @@ export const agent = pgTable(
     businessHours: jsonb('business_hours').$type<BusinessHours>(),
     /** Aviso enviado ao cliente que escreve fora do horário; `null` = silêncio. */
     outOfHoursMessage: text('out_of_hours_message'),
+    /** Fora do horário, transfere o diálogo ao operador livre; padrão ligado (spec agent-business-hours). */
+    outOfHoursTransfer: boolean('out_of_hours_transfer').notNull().default(true),
     status: agentStatus('status').notNull().default('ACTIVE'),
     inactiveReason: agentInactiveReason('inactive_reason'),
     /** Hash SHA-256 do token dos webhooks do agente (`?t=`); o token em claro nunca é guardado. */
