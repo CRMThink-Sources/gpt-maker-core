@@ -5,6 +5,7 @@ interface FakeTraining {
   agentId: string;
   type: string;
   text: string | null;
+  image?: string | null;
 }
 
 interface FakeIntention {
@@ -120,10 +121,16 @@ export class FakeGptMaker {
     this.agents.delete(agentId);
   }
 
-  async createTraining(agentId: string, input: { type: string; text?: string }) {
+  async createTraining(agentId: string, input: { type: string; text?: string; image?: string }) {
     this.call('training.create');
     const id = this.id('tr');
-    this.trainings.set(id, { id, agentId, type: input.type, text: input.text ?? null });
+    this.trainings.set(id, {
+      id,
+      agentId,
+      type: input.type,
+      text: input.text ?? null,
+      image: input.image ?? null,
+    });
     // Como na API real: a criação não devolve o id; ele vem da listagem.
     return { id: null };
   }
@@ -136,12 +143,13 @@ export class FakeGptMaker {
       .map((item) => ({ id: item.id, type: item.type, text: item.text }));
   }
 
-  async updateTextTraining(trainingId: string, input: { text: string }) {
+  async updateTextTraining(trainingId: string, input: { text: string; image?: string | null }) {
     this.call('training.update');
     const item = this.trainings.get(trainingId);
     if (!item)
       throw new GptMakerError('NOT_FOUND', 'training.update', 'não encontrado', { status: 404 });
     item.text = input.text;
+    if (input.image !== undefined) item.image = input.image;
   }
 
   async deleteTraining(trainingId: string) {

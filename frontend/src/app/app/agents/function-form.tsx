@@ -17,7 +17,7 @@ import {
   TRAINING_TEXT_MAX,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 import { BookIcon, CheckIcon, CloseIcon, PlusIcon, TextIcon, TrashIcon } from '@/components/icons';
 import { buttonClass } from '@/components/ui';
 import { inputClass } from './agent-fields';
@@ -30,6 +30,7 @@ import {
   UsersPicker,
 } from './bitrix-pickers';
 import { AssistPanel, type FormAssist } from './assist-ui';
+import { TrainingImageField } from './training-image-field';
 import { FieldNotes, FormReviewContext, type FormReview, ReviewSummary } from './review-ui';
 
 /**
@@ -49,6 +50,11 @@ type Props = {
   ai?: FormReview['ai'];
   /** Ajuda da IA para campos vazios; sem ela (criação, backoffice), nada muda no formulário. */
   assist?: FormAssist;
+  /**
+   * Agente do formulário: com ele, cada item da base aceita uma imagem (spec agent-training-image).
+   * Sem agente (assistente de criação, backoffice) não há onde guardar a imagem.
+   */
+  agentId?: string;
 };
 
 /** Problema de um campo (ou de um item dele: `campo[0]`, `campo[0].sub`). */
@@ -179,7 +185,20 @@ function Group({
 /** Agentes que os campos "Agente" oferecem (D17), sem repassar por cada pergunta. */
 const FormAgents = createContext<Array<{ id: string; name: string }>>([]);
 
-export function FunctionForm({ form, answers, onChange, issues, disabled, agents, ai, assist }: Props) {
+/** Agente dono das imagens dos itens da base; `null` esconde o campo de imagem. */
+const FormImageAgent = createContext<string | null>(null);
+
+export function FunctionForm({
+  form,
+  answers,
+  onChange,
+  issues,
+  disabled,
+  agents,
+  ai,
+  assist,
+  agentId,
+}: Props) {
   const set = (id: string, value: FunctionAnswerValue | undefined) => {
     const next = { ...answers };
     if (value === undefined) delete next[id];
@@ -206,40 +225,42 @@ export function FunctionForm({ form, answers, onChange, issues, disabled, agents
 
   return (
     <FormAgents.Provider value={agents ?? []}>
-      <FormReviewContext.Provider value={review}>
-        <div className="space-y-8">
-          <ReviewSummary answers={answers} />
-          {assist && (
-            <AssistPanel
-              form={form}
-              answers={answers}
-              disabled={disabled}
-              onApply={(fieldId, value) => set(fieldId, value)}
-              {...assist}
-            />
-          )}
-          <Group
-            icon={TextIcon}
-            title="Como o agente atende"
-            description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
-            fields={config}
-            answers={answers}
-          >
-            {config.map((field, index) => card(field, index))}
-          </Group>
-          {knowledge.length > 0 && (
+      <FormImageAgent.Provider value={agentId ?? null}>
+        <FormReviewContext.Provider value={review}>
+          <div className="space-y-8">
+            <ReviewSummary answers={answers} />
+            {assist && (
+              <AssistPanel
+                form={form}
+                answers={answers}
+                disabled={disabled}
+                onApply={(fieldId, value) => set(fieldId, value)}
+                {...assist}
+              />
+            )}
             <Group
-              icon={BookIcon}
-              title="Base de conhecimento"
-              description="Um assunto por item. Cada item vira um treinamento do agente."
-              fields={knowledge}
+              icon={TextIcon}
+              title="Como o agente atende"
+              description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
+              fields={config}
               answers={answers}
             >
-              {knowledge.map((field, index) => card(field, config.length + index))}
+              {config.map((field, index) => card(field, index))}
             </Group>
-          )}
-        </div>
-      </FormReviewContext.Provider>
+            {knowledge.length > 0 && (
+              <Group
+                icon={BookIcon}
+                title="Base de conhecimento"
+                description="Um assunto por item. Cada item vira um treinamento do agente."
+                fields={knowledge}
+                answers={answers}
+              >
+                {knowledge.map((field, index) => card(field, config.length + index))}
+              </Group>
+            )}
+          </div>
+        </FormReviewContext.Provider>
+      </FormImageAgent.Provider>
     </FormAgents.Provider>
   );
 }
@@ -673,6 +694,9 @@ function KnowledgeInput({
 }) {
   const items = (Array.isArray(value) ? value : []) as KnowledgeItem[];
   const update = (next: KnowledgeItem[]) => set(field.id, next);
+  const imageAgent = useContext(FormImageAgent);
+  // Miniaturas das imagens enviadas nesta sessão (o item só guarda o `imageId`).
+  const [previews, setPreviews] = useState<Record<string, string>>({});
   const blank = (): KnowledgeItem => ({
     itemKey: crypto.randomUUID(),
     values: Object.fromEntries(field.subfields.map((subfield) => [subfield.id, ''])),
@@ -742,6 +766,24 @@ function KnowledgeInput({
                     </label>
                   );
                 })}
+                {imageAgent && (
+                  <TrainingImageField
+                    agentId={imageAgent}
+                    imageId={item.imageId ?? null}
+                    previewUrl={item.imageId ? previews[item.imageId] : null}
+                    disabled={disabled}
+                    onChange={(image) => {
+                      if (image) setPreviews((current) => ({ ...current, [image.id]: image.url }));
+                      update(
+                        items.map((other) => {
+                          if (other.itemKey !== item.itemKey) return other;
+                          const { imageId: _old, ...rest } = other;
+                          return image ? { ...rest, imageId: image.id } : rest;
+                        }),
+                      );
+                    }}
+                  />
+                )}
                 <IssueText
                   issues={issues.filter((issue) => issue.field.startsWith(`${field.id}[${index}]`))}
                 />

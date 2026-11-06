@@ -20,6 +20,7 @@ import { ObjectStorage } from './object-storage';
           secretAccessKey: env.STORAGE_SECRET_KEY,
           forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
           presignTtlSeconds: env.STORAGE_PRESIGN_TTL_SECONDS,
+          keyPrefix: env.STORAGE_KEY_PREFIX,
         }),
     },
   ],

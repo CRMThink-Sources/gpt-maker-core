@@ -43,6 +43,8 @@ export interface CompiledTraining {
   /** `<campo>:<itemKey>`: liga o treinamento ao item entre publicações. */
   key: string;
   text: string;
+  /** Imagem do item (`training_image.id`), se houver. */
+  imageId?: string;
 }
 
 export interface CompiledIntention {
@@ -392,6 +394,7 @@ export function compileAgent(input: CompileInput): CompiledAgent {
       trainings.push({
         key: `${field.id}:${item.itemKey}`,
         text: renderKnowledgeItem(field, item),
+        ...(item.imageId ? { imageId: item.imageId } : {}),
       });
   }
   const texts = trainings.map((training) => training.text);

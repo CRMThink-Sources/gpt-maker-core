@@ -1,6 +1,7 @@
 import type { BusinessHours } from '@gptmaker/contracts';
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -120,6 +121,46 @@ export const agentBot = pgTable(
 export const trainingType = pgEnum('training_type', ['TEXT', 'WEBSITE', 'VIDEO', 'DOCUMENT']);
 export const trainingStatus = pgEnum('training_status', ['PROCESSING', 'DONE', 'FAILED']);
 
+/**
+ * Imagem enviada para um treinamento de texto (spec agent-training-image). Existe antes de ser
+ * ligada (`training.image_id`); a que fica sem treinamento por mais de 24 h é apagada.
+ */
+export const trainingImage = pgTable(
+  'training_image',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenant.id),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agent.id),
+    /** Chave do objeto no Spaces (SeaweedFS em dev). */
+    objectKey: text('object_key').notNull(),
+    /**
+     * Token da URL pública estável que o GPTMaker guarda (`/public/training-images/<token>`): ele
+     * não copia o arquivo e a URL pré-assinada expira e rejeita `HEAD`. Aleatório e impossível de
+     * adivinhar; apagar a imagem apaga o acesso.
+     */
+    publicToken: text('public_token')
+      .notNull()
+      .default(sql`replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')`),
+    fileName: text('file_name').notNull(),
+    mimetype: text('mimetype').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: createdAt(),
+    deletedAt: timestamptz('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('training_image_object_key_uq').on(t.objectKey),
+    uniqueIndex('training_image_public_token_uq').on(t.publicToken),
+    index('training_image_tenant_idx')
+      .on(t.tenantId)
+      .where(sql`${t.deletedAt} is null`),
+    index('training_image_agent_idx').on(t.agentId),
+  ],
+);
+
 export const training = pgTable(
   'training',
   {
@@ -143,6 +184,8 @@ export const training = pgTable(
     documentName: text('document_name'),
     documentMimetype: text('document_mimetype'),
     documentSizeBytes: integer('document_size_bytes'),
+    /** Imagem do treinamento `TEXT` (spec agent-training-image). */
+    imageId: uuid('image_id').references((): AnyPgColumn => trainingImage.id),
     status: trainingStatus('status').notNull().default('PROCESSING'),
     /** Gerado pela função do agente: só a publicação dela altera (spec agent-training). */
     managed: boolean('managed').notNull().default(false),

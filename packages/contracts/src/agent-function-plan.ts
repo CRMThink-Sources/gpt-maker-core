@@ -96,8 +96,10 @@ export function diffLines(before: string, after: string): DiffLine[] {
   return diff;
 }
 
+/** Sem imagem o hash é o do texto, igual ao de antes: itens já publicados não viram "alterados". */
 export function trainingHash(training: CompiledTraining): string {
-  return contentHash(training.text);
+  if (!training.imageId) return contentHash(training.text);
+  return contentHash({ text: training.text, imageId: training.imageId });
 }
 
 export function intentionHash(intention: CompiledIntention): string {

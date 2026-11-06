@@ -10,6 +10,7 @@ import type { Env } from '../../src/config/env';
 import { AgentRepository } from '../../src/modules/agents/agent.repository';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
 import { GptMakerResilience } from '../../src/modules/gptmaker/gptmaker.resilience';
+import { TrainingImageService } from '../../src/modules/training/training-image.service';
 import { hashCallbackToken, TrainingService } from '../../src/modules/training/training.service';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
 import { runMigrations } from '../../src/shared/database/migrate';
@@ -62,6 +63,7 @@ describe('treinamentos dos agentes', () => {
       new AgentRepository(db),
       client,
       storage as unknown as ObjectStorage,
+      new TrainingImageService(storage as unknown as ObjectStorage, db, redis, ENV),
       db,
       redis,
       { ...ENV, ...env } as Env,

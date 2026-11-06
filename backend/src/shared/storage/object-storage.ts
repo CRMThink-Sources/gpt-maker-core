@@ -20,6 +20,8 @@ export interface ObjectStorageOptions {
   secretAccessKey: string;
   forcePathStyle: boolean;
   presignTtlSeconds: number;
+  /** Prefixo das chaves novas (ex.: `staging`), para ambientes que dividem o bucket. */
+  keyPrefix?: string;
 }
 
 export interface PutObjectInput {
@@ -59,11 +61,15 @@ export class ObjectStorage {
         : this.client;
   }
 
-  /** `trainings/<tenantId>/<aleatório>.<extensão>`: prefixo por tenant só para manutenção. */
+  /**
+   * `[<prefixo>/]trainings/<tenantId>/<aleatório>.<extensão>`: prefixo por tenant só para
+   * manutenção; o do ambiente (`keyPrefix`) separa staging e produção no mesmo bucket.
+   */
   newTrainingKey(tenantId: string, fileName: string): string {
     const extension = /\.([a-z0-9]{1,10})$/i.exec(fileName)?.[1]?.toLowerCase();
     const random = randomBytes(24).toString('base64url');
-    return `trainings/${tenantId}/${random}${extension ? `.${extension}` : ''}`;
+    const prefix = this.options.keyPrefix ? `${this.options.keyPrefix}/` : '';
+    return `${prefix}trainings/${tenantId}/${random}${extension ? `.${extension}` : ''}`;
   }
 
   async put(input: PutObjectInput): Promise<void> {
@@ -86,6 +92,14 @@ export class ObjectStorage {
       new GetObjectCommand({ Bucket: this.options.bucket, Key: key }),
       { expiresIn: this.options.presignTtlSeconds },
     );
+  }
+
+  /** Objeto para entregar ao cliente HTTP (rota pública das imagens de treinamento). */
+  async getObject(key: string): Promise<{ body: Readable; contentLength?: number }> {
+    const out = await this.client.send(
+      new GetObjectCommand({ Bucket: this.options.bucket, Key: key }),
+    );
+    return { body: out.Body as Readable, contentLength: out.ContentLength };
   }
 
   async exists(key: string): Promise<boolean> {
