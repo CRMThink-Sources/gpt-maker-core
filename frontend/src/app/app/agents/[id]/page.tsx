@@ -42,6 +42,9 @@ function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput
   }
   const outOfHoursMessage = values.outOfHoursMessage.trim() || null;
   if (outOfHoursMessage !== agent.outOfHoursMessage) body.outOfHoursMessage = outOfHoursMessage;
+  if (values.outOfHoursTransfer !== agent.outOfHoursTransfer) {
+    body.outOfHoursTransfer = values.outOfHoursTransfer;
+  }
   return body;
 }
 

@@ -25,6 +25,8 @@ export type GateDecision =
   | {
       kind: 'skip-out-of-hours';
       notice: string | null;
+      /** Transferir o diálogo ao operador livre (padrão ligado). */
+      transfer: boolean;
       installationId: number;
     }
   /** Saldo total ≤ 0: não vai ao GPTMaker; o bot avisa e transfere (`NoCreditHandler`). */
@@ -53,6 +55,7 @@ export class InboundGate {
         modelCode: aiModel.code,
         businessHours: agent.businessHours,
         outOfHoursMessage: agent.outOfHoursMessage,
+        outOfHoursTransfer: agent.outOfHoursTransfer,
       })
       .from(agent)
       .innerJoin(tenant, eq(tenant.id, agent.tenantId))
@@ -71,6 +74,7 @@ export class InboundGate {
       return {
         kind: 'skip-out-of-hours',
         notice: row.outOfHoursMessage,
+        transfer: row.outOfHoursTransfer,
         installationId: Number(row.installationId),
       };
     }

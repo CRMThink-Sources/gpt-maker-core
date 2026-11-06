@@ -142,7 +142,13 @@ export class InboundConsumer implements OnApplicationBootstrap {
         this.logger.log({ messageId: message.messageId, decision }, 'mensagem não encaminhada');
         return;
       case 'skip-out-of-hours':
-        await this.outOfHours.handle(message, decision.installationId, decision.notice, attempt);
+        await this.outOfHours.handle(
+          message,
+          decision.installationId,
+          decision.notice,
+          decision.transfer,
+          attempt,
+        );
         return;
       case 'no-credit':
         await this.noCredit.handle(message, decision.installationId, attempt);

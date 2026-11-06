@@ -117,6 +117,8 @@ export const updateAgentSchema = z
     /** `null` remove o horário (24h) / a mensagem fora do horário. */
     businessHours: businessHoursSchema.nullable(),
     outOfHoursMessage: outOfHoursMessageSchema.nullable(),
+    /** Fora do horário, transfere o diálogo ao operador livre (spec agent-business-hours). */
+    outOfHoursTransfer: z.boolean(),
   })
   .partial()
   .strict()
@@ -150,6 +152,7 @@ export interface AgentView {
   settings: AgentSettings;
   businessHours: BusinessHours | null;
   outOfHoursMessage: string | null;
+  outOfHoursTransfer: boolean;
   status: z.infer<typeof agentStatusSchema>;
   inactiveReason: string | null;
   createdAt: string;

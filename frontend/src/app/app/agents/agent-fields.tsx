@@ -18,6 +18,8 @@ export interface AgentFormValues {
   /** `null` = atende 24h. */
   businessHours: BusinessHours | null;
   outOfHoursMessage: string;
+  /** Fora do horário, transfere ao operador livre (padrão ligado). */
+  outOfHoursTransfer: boolean;
 }
 
 export function initialValues(
@@ -31,6 +33,7 @@ export function initialValues(
     settings: { ...agent?.settings },
     businessHours: agent?.businessHours ?? null,
     outOfHoursMessage: agent?.outOfHoursMessage ?? '',
+    outOfHoursTransfer: agent?.outOfHoursTransfer ?? true,
   };
 }
 

@@ -264,6 +264,7 @@ export class AgentService {
       settings: input.settings,
       businessHours: input.businessHours,
       outOfHoursMessage: input.outOfHoursMessage,
+      outOfHoursTransfer: input.outOfHoursTransfer,
     });
   }
 
@@ -292,6 +293,7 @@ export class AgentService {
       /** `undefined` mantém; `null` remove (24h). Só local: o GPTMaker não conhece o horário. */
       businessHours?: Agent['businessHours'];
       outOfHoursMessage?: string | null;
+      outOfHoursTransfer?: boolean;
     },
   ): Promise<AgentView> {
     return this.withAgentLock(owner.tenantId, id, async () => {
@@ -350,6 +352,9 @@ export class AgentService {
         ...(input.businessHours !== undefined && { businessHours: input.businessHours }),
         ...(input.outOfHoursMessage !== undefined && {
           outOfHoursMessage: input.outOfHoursMessage,
+        }),
+        ...(input.outOfHoursTransfer !== undefined && {
+          outOfHoursTransfer: input.outOfHoursTransfer,
         }),
       };
       // O item de assinatura só leva o título: outras edições não mudam o espelho.
@@ -738,6 +743,7 @@ function toView(row: Agent, model: AiModel): AgentView {
     settings: row.settings,
     businessHours: row.businessHours,
     outOfHoursMessage: row.outOfHoursMessage,
+    outOfHoursTransfer: row.outOfHoursTransfer,
     status: row.status as AgentView['status'],
     inactiveReason: row.inactiveReason,
     createdAt: row.createdAt.toISOString(),

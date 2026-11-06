@@ -7,7 +7,15 @@ import { BusinessHoursFields } from './business-hours-fields';
 
 afterEach(cleanup);
 
-function Harness({ initial, now }: { initial: BusinessHours | null; now?: Date }) {
+function Harness({
+  initial,
+  now,
+  onValues,
+}: {
+  initial: BusinessHours | null;
+  now?: Date;
+  onValues?: (values: AgentFormValues) => void;
+}) {
   const [values, setValues] = useState<AgentFormValues>({
     name: '',
     avatarUrl: '',
@@ -15,7 +23,9 @@ function Harness({ initial, now }: { initial: BusinessHours | null; now?: Date }
     settings: {},
     businessHours: initial,
     outOfHoursMessage: '',
+    outOfHoursTransfer: true,
   });
+  onValues?.(values);
   return (
     <BusinessHoursFields
       values={values}
@@ -61,5 +71,30 @@ describe('BusinessHoursFields', () => {
     // Sábado.
     render(<Harness initial={office} now={new Date('2026-11-07T13:30:00Z')} />);
     expect(screen.getByText('Fora do horário agora')).toBeTruthy();
+  });
+
+  describe('transferência para atendente', () => {
+    it('vem ligada por padrão e desligar muda o valor enviado', () => {
+      let latest: AgentFormValues | undefined;
+      render(<Harness initial={office} onValues={(v) => (latest = v)} />);
+      const box = screen.getByLabelText('Transferir para um atendente') as HTMLInputElement;
+      expect(box.checked).toBe(true);
+      fireEvent.click(box);
+      expect(latest?.outOfHoursTransfer).toBe(false);
+      expect(
+        (screen.getByLabelText('Transferir para um atendente') as HTMLInputElement).checked,
+      ).toBe(false);
+    });
+
+    it('o aviso continua opcional e o texto de ajuda cita a Linha Aberta', () => {
+      render(<Harness initial={office} />);
+      expect(screen.getByText(/Linha Aberta precisa estar configurado/)).toBeTruthy();
+      expect(screen.getByText(/Mensagem fora do horário \(opcional\)/)).toBeTruthy();
+    });
+
+    it('sem horário a opção não aparece', () => {
+      render(<Harness initial={null} />);
+      expect(screen.queryByLabelText('Transferir para um atendente')).toBeNull();
+    });
   });
 });

@@ -184,9 +184,32 @@ export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: 
         </>
       )}
 
+      {hours && (
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 text-sm font-medium text-zinc-800">
+            <input
+              type="checkbox"
+              checked={values.outOfHoursTransfer}
+              onChange={(e) => set('outOfHoursTransfer', e.target.checked)}
+            />
+            Transferir para um atendente
+          </label>
+          <p className="text-sm text-zinc-500">
+            Fora do horário, a conversa vai para o operador livre da Linha Aberta e o agente deixa
+            de responder nela. Para o atendimento acontecer, o expediente da Linha Aberta precisa
+            estar configurado no Bitrix24. A conversa só volta para o agente quando o atendente a
+            encerra.
+          </p>
+        </div>
+      )}
+
       <Field
-        label="Mensagem fora do horário"
-        hint="Enviada uma vez a cada 12 horas para quem escrever fora do horário, sem consumir créditos. Em branco, o agente fica em silêncio. Mensagens fora do horário não são respondidas depois."
+        label="Mensagem fora do horário (opcional)"
+        hint={
+          values.outOfHoursTransfer && hours
+            ? 'Enviada ao cliente antes de a conversa ir para o atendente, sem consumir créditos. Em branco, a conversa é transferida sem aviso.'
+            : 'Enviada uma vez a cada 12 horas para quem escrever fora do horário, sem consumir créditos. Em branco, o agente fica em silêncio. Mensagens fora do horário não são respondidas depois.'
+        }
       >
         <textarea
           className={inputClass}

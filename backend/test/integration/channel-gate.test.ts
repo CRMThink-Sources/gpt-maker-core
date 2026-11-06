@@ -100,14 +100,23 @@ describe('gate das mensagens do chatbot', () => {
       balance?: [number, number, number] | null;
       businessHours?: (typeof agent.$inferInsert)['businessHours'];
       outOfHoursMessage?: string;
+      outOfHoursTransfer?: boolean;
     } = {},
   ) {
     const owner = await newTenant(options.tenantStatus);
     const bot = await newAgent(owner.id, options.agentStatus ?? 'ACTIVE');
-    if (options.businessHours !== undefined || options.outOfHoursMessage !== undefined) {
+    if (
+      options.businessHours !== undefined ||
+      options.outOfHoursMessage !== undefined ||
+      options.outOfHoursTransfer !== undefined
+    ) {
       await db
         .update(agent)
-        .set({ businessHours: options.businessHours, outOfHoursMessage: options.outOfHoursMessage })
+        .set({
+          businessHours: options.businessHours,
+          outOfHoursMessage: options.outOfHoursMessage,
+          outOfHoursTransfer: options.outOfHoursTransfer,
+        })
         .where(eq(agent.id, bot.id));
     }
     if (options.balance !== null) await setBalance(owner.id, ...(options.balance ?? [0, 10, 0]));
@@ -221,6 +230,20 @@ describe('gate das mensagens do chatbot', () => {
         await expect(gate.check(message)).resolves.toEqual({
           kind: 'skip-out-of-hours',
           notice: 'Voltamos às 9h',
+          transfer: true,
+          installationId: Number(owner.installationId),
+        });
+      });
+
+      it('transferência desligada no agente ⇒ a decisão leva transfer=false', async () => {
+        const { owner, message } = await scenario({
+          businessHours: NEVER_OPEN,
+          outOfHoursTransfer: false,
+        });
+        await expect(gate.check(message)).resolves.toEqual({
+          kind: 'skip-out-of-hours',
+          notice: null,
+          transfer: false,
           installationId: Number(owner.installationId),
         });
       });
@@ -391,10 +414,19 @@ describe('gate das mensagens do chatbot', () => {
         return 'notified';
       },
     } as unknown as NoCreditHandler;
-    const outOfHoursCalls: Array<{ message: InboundMessage; notice: string | null }> = [];
+    const outOfHoursCalls: Array<{
+      message: InboundMessage;
+      notice: string | null;
+      transfer: boolean;
+    }> = [];
     const outOfHours = {
-      handle: async (message: InboundMessage, _installationId: number, notice: string | null) => {
-        outOfHoursCalls.push({ message, notice });
+      handle: async (
+        message: InboundMessage,
+        _installationId: number,
+        notice: string | null,
+        transfer: boolean,
+      ) => {
+        outOfHoursCalls.push({ message, notice, transfer });
         return 'silent';
       },
     } as unknown as OutOfHoursHandler;
@@ -485,8 +517,18 @@ describe('gate das mensagens do chatbot', () => {
       await consumerWith(gate).process(message, 0);
       expect(asked).toEqual([]);
       expect(outOfHoursCalls).toMatchObject([
-        { message: { messageId: message.messageId }, notice: 'Fechado' },
+        { message: { messageId: message.messageId }, notice: 'Fechado', transfer: true },
       ]);
+    });
+
+    it('fora do horário com transferência desligada passa transfer=false ao handler', async () => {
+      const { message } = await scenario({
+        businessHours: NEVER_OPEN,
+        outOfHoursTransfer: false,
+      });
+      await consumerWith(gate).process(message, 0);
+      expect(asked).toEqual([]);
+      expect(outOfHoursCalls).toMatchObject([{ transfer: false }]);
     });
 
     it('transferência pedida por intenção sai depois da resposta, uma vez', async () => {
