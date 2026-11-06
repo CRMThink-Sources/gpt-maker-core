@@ -511,6 +511,7 @@ export default function AgentFunctionPage() {
             agents={transferAgents}
             ai={ai}
             assist={assist}
+            agentId={agent.id}
           />
         </div>
         <aside className="hidden space-y-4 xl:sticky xl:top-6 xl:block xl:self-start">

@@ -12,6 +12,7 @@ export * from './agent-functions';
 export * from './agent-functions-admin';
 export * from './agent-functions-app';
 export * from './agents';
+export * from './business-hours';
 export * from './credits';
 export * from './crm';
 export * from './errors';

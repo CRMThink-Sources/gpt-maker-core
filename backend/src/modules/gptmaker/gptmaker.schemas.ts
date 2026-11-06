@@ -203,9 +203,10 @@ export const createTrainingSchema = z.discriminatedUnion('type', [
 ]);
 export type GptMakerCreateTraining = z.infer<typeof createTrainingSchema>;
 
+/** `image`: URL nova; `null` remove a imagem; ausente não envia o campo (ver docs, tarefa 1.1). */
 export const updateTextTrainingSchema = z.object({
   text: z.string().min(1),
-  image: z.url().optional(),
+  image: z.url().nullable().optional(),
 });
 export type GptMakerUpdateTextTraining = z.infer<typeof updateTextTrainingSchema>;
 

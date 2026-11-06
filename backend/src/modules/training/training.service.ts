@@ -4,8 +4,11 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   createTrainingSchema,
   type CreateTrainingInput,
+  type TrainingImageView,
   type TrainingInterval,
+  TRAINING_IMAGE_MAX_BYTES,
   type TrainingUsage,
+  type UploadedTrainingImage,
   type TrainingView,
   type UpdateTrainingInput,
   updateTrainingSchema,
@@ -16,7 +19,12 @@ import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { currentContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
-import { planEntitlement, subscriptionState, training } from '../../shared/database/schema/index';
+import {
+  planEntitlement,
+  subscriptionState,
+  training,
+  trainingImage,
+} from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
@@ -29,14 +37,19 @@ import {
   type GptMakerTraining,
   type GptMakerTrainingType,
 } from '../gptmaker';
+import { sniffImage } from './image-sniff';
 import { interpretCallback } from './training-callback';
+import {
+  type TrainingImage as TrainingImageRow,
+  TrainingImageService,
+} from './training-image.service';
 import { listRemoteTrainings, matcherFor, sameUrl, type Training } from './training-remote';
 
 export type { Training };
 
 /**
- * Que treinamentos o cliente cria à mão num agente (spec agent-training: com função, texto só pelo
- * formulário; site e vídeo só no modo avançado). Registrada pelo módulo das funções, que não pode
+ * Que treinamentos o cliente cria à mão num agente (spec agent-training: site e vídeo só no modo
+ * avançado; texto sempre liberado, ao lado dos itens da função). Registrada pelo módulo das funções, que não pode
  * ser importado daqui (ele depende deste). Devolve o motivo da recusa, ou `null`.
  */
 export interface TrainingMediaPolicy {
@@ -70,6 +83,7 @@ export class TrainingService {
     private readonly agents: AgentRepository,
     private readonly gptmaker: GptMakerClient,
     private readonly storage: ObjectStorage,
+    private readonly images: TrainingImageService,
     @Inject(DB) private readonly db: Database,
     @Inject(REDIS) redis: Redis,
     @Inject(ENV) private readonly env: Env,
@@ -94,7 +108,10 @@ export class TrainingService {
         ),
       )
       .orderBy(asc(training.createdAt), asc(training.id));
-    return rows.map(toView);
+    const images = await this.images.findMany(
+      rows.flatMap((row) => (row.imageId ? [row.imageId] : [])),
+    );
+    return Promise.all(rows.map((row) => this.view(row, images)));
   }
 
   /**
@@ -102,16 +119,24 @@ export class TrainingService {
    * na projeção local, valem os padrões do ambiente; coluna nula no plano é sem limite.
    */
   async usage(tenantId: string): Promise<TrainingUsage> {
-    const [limits, [used]] = await Promise.all([
+    const [limits, [used], [images]] = await Promise.all([
       this.limitsOf(tenantId),
       this.db
         .select({ trainings: count(), documentBytes: sum(training.documentSizeBytes) })
         .from(training)
         .where(and(eq(training.tenantId, tenantId), isNull(training.deletedAt))),
+      // Imagens contam na mesma cota dos documentos, ligadas ou não (spec agent-training-image).
+      this.db
+        .select({ imageBytes: sum(trainingImage.sizeBytes) })
+        .from(trainingImage)
+        .where(and(eq(trainingImage.tenantId, tenantId), isNull(trainingImage.deletedAt))),
     ]);
     return {
       trainings: { used: used?.trainings ?? 0, limit: limits.maxTrainings },
-      documentBytes: { used: Number(used?.documentBytes ?? 0), limit: limits.maxDocumentBytes },
+      documentBytes: {
+        used: Number(used?.documentBytes ?? 0) + Number(images?.imageBytes ?? 0),
+        limit: limits.maxDocumentBytes,
+      },
     };
   }
 
@@ -132,18 +157,26 @@ export class TrainingService {
     const callback = this.newCallback();
 
     switch (input.type) {
-      case 'TEXT':
+      case 'TEXT': {
+        const image = input.imageId ? await this.usableImage(owner, input.imageId) : null;
         return this.createRemoteAndLocal(
           owner,
           {
             type: 'TEXT',
             content: input.text,
+            imageId: image?.id ?? null,
             callbackTokenHash: callback.hash,
             managed: access.managed === true,
           },
-          { type: 'TEXT', text: input.text, callbackUrl: callback.url },
+          {
+            type: 'TEXT',
+            text: input.text,
+            ...(image && { image: await this.images.imageUrlFor(image) }),
+            callbackUrl: callback.url,
+          },
           (remote) => remote.text?.trim() === input.text,
         );
+      }
       case 'WEBSITE':
         return this.createRemoteAndLocal(
           owner,
@@ -196,7 +229,13 @@ export class TrainingService {
           HttpStatus.CONFLICT,
         );
       }
-      if (row.content === input.text) return toView(row);
+      const text = input.text ?? row.content ?? '';
+      const nextImageId = input.imageId === undefined ? row.imageId : input.imageId;
+      const imageChanged = nextImageId !== row.imageId;
+      if (text === row.content && !imageChanged) return this.view(row);
+
+      const nextImage =
+        imageChanged && nextImageId ? await this.usableImage(owner, nextImageId, row.id) : null;
 
       const remoteId = await this.remoteIdOf(owner, row);
       if (!remoteId) {
@@ -206,15 +245,25 @@ export class TrainingService {
           HttpStatus.CONFLICT,
         );
       }
+      // Sempre manda a imagem que o treinamento deve ficar com: a nova, a atual (mudou só o texto)
+      // ou `null` (removida). A URL da atual é gerada de novo.
+      const keep = !imageChanged && row.imageId ? await this.images.find(row.imageId) : null;
+      const target = imageChanged ? nextImage : keep;
+      const image = target
+        ? await this.images.imageUrlFor(target)
+        : imageChanged
+          ? null
+          : undefined;
       await this.callGptMaker(() =>
-        this.gptmaker.updateTextTraining(remoteId, { text: input.text }),
+        this.gptmaker.updateTextTraining(remoteId, { text, ...(image !== undefined && { image }) }),
       );
       const [updated] = await this.db
         .update(training)
-        .set({ content: input.text, gptmakerTrainingId: remoteId })
+        .set({ content: text, imageId: nextImageId ?? null, gptmakerTrainingId: remoteId })
         .where(eq(training.id, row.id))
         .returning();
-      return toView(updated!);
+      if (imageChanged) await this.images.discard(row.imageId);
+      return this.view(updated!);
     });
   }
 
@@ -246,6 +295,7 @@ export class TrainingService {
       }
       await this.db.update(training).set({ deletedAt: new Date() }).where(eq(training.id, row.id));
       if (row.documentKey) await this.discardObject(row.documentKey);
+      await this.images.discard(row.imageId);
     });
   }
 
@@ -322,7 +372,7 @@ export class TrainingService {
         .set({ gptmakerTrainingId })
         .where(eq(training.id, row.id))
         .returning();
-      return toView(updated!);
+      return this.view(updated!);
     });
   }
 
@@ -332,8 +382,15 @@ export class TrainingService {
     callbackUrl: string,
   ): Promise<GptMakerCreateTraining> {
     switch (row.type) {
-      case 'TEXT':
-        return { type: 'TEXT', text: row.content ?? '', callbackUrl };
+      case 'TEXT': {
+        const image = row.imageId ? await this.images.find(row.imageId) : undefined;
+        return {
+          type: 'TEXT',
+          text: row.content ?? '',
+          ...(image && { image: await this.images.imageUrlFor(image) }),
+          callbackUrl,
+        };
+      }
       case 'WEBSITE':
         return {
           type: 'WEBSITE',
@@ -445,10 +502,14 @@ export class TrainingService {
    * Recusa com `PLAN_TRAINING_LIMIT` antes de qualquer chamada ao GPTMaker. Conferido no lock do
    * agente: dois agentes do mesmo tenant ao mesmo tempo podem passar um treinamento do limite.
    */
-  private async assertWithinLimits(tenantId: string, documentBytes: number): Promise<void> {
+  private async assertWithinLimits(
+    tenantId: string,
+    documentBytes: number,
+    newTraining = true,
+  ): Promise<void> {
     const usage = await this.usage(tenantId);
     const { trainings, documentBytes: storage } = usage;
-    if (trainings.limit !== null && trainings.used + 1 > trainings.limit) {
+    if (newTraining && trainings.limit !== null && trainings.used + 1 > trainings.limit) {
       throw new DomainError(
         'PLAN_TRAINING_LIMIT',
         `Seu plano permite até ${trainings.limit} treinamentos. Remova algum ou mude de plano`,
@@ -463,7 +524,7 @@ export class TrainingService {
     ) {
       throw new DomainError(
         'PLAN_TRAINING_LIMIT',
-        `Seu plano permite até ${toMb(storage.limit)} MB em documentos. Remova algum ou mude de plano`,
+        `Seu plano permite até ${toMb(storage.limit)} MB em documentos e imagens. Remova algum ou mude de plano`,
         HttpStatus.UNPROCESSABLE_ENTITY,
         { kind: 'documentBytes', ...storage },
       );
@@ -491,6 +552,81 @@ export class TrainingService {
       maxTrainings: plan.maxTrainings,
       maxDocumentBytes: plan.maxDocumentStorageMb === null ? null : plan.maxDocumentStorageMb * MB,
     };
+  }
+
+  /**
+   * Upload da imagem de um treinamento de texto (spec agent-training-image): PNG, JPEG ou WebP
+   * conferidos pelo conteúdo, até 5 MB, dentro da cota do plano. Devolve o id para ligar a um
+   * treinamento (manual ou item da função).
+   */
+  async uploadImage(
+    tenantId: string,
+    agentId: string,
+    file: { originalname?: string; buffer?: Buffer } | undefined,
+  ): Promise<UploadedTrainingImage> {
+    const owner = await this.agents.getById(tenantId, agentId);
+    const body = file?.buffer;
+    if (!body || body.length === 0) {
+      throw new DomainError(
+        'TRAINING_IMAGE_INVALID',
+        'Envie uma imagem no campo "file"',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (body.length > TRAINING_IMAGE_MAX_BYTES) {
+      throw new DomainError(
+        'TRAINING_IMAGE_TOO_LARGE',
+        `A imagem passa do limite de ${toMb(TRAINING_IMAGE_MAX_BYTES)} MB`,
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
+    }
+    const kind = sniffImage(body);
+    if (!kind) {
+      throw new DomainError(
+        'TRAINING_IMAGE_INVALID_TYPE',
+        'Só imagens PNG, JPEG e WebP são aceitas',
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      );
+    }
+    return this.withAgentLock(owner.id, async () => {
+      await this.assertWithinLimits(tenantId, body.length, false);
+      const row = await this.images.store({
+        tenantId,
+        agentId: owner.id,
+        fileName: (file?.originalname ?? `imagem.${kind.ext}`).slice(0, 200),
+        mimetype: kind.mimetype,
+        ext: kind.ext,
+        body,
+      });
+      return { ...(await this.images.view(row)), fileName: row.fileName };
+    });
+  }
+
+  /** Imagem do agente, ainda não usada por outro treinamento (`exceptTrainingId` é o próprio). */
+  private async usableImage(owner: Agent, imageId: string, exceptTrainingId?: string) {
+    const image = await this.images.resolve(owner.tenantId, owner.id, imageId);
+    const [inUse] = await this.db
+      .select({ id: training.id })
+      .from(training)
+      .where(and(eq(training.imageId, image.id), isNull(training.deletedAt)));
+    if (inUse && inUse.id !== exceptTrainingId) {
+      throw new DomainError(
+        'TRAINING_IMAGE_IN_USE',
+        'Esta imagem já está em outro treinamento; envie a imagem de novo',
+        HttpStatus.CONFLICT,
+      );
+    }
+    return image;
+  }
+
+  /** Visão do treinamento com a miniatura da imagem (URL de leitura temporária). */
+  private async view(
+    row: Training,
+    preloaded?: Map<string, TrainingImageRow>,
+  ): Promise<TrainingView> {
+    if (!row.imageId) return toView(row);
+    const image = preloaded?.get(row.imageId) ?? (await this.images.find(row.imageId));
+    return toView(row, image ? await this.images.view(image) : null);
   }
 
   /** Agente do tenant (404 se de outro) e sincronizado com o GPTMaker. */
@@ -532,6 +668,11 @@ export class TrainingService {
         );
       } catch (error) {
         await this.db.delete(training).where(eq(training.id, row!.id));
+        // Resultado ambíguo (5xx, timeout, rede): o GPTMaker pode ter criado e só depois falhado
+        // (ex.: ao processar a imagem). Sem isto o treinamento ficaria lá, sem registro aqui.
+        if (error instanceof DomainError && error.code === 'GPTMAKER_UNAVAILABLE') {
+          await this.discardRemoteCreated(owner, remote.type, matches);
+        }
         throw error;
       }
 
@@ -544,15 +685,43 @@ export class TrainingService {
           'treinamento criado no GPTMaker sem id local; a sincronização completa',
         );
       }
-      if (!gptmakerTrainingId) return toView(row!);
+      if (!gptmakerTrainingId) return this.view(row!);
 
       const [updated] = await this.db
         .update(training)
         .set({ gptmakerTrainingId })
         .where(eq(training.id, row!.id))
         .returning();
-      return toView(updated!);
+      return this.view(updated!);
     });
+  }
+
+  /**
+   * Apaga do GPTMaker o treinamento que uma criação com falha deixou lá: só o que ainda não tem
+   * registro local e casa exatamente com o conteúdo enviado. Melhor esforço: erro só vai ao log.
+   */
+  private async discardRemoteCreated(
+    owner: Agent,
+    type: GptMakerTrainingType,
+    matches: (candidate: GptMakerTraining) => boolean,
+  ): Promise<void> {
+    try {
+      const knownRows = await this.db
+        .select({ id: training.gptmakerTrainingId })
+        .from(training)
+        .where(and(eq(training.agentId, owner.id), isNotNull(training.gptmakerTrainingId)));
+      const known = new Set(knownRows.map((entry) => entry.id));
+      const remote = await listRemoteTrainings(this.gptmaker, owner.gptmakerAgentId, type);
+      for (const candidate of remote.filter((item) => !known.has(item.id) && matches(item))) {
+        await this.gptmaker.deleteTraining(candidate.id);
+        this.logger.warn(
+          { remoteId: candidate.id },
+          'treinamento criado no GPTMaker com falha removido de lá',
+        );
+      }
+    } catch (error) {
+      this.logger.error({ err: error }, 'não foi possível desfazer o treinamento criado com falha');
+    }
   }
 
   private async findCreated(
@@ -659,8 +828,6 @@ function truncatedJson(payload: unknown): string {
 }
 
 const REFUSALS: Record<string, string> = {
-  TRAINING_FORM_ONLY:
-    'A base de conhecimento deste agente é feita pelos itens do formulário da função',
   TRAINING_ADVANCED_ONLY: 'Treinamento por site ou vídeo só no modo avançado do agente',
 };
 
@@ -675,13 +842,14 @@ function assertAccess(row: Training, access: ManagedAccess): void {
   }
 }
 
-function toView(row: Training): TrainingView {
+function toView(row: Training, image: TrainingImageView | null = null): TrainingView {
   return {
     id: row.id,
     type: row.type,
     status: row.status,
     managed: row.managed,
     text: row.content,
+    image,
     url: row.url,
     trainingSubPages: row.trainingSubPages,
     trainingInterval: row.trainingInterval as TrainingInterval | null,

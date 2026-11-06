@@ -29,7 +29,8 @@ import { IntentionService } from '../../src/modules/intentions/intention.service
 import { ModelCatalogService } from '../../src/modules/models/model-catalog.service';
 import { PaymentsOutbox } from '../../src/modules/payments/payments-outbox';
 import { TenantService } from '../../src/modules/tenancy/tenant.service';
-import type { ObjectStorage } from '../../src/shared/storage/object-storage';
+import type { ObjectStorage, PutObjectInput } from '../../src/shared/storage/object-storage';
+import { TrainingImageService } from '../../src/modules/training/training-image.service';
 import { TrainingService } from '../../src/modules/training/training.service';
 import { TrainingSyncService } from '../../src/modules/training/training-sync.service';
 import { configureFieldCipher } from '../../src/shared/crypto/field-cipher';
@@ -49,6 +50,28 @@ const {
   tenant,
   training,
 } = schema;
+
+/** Storage em memória só para as imagens dos itens da base. */
+class MemoryStorage {
+  readonly objects = new Map<string, PutObjectInput>();
+  newTrainingKey(tenantId: string, fileName: string) {
+    return `trainings/${tenantId}/${randomUUID()}.${fileName.split('.').pop()}`;
+  }
+  async put(input: PutObjectInput) {
+    this.objects.set(input.key, input);
+  }
+  async presignedUrl(key: string) {
+    return `https://storage.test/${key}?X-Amz-Signature=abc`;
+  }
+  async delete(key: string) {
+    this.objects.delete(key);
+  }
+}
+const memoryStorage = new MemoryStorage();
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(512, 1),
+]);
 
 const ITEM_A = '7f2c1b8e-2a4d-4c6e-9b1a-3d5f7e9a1c2b';
 const ITEM_B = '1b9e4d2c-8f3a-4e5b-a6c7-d8e9f0a1b2c3';
@@ -162,7 +185,8 @@ describe('publicação da função do agente', () => {
     const trainings = new TrainingService(
       repository,
       client,
-      undefined as unknown as ObjectStorage,
+      memoryStorage as unknown as ObjectStorage,
+      new TrainingImageService(memoryStorage as unknown as ObjectStorage, db, redis, env),
       db,
       redis,
       env,
@@ -220,6 +244,7 @@ describe('publicação da função do agente', () => {
 
   beforeEach(async () => {
     fake.reset();
+    memoryStorage.objects.clear();
     queued = [];
     maxTrainings = 20;
     crmCalls = [];
@@ -236,6 +261,132 @@ describe('publicação da função do agente', () => {
     redis?.disconnect();
     await pool?.end();
     await Promise.all([postgres?.stop(), redisContainer?.stop()]);
+  });
+
+  describe('imagem nos itens da base e texto manual', () => {
+    const answersWith = (
+      imageId?: string,
+      extraItems: Array<{ itemKey: string; values: Record<string, string> }> = [],
+    ) =>
+      sdrAnswers({
+        'base.produtos': [
+          {
+            itemKey: ITEM_A,
+            values: { nome: 'Plano Pro', descricao: 'CRM completo' },
+            ...(imageId ? { imageId } : {}),
+          },
+          { itemKey: ITEM_B, values: { nome: 'Plano Start', descricao: 'Para começar' } },
+          ...extraItems,
+        ],
+      });
+    const rowOf = async (agentId: string, key: string) => {
+      const [resource] = (await resources(agentId)).filter((item) => item.key === key);
+      return (await liveTrainings(agentId)).find((row) => row.id === resource!.trainingId)!;
+    };
+    const upload = (agentId: string) =>
+      trainingService.uploadImage(owner.tenantId, agentId, {
+        originalname: 'preco.png',
+        buffer: PNG,
+      });
+    const fakeImageOf = (trainingId: string | null) =>
+      [...fake.trainings.values()].find((item) => item.id === trainingId)?.image;
+
+    it('item com imagem: o treinamento sai com texto e imagem', async () => {
+      const view = await createAgent();
+      const image = await upload(view.id);
+      const answers = answersWith(image.id);
+
+      const preview = await functions.preview(owner.tenantId, view.id, { answers });
+      expect(preview.plan.trainings.update.map((item) => item.key)).toEqual([
+        `base.produtos:${ITEM_A}`,
+      ]);
+      await functions.publish(owner.tenantId, view.id, { answers });
+      expect(await publisher.run(view.id)).toBe('DONE');
+
+      const row = await rowOf(view.id, `base.produtos:${ITEM_A}`);
+      expect(row.imageId).toBe(image.id);
+      expect(fakeImageOf(row.gptmakerTrainingId)).toContain('/public/training-images/');
+      expect(fake.count('training.update')).toBe(1);
+    });
+
+    it('só a imagem mudou: atualiza só aquele treinamento; remover a imagem a tira do GPTMaker', async () => {
+      const view = await createAgent();
+      const first = await upload(view.id);
+      await functions.publish(owner.tenantId, view.id, { answers: answersWith(first.id) });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      fake.calls = [];
+
+      const second = await upload(view.id);
+      await functions.publish(owner.tenantId, view.id, { answers: answersWith(second.id) });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      expect(fake.count('training.update')).toBe(1);
+      expect(fake.count('training.create')).toBe(0);
+      const swapped = await rowOf(view.id, `base.produtos:${ITEM_A}`);
+      expect(swapped.imageId).toBe(second.id);
+      expect(memoryStorage.objects.size).toBe(1);
+
+      await functions.publish(owner.tenantId, view.id, { answers: answersWith() });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      const removed = await rowOf(view.id, `base.produtos:${ITEM_A}`);
+      expect(removed.imageId).toBeNull();
+      expect(fakeImageOf(removed.gptmakerTrainingId)).toBeNull();
+      expect(memoryStorage.objects.size).toBe(0);
+    });
+
+    it('item removido: treinamento e imagem saem', async () => {
+      const view = await createAgent();
+      const image = await upload(view.id);
+      await functions.publish(owner.tenantId, view.id, { answers: answersWith(image.id) });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      expect(memoryStorage.objects.size).toBe(1);
+
+      const withoutA = sdrAnswers({
+        'base.produtos': [
+          { itemKey: ITEM_B, values: { nome: 'Plano Start', descricao: 'Para começar' } },
+        ],
+      });
+      await functions.publish(owner.tenantId, view.id, { answers: withoutA });
+      expect(await publisher.run(view.id)).toBe('DONE');
+      expect(memoryStorage.objects.size).toBe(0);
+      expect((await liveTrainings(view.id)).map((row) => row.content)).toHaveLength(1);
+    });
+
+    it('texto manual convive com a base: a publicação não o adota, altera nem remove', async () => {
+      const view = await createAgent();
+      const manual = await trainingService.create(owner.tenantId, view.id, {
+        type: 'TEXT',
+        text: 'Produto ou serviço: Plano Max\nPara grandes times',
+      });
+      expect(manual).toMatchObject({ managed: false });
+      const before = (await liveTrainings(view.id)).length;
+      fake.calls = [];
+
+      // Item novo cujo texto é igual ao do manual: cria um treinamento próprio, sem adotar o manual.
+      const itemC = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a';
+      const answers = answersWith(undefined, [
+        { itemKey: itemC, values: { nome: 'Plano Max', descricao: 'Para grandes times' } },
+      ]);
+      await functions.publish(owner.tenantId, view.id, { answers });
+      expect(await publisher.run(view.id)).toBe('DONE');
+
+      expect(fake.count('training.create')).toBe(1);
+      expect(fake.count('training.update')).toBe(0);
+      expect(fake.count('training.delete')).toBe(0);
+      expect((await liveTrainings(view.id)).length).toBe(before + 1);
+      const stillManual = (await liveTrainings(view.id)).find((row) => row.id === manual.id)!;
+      expect(stillManual.managed).toBe(false);
+      expect((await resources(view.id)).map((item) => item.trainingId)).not.toContain(manual.id);
+
+      // E editar ou remover o da função pela tela de treinamentos segue recusado.
+      const managed = await rowOf(view.id, `base.produtos:${ITEM_A}`);
+      expect(
+        (
+          await rejection(
+            trainingService.updateText(owner.tenantId, view.id, managed.id, { text: 'x' }),
+          )
+        ).code,
+      ).toBe('TRAINING_MANAGED_BY_FUNCTION');
+    });
   });
 
   describe('criação', () => {
@@ -914,14 +1065,13 @@ describe('publicação da função do agente', () => {
       expect(await configOf(view.id)).toMatchObject({ mode: 'ADVANCED' });
       const [advanced] = await db.select().from(agent).where(eq(agent.id, view.id));
       expect(advanced!.behavior).toMatch(/Sempre ofereça o e-book gratuito.$/);
-      // Texto manual nunca: a base vem do formulário, em qualquer modo.
-      expect(
-        (
-          await rejection(
-            trainingService.create(owner.tenantId, view.id, { type: 'TEXT', text: 'x' }),
-          )
-        ).code,
-      ).toBe('TRAINING_FORM_ONLY');
+      // Texto manual é liberado ao lado dos itens da função (spec agent-training-image).
+      const manual = await trainingService.create(owner.tenantId, view.id, {
+        type: 'TEXT',
+        text: 'Texto manual do cliente',
+      });
+      expect(manual).toMatchObject({ type: 'TEXT', managed: false });
+      await trainingService.remove(owner.tenantId, view.id, manual.id);
       const created = await trainingService.create(owner.tenantId, view.id, site);
       expect(created).toMatchObject({ type: 'WEBSITE', managed: false });
 

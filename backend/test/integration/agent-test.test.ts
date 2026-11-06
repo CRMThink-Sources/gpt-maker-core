@@ -187,6 +187,20 @@ describe('teste do agente', () => {
     expect(summary).toMatchObject({ id: conversation.id, lastMessage: 'Olá! Como posso ajudar?' });
   });
 
+  it('agente fora do horário de funcionamento responde normalmente no teste', async () => {
+    const closed = Object.fromEntries(
+      ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((day) => [day, []]),
+    ) as never;
+    await db
+      .update(agent)
+      .set({ businessHours: { timezone: 'America/Sao_Paulo', days: closed } })
+      .where(eq(agent.id, agentId));
+    const conversation = await service.create(tester, agentId, {});
+    const exchange = await service.send(tester, agentId, conversation.id, { text: 'Oi' });
+    expect(exchange.reply).toMatchObject({ role: 'AGENT', status: 'DELIVERED' });
+    await db.update(agent).set({ businessHours: null }).where(eq(agent.id, agentId));
+  });
+
   it('GPTMaker falha: pergunta marcada como não respondida, erro recuperável, sem débito', async () => {
     const conversation = await service.create(tester, agentId, {});
     reply = new GptMakerError('UNAVAILABLE', 'agent.conversation', 'timeout');

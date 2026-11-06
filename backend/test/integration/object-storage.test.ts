@@ -93,6 +93,30 @@ describe('armazenamento de objetos (S3)', () => {
     expect(storage.newTrainingKey(tenantId, 'sem-extensao')).toMatch(/\/[A-Za-z0-9_-]{32}$/);
   });
 
+  it('com prefixo do ambiente, as chaves novas ficam sob ele e a leitura e a remoção seguem a chave', async () => {
+    const staging = new ObjectStorage({ ...options, keyPrefix: 'staging' });
+    const tenantId = randomUUID();
+    const key = staging.newTrainingKey(tenantId, 'tabela.png');
+    expect(key).toMatch(new RegExp(`^staging/trainings/${tenantId}/[A-Za-z0-9_-]{32}\\.png$`));
+
+    await staging.put({
+      key,
+      body: Buffer.from('imagem'),
+      contentType: 'image/png',
+      contentLength: 6,
+      fileName: 'tabela.png',
+    });
+    expect(await staging.exists(key)).toBe(true);
+    const object = await staging.getObject(key);
+    const chunks: Buffer[] = [];
+    for await (const chunk of object.body) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString()).toBe('imagem');
+    await staging.delete(key);
+    expect(await staging.exists(key)).toBe(false);
+    // Sem prefixo, o formato continua o de antes.
+    expect(storage.newTrainingKey(tenantId, 'a.png')).toMatch(/^trainings\//);
+  });
+
   it('grava e baixa pela URL pré-assinada, com o nome original no download', async () => {
     const key = storage.newTrainingKey(randomUUID(), 'Política de trocas.pdf');
     await put(key);

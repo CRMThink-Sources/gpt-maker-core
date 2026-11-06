@@ -1,3 +1,4 @@
+import { isWithinBusinessHours } from '@gptmaker/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
@@ -20,12 +21,18 @@ export type GateDecision =
   | { kind: 'skip-inactive'; reason: 'agent' | 'tenant' }
   /** Operador atendendo o diálogo: o agente não responde. */
   | { kind: 'skip-human' }
+  /** Fora do horário de funcionamento do agente: não vai ao GPTMaker; `notice` é o aviso opcional. */
+  | {
+      kind: 'skip-out-of-hours';
+      notice: string | null;
+      installationId: number;
+    }
   /** Saldo total ≤ 0: não vai ao GPTMaker; o bot avisa e transfere (`NoCreditHandler`). */
   | { kind: 'no-credit'; balance: number; installationId: number };
 
 /**
  * Checagens do worker antes de encaminhar ao GPTMaker (design D5), nesta ordem: agente e portal
- * ativos, atendimento humano, saldo. Agente e portal vêm do banco (inativação vale na hora);
+ * ativos, atendimento humano, horário de funcionamento, saldo. Agente e portal vêm do banco (inativação vale na hora);
  * atendimento humano e saldo, do Redis com o banco como reserva.
  */
 @Injectable()
@@ -44,6 +51,8 @@ export class InboundGate {
         tenantStatus: tenant.status,
         installationId: tenant.installationId,
         modelCode: aiModel.code,
+        businessHours: agent.businessHours,
+        outOfHoursMessage: agent.outOfHoursMessage,
       })
       .from(agent)
       .innerJoin(tenant, eq(tenant.id, agent.tenantId))
@@ -55,6 +64,15 @@ export class InboundGate {
 
     if (await this.human.isActive(message.tenantId, message.dialogId)) {
       return { kind: 'skip-human' };
+    }
+
+    // Antes do saldo: fora do expediente ninguém recebe o aviso de falta de crédito.
+    if (!isWithinBusinessHours(row.businessHours)) {
+      return {
+        kind: 'skip-out-of-hours',
+        notice: row.outOfHoursMessage,
+        installationId: Number(row.installationId),
+      };
     }
 
     const balance = await this.balance.total(message.tenantId);

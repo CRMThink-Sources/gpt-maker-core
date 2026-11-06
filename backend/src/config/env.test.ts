@@ -105,4 +105,19 @@ describe('loadEnv', () => {
   it('recusa papel desconhecido', () => {
     expect(() => loadEnv({ ...base, APP_ROLE: 'cron' })).toThrow(/APP_ROLE/);
   });
+
+  it('STORAGE_KEY_PREFIX: aceita ambiente, normaliza barras e recusa o que não é caminho', () => {
+    expect(loadEnv(base).STORAGE_KEY_PREFIX).toBeUndefined();
+    expect(loadEnv({ ...base, STORAGE_KEY_PREFIX: 'staging' }).STORAGE_KEY_PREFIX).toBe('staging');
+    expect(loadEnv({ ...base, STORAGE_KEY_PREFIX: '/production/' }).STORAGE_KEY_PREFIX).toBe(
+      'production',
+    );
+    expect(loadEnv({ ...base, STORAGE_KEY_PREFIX: 'envs/staging' }).STORAGE_KEY_PREFIX).toBe(
+      'envs/staging',
+    );
+    // Vazio (variável presente sem valor) equivale a sem prefixo.
+    expect(loadEnv({ ...base, STORAGE_KEY_PREFIX: '' }).STORAGE_KEY_PREFIX).toBe('');
+    expect(() => loadEnv({ ...base, STORAGE_KEY_PREFIX: 'a b' })).toThrow(/STORAGE_KEY_PREFIX/);
+    expect(() => loadEnv({ ...base, STORAGE_KEY_PREFIX: '../x' })).toThrow(/STORAGE_KEY_PREFIX/);
+  });
 });

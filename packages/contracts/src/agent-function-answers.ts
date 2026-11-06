@@ -12,6 +12,8 @@ export const knowledgeItemSchema = z.object({
   /** Liga o item ao treinamento entre edições (design D4). */
   itemKey: z.uuid(),
   values: z.record(z.string(), z.string().max(TRAINING_TEXT_MAX)),
+  /** Imagem anexada ao treinamento do item (spec agent-training-image). */
+  imageId: z.uuid().optional(),
 });
 export type KnowledgeItem = z.infer<typeof knowledgeItemSchema>;
 
@@ -364,6 +366,7 @@ function checkField(
       });
       return items.map((item) => ({
         itemKey: item.itemKey,
+        ...(item.imageId ? { imageId: item.imageId } : {}),
         values: Object.fromEntries(
           field.subfields.map((subfield) => [subfield.id, (item.values[subfield.id] ?? '').trim()]),
         ),

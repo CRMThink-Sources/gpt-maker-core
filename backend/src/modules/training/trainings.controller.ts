@@ -8,12 +8,17 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   type CreateTrainingInput,
   createTrainingSchema,
   type TrainingUsage,
+  TRAINING_IMAGE_MAX_BYTES,
   type TrainingView,
+  type UploadedTrainingImage,
   updateTrainingSchema,
 } from '@gptmaker/contracts';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
@@ -62,6 +67,23 @@ export class TrainingsController {
     @Body() body: UpdateTrainingDto,
   ): Promise<TrainingView> {
     return this.trainings.updateText(session.tenantId, agentId, id, body);
+  }
+
+  /**
+   * Imagem para um treinamento de texto (`multipart/form-data`, campo `file`). Devolve o `imageId`
+   * para criar ou editar o treinamento; o limite exato (5 MB) e o tipo são conferidos no serviço.
+   */
+  @Post('images')
+  @AppAuth('manage')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: TRAINING_IMAGE_MAX_BYTES + 1024 * 1024 } }),
+  )
+  uploadImage(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @UploadedFile() file: { originalname?: string; buffer?: Buffer } | undefined,
+  ): Promise<UploadedTrainingImage> {
+    return this.trainings.uploadImage(session.tenantId, agentId, file);
   }
 
   /** Reenvia um treinamento com falha, com o mesmo conteúdo. */

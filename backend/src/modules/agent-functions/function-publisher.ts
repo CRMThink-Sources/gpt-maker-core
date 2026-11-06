@@ -199,17 +199,35 @@ export class FunctionPublisher {
           tenantId,
           agentId,
           resource.trainingId,
-          { text: item.text },
+          // `null` remove a imagem do treinamento quando o item ficou sem ela.
+          { text: item.text, imageId: item.imageId ?? null },
           MANAGED,
         );
         await this.setResource(resource.id, hash, { trainingId: resource.trainingId });
         continue;
       }
       // Criado numa tentativa que caiu antes de gravar o recurso: adota em vez de duplicar.
+      const adopted = await this.orphanTraining(agentId, item.text);
+      if (adopted && item.imageId) {
+        // O treinamento adotado nasceu sem a imagem do item: liga agora.
+        await this.trainings.updateText(
+          tenantId,
+          agentId,
+          adopted,
+          { imageId: item.imageId },
+          MANAGED,
+        );
+      }
       const trainingId =
-        (await this.orphanTraining(agentId, item.text)) ??
-        (await this.trainings.create(tenantId, agentId, { type: 'TEXT', text: item.text }, MANAGED))
-          .id;
+        adopted ??
+        (
+          await this.trainings.create(
+            tenantId,
+            agentId,
+            { type: 'TEXT', text: item.text, ...(item.imageId && { imageId: item.imageId }) },
+            MANAGED,
+          )
+        ).id;
       await this.saveResource(config, 'TRAINING', item.key, hash, { trainingId }, resource);
     }
   }

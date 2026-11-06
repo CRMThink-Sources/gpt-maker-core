@@ -37,6 +37,11 @@ function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput
     ),
   );
   if (Object.keys(settings).length) body.settings = settings;
+  if (JSON.stringify(values.businessHours) !== JSON.stringify(agent.businessHours)) {
+    body.businessHours = values.businessHours;
+  }
+  const outOfHoursMessage = values.outOfHoursMessage.trim() || null;
+  if (outOfHoursMessage !== agent.outOfHoursMessage) body.outOfHoursMessage = outOfHoursMessage;
   return body;
 }
 

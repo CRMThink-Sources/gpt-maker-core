@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentSettings, AgentView, AvailableModel } from '@gptmaker/contracts';
+import type { AgentSettings, AgentView, AvailableModel, BusinessHours } from '@gptmaker/contracts';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui';
 import { credits } from '@/lib/agents';
@@ -15,6 +15,9 @@ export interface AgentFormValues {
   modelId: string;
   /** Só as settings que o usuário mexeu ou que o agente já tem; as demais não são enviadas. */
   settings: AgentSettings;
+  /** `null` = atende 24h. */
+  businessHours: BusinessHours | null;
+  outOfHoursMessage: string;
 }
 
 export function initialValues(
@@ -26,6 +29,8 @@ export function initialValues(
     avatarUrl: agent?.avatarUrl ?? '',
     modelId: agent?.model.id ?? models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? '',
     settings: { ...agent?.settings },
+    businessHours: agent?.businessHours ?? null,
+    outOfHoursMessage: agent?.outOfHoursMessage ?? '',
   };
 }
 

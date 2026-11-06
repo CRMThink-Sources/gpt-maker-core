@@ -11,7 +11,7 @@ import {
   type SyntheticEvent,
   type SVGProps,
 } from 'react';
-import { ChatIcon, SparkIcon, UserIcon } from '@/components/icons';
+import { ChatIcon, ClockIcon, SparkIcon, UserIcon } from '@/components/icons';
 import { buttonClass, Card } from '@/components/ui';
 import {
   type AgentFormValues,
@@ -20,6 +20,7 @@ import {
   inputClass,
   ModelFields,
 } from './agent-fields';
+import { BusinessHoursFields, businessHoursProblem } from './business-hours-fields';
 
 const GROUPING: Record<NonNullable<AgentSettings['messageGroupingTime']>, string> = {
   NO_GROUP: 'Não agrupar',
@@ -62,7 +63,7 @@ const TOGGLES: Array<{ key: Toggle; label: string; hint: string }> = [
   },
 ];
 
-export type SectionKey = 'identity' | 'model' | 'service';
+export type SectionKey = 'identity' | 'model' | 'service' | 'hours';
 
 /** Seções da edição, uma por vez na tela; a navegação lateral alterna entre elas. */
 const SECTIONS: Array<{
@@ -94,6 +95,13 @@ const SECTIONS: Array<{
     description:
       'Ajustes da conversa. Transferência, emojis e assuntos vêm da função do agente (aba Função).',
     fields: ['settings'],
+  },
+  {
+    key: 'hours',
+    icon: ClockIcon,
+    title: 'Horário de funcionamento',
+    description: 'Dias e horários em que o agente responde. Fora deles, ele não atende.',
+    fields: ['businessHours', 'outOfHoursMessage'],
   },
 ];
 
@@ -249,8 +257,14 @@ export function AgentForm({
   const setSetting = <K extends keyof AgentSettings>(key: K, value: AgentSettings[K]) =>
     setValues((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
 
+  const hoursProblem = businessHoursProblem(values.businessHours);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (hoursProblem) {
+      setActive('hours');
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit(values);
@@ -403,6 +417,10 @@ export function AgentForm({
               </Field>
             </div>
           </div>
+        </Section>
+
+        <Section section={sectionOf('hours')} active={active === 'hours'} disabled={disabled}>
+          <BusinessHoursFields values={values} set={set} />
         </Section>
 
         {!readOnly && dirty && (
