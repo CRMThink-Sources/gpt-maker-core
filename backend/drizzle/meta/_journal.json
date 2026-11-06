@@ -169,6 +169,13 @@
       "when": 1793970096532,
       "tag": "0023_training_image_public_token",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793988791925,
+      "tag": "0024_agent_out_of_hours_transfer",
+      "breakpoints": true
     }
   ]
 }

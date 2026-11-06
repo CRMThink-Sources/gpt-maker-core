@@ -12,6 +12,8 @@ import { BitrixClient } from '../../src/modules/bitrix/bitrix.client';
 import { BotEventsService } from '../../src/modules/channel/bot-events.service';
 import { HumanAttendance, humanFlagKey } from '../../src/modules/channel/human-attendance';
 import { gptmakerChatIdFor, HumanHandoff } from '../../src/modules/channel/human-handoff';
+import { OutOfHoursHandler } from '../../src/modules/channel/out-of-hours.handler';
+import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import { TransferConsumer } from '../../src/modules/channel/transfer.consumer';
 import { GptMakerClient } from '../../src/modules/gptmaker/gptmaker.client';
 import { GptMakerResilience } from '../../src/modules/gptmaker/gptmaker.resilience';
@@ -240,6 +242,70 @@ describe('atendimento humano', () => {
       gptmakerChatId: gptmakerChatIdFor(GM_AGENT, owner.id, 'chat12'),
     });
     expect(await wiremock.count('PUT', chatPath('chat12', 'start-human'))).toBe(1);
+  });
+
+  describe('transferência fora do horário', () => {
+    const SEND = '/rest/imbot.v2.Chat.Message.send.json';
+    const inbound = (dialogId: string) =>
+      ({
+        tenantId: owner.id,
+        agentId,
+        botId: 456,
+        dialogId,
+        chatId: Number(dialogId.replace('chat', '')),
+        messageId: 1,
+      }) as unknown as InboundMessage;
+    const outOfHours = (bitrix: BitrixClient) => new OutOfHoursHandler(bitrix, db, redis, handoff);
+    const bitrixClient = () =>
+      new BitrixClient(
+        {
+          get: async () => ({
+            accessToken: 'portal-token',
+            expiresAt: new Date(Date.now() + 3_600_000),
+            endpoint: `${wiremock.baseUrl}/rest/`,
+          }),
+          refresh: async () => {
+            throw new Error('não esperado');
+          },
+        },
+        { timeoutMs: 5000, maxAttempts: 1, acquire: async () => {} },
+      );
+
+    it('chat que nunca existiu no GPTMaker (404): transfere mesmo assim e vira humano', async () => {
+      await wiremock.stub({ request: { method: 'POST', urlPath: OPERATOR }, response: ok(true) });
+      await wiremock.stub({ request: { method: 'POST', urlPath: SEND }, response: ok(true) });
+      await wiremock.stub({
+        request: { method: 'PUT', urlPathPattern: '/v2/chat/.+/(start|stop)-human' },
+        response: { status: 404, jsonBody: { message: 'Chat not found' } },
+      });
+      const handler = outOfHours(bitrixClient());
+      await expect(handler.handle(inbound('chat21'), 77, 'Voltamos às 9h', true, 0)).resolves.toBe(
+        'transferred',
+      );
+      expect(await wiremock.count('POST', SEND)).toBe(1);
+      expect(await wiremock.bodies('POST', OPERATOR)).toMatchObject([{ CHAT_ID: 21 }]);
+      expect(await stateOf('chat21')).toMatchObject({ agentId, humanActive: true });
+      // O gate usa isto: as próximas mensagens caem em `skip-human`, sem aviso nem IA.
+      expect(await human.isActive(owner.id, 'chat21')).toBe(true);
+    });
+
+    it('transferir sem avisar não envia mensagem ao diálogo', async () => {
+      await stubAll();
+      const handler = outOfHours(bitrixClient());
+      await handler.handle(inbound('chat22'), 77, null, true, 0);
+      expect(await wiremock.count('POST', SEND)).toBe(0);
+      expect(await wiremock.count('POST', OPERATOR)).toBe(1);
+    });
+
+    it('quando o atendente encerra, o diálogo volta para a IA', async () => {
+      await stubAll();
+      const handler = outOfHours(bitrixClient());
+      await handler.handle(inbound('chat23'), 77, null, true, 0);
+      await expect(handoff.stop({ tenantId: owner.id, dialogId: 'chat23' })).resolves.toBe(
+        'stopped',
+      );
+      expect(await human.isActive(owner.id, 'chat23')).toBe(false);
+    });
   });
 
   describe('consumidor do onTransfer', () => {

@@ -1,0 +1,1 @@
+ALTER TABLE "agent" ADD COLUMN "out_of_hours_transfer" boolean DEFAULT true NOT NULL;

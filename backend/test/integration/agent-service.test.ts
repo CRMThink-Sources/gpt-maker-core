@@ -596,6 +596,27 @@ describe('serviço de agentes', () => {
         expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
       });
 
+      it('transferência fora do horário: padrão ligado, desliga, liga e ausente não altera', async () => {
+        expect(await stored()).toMatchObject({ outOfHoursTransfer: true });
+        const off = await service.update(owner, existing.id, { outOfHoursTransfer: false });
+        expect(off).toMatchObject({ outOfHoursTransfer: false });
+        await service.update(owner, existing.id, { outOfHoursMessage: 'Voltamos às 9h' });
+        expect(await stored()).toMatchObject({ outOfHoursTransfer: false });
+        await service.update(owner, existing.id, { outOfHoursTransfer: true });
+        expect(await stored()).toMatchObject({ outOfHoursTransfer: true });
+        expect(await remoteCalls()).toEqual({ profile: 0, settings: 0 });
+      });
+
+      it('transferência não booleana é recusada', async () => {
+        const error = await errorOf(
+          service.update(owner, existing.id, {
+            outOfHoursTransfer: 'sim' as unknown as boolean,
+          }),
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(await stored()).toMatchObject({ outOfHoursTransfer: true });
+      });
+
       it('payload inválido é recusado e o horário salvo não muda', async () => {
         await service.update(owner, existing.id, { businessHours: hours });
         const invalid = {
