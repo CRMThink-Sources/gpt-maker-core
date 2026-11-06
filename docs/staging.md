@@ -62,10 +62,15 @@ O Caddy só emite o certificado quando o DNS já resolve para o Droplet.
 
 ## 5. Serviços externos
 
-### Spaces (documentos de treinamento)
+### Spaces (imagens dos treinamentos)
 
-1. **Create → Spaces**: NYC3, nome `gptmaker-staging-trainings`, acesso restrito (privado).
-2. **API → Spaces Keys**: chave com acesso só a esse bucket. Guarde a chave e o segredo.
+Staging e produção **dividem um bucket só** (decisão de custo: um Space de US$ 5/mês). O que os separa é a chave de cada ambiente e o prefixo das chaves dos objetos.
+
+1. **Create → Spaces**: NYC3, nome `gptmaker-trainings`, **Standard Storage**, acesso restrito (privado), listagem de arquivos restrita e **CDN desligado** (a API lê o bucket e serve a imagem; ninguém acessa o Space direto).
+2. **API → Spaces Keys**: uma chave **só do staging**, com leitura e escrita nesse bucket. Guarde a chave e o segredo.
+3. No `ENV_FILE`: `STORAGE_ENDPOINT=https://nyc3.digitaloceanspaces.com`, `STORAGE_REGION=nyc3`, `STORAGE_BUCKET=gptmaker-trainings`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` e **`STORAGE_KEY_PREFIX=staging`**.
+
+Os arquivos ficam em `staging/trainings/<tenant>/...`. Para limpar o staging, apague só esse prefixo.
 
 ### GPTMaker (workspace só do staging)
 
@@ -114,7 +119,7 @@ Secrets:
 - `APP_CODE=crmthink.homolog-thinkflow` (o código do app no cadastro da plataforma de staging)
 - domínios `thinkflow-staging.crmthink.com.br` e `api.thinkflow-staging.crmthink.com.br`; `API_PUBLIC_URL`, `FRONTEND_ORIGINS` e `PUBLIC_API_BASE_URL` com eles
 - senhas novas do Postgres e do RabbitMQ (`openssl rand -hex 24`), repetidas na `DATABASE_URL` e na `RABBITMQ_URL`
-- GPTMaker do workspace de staging; plataforma de staging; Spaces do bucket de staging
+- GPTMaker do workspace de staging; plataforma de staging; chave e prefixo `staging` do Spaces
 - `PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_…`
 - `DATA_ENCRYPTION_KEY` nova (`openssl rand -base64 32`), guardada também num cofre: sem ela, os dados cifrados ficam ilegíveis
 

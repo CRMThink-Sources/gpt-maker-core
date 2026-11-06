@@ -26,9 +26,18 @@ const httpUrl = z
 /** Tamanho máximo do texto de um treinamento (criação e edição). */
 export const TRAINING_TEXT_MAX = 1028;
 
-/** Treinamentos sem arquivo; documento vai por upload (`multipart/form-data`, campo `file`). */
+/** Imagem de treinamento de texto (spec agent-training-image). */
+export const TRAINING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const TRAINING_IMAGE_MIMETYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export type TrainingImageMimetype = (typeof TRAINING_IMAGE_MIMETYPES)[number];
+
+/** Treinamentos sem arquivo; a imagem do texto é enviada antes (`imageId`). */
 export const createTrainingSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('TEXT'), text: z.string().trim().min(1).max(TRAINING_TEXT_MAX) }),
+  z.object({
+    type: z.literal('TEXT'),
+    text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
+    imageId: z.uuid().optional(),
+  }),
   z.object({
     type: z.literal('WEBSITE'),
     url: httpUrl,
@@ -40,10 +49,20 @@ export const createTrainingSchema = z.discriminatedUnion('type', [
 ]);
 export type CreateTrainingInput = z.input<typeof createTrainingSchema>;
 
-/** Só treinamentos de texto são editáveis; os demais são removidos e criados de novo. */
-export const updateTrainingSchema = z.object({
-  text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
-});
+/**
+ * Só treinamentos de texto são editáveis; os demais são removidos e criados de novo. `imageId`
+ * ausente mantém a imagem; `null` a remove.
+ */
+export const updateTrainingSchema = z
+  .object({
+    text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
+    imageId: z.uuid().nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((input) => input.text !== undefined || input.imageId !== undefined, {
+    message: 'informe o texto ou a imagem',
+  });
 export type UpdateTrainingInput = z.input<typeof updateTrainingSchema>;
 
 /** Uso dos limites de treinamento do plano, somando todos os agentes do tenant. */
@@ -53,6 +72,17 @@ export interface TrainingUsage {
   documentBytes: { used: number; limit: number | null };
 }
 
+/** Imagem anexada a um treinamento de texto; `url` é de leitura temporária (miniatura). */
+export interface TrainingImageView {
+  id: string;
+  url: string;
+  mimetype: string;
+  sizeBytes: number;
+}
+
+/** Resposta do upload de imagem. */
+export type UploadedTrainingImage = TrainingImageView & { fileName: string };
+
 export interface TrainingView {
   id: string;
   type: z.infer<typeof trainingTypeSchema>;
@@ -61,6 +91,8 @@ export interface TrainingView {
   managed: boolean;
   /** Texto do `TEXT`. */
   text: string | null;
+  /** Imagem do `TEXT`. */
+  image: TrainingImageView | null;
   /** Endereço do `WEBSITE` ou do `VIDEO`. */
   url: string | null;
   trainingSubPages: boolean | null;

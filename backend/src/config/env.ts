@@ -121,10 +121,24 @@ export const envSchema = z.object({
   /** Endpoint S3 usado pela API (ex.: `https://nyc3.digitaloceanspaces.com`, `http://storage:8333`). */
   STORAGE_ENDPOINT: z.url(),
   /**
-   * Endpoint das URLs pré-assinadas, que o GPTMaker baixa; a assinatura inclui o host. Em dev com
-   * túnel, o endereço público do SeaweedFS. Sem valor, o mesmo do `STORAGE_ENDPOINT`.
+   * Endpoint das URLs pré-assinadas (documentos antigos); a assinatura inclui o host. As imagens
+   * de treinamento não usam: a API as serve em `/public/training-images`. Sem valor, o mesmo do
+   * `STORAGE_ENDPOINT`.
    */
   STORAGE_PUBLIC_ENDPOINT: z.url().optional(),
+  /**
+   * Prefixo das chaves dos objetos (ex.: `staging`, `production`): staging e produção podem dividir
+   * o mesmo bucket e o prefixo mantém os arquivos de cada ambiente separados. Vazio: sem prefixo.
+   */
+  STORAGE_KEY_PREFIX: z
+    .string()
+    .trim()
+    .regex(
+      /^[A-Za-z0-9_-]*(\/[A-Za-z0-9_-]+)*\/?$/,
+      'use letras, números, _ e - (partes separadas por /)',
+    )
+    .transform((value) => value.replace(/^\/+|\/+$/g, ''))
+    .optional(),
   STORAGE_REGION: z.string().min(1).default('us-east-1'),
   STORAGE_BUCKET: z.string().min(1).default('gptmaker-trainings'),
   STORAGE_ACCESS_KEY: z.string().min(1),

@@ -18,7 +18,7 @@ export const TRAINING_GONE_REASON =
   'Um treinamento gerado pelo formulário sumiu do GPTMaker. Publique de novo para recriá-lo.';
 
 /**
- * Regras da função sobre os treinamentos: site e vídeo só com o modo avançado publicado (nem no
+ * Regras da função sobre os treinamentos: texto manual sempre liberado; site e vídeo só com o modo avançado publicado (nem no
  * simples, nem no controle assumido), e treinamento gerado que some do GPTMaker marca o agente para republicar
  * (spec agent-training). Agente sem configuração de função é anterior às funções: regra antiga.
  */
@@ -56,7 +56,8 @@ export class FunctionTrainingPolicy
       .from(agentFunctionConfig)
       .where(eq(agentFunctionConfig.agentId, agentId));
     if (!config) return null;
-    if (type === 'TEXT') return 'TRAINING_FORM_ONLY';
+    // Texto manual é liberado ao lado dos itens da função (spec agent-training-image).
+    if (type === 'TEXT') return null;
     return config.mode === 'ADVANCED' ? null : 'TRAINING_ADVANCED_ONLY';
   }
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "training_image" ADD COLUMN "public_token" text DEFAULT replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '') NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "training_image_public_token_uq" ON "training_image" USING btree ("public_token");

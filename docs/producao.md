@@ -61,7 +61,7 @@ restaure o dump se preciso. O volume de dados nunca é apagado nesse roteiro.
 
 Valores novos, nunca reaproveite os do staging:
 
-- **Spaces**: bucket privado `gptmaker-production-trainings` (NYC3) e chave só para ele.
+- **Spaces**: o **mesmo bucket do staging** (`gptmaker-trainings`, NYC3, privado, sem CDN), por decisão de custo. Crie uma **chave só da produção** (API → Spaces Keys, leitura e escrita nesse bucket) e use `STORAGE_KEY_PREFIX=production`. Nunca reaproveite a chave do staging: assim cada ambiente pode ser revogado ou girado sozinho, e os arquivos ficam em `production/trainings/...`.
 - **GPTMaker**: workspace de produção na conta partner (id e token). O `workspace-sync` trata como
   órfão todo agente sem registro no banco do ambiente.
 - **crmthink-platform de produção**, cadastro do app `crmthink.thinkflow`:
@@ -92,6 +92,7 @@ Ative **Required reviewers** no Environment: o `deploy.yml` já espera essa apro
 - `APP_CODE=crmthink.thinkflow`
 - `APP_DOMAIN=gptthink.crmthink.com.br`, `API_DOMAIN=api.gptthink.crmthink.com.br`; `API_PUBLIC_URL`,
   `FRONTEND_ORIGINS` e `PUBLIC_API_BASE_URL` com eles
+- `STORAGE_ENDPOINT`, `STORAGE_REGION` e `STORAGE_BUCKET` iguais aos do staging; `STORAGE_ACCESS_KEY` e `STORAGE_SECRET_KEY` da chave **de produção**; `STORAGE_KEY_PREFIX=production`
 - senhas **novas** do Postgres e do RabbitMQ (`openssl rand -hex 24`), repetidas na `DATABASE_URL` e na `RABBITMQ_URL`
 - `DATA_ENCRYPTION_KEY` nova (`openssl rand -base64 32`), guardada também num cofre
 - sem `DATA_DIR` nem `STACK_NAME`: o deploy define

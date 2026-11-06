@@ -17,6 +17,7 @@ import {
 import { useAppSession } from '../../../session-provider';
 import { useAgent } from '../agent-context';
 import { AddTrainingModal } from './add-training-modal';
+import { EditTextTrainingModal } from './edit-text-modal';
 
 /** Enquanto houver treinamento processando, a lista se atualiza sozinha (o status vem do callback). */
 const POLL_MS = 5000;
@@ -85,6 +86,7 @@ export default function AgentTrainingsPage() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<TrainingView | null>(null);
   // Site e vídeo só no modo avançado; agente sem função (anterior às funções) segue livre.
   const [mediaAllowed, setMediaAllowed] = useState<boolean | null>(null);
   // No controle assumido não há botão de modo avançado: o caminho é voltar ao formulário.
@@ -165,10 +167,11 @@ export default function AgentTrainingsPage() {
     }
   }
 
-  const add = canManage && mediaAllowed && (
+  // Texto é sempre liberado; site e vídeo dependem do modo avançado (`mediaAllowed`).
+  const add = canManage && (
     <button type="button" onClick={() => setAdding(true)} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Adicionar site ou vídeo
+      Adicionar treinamento
     </button>
   );
 
@@ -182,7 +185,7 @@ export default function AgentTrainingsPage() {
             <Link href={`/app/agents/${agent.id}/function`} className="text-brand-700 underline">
               Função
             </Link>
-            .{' '}
+            . Você também pode acrescentar textos (com imagem) por aqui.{' '}
             {mediaAllowed === false
               ? takenOver
                 ? 'Para treinar com sites e vídeos, volte ao formulário no modo avançado lá.'
@@ -217,7 +220,7 @@ export default function AgentTrainingsPage() {
               <EmptyState
                 icon={<BookIcon className="size-6" />}
                 title="Nenhum treinamento ainda"
-                description="Preencha a base de conhecimento no formulário da aba Função e publique."
+                description="Preencha a base de conhecimento no formulário da aba Função e publique, ou adicione um texto por aqui."
                 action={add}
               />
             ) : (
@@ -228,9 +231,18 @@ export default function AgentTrainingsPage() {
                   const busy = busyId === training.id;
                   return (
                     <li key={training.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">
-                        <Icon className="size-5" />
-                      </span>
+                      {training.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={training.image.url}
+                          alt="Imagem do treinamento"
+                          className="size-9 shrink-0 rounded-lg border border-zinc-200 object-cover"
+                        />
+                      ) : (
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">
+                          <Icon className="size-5" />
+                        </span>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p
@@ -240,6 +252,9 @@ export default function AgentTrainingsPage() {
                             {trainingTitle(training)}
                           </p>
                           {training.managed && <Badge tone="brand">da função</Badge>}
+                          {training.type === 'TEXT' && !training.managed && (
+                            <Badge tone="zinc">manual</Badge>
+                          )}
                           <Badge tone={status.tone}>
                             {training.status === 'PROCESSING' && (
                               <Spinner className="-ml-0.5 size-3" />
@@ -309,6 +324,16 @@ export default function AgentTrainingsPage() {
                                 {busy ? 'Reenviando…' : 'Reenviar'}
                               </button>
                             )}
+                            {training.type === 'TEXT' && (
+                              <button
+                                type="button"
+                                onClick={() => setEditing(training)}
+                                disabled={busyId !== null}
+                                className={buttonClass('secondary', 'sm')}
+                              >
+                                Editar
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setConfirmingId(training.id)}
@@ -331,9 +356,22 @@ export default function AgentTrainingsPage() {
       {adding && (
         <AddTrainingModal
           agentId={agent.id}
+          mediaAllowed={mediaAllowed === true}
           onClose={() => setAdding(false)}
           onCreated={() => {
             setAdding(false);
+            void reload();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditTextTrainingModal
+          agentId={agent.id}
+          training={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             void reload();
           }}
         />
