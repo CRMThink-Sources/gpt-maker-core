@@ -205,7 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-8 sm:py-8">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-6xl">
             {session.tenant.status === 'AUTH_ERROR' && (
               <Alert tone="warning" className="mb-6">
                 O Bitrix24 recusou a autorização do app e o atendimento dos agentes está pausado. Um

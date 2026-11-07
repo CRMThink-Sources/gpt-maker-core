@@ -304,7 +304,7 @@ export default function AgentFunctionPage() {
   if (!config) return error ? <Alert tone="error">{error}</Alert> : <Loading />;
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="space-y-6">
       <Suspense>
         <CreatedNotice />
       </Suspense>
@@ -489,7 +489,7 @@ export default function AgentFunctionPage() {
         />
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_16rem]">
         <div className="min-w-0 space-y-4">
           {mode !== 'TAKEN_OVER' && (
             <div className="xl:hidden">
