@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type ComponentType, type SVGProps } f
 import { BookIcon, FileIcon, GlobeIcon, PlusIcon, TextIcon, VideoIcon } from '@/components/icons';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading, Spinner } from '@/components/ui';
 import { errorMessage } from '@/lib/agents';
+import { inputClass } from '../../agent-fields';
 import { ApiRequestError } from '@/lib/platform-session';
 import {
   formatBytes,
@@ -22,6 +23,8 @@ import { EditTextTrainingModal } from './edit-text-modal';
 /** Enquanto houver treinamento processando, a lista se atualiza sozinha (o status vem do callback). */
 const POLL_MS = 5000;
 const POLL_MAX = 120;
+/** Quantos treinamentos aparecem por vez; o resto entra em "Mostrar mais". */
+const PAGE_SIZE = 20;
 
 const ICONS: Record<TrainingView['type'], ComponentType<SVGProps<SVGSVGElement>>> = {
   TEXT: TextIcon,
@@ -93,6 +96,8 @@ export default function AgentTrainingsPage() {
   const [takenOver, setTakenOver] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   const canManage = session.canManage && agent.status !== 'OUT_OF_SYNC';
   const base = `/app/agents/${agent.id}/trainings`;
@@ -175,6 +180,12 @@ export default function AgentTrainingsPage() {
     </button>
   );
 
+  const term = query.trim().toLowerCase();
+  const filtered = (listing?.trainings ?? []).filter(
+    (training) => !term || trainingTitle(training).toLowerCase().includes(term),
+  );
+  const shown = filtered.slice(0, visible);
+
   return (
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -215,8 +226,26 @@ export default function AgentTrainingsPage() {
             />
           </div>
 
+          {listing.trainings.length > PAGE_SIZE && (
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setVisible(PAGE_SIZE);
+              }}
+              placeholder="Buscar treinamento pelo título"
+              aria-label="Buscar treinamento"
+              className={`${inputClass} mb-4`}
+            />
+          )}
+
           <Card>
-            {listing.trainings.length === 0 ? (
+            {listing.trainings.length > 0 && filtered.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-zinc-500">
+                Nenhum treinamento encontrado para “{query.trim()}”.
+              </p>
+            ) : listing.trainings.length === 0 ? (
               <EmptyState
                 icon={<BookIcon className="size-6" />}
                 title="Nenhum treinamento ainda"
@@ -225,7 +254,7 @@ export default function AgentTrainingsPage() {
               />
             ) : (
               <ul className="divide-y divide-zinc-100">
-                {listing.trainings.map((training) => {
+                {shown.map((training) => {
                   const Icon = ICONS[training.type];
                   const status = trainingStatus(training.status);
                   const busy = busyId === training.id;
@@ -350,6 +379,20 @@ export default function AgentTrainingsPage() {
               </ul>
             )}
           </Card>
+          {filtered.length > shown.length && (
+            <div className="mt-4 flex items-center justify-center gap-3 text-sm text-zinc-500">
+              <span>
+                Mostrando {shown.length} de {filtered.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setVisible((current) => current + PAGE_SIZE)}
+                className={buttonClass('secondary', 'sm')}
+              >
+                Mostrar mais
+              </button>
+            </div>
+          )}
         </>
       )}
 

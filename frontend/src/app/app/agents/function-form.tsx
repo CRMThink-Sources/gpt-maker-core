@@ -18,7 +18,15 @@ import {
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
-import { BookIcon, CheckIcon, CloseIcon, PlusIcon, TextIcon, TrashIcon } from '@/components/icons';
+import {
+  BookIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  PlusIcon,
+  TextIcon,
+  TrashIcon,
+} from '@/components/icons';
 import { buttonClass } from '@/components/ui';
 import { inputClass } from './agent-fields';
 import {
@@ -679,6 +687,9 @@ function ChoiceInput({
   );
 }
 
+/** Acima disso os itens da base de conhecimento começam recolhidos. */
+const KNOWLEDGE_COLLAPSE_AFTER = 3;
+
 function KnowledgeInput({
   field,
   value,
@@ -702,22 +713,60 @@ function KnowledgeInput({
     values: Object.fromEntries(field.subfields.map((subfield) => [subfield.id, ''])),
   });
   const first = field.subfields[0];
+  // Com muitos itens, só o que a pessoa está editando fica aberto; item com erro abre sozinho.
+  const collapsible = items.length > KNOWLEDGE_COLLAPSE_AFTER;
+  const [openState, setOpenState] = useState<Record<string, boolean>>({});
+  const hasIssue = (index: number) =>
+    issues.some((issue) => issue.field.startsWith(`${field.id}[${index}]`));
+  const isOpen = (item: KnowledgeItem, index: number) =>
+    !collapsible || hasIssue(index) || (openState[item.itemKey] ?? false);
+  const toggle = (item: KnowledgeItem, index: number) =>
+    setOpenState((current) => ({ ...current, [item.itemKey]: !isOpen(item, index) }));
+  const setAll = (open: boolean) =>
+    setOpenState(Object.fromEntries(items.map((item) => [item.itemKey, open])));
   return (
     <div className="text-sm">
       <Title field={field} />
+      {collapsible && (
+        <div className="mt-2 flex justify-end gap-3 text-xs font-medium text-zinc-500">
+          <button type="button" className="hover:text-brand-700" onClick={() => setAll(true)}>
+            Expandir todos
+          </button>
+          <button type="button" className="hover:text-brand-700" onClick={() => setAll(false)}>
+            Recolher todos
+          </button>
+        </div>
+      )}
       <div className="mt-3 space-y-3">
         {items.map((item, index) => {
+          const open = isOpen(item, index);
           const length = renderKnowledgeItem(field, item).length;
           const title = first ? item.values[first.id]?.trim() : '';
           return (
             <div key={item.itemKey} className="rounded-xl border border-zinc-200 bg-zinc-50/60">
-              <div className="flex items-center gap-2 border-b border-zinc-200/70 px-3.5 py-2">
-                <span className="flex size-5 items-center justify-center rounded-md bg-white text-[11px] font-semibold text-zinc-500 ring-1 ring-zinc-200">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-700">
-                  {title || `Item ${index + 1}`}
-                </span>
+              <div
+                className={`flex items-center gap-2 px-3.5 py-2 ${open ? 'border-b border-zinc-200/70' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  aria-expanded={open}
+                  aria-label={`${open ? 'Recolher' : 'Expandir'} item ${index + 1}`}
+                  disabled={!collapsible || hasIssue(index)}
+                  onClick={() => toggle(item, index)}
+                >
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-white text-[11px] font-semibold text-zinc-500 ring-1 ring-zinc-200">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-700">
+                    {title || `Item ${index + 1}`}
+                  </span>
+                  {collapsible && (
+                    <ChevronDownIcon
+                      className={`size-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`}
+                    />
+                  )}
+                </button>
                 <span
                   className={`text-xs tabular-nums ${length > TRAINING_TEXT_MAX ? 'text-red-600' : 'text-zinc-400'}`}
                   title={`Treinamento com ${length} de ${TRAINING_TEXT_MAX} caracteres`}
@@ -734,7 +783,7 @@ function KnowledgeInput({
                   <TrashIcon className="size-4" />
                 </button>
               </div>
-              <div className="space-y-3 p-3.5">
+              <div className={`space-y-3 p-3.5 ${open ? '' : 'hidden'}`}>
                 {field.subfields.map((subfield) => {
                   const Input = subfield.multiline ? 'textarea' : 'input';
                   const text = item.values[subfield.id] ?? '';
@@ -797,7 +846,11 @@ function KnowledgeInput({
           type="button"
           className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700 disabled:pointer-events-none disabled:opacity-50"
           disabled={disabled}
-          onClick={() => update([...items, blank()])}
+          onClick={() => {
+            const created = blank();
+            setOpenState((current) => ({ ...current, [created.itemKey]: true }));
+            update([...items, created]);
+          }}
         >
           <PlusIcon className="size-4" /> Adicionar item
           <span className="font-normal text-zinc-400">
