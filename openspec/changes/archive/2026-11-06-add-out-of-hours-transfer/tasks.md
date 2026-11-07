@@ -24,4 +24,4 @@
 ## 5. Documentação e integração
 
 - [x] 5.1 Atualizar `docs/agent-business-hours.md` (as quatro combinações, padrão transferir, sem retorno automático à IA, expediente da Linha Aberta, mudança para agentes existentes) e verificar que o texto bate com a spec
-- [ ] 5.2 Rodar `npm run lint`, `npm run typecheck` e a suíte de testes do backend, contratos e frontend, e verificar que passam; testar manualmente em staging com um agente fora do expediente: transferência ao operador livre, aviso antes dela quando configurado, IA sem responder depois, volta à IA ao encerrar o atendimento
+- [x] 5.2 Rodar `npm run lint`, `npm run typecheck` e a suíte de testes do backend, contratos e frontend, e verificar que passam; testar manualmente em staging com um agente fora do expediente: transferência ao operador livre, aviso antes dela quando configurado, IA sem responder depois, volta à IA ao encerrar o atendimento
