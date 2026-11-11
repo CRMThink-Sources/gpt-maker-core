@@ -9,7 +9,8 @@ import { metricsRegistry } from '../../shared/metrics/metrics';
 import { BitrixError } from '../bitrix';
 import type { CrmCaller } from './crm-access.guard';
 
-export type ToolName = 'consultar_cliente' | 'negocios_do_cliente' | 'etapas_do_funil';
+export type ToolName =
+  'consultar_cliente' | 'negocios_do_cliente' | 'etapas_do_funil' | 'horarios_livres';
 export type ToolOutcome = 'ok' | 'not_identified' | 'not_found' | 'unavailable' | 'rate_limited';
 
 /** Resposta de uma ferramenta: corpo para o agente e, para métricas, quantos registros. */

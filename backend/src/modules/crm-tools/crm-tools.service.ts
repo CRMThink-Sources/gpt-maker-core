@@ -164,6 +164,24 @@ export class CrmToolsService {
     });
   }
 
+  /**
+   * Responsável (`ASSIGNED_BY_ID`) do cliente da referência, para a agenda no modo "responsável do
+   * cliente no CRM" (spec agent-calendar-scheduling). Referência inválida, adulterada ou de outro
+   * tenant, ou registro apagado, contam como cliente não encontrado. Não passa pelo executor das
+   * ferramentas: quem chama já está dentro dele.
+   */
+  async clientResponsible(
+    caller: CrmCaller,
+    ref: unknown,
+  ): Promise<{ found: false } | { found: true; userId: number | null }> {
+    const client = this.refs.verify(caller.tenantId, ref);
+    if (!client) return { found: false };
+    const record = await this.getRecord(caller, client.type, client.id);
+    if (!record) return { found: false };
+    const userId = Number(record.ASSIGNED_BY_ID);
+    return { found: true, userId: userId > 0 ? userId : null };
+  }
+
   pipelineStages(caller: CrmCaller, pipelineName?: string) {
     return this.runner.run(caller, 'etapas_do_funil', async () => {
       const [metadata, choices] = await Promise.all([

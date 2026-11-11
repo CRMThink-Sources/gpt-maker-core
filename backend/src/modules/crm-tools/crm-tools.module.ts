@@ -8,6 +8,7 @@ import { TenancyModule } from '../tenancy';
 import { CalendarConfigController } from './calendar-config.controller';
 import { CalendarConfigRepository } from './calendar-config.repository';
 import { CalendarConfigService } from './calendar-config.service';
+import { CalendarToolsService } from './calendar-tools.service';
 import { CrmAccessController } from './crm-access.controller';
 import { CrmAccessGuard } from './crm-access.guard';
 import { CrmAccessService } from './crm-access.service';
@@ -35,6 +36,7 @@ import { McpController } from './mcp.controller';
     CrmToolsSync,
     CalendarConfigRepository,
     CalendarConfigService,
+    CalendarToolsService,
   ],
   exports: [CrmAccessService, CrmGuidanceService],
 })

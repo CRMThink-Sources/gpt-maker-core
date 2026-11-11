@@ -24,8 +24,8 @@
 
 ## 5. Disponibilidade
 
-- [ ] 5.1 Implementar o cálculo de slots como função pura em `crm-tools/calendar-slots.ts` (expediente do agente ou padrão seg–sex 09:00–18:00 `America/Sao_Paulo`, antecedência, grade, ocupação em UTC, só `busy`/`absent` bloqueiam, qualquer usuário livre no modo lista, limite de 10); verificar com testes tabulares (`it.each`): evento ocupado no meio do dia, evento livre, antecedência, virada de dia, fuso `America/Manaus`, horário de verão do fuso, sem expediente no dia e lista com um usuário ocupado
-- [ ] 5.2 Implementar `CalendarToolsService.freeSlots` (resolução da agenda por modo, `calendar.accessibility.get`, resposta com nome de quem atende e duração, validação de data fora da janela sem chamar o Bitrix24); verificar com testes de serviço com `BitrixClient` simulado: usuário fixo, responsável do cliente (com e sem responsável), lista de usuários, sem configuração, `insufficient_scope`
+- [x] 5.1 Implementar o cálculo de slots como função pura em `crm-tools/calendar-slots.ts` (expediente do agente ou padrão seg–sex 09:00–18:00 `America/Sao_Paulo`, antecedência, grade, ocupação em UTC, só `busy`/`absent` bloqueiam, qualquer usuário livre no modo lista, limite de 10); verificar com testes tabulares (`it.each`): evento ocupado no meio do dia, evento livre, antecedência, virada de dia, fuso `America/Manaus`, horário de verão do fuso, sem expediente no dia e lista com um usuário ocupado
+- [x] 5.2 Implementar `CalendarToolsService.freeSlots` (resolução da agenda por modo, `calendar.accessibility.get`, resposta com nome de quem atende e duração, validação de data fora da janela sem chamar o Bitrix24); verificar com testes de serviço com `BitrixClient` simulado: usuário fixo, responsável do cliente (com e sem responsável), lista de usuários, sem configuração, `insufficient_scope`
 
 ## 6. Agendamento
 
