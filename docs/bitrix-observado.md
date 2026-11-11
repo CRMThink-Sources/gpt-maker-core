@@ -93,7 +93,8 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   (número). `from`/`to` aceitam `YYYY-MM-DD HH:mm:ss` com `timezone_from`/`timezone_to` explícitos.
   `auto_detect_section: 'Y'` dispensa descobrir a seção (o evento caiu na seção do dono, `SECTION_ID`).
 - `calendar.event.get { type: 'user', ownerId, from, to }`: devolve a lista de eventos do dono.
-  Cada evento traz `DATE_FROM_TS_UTC`/`DATE_TO_TS_UTC` (timestamps UTC, usar estes), `TZ_FROM`,
+  Cada evento traz `DATE_FROM_TS_UTC`/`DATE_TO_TS_UTC` (**não são UTC de verdade**: ver o item
+  "Horário real do evento"), `TZ_FROM`, `~USER_OFFSET_FROM`,
   `ACCESSIBILITY` (`busy`), `CAL_TYPE`, `OWNER_ID`, `ATTENDEES_CODES` (`["U508"]`) e
   `UF_CRM_CAL_EVENT`. `DATE_FROM` vem formatada no idioma do usuário (`24/11/2026 14:00:00`):
   não usar para cálculo.
@@ -101,8 +102,18 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   (empresa) voltam idênticos em `UF_CRM_CAL_EVENT`. O método **não filtra** por esse campo: é
   preciso listar os eventos e filtrar no cliente.
 - `calendar.accessibility.get { users, from, to }`: `from`/`to` só com data. Devolve, por usuário,
-  os eventos que ocupam o período, com `ACCESSIBILITY`, `DATE_FROM_TS_UTC`, `DATE_TO_TS_UTC` e
-  `TZ_FROM`. O evento criado apareceu logo em seguida como `busy`.
+  os eventos que ocupam o período, com `ACCESSIBILITY`, `DATE_FROM_TS_UTC`, `DATE_TO_TS_UTC`,
+  `TZ_FROM` e `~USER_OFFSET_FROM`. O evento criado apareceu logo em seguida como `busy`.
+- **Horário real do evento (correção de 2026-11-11)**: `DATE_FROM_TS_UTC` **não é UTC**. É o instante
+  escrito na hora de parede de **quem consulta** (o usuário do token), como se fosse UTC, e
+  `~USER_OFFSET_FROM` é o deslocamento do fuso do evento em relação ao de quem consulta. Medido com o
+  usuário 508 (perfil em São Paulo, UTC-3): evento de 14:20 em São Paulo (`timezone_from`
+  `America/Sao_Paulo`) volta com `14:20Z` e offset `0`; evento de 10:00 em Nova York (= 15:00Z) volta
+  com `12:00Z` e offset `-7200`; o exemplo da documentação do Bitrix24 (consulta em UTC, evento em
+  Manágua) volta com o UTC real e offset `-21600`. A hora de parede **no fuso do evento** é
+  `TS + ~USER_OFFSET_FROM`, e o instante real sai de convertê-la com `TZ_FROM`
+  (`eventInterval` em `crm-tools/calendar-slots.ts`). A duração (`TO - FROM`) é a real. A
+  `START_TIME` das atividades do CRM **é** o instante real, com o deslocamento do portal.
 - **Sem proteção contra choque**: um segundo `calendar.event.add` no mesmo horário e na mesma agenda
   foi aceito e criou outro evento (id diferente), sem erro. A exclusividade do horário é do app.
 - **Evento privado**: `private_event: 'Y'` volta em `PRIVATE_EVENT` como `"1"` (não `"Y"`).
@@ -123,5 +134,12 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   1,5 s). `crm.activity.list { filter: { OWNER_TYPE_ID, OWNER_ID, PROVIDER_ID, '>=START_TIME' } }`
   levou ~240 ms. **Evento privado vinculado também gera atividade**, então a atividade não
   distingue o privado.
-- **Ainda não testado**: evento criado à mão na tela do Calendário com vínculo ao CRM gera a mesma
-  atividade; atividade `CRM_TODO` criada à mão (sem evento) é indistinguível pelos campos acima.
+- **Evento criado à mão (tarefa 7.2, 2026-11-11)**: um evento criado na tela do Calendário, vinculado a
+  um contato, gera a **mesma atividade `CRM_TODO`** (`TYPE_ID 6`, `ASSOCIATED_ENTITY_ID 0`, assunto =
+  nome do evento, responsável = dono da agenda, `COMPLETED N`), e o `START_TIME` dela é o instante
+  real do evento (evento de 17:20 em São Paulo ⇒ `2026-11-11T23:20:00+03:00` = 20:20Z). O
+  `agendamentos_do_cliente` enxerga, portanto, compromissos criados por pessoas e pela API.
+- **Filtros de `crm.activity.list` (tarefa 7.2)**: `>=START_TIME`, `<=START_TIME` (precisão de
+  minuto, com `+00:00`), `PROVIDER_ID` e `RESPONSIBLE_ID` como lista são todos respeitados.
+- **Ainda sem como distinguir**: uma atividade `CRM_TODO` criada à mão, sem evento, é indistinguível
+  pelos campos acima e seria listada como compromisso.

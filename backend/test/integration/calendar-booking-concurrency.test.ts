@@ -51,8 +51,11 @@ class FakePortal {
               .filter((event) => event.owner === id)
               .map((event) => ({
                 ACCESSIBILITY: 'busy',
-                DATE_FROM_TS_UTC: String(event.from / 1000),
-                DATE_TO_TS_UTC: String(event.to / 1000),
+                // Formato do portal: hora de parede de São Paulo escrita como UTC (ver eventInterval).
+                DATE_FROM_TS_UTC: String((event.from - 3 * 3600_000) / 1000),
+                DATE_TO_TS_UTC: String((event.to - 3 * 3600_000) / 1000),
+                '~USER_OFFSET_FROM': 0,
+                TZ_FROM: 'America/Sao_Paulo',
               })),
           ]),
         ),

@@ -4,6 +4,7 @@ import {
   addDays,
   type AgendaBusy,
   DEFAULT_CALENDAR_HOURS,
+  eventInterval,
   freeSlots,
   localDate,
   localParts,
@@ -379,5 +380,97 @@ describe('slotViolation', () => {
     const later = { ...rules, now: at('2026-11-24T11:30:00Z') };
     expect(slotViolation(later, at('2026-11-24T12:00:00Z'))).toBe('notice');
     expect(slotViolation(later, at('2026-11-24T12:30:00Z'))).toBeNull();
+  });
+});
+
+describe('eventInterval (período real de um evento do portal)', () => {
+  const sec = (iso: string) => Date.parse(iso) / 1000;
+  /** Evento como `calendar.accessibility.get` devolve: `TS` na parede de quem consulta, como se fosse UTC. */
+  const portal = (from: string, to: string, userOffset: number, timezone: string) =>
+    eventInterval({ fromTs: sec(from), toTs: sec(to), userOffset, timezone });
+  const span = (from: string, to: string) => ({ start: Date.parse(from), end: Date.parse(to) });
+
+  it.each([
+    // Valores observados no portal de teste (consulta feita por um usuário de São Paulo, UTC-3).
+    [
+      'criado pela API, 14:20 em São Paulo',
+      portal('2026-11-12T14:20:00Z', '2026-11-12T15:20:00Z', 0, 'America/Sao_Paulo'),
+      span('2026-11-12T17:20:00Z', '2026-11-12T18:20:00Z'),
+    ],
+    [
+      'criado à mão na tela do Calendário, 17:20 em São Paulo (bate com a atividade do CRM)',
+      portal('2026-11-11T17:20:00Z', '2026-11-11T18:20:00Z', 0, 'America/Sao_Paulo'),
+      span('2026-11-11T20:20:00Z', '2026-11-11T21:20:00Z'),
+    ],
+    [
+      'evento em Nova York, 10:00 (= 15:00Z), visto de São Paulo',
+      portal('2026-11-13T12:00:00Z', '2026-11-13T13:00:00Z', -7200, 'America/New_York'),
+      span('2026-11-13T15:00:00Z', '2026-11-13T16:00:00Z'),
+    ],
+    [
+      'exemplo da documentação do Bitrix24 (consulta em UTC, evento em Manágua)',
+      eventInterval({
+        fromTs: 1733158800,
+        toTs: 1733162400,
+        userOffset: -21600,
+        timezone: 'America/Managua',
+      }),
+      span('2024-12-02T17:00:00Z', '2024-12-02T18:00:00Z'),
+    ],
+    [
+      'dia do salto do horário de verão (03:30 EDT, depois do salto), visto de São Paulo',
+      portal('2026-03-08T04:30:00Z', '2026-03-08T05:30:00Z', -3600, 'America/New_York'),
+      span('2026-03-08T07:30:00Z', '2026-03-08T08:30:00Z'),
+    ],
+  ])('%s', (_caso, actual, expected) => {
+    expect(actual).toEqual(expected);
+  });
+
+  it('a duração do evento é preservada', () => {
+    const result = portal('2026-11-12T14:20:00Z', '2026-11-12T14:50:00Z', 0, 'America/Sao_Paulo')!;
+    expect(result.end - result.start).toBe(30 * 60_000);
+  });
+
+  it('aceita números como texto, como a API devolve', () => {
+    expect(
+      eventInterval({
+        fromTs: String(sec('2026-11-12T14:20:00Z')),
+        toTs: String(sec('2026-11-12T15:20:00Z')),
+        userOffset: '0',
+        timezone: 'America/Sao_Paulo',
+      }),
+    ).toEqual(span('2026-11-12T17:20:00Z', '2026-11-12T18:20:00Z'));
+  });
+
+  it('sem deslocamento informado, vale zero', () => {
+    expect(
+      eventInterval({
+        fromTs: sec('2026-11-12T14:20:00Z'),
+        toTs: sec('2026-11-12T15:20:00Z'),
+        timezone: 'America/Sao_Paulo',
+      }),
+    ).toEqual(span('2026-11-12T17:20:00Z', '2026-11-12T18:20:00Z'));
+  });
+
+  it.each([
+    ['sem fuso', undefined],
+    ['fuso inválido', 'Marte/Olimpo'],
+  ])('%s: não há como corrigir, vale o timestamp como veio', (_caso, timezone) => {
+    expect(
+      eventInterval({
+        fromTs: sec('2026-11-12T14:20:00Z'),
+        toTs: sec('2026-11-12T15:20:00Z'),
+        userOffset: -7200,
+        timezone,
+      }),
+    ).toEqual(span('2026-11-12T14:20:00Z', '2026-11-12T15:20:00Z'));
+  });
+
+  it.each([
+    ['início inválido', { fromTs: 'x', toTs: 10 }],
+    ['fim inválido', { fromTs: 10, toTs: undefined }],
+    ['fim antes do início', { fromTs: 20, toTs: 10 }],
+  ])('%s: ignora o evento', (_caso, event) => {
+    expect(eventInterval({ ...event, timezone: 'America/Sao_Paulo' })).toBeNull();
   });
 });

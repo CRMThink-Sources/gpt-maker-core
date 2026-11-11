@@ -1,6 +1,7 @@
 import {
   type BusinessHours,
   DEFAULT_BUSINESS_TIMEZONE,
+  isValidTimezone,
   toMinutes,
   type WeekDay,
 } from '@gptmaker/contracts';
@@ -216,4 +217,48 @@ export function slotViolation(
   });
   if (!onGrid) return 'grid';
   return start < rules.now + rules.minNoticeMinutes * MINUTE_MS ? 'notice' : null;
+}
+
+/** Campos de um evento em `calendar.accessibility.get` usados para achar o período real dele. */
+export interface PortalEventTimes {
+  /** `DATE_FROM_TS_UTC` (segundos). */
+  fromTs: unknown;
+  /** `DATE_TO_TS_UTC` (segundos). */
+  toTs: unknown;
+  /** `~USER_OFFSET_FROM` (segundos). */
+  userOffset?: unknown;
+  /** `TZ_FROM`: fuso do evento (nome IANA). */
+  timezone?: unknown;
+}
+
+/**
+ * Período real (instantes UTC) de um evento do Calendário do Bitrix24.
+ *
+ * `DATE_FROM_TS_UTC` **não é UTC**: é o instante escrito na hora de parede de quem consulta (o
+ * usuário do token), como se fosse UTC; e `~USER_OFFSET_FROM` é o deslocamento do fuso do evento em
+ * relação ao de quem consulta. Observado no portal de teste (docs/bitrix-observado.md): evento de
+ * 14:20 em São Paulo vem com `14:20Z` e offset 0; de 10:00 em Nova York (= 15:00Z) vem com `12:00Z`
+ * e offset −7200. Logo, a hora de parede **no fuso do evento** é `TS + ~USER_OFFSET_FROM`, e o
+ * instante real sai de convertê-la com `TZ_FROM`. A duração (`TO − FROM`) é a real. Sem fuso
+ * válido não há como corrigir: vale o timestamp como veio.
+ */
+export function eventInterval(event: PortalEventTimes): Interval | null {
+  const from = Number(event.fromTs);
+  const to = Number(event.toTs);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
+  const timezone =
+    typeof event.timezone === 'string' && isValidTimezone(event.timezone) ? event.timezone : null;
+  if (!timezone) return { start: from * 1000, end: to * 1000 };
+
+  const offset = Number(event.userOffset ?? 0);
+  const wall = new Date((from + (Number.isFinite(offset) ? offset : 0)) * 1000);
+  const base = zonedToEpoch(
+    wall.toISOString().slice(0, 10),
+    wall.getUTCHours() * 60 + wall.getUTCMinutes(),
+    timezone,
+  );
+  // Hora que não existe no fuso (salto do horário de verão): sem como corrigir com segurança.
+  if (base === null) return { start: from * 1000, end: to * 1000 };
+  const start = base + wall.getUTCSeconds() * 1000;
+  return { start, end: start + (to - from) * 1000 };
 }

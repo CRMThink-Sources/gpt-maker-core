@@ -13,6 +13,7 @@ import {
   addDays,
   type AgendaBusy,
   DEFAULT_CALENDAR_HOURS,
+  eventInterval,
   type FreeSlot,
   freeSlots,
   type Interval,
@@ -107,6 +108,8 @@ interface AccessibilityEvent {
   ACCESSIBILITY?: string;
   DATE_FROM_TS_UTC?: string | number;
   DATE_TO_TS_UTC?: string | number;
+  '~USER_OFFSET_FROM'?: string | number;
+  TZ_FROM?: string;
 }
 
 interface AgendaUser {
@@ -570,11 +573,16 @@ export class CalendarToolsService {
       ownerId: user.id,
       busy: (byUser[String(user.id)] ?? [])
         .filter((event) => BLOCKING.has(String(event.ACCESSIBILITY)))
-        .map((event): Interval => ({
-          start: Number(event.DATE_FROM_TS_UTC) * 1000,
-          end: Number(event.DATE_TO_TS_UTC) * 1000,
-        }))
-        .filter((interval) => Number.isFinite(interval.start) && Number.isFinite(interval.end)),
+        // `DATE_*_TS_UTC` não é UTC de verdade: ver `eventInterval`.
+        .map((event) =>
+          eventInterval({
+            fromTs: event.DATE_FROM_TS_UTC,
+            toTs: event.DATE_TO_TS_UTC,
+            userOffset: event['~USER_OFFSET_FROM'],
+            timezone: event.TZ_FROM,
+          }),
+        )
+        .filter((interval): interval is Interval => interval !== null),
     }));
   }
 

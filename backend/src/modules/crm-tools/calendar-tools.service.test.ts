@@ -51,12 +51,26 @@ interface PortalEvent {
   ACCESSIBILITY: string;
   DATE_FROM_TS_UTC: string;
   DATE_TO_TS_UTC: string;
+  '~USER_OFFSET_FROM': number;
+  TZ_FROM: string;
 }
-/** Evento de `from` a `to` (UTC) com a disponibilidade dada. */
+
+/**
+ * Como o portal descreve um evento em `calendar.accessibility.get` (observado em
+ * docs/bitrix-observado.md): `DATE_*_TS_UTC` **não é UTC**, é o instante na hora de parede de quem
+ * consulta (aqui, São Paulo, UTC-3) escrita como se fosse UTC, e `~USER_OFFSET_FROM` é o
+ * deslocamento do fuso do evento em relação ao de quem consulta.
+ */
+const VIEWER_OFFSET_MS = -3 * 3600_000;
+const portalTs = (instantMs: number) => String((instantMs + VIEWER_OFFSET_MS) / 1000);
+
+/** Evento de `from` a `to` (instantes reais, UTC) na agenda de São Paulo, com a disponibilidade dada. */
 const event = (accessibility: string, fromIso: string, toIso: string): PortalEvent => ({
   ACCESSIBILITY: accessibility,
-  DATE_FROM_TS_UTC: String(Date.parse(fromIso) / 1000),
-  DATE_TO_TS_UTC: String(Date.parse(toIso) / 1000),
+  DATE_FROM_TS_UTC: portalTs(Date.parse(fromIso)),
+  DATE_TO_TS_UTC: portalTs(Date.parse(toIso)),
+  '~USER_OFFSET_FROM': 0,
+  TZ_FROM: 'America/Sao_Paulo',
 });
 
 function config(overrides: Partial<CalendarConfigRow> = {}): CalendarConfigRow {
@@ -169,8 +183,10 @@ function setup(
         const owner = Number(params.ownerId);
         (events[owner] ??= []).push({
           ACCESSIBILITY: 'busy',
-          DATE_FROM_TS_UTC: String(toMs(params.from) / 1000),
-          DATE_TO_TS_UTC: String(toMs(params.to) / 1000),
+          DATE_FROM_TS_UTC: portalTs(toMs(params.from)),
+          DATE_TO_TS_UTC: portalTs(toMs(params.to)),
+          '~USER_OFFSET_FROM': 0,
+          TZ_FROM: 'America/Sao_Paulo',
         });
         return { result: 279_590 + created.length };
       }
@@ -1275,5 +1291,106 @@ describe('o que as ferramentas de agenda escrevem no Bitrix24 (spec agent-crm-to
     ]) {
       expect(WRITE_METHOD.test(method)).toBe(false);
     }
+  });
+});
+
+describe('ocupação lida do portal (o timestamp não é UTC)', () => {
+  /** Evento no formato do portal (ver `portalTs`) com fuso e deslocamento próprios. */
+  const eventIn = (
+    timezone: string,
+    userOffset: number,
+    fromIso: string,
+    toIso: string,
+    accessibility = 'busy',
+  ): PortalEvent => ({
+    ACCESSIBILITY: accessibility,
+    DATE_FROM_TS_UTC: portalTs(Date.parse(fromIso)),
+    DATE_TO_TS_UTC: portalTs(Date.parse(toIso)),
+    '~USER_OFFSET_FROM': userOffset,
+    TZ_FROM: timezone,
+  });
+  const starts = (body: Record<string, unknown>) =>
+    (body.horarios as Array<Record<string, string>>).map((slot) => slot.hora_inicio);
+  // 10:00–11:00 em Nova York = 15:00Z–16:00Z = 12:00–13:00 em São Paulo.
+  const newYork = () =>
+    eventIn('America/New_York', -7200, '2026-11-24T15:00:00Z', '2026-11-24T16:00:00Z');
+
+  it('evento das 10:00 às 11:00 em São Paulo bloqueia 10:00 e 10:30, e não as 07:00', async () => {
+    const { service } = setup({
+      hours: hoursOf({ tue: [['07:00', '12:00']] }),
+      events: { 508: [event('busy', '2026-11-24T13:00:00Z', '2026-11-24T14:00:00Z')] },
+    });
+    const result = await service.freeSlots(caller);
+    // Lido como UTC, o evento cairia às 07:00–08:00 locais e as 10:00 apareceriam livres.
+    expect(starts(result.body)).toEqual([
+      '07:00',
+      '07:30',
+      '08:00',
+      '08:30',
+      '09:00',
+      '09:30',
+      '11:00',
+      '11:30',
+    ]);
+  });
+
+  it('evento marcado em outro fuso (Nova York) bloqueia o horário real em São Paulo', async () => {
+    const { service } = setup({
+      hours: hoursOf({ tue: [['11:00', '14:00']] }),
+      events: { 508: [newYork()] },
+    });
+    const result = await service.freeSlots(caller);
+    expect(starts(result.body)).toEqual(['11:00', '11:30', '13:00', '13:30']);
+  });
+
+  it('agendar no horário ocupado por evento de outro fuso é recusado, e o vizinho livre é aceito', async () => {
+    const options = {
+      client: maria(null),
+      hours: hoursOf({ tue: [['11:00', '14:00']] }),
+      events: { 508: [newYork()] },
+    };
+    const taken = await setup(options).service.book(caller, {
+      cliente: 'ref',
+      inicio: '2026-11-24 12:00',
+    });
+    expect(taken.body.erro).toBe('Esse horário não está mais disponível.');
+
+    const free = setup({ ...options, events: { 508: [newYork()] } });
+    const ok = await free.service.book(caller, { cliente: 'ref', inicio: '2026-11-24 11:00' });
+    expect(ok.outcome).toBe('ok');
+    expect(free.created).toHaveLength(1);
+  });
+
+  it('evento sem fuso no portal: vale o timestamp como veio, sem quebrar', async () => {
+    const { service } = setup({
+      hours: hoursOf({ tue: [['09:00', '11:00']] }),
+      events: {
+        508: [
+          {
+            ACCESSIBILITY: 'busy',
+            DATE_FROM_TS_UTC: String(Date.parse('2026-11-24T12:00:00Z') / 1000),
+            DATE_TO_TS_UTC: String(Date.parse('2026-11-24T12:30:00Z') / 1000),
+          } as never,
+        ],
+      },
+    });
+    const result = await service.freeSlots(caller);
+    // 12:00Z–12:30Z, lido como veio, bloqueia as 09:00 locais.
+    expect(starts(result.body)).toEqual(['09:30', '10:00', '10:30']);
+  });
+
+  it('evento marcado como livre em outro fuso também não bloqueia', async () => {
+    const free = eventIn(
+      'America/New_York',
+      -7200,
+      '2026-11-24T15:00:00Z',
+      '2026-11-24T16:00:00Z',
+      'free',
+    );
+    const { service } = setup({
+      hours: hoursOf({ tue: [['11:00', '14:00']] }),
+      events: { 508: [free] },
+    });
+    expect((await service.freeSlots(caller)).count).toBe(6);
   });
 });
