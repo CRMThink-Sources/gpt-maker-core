@@ -613,7 +613,7 @@ export class CalendarToolsService {
     }
   }
 
-  /** Guarda o resultado 24 h: a mesma chamada de novo devolve o agendamento já feito. */
+  /** Guarda o resultado por 15 min (BOOKED_TTL_SECONDS): a mesma chamada de novo devolve o agendamento já feito. */
   private async remember(key: string, body: Record<string, unknown>): Promise<void> {
     await this.redis
       .set(key, JSON.stringify(body), 'EX', BOOKED_TTL_SECONDS)

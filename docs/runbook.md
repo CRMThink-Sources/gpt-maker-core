@@ -351,3 +351,45 @@ pagamento falhou, período acabando, modelo rebaixado. Falhas aparecem em Backof
 4. Sem métricas de DLQ, eventos pendentes, outbox e reconciliação, e sem Prometheus/Grafana/alertas (16.1/16.2).
 5. `AUTH_ERROR` sai só por reinstalação ou evento da plataforma; não há ação admin.
 6. Fuso dos crons depende do `TZ` do contêiner (não definido): confirmar em produção.
+
+## 9. Agenda do agente (Calendário do Bitrix24)
+
+Change `agent-calendar-scheduling`. Ferramentas MCP `horarios_livres`, `agendar_compromisso` e
+`agendamentos_do_cliente` (detalhes em `docs/crm-tools.md`). Exige `CRM_TOOLS_ENABLED=true` e o Acesso ao
+CRM ligado no agente.
+
+### Reautorização do escopo `calendar`
+
+- O app precisa do escopo **Calendário** (`calendar`) no cadastro do aplicativo na plataforma. Portais que
+  já tinham o app instalado **não ganham o escopo sozinhos**: o administrador do portal precisa
+  **reinstalar/reautorizar** o app (mesmo caminho da seção 2).
+- Sintoma: o card **Agenda** do agente mostra "reautorizar o aplicativo" e o agente diz que o calendário
+  não está liberado. Nos logs `ferramenta do CRM` o resultado é `unavailable`.
+- Conferir: `app.info` do portal lista `calendar` nos escopos (ver `docs/bitrix-observado.md`, "Escopos da
+  instalação").
+- Depois de reinstalar, não há nada a reiniciar: a próxima chamada do agente já usa o escopo.
+
+### Publicar uma mudança nas ferramentas
+
+- O GPTMaker só relê as ferramentas quando `TOOLS_VERSION` (`mcp.controller.ts`) muda; quem manda ele reler
+  é o **worker, ao subir**. Depois de um deploy que mexa no nome, na descrição ou no esquema de uma
+  ferramenta, confirme no log do worker `ferramentas do CRM alinhadas`. Um teste trava a versão ao conteúdo.
+
+### Rollback
+
+- **Desligar para um agente**: no card Agenda, "Remover agenda" (`DELETE /app/agents/:id/calendar`). Sem
+  agenda configurada, as ferramentas continuam publicadas, mas respondem que a equipe retorna o contato, sem
+  erro e sem marcar nada.
+- **Desligar para todos**: `CRM_TOOLS_ENABLED=false` (o `/mcp` passa a responder 404). Os agentes seguem
+  atendendo, sem dados do CRM nem agenda.
+- **Voltar o código**: redeploy da tag anterior (seção 4). A tabela `agent_calendar_config` (migration
+  `0025`) fica no banco e é ignorada pelo código antigo; não é preciso desfazer a migration.
+- Eventos já criados no Bitrix24 **não são apagados** pelo rollback: o agente nunca cancela nem remarca. Se
+  for preciso, remova-os à mão no Calendário (o título é `Agendamento: <nome do cliente>`).
+
+### Problemas conhecidos
+
+- Se o Bitrix24 demorar mais de ~10 s para criar um evento, o agente pode dizer "indisponível" e o evento
+  ainda ser criado depois. Antes de criar, o servidor relê a agenda e a idempotência cobre 15 minutos, mas
+  confira duplicados no Calendário do usuário em reclamações de "marcou duas vezes".
+- Não há proteção do Bitrix24 contra choque de horário: a garantia é do app (lock por usuário no Redis).

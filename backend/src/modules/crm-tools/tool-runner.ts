@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { Counter, Histogram } from 'prom-client';
 import type { Env } from '../../config/env';
@@ -74,7 +74,7 @@ export class ToolRunner {
     const started = Date.now();
     let result: ToolResult;
     try {
-      if (await this.overLimit(caller.agentId)) {
+      if (await this.overLimit(caller)) {
         result = {
           outcome: 'rate_limited',
           count: 0,
@@ -97,13 +97,18 @@ export class ToolRunner {
     void this.db
       .update(agentCrmAccess)
       .set({ lastCallAt: new Date() })
-      .where(eq(agentCrmAccess.agentId, caller.agentId))
+      .where(
+        and(
+          eq(agentCrmAccess.tenantId, caller.tenantId),
+          eq(agentCrmAccess.agentId, caller.agentId),
+        ),
+      )
       .catch((error: unknown) => this.logger.warn({ err: error }, 'last_call_at não gravado'));
     return result;
   }
 
-  private async overLimit(agentId: string): Promise<boolean> {
-    const key = `crm-tools:rate:${agentId}:${Math.floor(Date.now() / 60_000)}`;
+  private async overLimit(caller: CrmCaller): Promise<boolean> {
+    const key = `crm-tools:rate:${caller.tenantId}:${caller.agentId}:${Math.floor(Date.now() / 60_000)}`;
     try {
       const count = await this.redis.incr(key);
       if (count === 1) await this.redis.expire(key, 120);

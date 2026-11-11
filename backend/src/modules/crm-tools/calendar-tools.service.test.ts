@@ -857,6 +857,16 @@ describe('CalendarToolsService.book', () => {
     expect(entry.expiresAt! - Date.now()).toBeLessThanOrEqual(15 * 60 * 1000);
   });
 
+  it('o mesmo cliente e horário em outro tenant tem chave de repetição própria', async () => {
+    const first = setup({ client: maria(null) });
+    await first.service.book(caller, ask());
+    const second = setup({ client: maria(null) });
+    await second.service.book({ ...caller, tenantId: 'tenant-b' }, ask());
+    expect(keysOf(first.redis)).toHaveLength(1);
+    expect(keysOf(second.redis)).toHaveLength(1);
+    expect(keysOf(first.redis)[0]).not.toBe(keysOf(second.redis)[0]);
+  });
+
   it('as chamadas de agendamento somam no limite por agente das demais ferramentas', async () => {
     const { service, bitrix } = setup({ client: maria(null), ratePerMinute: 2 });
     await service.freeSlots(caller);

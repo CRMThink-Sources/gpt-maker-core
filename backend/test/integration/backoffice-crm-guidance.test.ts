@@ -21,6 +21,7 @@ import { totpCode } from '../../src/modules/backoffice/credentials';
 import { CrmGuidanceAdminController } from '../../src/modules/backoffice/crm-guidance-admin.controller';
 import { CrmGuidanceAdminService } from '../../src/modules/backoffice/crm-guidance-admin.service';
 import { OperatorService } from '../../src/modules/backoffice/operator.service';
+import { CRM_GUIDANCE_KEYS } from '@gptmaker/contracts';
 import { CRM_GUIDANCE_DEFAULTS } from '../../src/modules/crm-tools/crm-guidance.defaults';
 import { CrmGuidanceService } from '../../src/modules/crm-tools/crm-guidance.service';
 import { contextMiddleware } from '../../src/shared/context/context.middleware';
@@ -130,12 +131,12 @@ describe('backoffice: orientações do CRM', () => {
     await Promise.all([postgres?.stop(), redisContainer?.stop()]);
   });
 
-  it('lista os quatro textos com o padrão quando ninguém editou', async () => {
+  it('lista os textos com o padrão quando ninguém editou', async () => {
     const res = await request(app.getHttpServer())
       .get('/admin/crm-guidance')
       .set('Cookie', admin.cookie)
       .expect(200);
-    expect(res.body).toHaveLength(4);
+    expect(res.body).toHaveLength(CRM_GUIDANCE_KEYS.length);
     expect(res.body[0]).toMatchObject({
       key: 'cliente_identificado',
       text: CRM_GUIDANCE_DEFAULTS.cliente_identificado,

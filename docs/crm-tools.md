@@ -71,3 +71,12 @@ Por que híbrido: o GPTMaker **não envia nenhuma informação da conversa** nas
   3. ligue "Acesso ao CRM" no agente;
   4. numa Linha Aberta com o contato vinculado, pergunte "como está minha proposta?". O agente deve citar funil e etapa pelo nome;
   5. em seguida, peça o histórico de compras. O agente deve usar `negocios_do_cliente`.
+
+## Agenda (Calendário do Bitrix24)
+
+Change `agent-calendar-scheduling` (spec `agent-calendar-scheduling`). Roteiro de teste: `docs/roteiro-teste-agenda.md`; operação e rollback: `docs/runbook.md` §9; comportamento observado do Bitrix24: `docs/bitrix-observado.md`.
+
+- O cliente escolhe, **por agente**, de quem é a agenda (card **Agenda**, `GET/PUT/DELETE /app/agents/{id}/calendar`): `FIXED_USER`, `CLIENT_OWNER` (responsável do cliente no CRM) ou `USER_LIST` (até 10, o primeiro livre; o compromisso vai para o primeiro da lista livre no horário).
+- Ferramentas MCP: `horarios_livres` (até 10 horários, ditos por extenso em `quando`; o valor interno vai em `usar_ao_agendar`), `agendar_compromisso` (`cliente`, `inicio`, `assunto?`) e `agendamentos_do_cliente` (data, hora e com quem, sem título nem descrição). Não há remarcar nem cancelar.
+- Criação com lock Redis por (tenant, usuário), revalidação do horário e idempotência de 15 minutos.
+- Exige o escopo `calendar` do app.
