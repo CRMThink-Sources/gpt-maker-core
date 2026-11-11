@@ -110,7 +110,7 @@ O servidor MCP MUST oferecer a ferramenta `agendar_compromisso`, que recebe a re
 - **THEN** a ferramenta responde que não foi possível agendar agora, nenhum evento fica registrado como criado pelo sistema, e o agente é orientado a avisar o cliente que a equipe retornará
 
 ### Requirement: Ferramenta agendamentos_do_cliente
-O servidor MCP MUST oferecer a ferramenta `agendamentos_do_cliente`, que recebe a referência do cliente e devolve até 10 compromissos futuros do cliente (do mais próximo para o mais distante), encontrados nas agendas que o agente usa e vinculados ao cliente no CRM, com data, hora de início e fim, fuso, título, nome de quem atende e se foi marcado pelo agente. A ferramenta MUST considerar somente a janela de 60 dias à frente, MUST NOT devolver descrição livre nem participantes além de quem atende, e MUST NOT incluir eventos privados.
+O servidor MCP MUST oferecer a ferramenta `agendamentos_do_cliente`, que recebe a referência do cliente e devolve até 10 compromissos futuros do cliente (do mais próximo para o mais distante), vinculados ao cliente no CRM e cujo responsável é um usuário das agendas que o agente usa, com data, hora de início e fim, fuso e nome de quem atende. A ferramenta MUST considerar somente a janela de 60 dias à frente e MUST NOT devolver título, descrição nem participantes do compromisso, de modo que um compromisso privado revele apenas que existe um horário ocupado com aquele cliente.
 
 #### Scenario: Cliente com agendamentos
 - **WHEN** o cliente tem dois compromissos futuros vinculados na agenda de Ana Lima
@@ -124,9 +124,13 @@ O servidor MCP MUST oferecer a ferramenta `agendamentos_do_cliente`, que recebe 
 - **WHEN** o cliente tem um compromisso numa agenda de usuário que não é usada pelo agente
 - **THEN** esse compromisso não é devolvido
 
-#### Scenario: Evento privado
-- **WHEN** um evento vinculado ao cliente está marcado como privado
-- **THEN** a ferramenta não o devolve
+#### Scenario: Título e descrição não são devolvidos
+- **WHEN** um compromisso vinculado ao cliente tem título e descrição preenchidos, inclusive quando está marcado como privado
+- **THEN** a ferramenta devolve só data, hora, duração, fuso e quem atende, sem título nem descrição
+
+#### Scenario: Compromisso alterado ou apagado
+- **WHEN** um compromisso do cliente foi remarcado ou apagado no Calendário do Bitrix24 depois de criado
+- **THEN** a ferramenta devolve o horário atual ou deixa de devolvê-lo
 
 ### Requirement: Isolamento, limites e registro das ferramentas de agenda
 As ferramentas de agenda MUST seguir a autenticação, o isolamento por tenant, o limite de chamadas por agente (compartilhado com as demais ferramentas do CRM), o tempo máximo de resposta de 10 segundos e as respostas de indisponibilidade definidos em `agent-crm-tools`. Cada chamada MUST ser registrada com tenant, agente, ferramenta, duração, quantidade de registros e resultado, e MUST NOT registrar nomes, telefones, e-mails, títulos ou descrições de eventos, nem horários dos compromissos.

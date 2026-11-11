@@ -8,7 +8,7 @@ Fatos da API do Bitrix24 que moldam a solução (documentação oficial, a confi
 
 - `calendar.event.add` (escopo `calendar`): cria o evento com `type`, `ownerId`, `from`, `to`, `name`, `timezone_from`/`timezone_to`, `attendees`, `crm_fields` (ex.: `C_5`, `L_11`, `CO_1`, `D_7`) e aceita `auto_detect_section: Y`, o que dispensa descobrir a seção do calendário.
 - `calendar.accessibility.get` recebe `users`, `from` e `to` **só com data** (`YYYY-MM-DD`) e devolve os eventos que ocupam cada usuário, com `ACCESSIBILITY` e `DATE_FROM_TS_UTC`/`DATE_TO_TS_UTC`.
-- `calendar.event.get` exige `type` e `ownerId` e **não filtra por vínculo com o CRM**; o vínculo vem em `UF_CRM_CAL_EVENT` de cada evento devolvido.
+- `calendar.event.get` exige `type` e `ownerId`, **não filtra por vínculo com o CRM** (o vínculo vem em `UF_CRM_CAL_EVENT`) e devolve as recorrências expandidas, o que o torna pesado em agendas reais (ver D6).
 - O app hoje não tem o escopo `calendar` (`docs/bitrix-observado.md`, "Escopos da instalação"). Chamada sem ele responde `insufficient_scope`.
 - Não existe reserva transacional de horário: dois `event.add` concorrentes no mesmo horário criam dois eventos.
 
@@ -82,9 +82,12 @@ O agente nunca informa nem recebe ids de usuário; recebe o nome (via `UserNames
 
 ### D6. Consulta dos agendamentos do cliente
 
-Como `calendar.event.get` não filtra por vínculo com o CRM, `agendamentos_do_cliente` lista os eventos das agendas do agente (mesmos usuários de D5; em `CLIENT_OWNER`, o responsável) de hoje a +60 dias, com `calendar.event.get` por usuário, e filtra por `UF_CRM_CAL_EVENT` contendo o cliente (`C_`, `L_`, `CO_`) e pelas exclusões (privado, apagado). Devolve até 10, ordenados por início, só campos mínimos (início, fim, título, quem atende, se criado pelo agente, identificado por marca na descrição).
+`agendamentos_do_cliente` lê as **atividades do CRM** do cliente, não as agendas. Observado no portal de teste (`docs/bitrix-observado.md`): um evento criado com `crm_fields` gera uma atividade `CRM_TODO` no contato, lead ou empresa, com início, fim e responsável (o dono da agenda), e ela acompanha a edição e a exclusão do evento. A consulta é um único `crm.activity.list` com `OWNER_TYPE_ID`/`OWNER_ID` do cliente, `PROVIDER_ID = CRM_TODO`, `START_TIME` de agora a +60 dias e `RESPONSIBLE_ID` entre os usuários das agendas do agente (D5; em `CLIENT_OWNER`, o responsável do cliente). Devolve até 10, por início, só com data, hora, duração, fuso e quem atende (nome via `UserNamesService`), convertendo o instante para o fuso da agenda.
 
-- *Por quê*: é o único caminho da API para o vínculo; a janela de 60 dias e o teto de 10 usuários limitam o custo.
+- *Por quê*: `calendar.event.get` não filtra por vínculo com o CRM e devolve as recorrências expandidas (631 eventos em 14 dias para um usuário real, 4,9 MB em 60 dias, e até 10 usuários por agente); a atividade custa ~240 ms e uma chamada.
+- *Privado*: o evento privado vinculado também gera atividade e ela não o distingue. Como a atividade já aparece na linha do tempo do cliente, a ferramenta **nunca devolve título nem descrição**: só o horário ocupado e quem atende.
+- *Limite aceito*: uma atividade `CRM_TODO` criada à mão, sem evento, é indistinguível pelos campos observados e seria listada como compromisso; evento criado à mão com vínculo deve gerar a mesma atividade (a confirmar na tarefa 7.1).
+- *Alternativa descartada*: varrer `calendar.event.get` das agendas filtrando por `UF_CRM_CAL_EVENT`: payload e tempo imprevisíveis, ainda precisa excluir privados.
 - *Alternativa descartada*: guardar no nosso banco os agendamentos feitos pelo agente e listar só esses: perderia compromissos criados por pessoas e ficaria defasado se o evento fosse movido ou apagado no Bitrix24.
 
 ### D7. Escopo `calendar` e falhas
@@ -109,8 +112,9 @@ Seção "Agenda" ao lado do acesso ao CRM em `/app` (só habilitada com o CRM co
 ## Risks / Trade-offs
 
 - **Corrida de horário com agendamentos manuais** → o lock e a releitura imediata cobrem o sistema; a janela residual com pessoas no Bitrix24 é aceita e documentada. A resposta de erro oferece alternativas.
-- **Token da instalação sem permissão para criar eventos na agenda de outro usuário** → verificar no portal de teste qual usuário o token representa e se `type: user` com `ownerId` de terceiro é aceito; se não, avaliar o calendário da empresa ou exigir administrador. Tarefa de investigação antes da implementação.
-- **Volume de eventos em `agendamentos_do_cliente`** (agendas cheias, até 10 usuários) → janela de 60 dias, tempo máximo de 10 s, resposta "indisponível" no estouro; avaliar cache curto por (tenant, usuário) se medir lentidão.
+- **Token da instalação sem permissão para criar eventos na agenda de outro usuário** → no portal de teste, o token de um administrador (usuário 508) criou e leu a agenda de outro usuário (418); **premissa informada pelo time**: o token guardado da instalação é sempre o de um administrador, então o caso de usuário comum não foi testado nem é esperado. Se um administrador perder o perfil ou o token passar a ser de outro usuário, vale o plano B. Se a criação responder acesso negado: a ferramenta responde que o app não tem permissão nessa agenda, o painel mostra "o usuário que instalou o app precisa ser administrador ou ter acesso às agendas escolhidas", e nada é criado em outra agenda como substituto (nem `company_calendar`, que muda quem enxerga o compromisso). A tarefa 6.1 cobre a recusa com teste.
+- **Volume de dados em `agendamentos_do_cliente`** → resolvido ao ler atividades do CRM (uma chamada); permanece o limite de 10 s e a resposta "indisponível" no estouro.
+- **Atividade que não representa um evento** (To-do criado à mão) ou evento sem atividade → a tarefa 7.1 confirma o comportamento com evento criado à mão e a spec descreve o limite (o compromisso listado é o que o CRM mostra na linha do tempo do cliente).
 - **Fuso e formato de data do Bitrix24** (strings de data dependem do idioma do usuário) → usar sempre timestamps UTC na leitura e enviar `timezone_from`/`timezone_to` explícitos na escrita; testes com fusos diferentes.
 - **Tenants existentes sem o escopo** → as ferramentas respondem "não liberado" e o painel avisa; nada quebra para quem não usa agenda. Reinstalar é passo operacional (ver Migration Plan).
 - **Primeira escrita das ferramentas do agente** (risco de duplicidade, de dado errado no CRM do cliente) → escopo mínimo (somente evento), cliente obrigatório, idempotência, revalidação, teste de integração e auditoria com `auditor-multitenant`.

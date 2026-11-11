@@ -2,8 +2,8 @@
 
 ## 1. Investigação no portal de teste
 
-- [ ] 1.1 No portal de teste com o escopo `calendar` concedido, rodar `calendar.event.add` (`type: user`, `ownerId` de outro usuário, `auto_detect_section: Y`, `crm_fields`), `calendar.accessibility.get` e `calendar.event.get`, e registrar em `docs/bitrix-observado.md` (seção "Calendário", com data e portal): qual usuário o token da instalação representa, se criar na agenda de terceiros é aceito, o formato de `crm_fields` (`C_`, `L_`, `CO_`), se `UF_CRM_CAL_EVENT` volta em `event.get`, e os campos `DATE_*_TS_UTC`/`ACCESSIBILITY`. Verificar com o documento publicado e com os exemplos de resposta reais colados nele
-- [ ] 1.2 Decidir, a partir de 1.1, o plano B caso o token não possa criar na agenda de terceiros (calendário da empresa ou exigir administrador) e atualizar `design.md` (Riscos) se algo divergir do previsto. Verificar com a seção "Riscos" revisada ou com a nota "sem divergência" no próprio `design.md`
+- [x] 1.1 No portal de teste com o escopo `calendar` concedido, rodar `calendar.event.add` (`type: user`, `ownerId` de outro usuário, `auto_detect_section: Y`, `crm_fields`), `calendar.accessibility.get` e `calendar.event.get`, e registrar em `docs/bitrix-observado.md` (seção "Calendário", com data e portal): qual usuário o token da instalação representa, se criar na agenda de terceiros é aceito, o formato de `crm_fields` (`C_`, `L_`, `CO_`), se `UF_CRM_CAL_EVENT` volta em `event.get`, e os campos `DATE_*_TS_UTC`/`ACCESSIBILITY`. Verificar com o documento publicado e com os exemplos de resposta reais colados nele
+- [x] 1.2 Decidir, a partir de 1.1, o plano B caso o token não possa criar na agenda de terceiros (calendário da empresa ou exigir administrador) e atualizar `design.md` (Riscos) se algo divergir do previsto. Verificar com a seção "Riscos" revisada ou com a nota "sem divergência" no próprio `design.md`
 
 ## 2. Escopo `calendar` e cliente do Bitrix
 
@@ -29,14 +29,14 @@
 
 ## 6. Agendamento
 
-- [ ] 6.1 Implementar `CalendarToolsService.book` na ordem do design D4: verificar referência do cliente e regras do horário, lock distribuído por (tenant, usuário), releitura da ocupação, escolha do primeiro usuário livre, idempotência em Redis (24 h) e `calendar.event.add` com `crm_fields`; verificar com testes de serviço: sucesso, horário tomado (devolve até 3 alternativas), início fora das regras, referência de outro tenant, repetição da mesma chamada, falha do Bitrix24 ao criar (sem chave de idempotência gravada)
+- [ ] 6.1 Implementar `CalendarToolsService.book` na ordem do design D4: verificar referência do cliente e regras do horário, lock distribuído por (tenant, usuário), releitura da ocupação, escolha do primeiro usuário livre, idempotência em Redis (24 h) e `calendar.event.add` com `crm_fields`; verificar com testes de serviço: sucesso, horário tomado (devolve até 3 alternativas), início fora das regras, referência de outro tenant, repetição da mesma chamada, falha do Bitrix24 ao criar (sem chave de idempotência gravada) e acesso negado na agenda do dono (resposta "sem permissão nessa agenda", sem criar em outra agenda e sem repetir a chamada)
 - [ ] 6.2 Garantir que a resposta de `book` não traz identificadores internos e que o título e a descrição do evento são curtos e sem dados além do nome do cliente; verificar com teste que inspeciona o corpo da resposta e o payload enviado ao Bitrix24
 - [ ] 6.3 Escrever um teste de integração com Redis (Testcontainers) que dispara duas chamadas concorrentes para o mesmo horário e verifica que só um `calendar.event.add` é feito; verificar com o teste passando em `npm run test:integration -w backend`
 
 ## 7. Agendamentos do cliente
 
-- [ ] 7.1 Implementar `CalendarToolsService.clientAppointments` (eventos das agendas do agente de hoje a +60 dias, filtro por `UF_CRM_CAL_EVENT` do cliente, exclusão de privados e apagados, marca de "criado pelo agente", ordenação, limite de 10, teto de 10 usuários); verificar com testes: com agendamentos, sem agendamentos, agenda fora da configuração, evento privado, vínculo com contato/lead/empresa
-- [ ] 7.2 Medir o tempo da consulta no portal de teste com uma agenda cheia e ajustar o teto/janela se passar de 5 segundos, registrando o resultado em `docs/bitrix-observado.md`; verificar com a medição registrada
+- [ ] 7.1 Implementar `CalendarToolsService.clientAppointments` sobre `crm.activity.list` (design D6: dono do cliente, `PROVIDER_ID = CRM_TODO`, `START_TIME` de agora a +60 dias, `RESPONSIBLE_ID` entre os usuários das agendas, ordenação por início, limite de 10, conversão do instante para o fuso da agenda, sem título nem descrição); verificar com testes: com agendamentos, sem agendamentos, responsável fora da configuração, vínculo com contato/lead/empresa, título nunca na resposta, conversão de fuso (`+03:00` para `America/Sao_Paulo`)
+- [ ] 7.2 Confirmar no portal de teste, e registrar em `docs/bitrix-observado.md`, que um evento criado à mão na tela do Calendário com vínculo ao CRM gera a mesma atividade `CRM_TODO` e que o `START_TIME` bate com o horário do evento; se não gerar, ajustar o design D6 e a spec antes de seguir. Verificar com o resultado registrado
 
 ## 8. Servidor MCP e orientação ao agente
 
