@@ -13,6 +13,13 @@ import type { Database } from '../../src/shared/database/database.module';
 const NOW = Date.parse('2026-11-24T10:00:00Z'); // terça, 07:00 em São Paulo
 /** Ids de cliente únicos entre as instâncias: dois clientes diferentes nunca viram "a mesma chamada". */
 let nextClient = 100;
+/** Cada referência de cliente tem um id próprio e estável (a confirmação pede o mesmo cliente duas vezes). */
+const clientIds = new Map<string, number>();
+const clientIdOf = (ref: unknown) => {
+  const key = String(ref);
+  if (!clientIds.has(key)) clientIds.set(key, ++nextClient);
+  return clientIds.get(key)!;
+};
 const SLOT = '2026-11-24 09:00';
 const hours = {
   timezone: 'America/Sao_Paulo',
@@ -127,13 +134,16 @@ describe('agendamento simultâneo da mesma agenda', () => {
     clients.push(redis);
     const service = new CalendarToolsService(
       {
-        calendarClient: async () => ({
-          found: true as const,
-          type: 'contact' as const,
-          id: extra.clientId ?? ++nextClient,
-          name: `Cliente ${extra.clientId ?? nextClient}`,
-          userId: null,
-        }),
+        calendarClient: async (_caller: unknown, ref: unknown) => {
+          const id = extra.clientId ?? clientIdOf(ref);
+          return {
+            found: true as const,
+            type: 'contact' as const,
+            id,
+            name: `Cliente ${id}`,
+            userId: null,
+          };
+        },
       } as never,
       (extra.portal ?? portal) as never,
       { markScopeMissing: async () => {}, clearScopeMissing: async () => {} } as never,
@@ -147,6 +157,12 @@ describe('agendamento simultâneo da mesma agenda', () => {
       { current: async () => CRM_GUIDANCE_DEFAULTS } as CrmGuidanceService,
     );
     service.clock = () => NOW;
+    // O cliente já confirmou (design D9): a primeira chamada pergunta e a repetição marca.
+    const rawBook = service.book.bind(service);
+    service.book = async (who, input) => {
+      const first = await rawBook(who, input);
+      return first.body.aguardando_confirmacao_do_cliente === true ? rawBook(who, input) : first;
+    };
     return service;
   }
 

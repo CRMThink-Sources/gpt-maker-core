@@ -51,6 +51,8 @@ const SOFT_DEADLINE_MS = 5_000;
  * equipe já apagou ou remarcou no Bitrix24.
  */
 const BOOKED_TTL_SECONDS = 15 * 60;
+/** Quanto tempo vale a pergunta ao cliente antes de marcar (design D9). */
+const PENDING_TTL_SECONDS = 10 * 60;
 const MAX_ALTERNATIVES = 3;
 /** `agendamentos_do_cliente`: compromissos por resposta e quantos dias à frente se olha. */
 const MAX_APPOINTMENTS = 10;
@@ -355,6 +357,23 @@ export class CalendarToolsService {
       if ('result' in agenda) return agenda.result;
       if (agenda.users.length === 0) return NO_AGENDA;
 
+      // Confirmação em duas etapas (design D9): a primeira chamada só confere o horário e devolve o
+      // que o agente deve perguntar ao cliente; só a repetição, com os mesmos dados, marca.
+      const pendingKey = pendingConfirmationKey(key);
+      if (!(await this.redis.get(pendingKey))) {
+        return this.askConfirmation({
+          caller,
+          cfg,
+          hours,
+          now,
+          client,
+          start,
+          users: agenda.users,
+          subject: cleanSubject(input.assunto),
+          pendingKey,
+        });
+      }
+
       const locks = agenda.users.map((user) => `calendar:${caller.tenantId}:${user.id}`).sort();
       const outcome = await this.withLocks(locks, () =>
         this.bookLocked({
@@ -376,6 +395,7 @@ export class CalendarToolsService {
         case 'booked':
         case 'done':
           if (done.kind === 'booked') await this.scopeWorked(caller, cfg);
+          await this.redis.del(pendingKey).catch(() => undefined);
           return done.result;
         case 'taken':
           return this.alternatives(caller, { cfg, hours, now, users: agenda.users, start });
@@ -397,6 +417,52 @@ export class CalendarToolsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Primeira chamada de `agendar_compromisso` para este cliente e horário: nada é marcado. Confere
+   * que o horário continua livre, guarda que a pergunta foi feita e devolve o que dizer ao cliente.
+   * Sem isso o modelo marcava por conta própria, tomando a resposta a outra pergunta (o assunto)
+   * como a escolha do horário.
+   */
+  private async askConfirmation(args: {
+    caller: CrmCaller;
+    cfg: CalendarConfigRow;
+    hours: BusinessHours;
+    now: number;
+    client: Client;
+    start: number;
+    users: AgendaUser[];
+    subject: string | null;
+    pendingKey: string;
+  }): Promise<ToolResult> {
+    const { caller, cfg, hours, now, start, users, subject } = args;
+    const end = start + cfg.slotMinutes * 60_000;
+    const day = localDate(start, hours.timezone);
+    const agendas = await this.busy(caller, users, day, day);
+    const free = agendas.find((agenda) => !agenda.busy.some((b) => b.start < end && b.end > start));
+    if (!free) return this.alternatives(caller, { cfg, hours, now, users, start });
+
+    await this.redis.set(args.pendingKey, '1', 'EX', PENDING_TTL_SECONDS);
+    const owner = users.find((user) => user.id === free.ownerId)!;
+    const from = localParts(start, hours.timezone);
+    const to = localParts(end, hours.timezone);
+    return result(
+      'ok',
+      {
+        agendado: false,
+        aguardando_confirmacao_do_cliente: true,
+        quando: spokenWhen(from.data, from.hora, currentYear(now, hours.timezone)),
+        termina_as: spokenTime(to.hora),
+        duracao_minutos: cfg.slotMinutes,
+        fuso_horario: hours.timezone,
+        com: owner.name,
+        ...(subject ? { assunto: subject } : {}),
+        mensagem:
+          'NADA FOI MARCADO AINDA. Diga ao cliente a data e a hora por extenso (campo "quando") e com quem será (campo "com"), e pergunte se ele confirma. Só depois que o cliente responder que sim, chame agendar_compromisso de novo, com os mesmos valores. Se ele quiser outro horário, volte à lista de horários.',
+      },
+      1,
+    );
   }
 
   /**
@@ -626,6 +692,11 @@ export class CalendarToolsService {
         this.logger.warn({ err: error }, 'agendamento feito, mas a chave de repetição não gravou'),
       );
   }
+}
+
+/** Pergunta ao cliente já feita para este cliente e horário (mesmo digest da chave de repetição). */
+function pendingConfirmationKey(bookedKeyValue: string): string {
+  return bookedKeyValue.replace('calendar:booked:', 'calendar:pending:');
 }
 
 /** Mesma chamada = mesmo cliente, no mesmo horário, para o mesmo agente. Sem dados pessoais na chave. */

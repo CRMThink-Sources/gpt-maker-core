@@ -112,6 +112,7 @@ describe('McpController', () => {
   it('o conteúdo das ferramentas só muda junto com TOOLS_VERSION', async () => {
     const PUBLISHED: Record<string, string> = {
       '4': '5e6fc8d577d4f66788672f9f00a4bff6dae42a4c6258f9439662b80037065526',
+      '5': 'b9adc3c2fada58d1a6286287f256ca9045a1b43085c3878f80b91d6c1eda5938',
     };
     const client = await connect();
     const { tools: listed } = await client.listTools();

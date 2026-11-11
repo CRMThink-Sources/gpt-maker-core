@@ -127,6 +127,11 @@ function setup(
     /** Erro de `calendar.event.add` (pode ser trocado depois pelo teste). */
     failAdd?: Error;
     ratePerMinute?: number;
+    /**
+     * O cliente já confirmou o horário (design D9): `book` faz a pergunta e a repetição que marca.
+     * `false` entrega a chamada crua, para testar a primeira etapa.
+     */
+    confirmed?: boolean;
   } = {},
 ) {
   const users = options.users ?? { 508: 'Ana Lima', 418: 'Bruno Reis' };
@@ -196,7 +201,11 @@ function setup(
       throw new Error(`método inesperado: ${method}`);
     }),
   };
-  const crm = { calendarClient: vi.fn(async () => options.client ?? maria(null)) };
+  const crm = {
+    calendarClient: vi.fn(
+      async (_caller?: unknown, _ref?: unknown) => options.client ?? maria(null),
+    ),
+  };
   const scope = {
     markScopeMissing: vi.fn(async () => {}),
     clearScopeMissing: vi.fn(async () => {}),
@@ -224,6 +233,15 @@ function setup(
     } as CrmGuidanceService,
   );
   service.clock = () => NOW;
+  if (options.confirmed !== false) {
+    const rawBook = service.book.bind(service);
+    service.book = async (who, input) => {
+      const first = await rawBook(who, input);
+      // Sem pergunta a fazer (cliente inexistente, horário inválido ou tomado): vale a resposta.
+      if (first.body.aguardando_confirmacao_do_cliente !== true) return first;
+      return rawBook(who, input);
+    };
+  }
   const portalCalls = (method: string) => calls.filter((call) => call.method === method);
   return { service, bitrix, crm, scope, calls, portalCalls, created, state, redis };
 }
@@ -766,9 +784,11 @@ describe('CalendarToolsService.book', () => {
 
   it('dois clientes querendo o mesmo horário ao mesmo tempo: só um agenda, o outro recebe alternativas', async () => {
     const { service, created, crm } = setup();
-    crm.calendarClient
-      .mockResolvedValueOnce({ ...maria(null), id: 12, name: 'Maria Souza' })
-      .mockResolvedValueOnce({ ...maria(null), id: 13, name: 'João Alves' });
+    crm.calendarClient.mockImplementation(async (_caller: unknown, ref: unknown) =>
+      ref === 'ref-a'
+        ? { ...maria(null), id: 12, name: 'Maria Souza' }
+        : { ...maria(null), id: 13, name: 'João Alves' },
+    );
     const [a, b] = await Promise.all([
       service.book(caller, ask({ cliente: 'ref-a' })),
       service.book(caller, ask({ cliente: 'ref-b' })),
@@ -884,6 +904,90 @@ describe('CalendarToolsService.book', () => {
     const result = await service.book(caller, ask());
     expect(result.body.erro).toContain('não está configurada');
     expect(bitrix.call).not.toHaveBeenCalled();
+  });
+
+  describe('confirmação do cliente antes de marcar (design D9)', () => {
+    const pendingKeys = (redis: FakeRedis) =>
+      [...redis.store.keys()].filter((k) => k.startsWith('calendar:pending:'));
+
+    it('a primeira chamada não marca: devolve o que perguntar ao cliente', async () => {
+      const { service, created, redis } = setup({ client: maria(null), confirmed: false });
+      const result = await service.book(caller, ask({ assunto: 'Visita' }));
+
+      expect(created).toEqual([]);
+      expect(result.outcome).toBe('ok');
+      expect(result.body).toMatchObject({
+        agendado: false,
+        aguardando_confirmacao_do_cliente: true,
+        quando: 'terça-feira, 24 de novembro, às 9h',
+        termina_as: '9h30',
+        com: 'Ana Lima',
+        assunto: 'Visita',
+      });
+      expect(String(result.body.mensagem)).toContain('NADA FOI MARCADO AINDA');
+      expect(pendingKeys(redis)).toHaveLength(1);
+      // Nada que o cliente não deva ver, nem a chave de repetição de um agendamento.
+      expect(keysOf(redis)).toEqual([]);
+    });
+
+    it('a repetição com os mesmos dados marca uma vez e limpa a pergunta', async () => {
+      const { service, created, redis } = setup({ client: maria(null), confirmed: false });
+      await service.book(caller, ask());
+      const done = await service.book(caller, ask());
+
+      expect(done.body.agendado).toBe(true);
+      expect(created).toHaveLength(1);
+      expect(pendingKeys(redis)).toEqual([]);
+      const again = await service.book(caller, ask());
+      expect(again.body.agendado).toBe(true);
+      expect(created).toHaveLength(1);
+    });
+
+    it('outro horário exige a própria confirmação: a do primeiro não vale', async () => {
+      const { service, created } = setup({ client: maria(null), confirmed: false });
+      await service.book(caller, ask());
+      const other = await service.book(caller, ask({ inicio: '2026-11-24 09:30' }));
+
+      expect(other.body.aguardando_confirmacao_do_cliente).toBe(true);
+      expect(created).toEqual([]);
+    });
+
+    it('a confirmação de um cliente não vale para outro', async () => {
+      const { service, created, crm } = setup({ confirmed: false });
+      crm.calendarClient.mockImplementation(async (_caller: unknown, ref: unknown) =>
+        ref === 'ref-a'
+          ? { ...maria(null), id: 12, name: 'Maria Souza' }
+          : { ...maria(null), id: 13, name: 'João Alves' },
+      );
+      await service.book(caller, ask({ cliente: 'ref-a' }));
+      const other = await service.book(caller, ask({ cliente: 'ref-b' }));
+
+      expect(other.body.aguardando_confirmacao_do_cliente).toBe(true);
+      expect(created).toEqual([]);
+    });
+
+    it('horário já tomado na primeira etapa: alternativas, sem guardar a pergunta', async () => {
+      const { service, created, redis } = setup({
+        client: maria(null),
+        confirmed: false,
+        events: { 508: [event('busy', '2026-11-24T12:00:00Z', '2026-11-24T12:30:00Z')] },
+      });
+      const result = await service.book(caller, ask());
+
+      expect(result.outcome).toBe('not_found');
+      expect(result.body.erro).toBe('Esse horário não está mais disponível.');
+      expect(created).toEqual([]);
+      expect(pendingKeys(redis)).toEqual([]);
+    });
+
+    it('cliente não encontrado ou horário inválido não geram pergunta', async () => {
+      const { service, redis } = setup({ client: { found: false }, confirmed: false });
+      expect((await service.book(caller, ask())).outcome).toBe('not_found');
+      const other = setup({ client: maria(null), confirmed: false });
+      await other.service.book(caller, ask({ inicio: '2026-11-24 03:00' }));
+      expect(pendingKeys(redis)).toEqual([]);
+      expect(pendingKeys(other.redis)).toEqual([]);
+    });
   });
 
   it('a chave de repetição não guarda dados pessoais e expira em 15 minutos', async () => {

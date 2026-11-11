@@ -107,7 +107,7 @@ No modo `CLIENT_OWNER` o evento pode cair na agenda de **qualquer usuário ativo
 
 ### D9. Confirmação pelo cliente
 
-O servidor não consegue saber se o cliente confirmou. A garantia é de três camadas: a descrição da ferramenta (e a orientação do `crm-guidance`) manda confirmar data e hora antes de chamar; a ferramenta exige referência de cliente válida e horário livre; e o resultado detalha o que foi marcado, para o agente repetir ao cliente. Não há criação sem cliente identificado.
+O servidor não consegue saber o que o cliente disse, e só a instrução em texto não bastou: no teste local o modelo tomou a resposta à pergunta do assunto como a escolha do horário e marcou sem o cliente escolher. A garantia passa a ter uma etapa técnica: `agendar_compromisso` funciona em duas chamadas. A primeira, para um cliente e um horário, confere o horário e devolve `aguardando_confirmacao_do_cliente` com a data, a hora e "com quem" por extenso, e guarda no Redis (`calendar:pending:<digest>`, 10 min, sem dados pessoais) que a pergunta foi feita; só a segunda, com os mesmos dados, cria o evento e apaga a marca. Outro horário ou outro cliente exige a própria confirmação. Limite aceito: nada impede o modelo de repetir a chamada logo em seguida, sem perguntar; o resultado da primeira etapa diz em letras maiúsculas que nada foi marcado e manda perguntar, o que o modelo segue bem por ser a instrução mais recente. A camada de texto continua (descrição da ferramenta e orientação do `crm-guidance`), assim como a exigência de cliente identificado e de horário livre.
 
 ### D10. Tela do agente
 

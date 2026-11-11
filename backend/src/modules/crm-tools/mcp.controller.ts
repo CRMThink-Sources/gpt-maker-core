@@ -24,7 +24,7 @@ import { MCP_PATH } from './system-intention';
  * Versão das ferramentas publicadas: mudar nome, descrição ou esquema exige incrementar, para o
  * `CrmToolsSync` pedir ao GPTMaker que releia (`sync-tools`).
  */
-export const TOOLS_VERSION = '4';
+export const TOOLS_VERSION = '5';
 
 /** Ferramentas do servidor MCP, ligadas ao agente que chama (design S8). */
 export function buildMcpServer(
@@ -114,11 +114,14 @@ export function buildMcpServer(
       title: 'Marcar compromisso na agenda',
       description:
         'Marca um compromisso do cliente no Calendário do Bitrix24 em um dos horários livres. ' +
-        'ANTES de usar: consulte "horarios_livres", ofereça os horários ao cliente e só chame esta ' +
-        'ferramenta depois que ele confirmar a data e a hora. Precisa da referência do cliente ' +
-        'devolvida por "Consultar cliente no CRM". Depois de marcar, confirme ao cliente a data e a ' +
-        'hora por extenso (campo "quando") e com quem será. Chamar de novo com os mesmos dados não duplica o compromisso. Se o ' +
-        'horário já foi ocupado, a resposta traz alternativas para oferecer.',
+        'ANTES de usar: consulte "horarios_livres", ofereça os horários ao cliente e deixe que ele ' +
+        'escolha. Precisa da referência do cliente devolvida por "Consultar cliente no CRM". ' +
+        'Funciona em duas etapas: a PRIMEIRA chamada não marca nada, só confere o horário e devolve a ' +
+        'data e a hora por extenso (campo "quando") e com quem será, para você confirmar a data e a ' +
+        'hora com o cliente; só depois que ele responder que sim, chame de novo com os mesmos valores ' +
+        'e o compromisso é marcado. Depois de marcado, confirme ao cliente a data, a hora e com quem ' +
+        'será. Chamar de novo com os mesmos dados não duplica o compromisso. Se o horário já foi ' +
+        'ocupado, a resposta traz alternativas para oferecer.',
       inputSchema: {
         cliente: z
           .string()

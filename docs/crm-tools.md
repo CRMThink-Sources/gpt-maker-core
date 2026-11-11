@@ -78,5 +78,5 @@ Change `agent-calendar-scheduling` (spec `agent-calendar-scheduling`). Roteiro d
 
 - O cliente escolhe, **por agente**, de quem é a agenda (card **Agenda**, `GET/PUT/DELETE /app/agents/{id}/calendar`): `FIXED_USER`, `CLIENT_OWNER` (responsável do cliente no CRM) ou `USER_LIST` (até 10, o primeiro livre; o compromisso vai para o primeiro da lista livre no horário).
 - Ferramentas MCP: `horarios_livres` (até 10 horários, ditos por extenso em `quando`; o valor interno vai em `usar_ao_agendar`), `agendar_compromisso` (`cliente`, `inicio`, `assunto?`) e `agendamentos_do_cliente` (data, hora e com quem, sem título nem descrição). Não há remarcar nem cancelar.
-- Criação com lock Redis por (tenant, usuário), revalidação do horário e idempotência de 15 minutos.
+- Criação com lock Redis por (tenant, usuário), revalidação do horário e idempotência de 15 minutos. `agendar_compromisso` marca em **duas chamadas** (design D9): a primeira só confere e devolve a data, a hora e com quem para o agente confirmar com o cliente; a segunda, com os mesmos dados em até 10 minutos, cria o evento.
 - Exige o escopo `calendar` do app.

@@ -83,11 +83,19 @@ O servidor MCP MUST oferecer a ferramenta `horarios_livres`, que recebe uma data
 - **THEN** a ferramenta responde qual é o período permitido e não consulta o Bitrix24
 
 ### Requirement: Ferramenta agendar_compromisso
-O servidor MCP MUST oferecer a ferramenta `agendar_compromisso`, que recebe a referência do cliente devolvida por "Consultar cliente no CRM", o início do compromisso e um assunto curto opcional, e cria no Calendário do Bitrix24 um evento na agenda determinada pelo modo, com a duração configurada, vinculado ao cliente no CRM e com a descrição indicando que foi marcado pelo agente. A ferramenta MUST recusar referência inválida ou de outro tenant como cliente não encontrado, MUST recusar início que não esteja entre os horários livres naquele momento (reconsultando o Bitrix24 imediatamente antes de criar) e MUST criar o evento no máximo uma vez para o mesmo cliente, agenda e início, devolvendo o evento já criado em repetições da mesma chamada. A descrição da ferramenta MUST orientar o agente a só usá-la depois que o cliente confirmar data e hora. A resposta MUST trazer a data e a hora por extenso (como em `horarios_livres`), a hora de término, a duração, o fuso e o nome de quem atende, e MUST NOT trazer identificadores internos do Bitrix24.
+O servidor MCP MUST oferecer a ferramenta `agendar_compromisso`, que recebe a referência do cliente devolvida por "Consultar cliente no CRM", o início do compromisso e um assunto curto opcional, e cria no Calendário do Bitrix24 um evento na agenda determinada pelo modo, com a duração configurada, vinculado ao cliente no CRM e com a descrição indicando que foi marcado pelo agente. A ferramenta MUST recusar referência inválida ou de outro tenant como cliente não encontrado, MUST recusar início que não esteja entre os horários livres naquele momento (reconsultando o Bitrix24 imediatamente antes de criar) e MUST criar o evento no máximo uma vez para o mesmo cliente, agenda e início, devolvendo o evento já criado em repetições da mesma chamada. A descrição da ferramenta MUST orientar o agente a só usá-la depois que o cliente confirmar data e hora. A ferramenta MUST funcionar em duas etapas: a primeira chamada para um cliente e um horário MUST NOT criar o evento e MUST devolver, por extenso, a data, a hora e o nome de quem atende, avisando que nada foi marcado e que o agente deve confirmar com o cliente; só uma segunda chamada com os mesmos dados, em até 10 minutos, MUST criar o evento. A resposta de agendamento MUST trazer a data e a hora por extenso (como em `horarios_livres`), a hora de término, a duração, o fuso e o nome de quem atende, e MUST NOT trazer identificadores internos do Bitrix24.
 
 #### Scenario: Agendamento bem-sucedido
 - **WHEN** o agente chama a ferramenta com a referência de "Maria Souza" e o início 2026-11-20 14:00, horário livre na agenda de Ana Lima
 - **THEN** o Bitrix24 recebe um evento de 30 minutos na agenda de Ana Lima, vinculado ao contato Maria Souza, e a resposta confirma data, hora, duração e "com Ana Lima"
+
+#### Scenario: Primeira chamada não marca
+- **WHEN** o agente chama `agendar_compromisso` pela primeira vez para o cliente e o horário, mesmo que o cliente ainda não tenha escolhido
+- **THEN** nenhum evento é criado, a resposta diz que nada foi marcado e traz a data, a hora e "com quem" por extenso para o agente confirmar com o cliente
+
+#### Scenario: Confirmação de outro horário ou de outro cliente
+- **WHEN** a segunda chamada traz outro horário ou outro cliente
+- **THEN** ela é tratada como uma primeira chamada: nada é marcado e a confirmação é pedida de novo
 
 #### Scenario: Horário tomado entre a consulta e a confirmação
 - **WHEN** o horário oferecido foi ocupado por outro evento antes de o cliente confirmar
