@@ -405,3 +405,78 @@ export interface CrmGuidanceView {
   updatedBy: string | null;
   updatedAt: string | null;
 }
+
+/**
+ * Agenda do agente no Calendário do Bitrix24 (spec agent-calendar-scheduling, "Configurar a agenda
+ * do agente"): de quem é a agenda e as regras dos horários oferecidos.
+ */
+export const CALENDAR_MODES = ['FIXED_USER', 'CLIENT_OWNER', 'USER_LIST'] as const;
+export const calendarModeSchema = z.enum(CALENDAR_MODES);
+export type CalendarMode = z.infer<typeof calendarModeSchema>;
+
+export const CALENDAR_MODE_LABELS: Record<CalendarMode, string> = {
+  FIXED_USER: 'Usuário fixo',
+  CLIENT_OWNER: 'Responsável do cliente no CRM',
+  USER_LIST: 'Lista de usuários',
+};
+
+export const CALENDAR_USERS_MAX = 10;
+export const CALENDAR_SLOT_MINUTES = { min: 15, max: 240, step: 5, default: 30 } as const;
+export const CALENDAR_MIN_NOTICE_MINUTES = { min: 0, max: 1440, default: 60 } as const;
+export const CALENDAR_MAX_DAYS_AHEAD = { min: 1, max: 30, default: 7 } as const;
+
+export const calendarConfigInputSchema = z
+  .object({
+    mode: calendarModeSchema,
+    /** Ids de usuários do portal: 1 em `FIXED_USER`, de 1 a 10 em `USER_LIST`, nenhum em `CLIENT_OWNER`. */
+    userIds: z.array(z.number().int().positive()).default([]),
+    slotMinutes: z
+      .number()
+      .int('A duração deve ser um número inteiro de minutos')
+      .min(CALENDAR_SLOT_MINUTES.min, `A duração mínima é de ${CALENDAR_SLOT_MINUTES.min} minutos`)
+      .max(CALENDAR_SLOT_MINUTES.max, `A duração máxima é de ${CALENDAR_SLOT_MINUTES.max} minutos`)
+      .multipleOf(CALENDAR_SLOT_MINUTES.step, 'Use a duração em múltiplos de 5 minutos')
+      .default(CALENDAR_SLOT_MINUTES.default),
+    minNoticeMinutes: z
+      .number()
+      .int('A antecedência deve ser um número inteiro de minutos')
+      .min(CALENDAR_MIN_NOTICE_MINUTES.min, 'A antecedência não pode ser negativa')
+      .max(
+        CALENDAR_MIN_NOTICE_MINUTES.max,
+        `A antecedência máxima é de ${CALENDAR_MIN_NOTICE_MINUTES.max} minutos`,
+      )
+      .default(CALENDAR_MIN_NOTICE_MINUTES.default),
+    maxDaysAhead: z
+      .number()
+      .int('A janela deve ser um número inteiro de dias')
+      .min(CALENDAR_MAX_DAYS_AHEAD.min, `A janela mínima é de ${CALENDAR_MAX_DAYS_AHEAD.min} dia`)
+      .max(CALENDAR_MAX_DAYS_AHEAD.max, `A janela máxima é de ${CALENDAR_MAX_DAYS_AHEAD.max} dias`)
+      .default(CALENDAR_MAX_DAYS_AHEAD.default),
+  })
+  .superRefine((value, ctx) => {
+    const { mode, userIds } = value;
+    const issue = (message: string) => ctx.addIssue({ code: 'custom', path: ['userIds'], message });
+    if (new Set(userIds).size !== userIds.length) return issue('Há usuários repetidos na lista');
+    if (mode === 'FIXED_USER' && userIds.length !== 1) {
+      return issue('No modo usuário fixo, escolha exatamente 1 usuário');
+    }
+    if (mode === 'USER_LIST' && (userIds.length < 1 || userIds.length > CALENDAR_USERS_MAX)) {
+      return issue(`Na lista de usuários, escolha de 1 a ${CALENDAR_USERS_MAX} usuários`);
+    }
+    if (mode === 'CLIENT_OWNER' && userIds.length > 0) {
+      return issue('No modo responsável do cliente, não há usuários para escolher');
+    }
+  });
+export type CalendarConfigInput = z.input<typeof calendarConfigInputSchema>;
+/** Configuração com os padrões aplicados. */
+export type CalendarConfig = z.output<typeof calendarConfigInputSchema>;
+
+/** Agenda do agente na tela: a configuração salva e o que impede o uso. */
+export interface CalendarConfigView {
+  /** `null` = agenda não configurada. */
+  config: CalendarConfig | null;
+  /** A agenda só existe com o acesso ao CRM do agente conectado. */
+  crmConnected: boolean;
+  /** Uma chamada recente ao Calendário falhou por falta do escopo `calendar` (reautorizar o app). */
+  scopeMissing: boolean;
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calendarConfigInputSchema,
   CRM_GUIDANCE_MAX,
   crmFieldSettingInputSchema,
   crmGuidanceInputSchema,
@@ -203,5 +204,88 @@ describe('crmGuidanceInputSchema', () => {
     expect(
       crmGuidanceInputSchema.safeParse({ text: 'a'.repeat(CRM_GUIDANCE_MAX + 1) }).success,
     ).toBe(false);
+  });
+});
+
+describe('calendarConfigInputSchema', () => {
+  const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  it('aplica os padrões: 30 minutos, 60 de antecedência e 7 dias', () => {
+    expect(calendarConfigInputSchema.parse({ mode: 'FIXED_USER', userIds: [12] })).toEqual({
+      mode: 'FIXED_USER',
+      userIds: [12],
+      slotMinutes: 30,
+      minNoticeMinutes: 60,
+      maxDaysAhead: 7,
+    });
+  });
+
+  it('responsável do cliente dispensa usuários; lista de usuários exige ao menos 1', () => {
+    expect(calendarConfigInputSchema.safeParse({ mode: 'CLIENT_OWNER' }).success).toBe(true);
+    expect(
+      calendarConfigInputSchema.safeParse({ mode: 'CLIENT_OWNER', userIds: [1] }).success,
+    ).toBe(false);
+    expect(calendarConfigInputSchema.safeParse({ mode: 'USER_LIST', userIds: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ['usuário fixo com 2 usuários', { mode: 'FIXED_USER', userIds: [1, 2] }, 'exatamente 1'],
+    ['usuário fixo sem usuário', { mode: 'FIXED_USER' }, 'exatamente 1'],
+    ['lista com 11 usuários', { mode: 'USER_LIST', userIds: [...ten, 11] }, 'de 1 a 10'],
+    ['usuários repetidos', { mode: 'USER_LIST', userIds: [3, 3] }, 'repetidos'],
+    ['duração de 10 minutos', { mode: 'FIXED_USER', userIds: [1], slotMinutes: 10 }, 'mínima'],
+    ['duração de 250 minutos', { mode: 'FIXED_USER', userIds: [1], slotMinutes: 250 }, 'máxima'],
+    [
+      'duração fora do múltiplo de 5',
+      { mode: 'FIXED_USER', userIds: [1], slotMinutes: 32 },
+      'múltiplos',
+    ],
+    [
+      'antecedência negativa',
+      { mode: 'FIXED_USER', userIds: [1], minNoticeMinutes: -1 },
+      'negativa',
+    ],
+    [
+      'antecedência acima de 24 h',
+      { mode: 'FIXED_USER', userIds: [1], minNoticeMinutes: 1441 },
+      'máxima',
+    ],
+    ['janela de 0 dia', { mode: 'FIXED_USER', userIds: [1], maxDaysAhead: 0 }, 'mínima'],
+    ['janela de 31 dias', { mode: 'FIXED_USER', userIds: [1], maxDaysAhead: 31 }, 'máxima'],
+  ])('recusa %s', (_caso, input, trecho) => {
+    const result = calendarConfigInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message).join(' ')).toContain(trecho);
+    }
+  });
+
+  it('recusa modo inexistente', () => {
+    expect(calendarConfigInputSchema.safeParse({ mode: 'TODOS', userIds: [1] }).success).toBe(
+      false,
+    );
+  });
+
+  it('aceita os limites: 15 e 240 minutos, 0 e 1440 de antecedência, 1 e 30 dias, 10 usuários', () => {
+    for (const slotMinutes of [15, 240]) {
+      expect(
+        calendarConfigInputSchema.safeParse({ mode: 'USER_LIST', userIds: ten, slotMinutes })
+          .success,
+      ).toBe(true);
+    }
+    for (const minNoticeMinutes of [0, 1440]) {
+      expect(
+        calendarConfigInputSchema.safeParse({ mode: 'FIXED_USER', userIds: [1], minNoticeMinutes })
+          .success,
+      ).toBe(true);
+    }
+    for (const maxDaysAhead of [1, 30]) {
+      expect(
+        calendarConfigInputSchema.safeParse({ mode: 'FIXED_USER', userIds: [1], maxDaysAhead })
+          .success,
+      ).toBe(true);
+    }
   });
 });

@@ -7,14 +7,14 @@
 
 ## 2. Escopo `calendar` e cliente do Bitrix
 
-- [ ] 2.1 Incluir `calendar` na lista de escopos exigidos pelo app (documentação em `docs/bitrix-observado.md`, "Escopos da instalação", e no cadastro do app/plataforma) e mapear `insufficient_scope` de `calendar.*` em `BitrixError` com `kind` próprio; verificar com teste de `bitrix.client` que o erro é classificado e não é repetido
-- [ ] 2.2 Criar o executor compartilhado `crm-tools/tool-runner.ts` (limite por agente, tempo máximo, métricas, log sem dados, `last_call_at`) extraído de `CrmToolsService.run`, e passar `CrmToolsService` a usá-lo; verificar que `crm-tools.service.test.ts` continua passando sem alteração de comportamento
+- [x] 2.1 Incluir `calendar` na lista de escopos exigidos pelo app (documentação em `docs/bitrix-observado.md`, "Escopos da instalação", e no cadastro do app/plataforma) e expor `BitrixError.isScopeMissing` para `insufficient_scope` de `calendar.*` (mantém `kind: API_ERROR` para não mudar `getRecord` e o consumer de entrada); verificar com teste de `bitrix.client` que o erro é classificado e não é repetido
+- [x] 2.2 Criar o executor compartilhado `crm-tools/tool-runner.ts` (limite por agente, tempo máximo, métricas, log sem dados, `last_call_at`) extraído de `CrmToolsService.run`, e passar `CrmToolsService` a usá-lo; verificar que `crm-tools.service.test.ts` continua passando sem alteração de comportamento
 
 ## 3. Contratos e persistência
 
-- [ ] 3.1 Criar em `packages/contracts/src/crm.ts` o `calendarConfigSchema` (modo, usuários conforme o modo, duração 15–240 em múltiplos de 5, antecedência 0–1440, janela 1–30) e os tipos `CalendarConfigView`; verificar com testes de unidade: usuário fixo com 2 usuários, lista com 11, duração 10, valores padrão e remoção (`null`)
-- [ ] 3.2 Adicionar a tabela `agent_calendar_config` (PK `agent_id`, `tenant_id` com FK e índice, `mode`, `user_ids`, `slot_minutes`, `min_notice_minutes`, `max_days_ahead`, `last_scope_error_at`, timestamps) em `shared/database/schema/` e gerar a migration com `npm run db:generate -w backend`; verificar que aplica em banco limpo e sobre dados existentes e que `git status backend/drizzle` mostra só a migration nova
-- [ ] 3.3 Auditar a migration e o schema com o agente `guardiao-migracoes` e registrar o veredito; verificar com o relatório sem bloqueantes
+- [x] 3.1 Criar em `packages/contracts/src/crm.ts` o `calendarConfigSchema` (modo, usuários conforme o modo, duração 15–240 em múltiplos de 5, antecedência 0–1440, janela 1–30) e os tipos `CalendarConfigView`; verificar com testes de unidade: usuário fixo com 2 usuários, lista com 11, duração 10, valores padrão e remoção (`null`)
+- [x] 3.2 Adicionar a tabela `agent_calendar_config` (PK `agent_id`, `tenant_id` com FK e índice, `mode`, `user_ids`, `slot_minutes`, `min_notice_minutes`, `max_days_ahead`, `last_scope_error_at`, timestamps) em `shared/database/schema/` e gerar a migration com `npm run db:generate -w backend`; verificar que aplica em banco limpo e sobre dados existentes e que `git status backend/drizzle` mostra só a migration nova
+- [x] 3.3 Auditar a migration e o schema com o agente `guardiao-migracoes` e registrar o veredito; verificar com o relatório sem bloqueantes
 
 ## 4. Configuração por agente (API)
 

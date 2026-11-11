@@ -92,7 +92,7 @@ O agente nunca informa nem recebe ids de usuário; recebe o nome (via `UserNames
 
 ### D7. Escopo `calendar` e falhas
 
-`BitrixError` com `insufficient_scope` vira resposta de ferramenta "calendário não liberado" (resultado `unavailable`, sem repetir a chamada) e fica registrada para o painel. A configuração na tela mostra o alerta "reautorizar o app" quando uma chamada recente teve esse erro (campo `last_scope_error_at` em `agent_calendar_config`). O escopo é incluído no cadastro do app no Bitrix24 e na lista de escopos da instalação, e a documentação (`docs/bitrix-observado.md`, runbook) é atualizada.
+`BitrixError` com `isScopeMissing` (`insufficient_scope`, mantendo `kind: API_ERROR` para não mudar `getRecord` e o consumer de entrada) vira resposta de ferramenta "calendário não liberado" (resultado `unavailable`, sem repetir a chamada) e fica registrada para o painel. A configuração na tela mostra o alerta "reautorizar o app" quando uma chamada recente teve esse erro (campo `last_scope_error_at` em `agent_calendar_config`). O escopo é incluído no cadastro do app no Bitrix24 e na lista de escopos da instalação, e a documentação (`docs/bitrix-observado.md`, runbook) é atualizada.
 
 ### D8. Ferramentas sempre publicadas, com resposta clara quando não configuradas
 
