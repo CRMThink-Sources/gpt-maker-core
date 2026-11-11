@@ -5,6 +5,10 @@ import { BitrixModule } from '../bitrix';
 import { GptMakerModule } from '../gptmaker';
 import { SemanticModule } from '../semantic';
 import { TenancyModule } from '../tenancy';
+import { CalendarConfigController } from './calendar-config.controller';
+import { CalendarConfigRepository } from './calendar-config.repository';
+import { CalendarConfigService } from './calendar-config.service';
+import { CalendarToolsService } from './calendar-tools.service';
 import { CrmAccessController } from './crm-access.controller';
 import { CrmAccessGuard } from './crm-access.guard';
 import { CrmAccessService } from './crm-access.service';
@@ -23,8 +27,17 @@ import { McpController } from './mcp.controller';
     GptMakerModule,
     SemanticModule,
   ],
-  controllers: [CrmAccessController, CrmClientController, McpController],
-  providers: [CrmAccessService, CrmAccessGuard, CrmGuidanceService, CrmToolsService, CrmToolsSync],
+  controllers: [CrmAccessController, CrmClientController, McpController, CalendarConfigController],
+  providers: [
+    CrmAccessService,
+    CrmAccessGuard,
+    CrmGuidanceService,
+    CrmToolsService,
+    CrmToolsSync,
+    CalendarConfigRepository,
+    CalendarConfigService,
+    CalendarToolsService,
+  ],
   exports: [CrmAccessService, CrmGuidanceService],
 })
 export class CrmToolsModule {}

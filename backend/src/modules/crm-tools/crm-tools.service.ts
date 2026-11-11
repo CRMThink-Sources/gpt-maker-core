@@ -1,13 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { DEAL_PIPELINE_FIELD, DEAL_STAGE_FIELD } from '@gptmaker/contracts';
-import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
-import { Counter, Histogram } from 'prom-client';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agentCrmAccess } from '../../shared/database/schema/index';
-import { metricsRegistry } from '../../shared/metrics/metrics';
 import { REDIS } from '../../shared/redis/redis.module';
 import { isTestDialog, testDialogKeyFrom, TestConversations } from '../agent-test';
 import { BitrixClient, BitrixError } from '../bitrix';
@@ -27,16 +23,10 @@ import { ClientRefs, type ClientType } from './client-ref';
 import { composeGuidance } from './crm-guidance.defaults';
 import { CrmGuidanceService } from './crm-guidance.service';
 import type { CrmCaller } from './crm-access.guard';
+import { ToolRunner, type ToolResult } from './tool-runner';
 
-export type ToolName = 'consultar_cliente' | 'negocios_do_cliente' | 'etapas_do_funil';
-export type ToolOutcome = 'ok' | 'not_identified' | 'not_found' | 'unavailable' | 'rate_limited';
-
-/** Resposta de uma ferramenta: corpo para o agente e, para métricas, quantos registros. */
-export interface ToolResult {
-  outcome: ToolOutcome;
-  body: Record<string, unknown>;
-  count: number;
-}
+// Os tipos e o tempo máximo moraram aqui; seguem exportados para quem já importa deste arquivo.
+export { TOOL_TIMEOUT_MS, type ToolName, type ToolOutcome, type ToolResult } from './tool-runner';
 
 export type DealSituation = 'em_andamento' | 'ganhos' | 'perdidos' | 'todos';
 export const DEAL_SITUATIONS: readonly DealSituation[] = [
@@ -54,8 +44,6 @@ const SEMANTIC_FILTER: Record<DealSituation, string | null> = {
 
 /** Negócios por resposta (spec agent-crm-tools). */
 export const MAX_DEALS = 10;
-/** Tempo máximo de uma ferramenta (o agente está esperando para responder). */
-export const TOOL_TIMEOUT_MS = 10_000;
 
 const CLIENT_TYPE_LABEL: Record<ClientType, string> = {
   contact: 'contato',
@@ -76,30 +64,6 @@ const OMIT_DEAL = new Set([
 ]);
 const OMIT_CLIENT = new Set(['NAME', 'SECOND_NAME', 'LAST_NAME', 'TITLE', 'ASSIGNED_BY_ID']);
 
-const calls = new Counter({
-  name: 'crm_tool_calls_total',
-  help: 'Chamadas às ferramentas do agente sobre o CRM por ferramenta e resultado',
-  labelNames: ['tool', 'outcome'],
-  registers: [metricsRegistry],
-});
-const duration = new Histogram({
-  name: 'crm_tool_duration_seconds',
-  help: 'Duração das ferramentas do agente sobre o CRM',
-  labelNames: ['tool'],
-  buckets: [0.1, 0.25, 0.5, 1, 2.5, 5, 10],
-  registers: [metricsRegistry],
-});
-
-class ToolTimeout extends Error {}
-
-const UNAVAILABLE: ToolResult = {
-  outcome: 'unavailable',
-  body: {
-    erro: 'Os dados do CRM estão temporariamente indisponíveis. Responda sem eles e, se preciso, diga ao cliente que a equipe vai verificar.',
-  },
-  count: 0,
-};
-
 /**
  * Ferramentas somente leitura do agente sobre o CRM (spec agent-crm-tools, design S2/S7): a
  * intenção de sistema identifica o cliente pelo vínculo da conversa; o MCP lista negócios e
@@ -107,26 +71,27 @@ const UNAVAILABLE: ToolResult = {
  */
 @Injectable()
 export class CrmToolsService {
-  private readonly logger = new Logger(CrmToolsService.name);
   readonly refs: ClientRefs;
+  private readonly runner: ToolRunner;
 
   constructor(
     private readonly bitrix: BitrixClient,
     private readonly catalog: FieldCatalogService,
     private readonly settings: FieldSettingsService,
     private readonly users: UserNamesService,
-    @Inject(DB) private readonly db: Database,
-    @Inject(REDIS) private readonly redis: Redis,
-    @Inject(ENV) private readonly env: Env,
+    @Inject(DB) db: Database,
+    @Inject(REDIS) redis: Redis,
+    @Inject(ENV) env: Env,
     private readonly testConversations: TestConversations,
     private readonly guidance: CrmGuidanceService,
   ) {
     this.refs = ClientRefs.fromBase64Key(env.DATA_ENCRYPTION_KEY);
+    this.runner = new ToolRunner(db, redis, env);
   }
 
   /** Intenção "Consultar cliente no CRM": só pelo vínculo da conversa, nunca por dado digitado. */
   identifyClient(caller: CrmCaller, chat: unknown): Promise<ToolResult> {
-    return this.run(caller, 'consultar_cliente', async () => {
+    return this.runner.run(caller, 'consultar_cliente', async () => {
       const dialogId =
         typeof chat === 'string' && !/\{\{/.test(chat)
           ? dialogFromChat(chat, caller.tenantId)
@@ -174,7 +139,7 @@ export class CrmToolsService {
   }
 
   clientDeals(caller: CrmCaller, ref: unknown, situation: DealSituation = 'todos') {
-    return this.run(caller, 'negocios_do_cliente', async () => {
+    return this.runner.run(caller, 'negocios_do_cliente', async () => {
       const client = this.refs.verify(caller.tenantId, ref);
       if (!client)
         return notFound(
@@ -199,8 +164,35 @@ export class CrmToolsService {
     });
   }
 
+  /**
+   * Cliente da referência para as ferramentas de agenda (spec agent-calendar-scheduling): tipo, id,
+   * nome e responsável (`ASSIGNED_BY_ID`). Referência inválida, adulterada ou de outro tenant, ou
+   * registro apagado, contam como cliente não encontrado. Não passa pelo executor das ferramentas:
+   * quem chama já está dentro dele.
+   */
+  async calendarClient(
+    caller: CrmCaller,
+    ref: unknown,
+  ): Promise<
+    | { found: false }
+    | { found: true; type: ClientType; id: number; name: string | null; userId: number | null }
+  > {
+    const client = this.refs.verify(caller.tenantId, ref);
+    if (!client) return { found: false };
+    const record = await this.getRecord(caller, client.type, client.id);
+    if (!record) return { found: false };
+    const userId = Number(record.ASSIGNED_BY_ID);
+    return {
+      found: true,
+      type: client.type,
+      id: client.id,
+      name: displayName(client.type, record),
+      userId: userId > 0 ? userId : null,
+    };
+  }
+
   pipelineStages(caller: CrmCaller, pipelineName?: string) {
-    return this.run(caller, 'etapas_do_funil', async () => {
+    return this.runner.run(caller, 'etapas_do_funil', async () => {
       const [metadata, choices] = await Promise.all([
         this.catalog.load(caller),
         this.settings.forTenant(caller.tenantId),
@@ -253,57 +245,6 @@ export class CrmToolsService {
       count: 0,
       body: { cliente: null, mensagem: guidance.cliente_nao_identificado },
     };
-  }
-
-  /** Limite por agente, tempo máximo, métricas, log sem dados e `last_call_at`. */
-  private async run(
-    caller: CrmCaller,
-    tool: ToolName,
-    fn: () => Promise<ToolResult>,
-  ): Promise<ToolResult> {
-    const end = duration.startTimer({ tool });
-    const started = Date.now();
-    let result: ToolResult;
-    try {
-      if (await this.overLimit(caller.agentId)) {
-        result = {
-          outcome: 'rate_limited',
-          count: 0,
-          body: { erro: 'Limite de consultas ao CRM atingido. Tente de novo em um minuto.' },
-        };
-      } else {
-        result = await withTimeout(fn(), TOOL_TIMEOUT_MS);
-      }
-    } catch (error) {
-      if (!(error instanceof BitrixError) && !(error instanceof ToolTimeout)) throw error;
-      this.logger.warn({ tool, err: error }, 'CRM indisponível para a ferramenta');
-      result = UNAVAILABLE;
-    }
-    end();
-    calls.inc({ tool, outcome: result.outcome });
-    this.logger.log(
-      { tool, outcome: result.outcome, count: result.count, durationMs: Date.now() - started },
-      'ferramenta do CRM',
-    );
-    void this.db
-      .update(agentCrmAccess)
-      .set({ lastCallAt: new Date() })
-      .where(eq(agentCrmAccess.agentId, caller.agentId))
-      .catch((error: unknown) => this.logger.warn({ err: error }, 'last_call_at não gravado'));
-    return result;
-  }
-
-  private async overLimit(agentId: string): Promise<boolean> {
-    const key = `crm-tools:rate:${agentId}:${Math.floor(Date.now() / 60_000)}`;
-    try {
-      const count = await this.redis.incr(key);
-      if (count === 1) await this.redis.expire(key, 120);
-      return count > this.env.CRM_TOOLS_RATE_PER_MINUTE;
-    } catch (error) {
-      // Redis fora: libera (o Bitrix ainda tem o próprio limite por portal).
-      this.logger.warn({ err: error }, 'limite das ferramentas do CRM indisponível');
-      return false;
-    }
   }
 
   private async context(caller: CrmCaller): Promise<Omit<TranslationContext, 'users'>> {
@@ -458,18 +399,4 @@ function text(value: unknown): string | null {
 /** Sem acento e sem caixa, para casar o nome do funil dito pelo agente. */
 function normalize(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new ToolTimeout(`ferramenta excedeu ${ms}ms`)), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
 }

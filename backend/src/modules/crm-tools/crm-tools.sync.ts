@@ -81,11 +81,11 @@ export class CrmToolsSync implements OnApplicationBootstrap {
             .update(agentCrmAccess)
             .set({ gptmakerMcpId: mcpId })
             .where(eq(agentCrmAccess.agentId, access.agentId));
-          for (const tool of await this.gptmaker.listMcpTools(mcpId)) {
-            if (tool.active === false) await this.gptmaker.activateMcpTool(mcpId, tool.id);
-          }
+          await this.activateInactiveTools(mcpId);
         } else {
           await this.gptmaker.syncMcpTools(access.gptmakerMcpId);
+          // Ferramenta nova chega inativa no GPTMaker: sem isso o agente conectado antes não a usa.
+          await this.activateInactiveTools(access.gptmakerMcpId);
         }
         updated++;
       } catch (error) {
@@ -100,5 +100,11 @@ export class CrmToolsSync implements OnApplicationBootstrap {
     if (updated || failed)
       this.logger.log({ updated, failed, urlChanged }, 'ferramentas do CRM alinhadas');
     return { updated, failed };
+  }
+
+  private async activateInactiveTools(mcpId: string): Promise<void> {
+    for (const tool of await this.gptmaker.listMcpTools(mcpId)) {
+      if (tool.active === false) await this.gptmaker.activateMcpTool(mcpId, tool.id);
+    }
   }
 }

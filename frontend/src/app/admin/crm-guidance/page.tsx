@@ -20,6 +20,8 @@ const USAGE: Record<CrmGuidanceKey, string> = {
   negocios_do_cliente: 'Vai na resposta da ferramenta negocios_do_cliente.',
   escopo_dados: 'Somado ao fim das duas orientações acima: o que o agente tem e o que não tem.',
   cliente_nao_identificado: 'Resposta quando a conversa não está ligada a um cliente do CRM.',
+  agenda:
+    'Vai na resposta de horarios_livres e nas alternativas de agendar_compromisso: como oferecer os horários e quando marcar.',
 };
 
 function message(e: unknown, fallback: string): string {
@@ -210,6 +212,12 @@ export default function AdminCrmGuidancePage() {
                   </dd>
                 </div>
               ))}
+              <div>
+                <dt className="font-medium text-zinc-700">{CRM_GUIDANCE_LABELS.agenda}</dt>
+                <dd className="mt-1 rounded-lg bg-zinc-50 p-3 font-mono text-zinc-700">
+                  orientacao: {text('agenda')}
+                </dd>
+              </div>
               <div>
                 <dt className="font-medium text-zinc-700">
                   {CRM_GUIDANCE_LABELS.cliente_nao_identificado}

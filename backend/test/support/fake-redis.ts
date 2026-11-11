@@ -13,6 +13,11 @@ export class FakeRedis {
 
   async get(key: string): Promise<string | null> {
     this.check();
+    return this.peek(key);
+  }
+
+  /** Leitura síncrona: o `SET ... NX` não pode ceder a vez entre ler e gravar (no Redis é atômico). */
+  private peek(key: string): string | null {
     const entry = this.store.get(key);
     if (!entry) return null;
     if (entry.expiresAt !== undefined && entry.expiresAt <= this.now()) {
@@ -29,7 +34,7 @@ export class FakeRedis {
       const flag = String(args[i]).toUpperCase();
       if (flag === 'PX') expiresAt = this.now() + Number(args[++i]);
       else if (flag === 'EX') expiresAt = this.now() + Number(args[++i]) * 1000;
-      else if (flag === 'NX' && (await this.get(key)) !== null) return null;
+      else if (flag === 'NX' && this.peek(key) !== null) return null;
     }
     this.store.set(key, { value, expiresAt });
     return 'OK';

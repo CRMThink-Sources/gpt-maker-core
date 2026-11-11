@@ -22,7 +22,7 @@ import * as schema from '../../src/shared/database/schema/index';
 import { WireMock } from '../support/wiremock';
 import { testPool } from '../support/postgres';
 
-const { agent, agentCrmAccess, aiModel, tenant } = schema;
+const { agent, agentCalendarConfig, agentCrmAccess, aiModel, tenant } = schema;
 const REMOTE_AGENT = 'gm-agent-crm';
 const INTENTIONS = `/v2/agent/${REMOTE_AGENT}/intentions`;
 const MCP_ADD = `/v2/agent/${REMOTE_AGENT}/mcp/add`;
@@ -126,6 +126,7 @@ describe('acesso do agente ao CRM', () => {
   beforeEach(async () => {
     await wiremock.reset();
     await redis.flushall();
+    await db.delete(agentCalendarConfig);
     await db.delete(agentCrmAccess);
     await db.delete(agent);
     const code = randomBytes(3).toString('hex');
@@ -245,6 +246,31 @@ describe('acesso do agente ao CRM', () => {
     expect(await authenticate(token)).toBe(401);
     expect(await wiremock.count('DELETE', '/v2/mcp/mcp-1')).toBe(1);
     expect(await wiremock.count('DELETE', '/v2/intention/int-sys')).toBe(1);
+  });
+
+  // spec agent-calendar-scheduling, "Desativar o CRM do agente": a agenda configurada é mantida.
+  it('desativar e reativar o CRM não perde a agenda configurada', async () => {
+    await stubHappyPath();
+    await service.update(tenantId, agentId, { enabled: true });
+    const saved = {
+      mode: 'USER_LIST' as const,
+      userIds: [508, 418],
+      slotMinutes: 45,
+      minNoticeMinutes: 120,
+      maxDaysAhead: 14,
+    };
+    await db.insert(agentCalendarConfig).values({ agentId, tenantId, ...saved });
+    const calendar = () =>
+      db.select().from(agentCalendarConfig).where(eq(agentCalendarConfig.agentId, agentId));
+
+    await service.update(tenantId, agentId, { enabled: false });
+    expect(await calendar()).toMatchObject([{ ...saved, tenantId }]);
+
+    await wiremock.reset();
+    await stubHappyPath();
+    const view = await service.update(tenantId, agentId, { enabled: true });
+    expect(view.status).toBe('CONNECTED');
+    expect(await calendar()).toMatchObject([{ ...saved, tenantId }]);
   });
 
   it('agente inativo ou tenant desinstalado: credencial recusada', async () => {

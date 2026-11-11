@@ -37,6 +37,12 @@ export function saveCrmField(
   );
 }
 
+/**
+ * Evento do navegador que o bloco "Acesso ao CRM" dispara depois de ligar ou desligar o acesso
+ * com sucesso. Quem depende do acesso (a agenda do agente) relê o estado quando ele chega.
+ */
+export const CRM_ACCESS_CHANGED_EVENT = 'gptmaker:crm-access-changed';
+
 export function getCrmAccess(api: Api, agentId: string): Promise<CrmAccessView> {
   return api<CrmAccessView>(`/app/agents/${encodeURIComponent(agentId)}/crm-access`);
 }

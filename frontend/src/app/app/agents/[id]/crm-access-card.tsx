@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, Spinner, Switch } from '@/components/ui';
-import { CRM_ACCESS_STATUS, crmErrorMessage, getCrmAccess, setCrmAccess } from '@/lib/crm';
+import {
+  CRM_ACCESS_CHANGED_EVENT,
+  CRM_ACCESS_STATUS,
+  crmErrorMessage,
+  getCrmAccess,
+  setCrmAccess,
+} from '@/lib/crm';
 import { formatDateTime } from '@/lib/triggers';
 import { useAppSession } from '../../session-provider';
 import { useAgent } from './agent-context';
@@ -59,6 +65,8 @@ export function CrmAccessCard() {
     setConfirming(false);
     try {
       setAccess(await setCrmAccess(api, agent.id, { enabled }));
+      // A agenda (bloco abaixo) só existe com o CRM conectado: avisa para reler o estado.
+      window.dispatchEvent(new Event(CRM_ACCESS_CHANGED_EVENT));
     } catch (e) {
       setError(
         crmErrorMessage(

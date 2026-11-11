@@ -124,11 +124,14 @@ export function ResponsiblePicker({
   onChange,
   disabled,
   label = 'Responsável',
+  knownName,
 }: {
   value: number;
   onChange: (id: number) => void;
   disabled?: boolean;
   label?: string;
+  /** Nome do usuário já salvo, para não mostrar só o número ao abrir a tela. */
+  knownName?: string;
 }) {
   const [name, setName] = useState<string | null>(null);
   const canPick = insideBitrix();
@@ -138,7 +141,7 @@ export function ResponsiblePicker({
         {canPick ? (
           <>
             <span className="text-sm text-zinc-700">
-              {value > 0 ? (name ?? `Usuário #${value}`) : 'Nenhum escolhido'}
+              {value > 0 ? (name ?? knownName ?? `Usuário #${value}`) : 'Nenhum escolhido'}
             </span>
             <button
               type="button"
@@ -179,20 +182,27 @@ export function UsersPicker({
   onChange,
   disabled,
   label = 'Usuários',
+  hint = 'Recebem um de cada vez, em rodízio.',
+  max = 20,
+  knownNames = {},
 }: {
   value: number[];
   onChange: (ids: number[]) => void;
   disabled?: boolean;
   label?: string;
+  /** Explicação do que acontece com mais de um usuário. */
+  hint?: string;
+  /** Quantos usuários cabem (padrão 20). */
+  max?: number;
+  /** Nomes dos usuários já salvos, para não mostrar só o número ao abrir a tela. */
+  knownNames?: Record<number, string>;
 }) {
-  const [names, setNames] = useState<Record<number, string>>({});
+  const [pickedNames, setNames] = useState<Record<number, string>>({});
+  const names = { ...knownNames, ...pickedNames };
   const [text, setText] = useState(value.join(', '));
   if (!insideBitrix()) {
     return (
-      <Field
-        label={label}
-        hint="Ids dos usuários no Bitrix24, separados por vírgula. Recebem um de cada vez."
-      >
+      <Field label={label} hint={`Ids dos usuários no Bitrix24, separados por vírgula. ${hint}`}>
         <input
           className={`${inputClass} mt-1.5`}
           value={text}
@@ -210,7 +220,7 @@ export function UsersPicker({
     );
   }
   return (
-    <Field label={label} hint="Recebem um de cada vez, em rodízio.">
+    <Field label={label} hint={hint}>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         {value.length === 0 && <span className="text-sm text-zinc-700">Nenhum escolhido</span>}
         {value.map((id) => (
@@ -243,7 +253,7 @@ export function UsersPicker({
               ...Object.fromEntries(users.map((user) => [Number(user.id), user.name])),
             }));
             onChange(
-              [...new Set([...value, ...users.map((user) => Number(user.id))])].slice(0, 20),
+              [...new Set([...value, ...users.map((user) => Number(user.id))])].slice(0, max),
             );
           }}
         >
