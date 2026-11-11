@@ -2,13 +2,14 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { CalendarToolsService } from './calendar-tools.service';
 import { CrmAccessGuard, type CrmCaller } from './crm-access.guard';
 import { CrmToolsService, type ToolResult } from './crm-tools.service';
-import { McpController } from './mcp.controller';
+import { McpController, TOOLS_VERSION } from './mcp.controller';
 
 const caller: CrmCaller = { tenantId: 't1', agentId: 'a1', installationId: 101 };
 
@@ -104,6 +105,34 @@ describe('McpController', () => {
     );
     return client;
   }
+
+  // O GPTMaker só relê as ferramentas quando TOOLS_VERSION muda (`CrmToolsSync`). Mudou nome,
+  // descrição ou esquema sem subir a versão, os agentes continuam com o texto antigo: foi o que
+  // fez o agente repetir "2026-11-12 09:00" ao cliente. Este teste amarra a versão ao conteúdo.
+  it('o conteúdo das ferramentas só muda junto com TOOLS_VERSION', async () => {
+    const PUBLISHED: Record<string, string> = {
+      '4': '5e6fc8d577d4f66788672f9f00a4bff6dae42a4c6258f9439662b80037065526',
+    };
+    const client = await connect();
+    const { tools: listed } = await client.listTools();
+    await client.close();
+    const published = listed
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const hash = createHash('sha256').update(JSON.stringify(published)).digest('hex');
+    expect(
+      PUBLISHED[TOOLS_VERSION],
+      `TOOLS_VERSION ${TOOLS_VERSION} sem hash registrado: registre ${hash}`,
+    ).toBeDefined();
+    expect(
+      hash,
+      `As ferramentas mudaram: suba TOOLS_VERSION (mcp.controller.ts) e registre o hash ${hash} para a nova versão`,
+    ).toBe(PUBLISHED[TOOLS_VERSION]);
+  });
 
   it('lista as ferramentas do CRM e as de agenda com descrições em pt-BR', async () => {
     const client = await connect();

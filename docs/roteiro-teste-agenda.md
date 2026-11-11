@@ -15,6 +15,16 @@ cliente já tem marcado, usando o horário real dos eventos.
 | Agente          | Um agente do tenant de teste, **sincronizado** com o GPTMaker (não "fora de sincronia").                                                                                                                              |
 | Função          | O agente usa a função "Agendamento no Calendário" (JSON gerado ao lado deste roteiro). Alternativa rápida: a instrução nas "Instruções adicionais".                                                                   |
 
+### Rodando local (com túnel)
+
+- Reinicie a **API** (`npm run dev:api -w backend`) e o **worker** (`npm run dev:worker -w backend`) sempre que o
+  código mudar. O worker é quem publica as ferramentas no GPTMaker: ao subir, ele compara a `TOOLS_VERSION` com a
+  última publicada e, se mudou, manda o GPTMaker reler as ferramentas e ativa as novas. **Sem reiniciar o
+  worker, o agente continua com as descrições antigas das ferramentas**, mesmo com a API atualizada.
+- O `API_PUBLIC_URL` precisa ser o endereço do túnel. Se o túnel mudou, o worker recria a conexão MCP dos agentes.
+- Para conferir o que o agente recebe, olhe o resultado da ferramenta no GPTMaker: cada horário deve trazer
+  `quando`, `termina_as`, `com` e `usar_ao_agendar` (e **não** `data`, `hora_inicio` nem `dia_da_semana`).
+
 ## 2. Preparar o agente
 
 1. Abra o agente e ligue o **Acesso ao CRM**. Espere o estado "Conectado" (até 30 s).

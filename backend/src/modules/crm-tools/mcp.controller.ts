@@ -24,7 +24,7 @@ import { MCP_PATH } from './system-intention';
  * Versão das ferramentas publicadas: mudar nome, descrição ou esquema exige incrementar, para o
  * `CrmToolsSync` pedir ao GPTMaker que releia (`sync-tools`).
  */
-export const TOOLS_VERSION = '3';
+export const TOOLS_VERSION = '4';
 
 /** Ferramentas do servidor MCP, ligadas ao agente que chama (design S8). */
 export function buildMcpServer(
