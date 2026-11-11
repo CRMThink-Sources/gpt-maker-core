@@ -58,6 +58,11 @@ const SOFT_DEADLINE_MS = 5_000;
  */
 const BOOKED_TTL_SECONDS = 15 * 60;
 const MAX_ALTERNATIVES = 3;
+/** `agendamentos_do_cliente`: compromissos por resposta e quantos dias à frente se olha. */
+const MAX_APPOINTMENTS = 10;
+const APPOINTMENTS_WINDOW_DAYS = 60;
+/** `OWNER_TYPE_ID` das atividades do CRM por tipo de cliente (entidades do Bitrix24). */
+const CRM_OWNER_TYPE = { lead: 1, contact: 3, company: 4 } as const;
 const TITLE_MAX = 100;
 const SUBJECT_MAX = 200;
 
@@ -93,6 +98,12 @@ interface PortalUser {
   ID: string | number;
   NAME?: string;
   LAST_NAME?: string;
+}
+
+interface ClientActivity {
+  START_TIME?: string;
+  END_TIME?: string;
+  RESPONSIBLE_ID?: string | number;
 }
 
 interface AccessibilityEvent {
@@ -149,6 +160,99 @@ export class CalendarToolsService {
   book(caller: CrmCaller, input: { cliente?: unknown; inicio?: unknown; assunto?: unknown } = {}) {
     return this.runner.run(caller, 'agendar_compromisso', () =>
       this.createAppointment(caller, input),
+    );
+  }
+
+  /** Ferramenta `agendamentos_do_cliente`: compromissos futuros do cliente nas agendas do agente. */
+  clientAppointments(caller: CrmCaller, input: { cliente?: unknown } = {}) {
+    return this.runner.run(caller, 'agendamentos_do_cliente', () =>
+      this.listClientAppointments(caller, input),
+    );
+  }
+
+  /**
+   * Lê as atividades do CRM do cliente (design D6): um evento do Calendário vinculado a ele vira uma
+   * atividade `CRM_TODO` com início, fim e responsável, e acompanha edição e exclusão do evento.
+   * Não devolve título nem descrição (o evento privado também gera atividade). Janela e responsável
+   * são conferidos de novo aqui: o que o Bitrix24 devolver fora do pedido não chega ao agente.
+   */
+  private async listClientAppointments(
+    caller: CrmCaller,
+    input: { cliente?: unknown },
+  ): Promise<ToolResult> {
+    const cfg = await this.configs.find(caller.tenantId, caller.agentId);
+    if (!cfg) return NOT_CONFIGURED;
+
+    const hours = await this.hoursOf(caller);
+    const client = await this.crm.calendarClient(caller, input.cliente);
+    if (!client.found) return CLIENT_NOT_FOUND;
+    const agenda = await this.agendaUsers(caller, cfg, client);
+    if ('result' in agenda) return agenda.result;
+    if (agenda.users.length === 0) return NO_AGENDA;
+
+    const now = this.clock();
+    const until = now + APPOINTMENTS_WINDOW_DAYS * 24 * 60 * 60_000;
+    const { result: rows, total } = await this.bitrix.call<ClientActivity[]>(
+      caller.installationId,
+      'crm.activity.list',
+      {
+        filter: {
+          OWNER_TYPE_ID: CRM_OWNER_TYPE[client.type],
+          OWNER_ID: client.id,
+          PROVIDER_ID: 'CRM_TODO',
+          RESPONSIBLE_ID: agenda.users.map((user) => user.id),
+          '>=START_TIME': isoWithOffset(now),
+          '<=START_TIME': isoWithOffset(until),
+        },
+        order: { START_TIME: 'ASC' },
+        select: ['ID', 'START_TIME', 'END_TIME', 'RESPONSIBLE_ID'],
+      },
+    );
+
+    const names = new Map(agenda.users.map((user) => [user.id, user.name]));
+    const upcoming = (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        start: Date.parse(String(row.START_TIME)),
+        end: Date.parse(String(row.END_TIME)),
+        owner: Number(row.RESPONSIBLE_ID),
+      }))
+      .filter(
+        (row) =>
+          Number.isFinite(row.start) &&
+          Number.isFinite(row.end) &&
+          row.start >= now &&
+          row.start <= until &&
+          names.has(row.owner),
+      )
+      .sort((a, b) => a.start - b.start);
+
+    const shown = upcoming.slice(0, MAX_APPOINTMENTS);
+    const more =
+      upcoming.length > shown.length || (total ?? 0) > (Array.isArray(rows) ? rows.length : 0);
+    return result(
+      'ok',
+      {
+        fuso_horario: hours.timezone,
+        agendamentos: shown.map((row) => {
+          const start = localParts(row.start, hours.timezone);
+          return {
+            data: start.data,
+            dia_da_semana: weekDayName(start.data),
+            hora_inicio: start.hora,
+            hora_fim: localParts(row.end, hours.timezone).hora,
+            duracao_minutos: Math.max(0, Math.round((row.end - row.start) / 60_000)),
+            com: names.get(row.owner),
+          };
+        }),
+        ...(more ? { ha_mais: true } : {}),
+        ...(shown.length === 0
+          ? { mensagem: 'Não há agendamentos futuros deste cliente.' }
+          : {
+              orientacao:
+                'Informe ao cliente apenas data, hora e com quem é o compromisso. Não há título nem detalhes.',
+            }),
+      },
+      shown.length,
     );
   }
 
@@ -598,6 +702,11 @@ function cleanSubject(value: unknown): string | null {
     .trim()
     .slice(0, SUBJECT_MAX);
   return text || null;
+}
+
+/** Instante em ISO com deslocamento (`2026-11-24T10:00:00+00:00`), formato que o filtro do Bitrix24 aceita. */
+function isoWithOffset(instant: number): string {
+  return new Date(instant).toISOString().replace(/\.\d{3}Z$/, '+00:00');
 }
 
 function weekDayName(date: string): string {

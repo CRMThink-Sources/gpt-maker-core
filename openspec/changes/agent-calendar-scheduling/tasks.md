@@ -35,7 +35,7 @@
 
 ## 7. Agendamentos do cliente
 
-- [ ] 7.1 Implementar `CalendarToolsService.clientAppointments` sobre `crm.activity.list` (design D6: dono do cliente, `PROVIDER_ID = CRM_TODO`, `START_TIME` de agora a +60 dias, `RESPONSIBLE_ID` entre os usuários das agendas, ordenação por início, limite de 10, conversão do instante para o fuso da agenda, sem título nem descrição); verificar com testes: com agendamentos, sem agendamentos, responsável fora da configuração, vínculo com contato/lead/empresa, título nunca na resposta, conversão de fuso (`+03:00` para `America/Sao_Paulo`)
+- [x] 7.1 Implementar `CalendarToolsService.clientAppointments` sobre `crm.activity.list` (design D6: dono do cliente, `PROVIDER_ID = CRM_TODO`, `START_TIME` de agora a +60 dias, `RESPONSIBLE_ID` entre os usuários das agendas, ordenação por início, limite de 10, conversão do instante para o fuso da agenda, sem título nem descrição); verificar com testes: com agendamentos, sem agendamentos, responsável fora da configuração, vínculo com contato/lead/empresa, título nunca na resposta, conversão de fuso (`+03:00` para `America/Sao_Paulo`)
 - [ ] 7.2 Confirmar no portal de teste, e registrar em `docs/bitrix-observado.md`, que um evento criado à mão na tela do Calendário com vínculo ao CRM gera a mesma atividade `CRM_TODO` e que o `START_TIME` bate com o horário do evento; se não gerar, ajustar o design D6 e a spec antes de seguir. Verificar com o resultado registrado
 
 ## 8. Servidor MCP e orientação ao agente

@@ -33,6 +33,17 @@ function hoursOf(days: Partial<Record<WeekDay, Array<[string, string]>>>): Busin
   };
 }
 
+/** Atividade `CRM_TODO` que o Bitrix24 gera para um evento do Calendário vinculado ao cliente. */
+interface PortalActivity {
+  OWNER_TYPE_ID: number;
+  OWNER_ID: number;
+  PROVIDER_ID: string;
+  START_TIME: string;
+  END_TIME: string;
+  RESPONSIBLE_ID: number;
+  SUBJECT?: string;
+}
+
 interface PortalEvent {
   ACCESSIBILITY: string;
   DATE_FROM_TS_UTC: string;
@@ -77,8 +88,20 @@ function setup(
     /** Usuários ativos do portal: id → nome. */
     users?: Record<number, string>;
     events?: Record<number, PortalEvent[]>;
-    client?: ReturnType<typeof maria> | { found: false };
+    client?:
+      | { found: false }
+      | {
+          found: true;
+          type: 'contact' | 'lead' | 'company';
+          id: number;
+          name: string | null;
+          userId: number | null;
+        };
     failWith?: { method: string; error: Error };
+    /** Atividades do CRM do portal simulado (`crm.activity.list`). */
+    activities?: PortalActivity[];
+    /** O portal ignora os filtros do pedido e devolve tudo: prova a reconferência no código. */
+    ignoreFilter?: boolean;
     /** Erro de `calendar.event.add` (pode ser trocado depois pelo teste). */
     failAdd?: Error;
     ratePerMinute?: number;
@@ -109,6 +132,28 @@ function setup(
       if (method === 'calendar.accessibility.get') {
         const wanted = params.users as number[];
         return { result: Object.fromEntries(wanted.map((id) => [String(id), events[id] ?? []])) };
+      }
+      if (method === 'crm.activity.list') {
+        const filter = params.filter as Record<string, unknown>;
+        const responsibles = filter.RESPONSIBLE_ID as number[] | undefined;
+        const select = params.select as string[];
+        const rows = (options.activities ?? []).filter(
+          (row) =>
+            options.ignoreFilter ||
+            (row.OWNER_TYPE_ID === filter.OWNER_TYPE_ID &&
+              row.OWNER_ID === filter.OWNER_ID &&
+              row.PROVIDER_ID === filter.PROVIDER_ID &&
+              (!responsibles || responsibles.includes(row.RESPONSIBLE_ID)) &&
+              Date.parse(row.START_TIME) >= Date.parse(String(filter['>=START_TIME'])) &&
+              Date.parse(row.START_TIME) <= Date.parse(String(filter['<=START_TIME']))),
+        );
+        // Só os campos pedidos em `select`, como o Bitrix24.
+        return {
+          result: rows.map((row) =>
+            Object.fromEntries(select.map((field) => [field, (row as never)[field]])),
+          ),
+          total: rows.length,
+        };
       }
       if (method === 'calendar.event.add') {
         // Dá a vez a outras chamadas, como uma resposta de rede.
@@ -769,6 +814,301 @@ describe('CalendarToolsService.book', () => {
     bitrix.call.mockClear();
     const third = await service.book(caller, ask({ inicio: '2026-11-24 10:00' }));
     expect(third.outcome).toBe('rate_limited');
+    expect(bitrix.call).not.toHaveBeenCalled();
+  });
+});
+
+describe('CalendarToolsService.clientAppointments', () => {
+  /** Compromisso de `hhmm` locais (São Paulo) em `day`, escrito como o portal: deslocamento +03:00. */
+  const todo = (
+    day: string,
+    hour: number,
+    overrides: Partial<PortalActivity> & { minutes?: number } = {},
+  ): PortalActivity => {
+    const startUtc = Date.parse(`${day}T${String(hour).padStart(2, '0')}:00:00-03:00`);
+    const portal = (ms: number) =>
+      new Date(ms + 3 * 3600_000).toISOString().replace(/\.\d{3}Z$/, '+03:00');
+    return {
+      OWNER_TYPE_ID: 3,
+      OWNER_ID: 12,
+      PROVIDER_ID: 'CRM_TODO',
+      START_TIME: portal(startUtc),
+      END_TIME: portal(startUtc + (overrides.minutes ?? 30) * 60_000),
+      RESPONSIBLE_ID: 508,
+      ...overrides,
+    };
+  };
+  const list = (service: CalendarToolsService, cliente: unknown = 'ref-maria') =>
+    service.clientAppointments(caller, { cliente });
+  const shown = (body: Record<string, unknown>) =>
+    (body.agendamentos as Array<Record<string, unknown>>).map(
+      (item) => `${item.data} ${item.hora_inicio}-${item.hora_fim} ${item.com}`,
+    );
+
+  it('devolve os compromissos futuros do cliente, do mais próximo ao mais distante', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: [todo('2026-12-02', 15), todo('2026-11-25', 10, { minutes: 45 })],
+    });
+    const result = await list(service);
+    expect(result.outcome).toBe('ok');
+    expect(result.count).toBe(2);
+    expect(shown(result.body)).toEqual([
+      '2026-11-25 10:00-10:45 Ana Lima',
+      '2026-12-02 15:00-15:30 Ana Lima',
+    ]);
+    expect(result.body.agendamentos).toMatchObject([
+      { dia_da_semana: 'quarta-feira', duracao_minutos: 45 },
+      { dia_da_semana: 'quarta-feira', duracao_minutos: 30 },
+    ]);
+    expect(result.body.fuso_horario).toBe(SP);
+  });
+
+  it('o instante vem do portal com o deslocamento dele e é mostrado no fuso da agenda', async () => {
+    const { service } = setup({ client: maria(null), activities: [todo('2026-11-25', 9)] });
+    const [first] = (await list(service)).body.agendamentos as Array<Record<string, unknown>>;
+    // O portal escreve 15:00+03:00 (= 09:00 em São Paulo): a agenda mostra 09:00.
+    expect(first).toMatchObject({ data: '2026-11-25', hora_inicio: '09:00', hora_fim: '09:30' });
+  });
+
+  it('pede ao CRM só o necessário: dono, provedor, responsáveis e janela de 60 dias, sem título', async () => {
+    const { service, portalCalls } = setup({ client: maria(null), activities: [] });
+    await list(service);
+    expect(portalCalls('crm.activity.list')[0]!.params).toEqual({
+      filter: {
+        OWNER_TYPE_ID: 3,
+        OWNER_ID: 12,
+        PROVIDER_ID: 'CRM_TODO',
+        RESPONSIBLE_ID: [508],
+        '>=START_TIME': '2026-11-24T10:00:00+00:00',
+        '<=START_TIME': '2027-01-23T10:00:00+00:00',
+      },
+      order: { START_TIME: 'ASC' },
+      select: ['ID', 'START_TIME', 'END_TIME', 'RESPONSIBLE_ID'],
+    });
+  });
+
+  it('título e descrição nunca aparecem, nem de compromisso privado', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: [todo('2026-11-25', 10, { SUBJECT: 'Consulta confidencial com o Dr. Almeida' })],
+    });
+    const result = await list(service);
+    expect(result.count).toBe(1);
+    expect(JSON.stringify(result.body)).not.toMatch(
+      /confidencial|Almeida|SUBJECT|titulo|descricao/i,
+    );
+    expect(Object.keys((result.body.agendamentos as object[])[0]!).sort()).toEqual([
+      'com',
+      'data',
+      'dia_da_semana',
+      'duracao_minutos',
+      'hora_fim',
+      'hora_inicio',
+    ]);
+  });
+
+  it('sem compromissos futuros: responde sem erro', async () => {
+    const { service } = setup({ client: maria(null), activities: [] });
+    const result = await list(service);
+    expect(result.outcome).toBe('ok');
+    expect(result.count).toBe(0);
+    expect(result.body).toMatchObject({ agendamentos: [] });
+    expect(result.body.mensagem).toContain('Não há agendamentos futuros');
+  });
+
+  it('responsável que não é das agendas do agente: não aparece, mesmo que o portal devolva', async () => {
+    // O portal "esquece" o filtro e devolve o de um usuário de fora: o código descarta.
+    const { service } = setup({
+      client: maria(null),
+      ignoreFilter: true,
+      activities: [todo('2026-11-25', 10, { RESPONSIBLE_ID: 999 }), todo('2026-11-26', 10)],
+    });
+    const result = await list(service);
+    expect(shown(result.body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+  });
+
+  it('fora da janela (passado ou além de 60 dias): não aparece, mesmo que o portal devolva', async () => {
+    const { service } = setup({
+      client: maria(null),
+      ignoreFilter: true,
+      activities: [
+        todo('2026-11-20', 10), // já passou
+        todo('2026-11-24', 6), // hoje, antes de agora (07:00 locais)
+        todo('2027-02-10', 10), // além dos 60 dias
+        todo('2026-12-10', 10),
+      ],
+    });
+    const result = await list(service);
+    expect(shown(result.body)).toEqual(['2026-12-10 10:00-10:30 Ana Lima']);
+  });
+
+  it.each([
+    ['contato', 'contact', 3],
+    ['lead', 'lead', 1],
+    ['empresa', 'company', 4],
+  ] as const)(
+    'vínculo com %s: pergunta pelo tipo de dono certo do CRM',
+    async (_nome, type, ownerType) => {
+      const { service, portalCalls } = setup({
+        client: { ...maria(null), type, id: 77 },
+        activities: [todo('2026-11-25', 10, { OWNER_TYPE_ID: ownerType, OWNER_ID: 77 })],
+      });
+      const result = await list(service);
+      expect(portalCalls('crm.activity.list')[0]!.params.filter).toMatchObject({
+        OWNER_TYPE_ID: ownerType,
+        OWNER_ID: 77,
+      });
+      expect(result.count).toBe(1);
+    },
+  );
+
+  it('compromisso de outro cliente não aparece', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: [todo('2026-11-25', 10, { OWNER_ID: 13 }), todo('2026-11-26', 10)],
+    });
+    expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+  });
+
+  it('devolve no máximo 10 e avisa que há mais', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: Array.from({ length: 12 }, (_, i) =>
+        todo('2026-12-01', 8 + (i % 10), { minutes: 10 + i }),
+      ),
+    });
+    const result = await list(service);
+    expect(result.count).toBe(10);
+    expect(result.body.ha_mais).toBe(true);
+  });
+
+  it('exatamente 10: sem aviso de que há mais', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: Array.from({ length: 10 }, (_, i) => todo('2026-12-01', 8 + i)),
+    });
+    const result = await list(service);
+    expect(result.count).toBe(10);
+    expect(result.body.ha_mais).toBeUndefined();
+  });
+
+  it('linhas sem horário válido são ignoradas', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: [
+        { ...todo('2026-11-25', 10), START_TIME: '' },
+        { ...todo('2026-11-25', 11), END_TIME: 'sem data' },
+        todo('2026-11-26', 10),
+      ],
+      ignoreFilter: true,
+    });
+    expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+  });
+
+  describe('de quem são as agendas', () => {
+    it('lista de usuários: junta os compromissos dos dois, cada um com o seu nome', async () => {
+      const { service, portalCalls } = setup({
+        client: maria(null),
+        row: config({ mode: 'USER_LIST', userIds: [508, 418] }),
+        activities: [todo('2026-11-25', 10, { RESPONSIBLE_ID: 418 }), todo('2026-11-26', 10)],
+      });
+      const result = await list(service);
+      expect(
+        (portalCalls('crm.activity.list')[0]!.params.filter as Record<string, unknown>)
+          .RESPONSIBLE_ID,
+      ).toEqual([508, 418]);
+      expect(shown(result.body)).toEqual([
+        '2026-11-25 10:00-10:30 Bruno Reis',
+        '2026-11-26 10:00-10:30 Ana Lima',
+      ]);
+    });
+
+    it('responsável do cliente: só os compromissos dele', async () => {
+      const { service, portalCalls } = setup({
+        client: maria(418),
+        row: config({ mode: 'CLIENT_OWNER', userIds: [] }),
+        activities: [
+          todo('2026-11-25', 10, { RESPONSIBLE_ID: 418 }),
+          todo('2026-11-26', 10, { RESPONSIBLE_ID: 508 }),
+        ],
+      });
+      const result = await list(service);
+      expect(
+        (portalCalls('crm.activity.list')[0]!.params.filter as Record<string, unknown>)
+          .RESPONSIBLE_ID,
+      ).toEqual([418]);
+      expect(shown(result.body)).toEqual(['2026-11-25 10:00-10:30 Bruno Reis']);
+    });
+
+    it('responsável do cliente ausente: não há agenda e o CRM não é consultado', async () => {
+      const { service, portalCalls } = setup({
+        client: maria(null),
+        row: config({ mode: 'CLIENT_OWNER', userIds: [] }),
+      });
+      const result = await list(service);
+      expect(result.outcome).toBe('not_found');
+      expect(result.body.erro).toContain('Não há agenda');
+      expect(portalCalls('crm.activity.list')).toEqual([]);
+    });
+
+    it('usuário inativo da lista: seus compromissos não aparecem', async () => {
+      const { service } = setup({
+        client: maria(null),
+        row: config({ mode: 'USER_LIST', userIds: [508, 418] }),
+        users: { 508: 'Ana Lima' },
+        ignoreFilter: true,
+        activities: [todo('2026-11-25', 10, { RESPONSIBLE_ID: 418 }), todo('2026-11-26', 10)],
+      });
+      expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+    });
+  });
+
+  it('referência inválida ou de outro tenant: cliente não encontrado, sem consultar o CRM', async () => {
+    const { service, bitrix } = setup({ client: { found: false } });
+    const result = await list(service, 'de-outro-tenant');
+    expect(result.outcome).toBe('not_found');
+    expect(result.body.erro).toContain('Cliente não encontrado');
+    expect(bitrix.call).not.toHaveBeenCalled();
+  });
+
+  it('sem configuração de agenda: não consulta nada', async () => {
+    const { service, bitrix } = setup({ row: null });
+    const result = await list(service);
+    expect(result.body.erro).toContain('não está configurada');
+    expect(bitrix.call).not.toHaveBeenCalled();
+  });
+
+  it('Bitrix24 fora do ar: responde indisponibilidade temporária', async () => {
+    const { service } = setup({
+      client: maria(null),
+      failWith: {
+        method: 'crm.activity.list',
+        error: new BitrixError('UNAVAILABLE', 'crm.activity.list', 'NETWORK_ERROR', 'fora'),
+      },
+    });
+    const result = await list(service);
+    expect(result.outcome).toBe('unavailable');
+    expect(result.body.erro).toContain('temporariamente indisponíveis');
+  });
+
+  it('é só leitura e não mexe no aviso de escopo do calendário', async () => {
+    const { service, scope, portalCalls } = setup({
+      client: maria(null),
+      row: config({ lastScopeErrorAt: new Date() }),
+      activities: [todo('2026-11-25', 10)],
+    });
+    await list(service);
+    expect(scope.markScopeMissing).not.toHaveBeenCalled();
+    expect(scope.clearScopeMissing).not.toHaveBeenCalled();
+    expect(portalCalls('calendar.event.add')).toEqual([]);
+  });
+
+  it('soma no limite por agente das demais ferramentas', async () => {
+    const { service, bitrix } = setup({ client: maria(null), ratePerMinute: 1 });
+    await list(service);
+    bitrix.call.mockClear();
+    expect((await list(service)).outcome).toBe('rate_limited');
     expect(bitrix.call).not.toHaveBeenCalled();
   });
 });
