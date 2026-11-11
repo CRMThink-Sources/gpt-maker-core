@@ -46,7 +46,10 @@ Chamado com `DIALOG_ID` (`chat9498`). Resposta real (2026-10-01), só os campos 
 
 ## Escopos da instalação
 
-O app precisa de `imbot`, `imopenlines`, `im`, `crm`, `task`, `bizproc` e `user` (tarefa 6.1).
+O app precisa de `imbot`, `imopenlines`, `im`, `crm`, `task`, `bizproc`, `user` e, para o agendamento
+do agente (change `agent-calendar-scheduling`), `calendar`. Sem `calendar`, `calendar.*` responde
+`insufficient_scope` (`BitrixError.isScopeMissing`); o escopo é incluído no cadastro do app no
+Bitrix24/plataforma e exige reinstalar.
 Para conferir os concedidos, chame o método `scope` com o token da instalação. Em 2026-10-01, a
 instalação de teste (`2017`) tinha só `crm`, `imbot`, `imopenlines`, `im`, `user_brief` e
 `placement`. Sem `task`, o `tasks.task.add` responde `insufficient_scope`, e o mesmo vale para o

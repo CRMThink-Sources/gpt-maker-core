@@ -84,6 +84,20 @@ describe('BitrixClient', () => {
     expect(invalid.fetchFn).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['calendar.event.add', 'insufficient_scope', true],
+    ['calendar.accessibility.get', 'insufficient_scope', true],
+    ['calendar.event.add', 'ERROR_CORE', false],
+  ])('%s com %s: escopo ausente = %s, sem nova tentativa', async (method, code, missing) => {
+    const { client, fetchFn } = setup([
+      json(403, { error: code, error_description: 'The request requires higher privileges' }),
+    ]);
+    const error = await client.call(1001, method, {}).catch((e: unknown) => e);
+    expect(error).toMatchObject({ kind: 'API_ERROR', code });
+    expect((error as { isScopeMissing: boolean }).isScopeMissing).toBe(missing);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('sem vaga no rate limiter do portal ⇒ RATE_LIMITED sem chamar o Bitrix', async () => {
     const acquire = vi.fn(async () => {
       throw new RateLimitExceededError('bitrix:1001');
