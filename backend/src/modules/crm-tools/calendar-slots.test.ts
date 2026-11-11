@@ -10,6 +10,8 @@ import {
   localParts,
   searchWindow,
   slotViolation,
+  spokenTime,
+  spokenWhen,
   type SlotQuery,
   zonedToEpoch,
 } from './calendar-slots';
@@ -472,5 +474,47 @@ describe('eventInterval (período real de um evento do portal)', () => {
     ['fim antes do início', { fromTs: 20, toTs: 10 }],
   ])('%s: ignora o evento', (_caso, event) => {
     expect(eventInterval({ ...event, timezone: 'America/Sao_Paulo' })).toBeNull();
+  });
+});
+
+describe('spokenTime e spokenWhen (como o agente fala com o cliente)', () => {
+  it.each([
+    ['09:00', '9h'],
+    ['09:30', '9h30'],
+    ['10:05', '10h05'],
+    ['14:00', '14h'],
+    ['00:00', '0h'],
+    ['23:45', '23h45'],
+  ])('hora %s vira "%s"', (hora, expected) => {
+    expect(spokenTime(hora)).toBe(expected);
+  });
+
+  it.each([
+    ['2026-11-12', '09:30', 'quinta-feira, 12 de novembro, às 9h30'],
+    ['2026-11-12', '09:00', 'quinta-feira, 12 de novembro, às 9h'],
+    ['2026-11-24', '14:00', 'terça-feira, 24 de novembro, às 14h'],
+    ['2026-12-01', '10:00', 'terça-feira, 1 de dezembro, às 10h'],
+    ['2026-11-21', '08:15', 'sábado, 21 de novembro, às 8h15'],
+    ['2026-11-22', '16:00', 'domingo, 22 de novembro, às 16h'],
+    ['2026-03-02', '11:00', 'segunda-feira, 2 de março, às 11h'],
+    ['2026-11-12', '01:30', 'quinta-feira, 12 de novembro, à 1h30'],
+  ])('%s %s vira "%s"', (date, hora, expected) => {
+    expect(spokenWhen(date, hora)).toBe(expected);
+  });
+
+  it('cita o ano só quando não é o corrente', () => {
+    expect(spokenWhen('2026-11-12', '09:30', 2026)).toBe('quinta-feira, 12 de novembro, às 9h30');
+    expect(spokenWhen('2027-01-12', '09:30', 2026)).toBe(
+      'terça-feira, 12 de janeiro de 2027, às 9h30',
+    );
+  });
+
+  it('nunca traz a data no formato AAAA-MM-DD nem a hora no formato HH:mm', () => {
+    for (const [date, hora] of [
+      ['2026-11-12', '09:30'],
+      ['2027-02-03', '17:00'],
+    ] as const) {
+      expect(spokenWhen(date, hora, 2026)).not.toMatch(/\d{4}-\d{2}-\d{2}|\d{2}:\d{2}/);
+    }
   });
 });

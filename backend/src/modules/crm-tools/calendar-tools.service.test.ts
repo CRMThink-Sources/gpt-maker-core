@@ -6,6 +6,7 @@ import type { Env } from '../../config/env';
 import type { Database } from '../../shared/database/database.module';
 import { BitrixError } from '../bitrix';
 import type { CalendarConfigRow } from './calendar-config.repository';
+import { spokenTime, spokenWhen } from './calendar-slots';
 import { CalendarToolsService } from './calendar-tools.service';
 import { CRM_GUIDANCE_DEFAULTS } from './crm-guidance.defaults';
 import type { CrmGuidanceService } from './crm-guidance.service';
@@ -225,10 +226,25 @@ function setup(
   return { service, bitrix, crm, scope, calls, portalCalls, created, state, redis };
 }
 
+/** Hora `HH:mm` mais `minutes` minutos. */
+const plus = (hora: string, minutes: number) => {
+  const total = Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5)) + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+/** Os horários da resposta como `AAAA-MM-DD HH:mm-HH:mm`, a partir do valor interno e da duração. */
 const hoursOnly = (body: Record<string, unknown>) =>
-  (body.horarios as Array<Record<string, string>>).map(
-    (slot) => `${slot.data} ${slot.hora_inicio}-${slot.hora_fim}`,
-  );
+  (body.horarios as Array<Record<string, string>>).map((slot) => {
+    const [day, hora] = String(slot.usar_ao_agendar).split(' ') as [string, string];
+    return `${day} ${hora}-${plus(hora, Number(body.duracao_minutos))}`;
+  });
+/** Início `HH:mm` de cada horário (da lista `horarios` ou `alternativas`). */
+const slotStarts = (slots: unknown) =>
+  (slots as Array<Record<string, string>>).map((slot) => String(slot.usar_ao_agendar).slice(11));
+/** Expectativa no formato falado a partir de `AAAA-MM-DD HH:mm-HH:mm Nome`. */
+const w = (text: string) => {
+  const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})-(\d{2}:\d{2}) (.+)$/.exec(text)!;
+  return `${spokenWhen(match[1]!, match[2]!, 2026)} até ${spokenTime(match[3]!)} · ${match[4]}`;
+};
 
 describe('CalendarToolsService.freeSlots', () => {
   it('sem configuração de agenda: responde que não está configurada e não consulta o Bitrix24', async () => {
@@ -263,7 +279,8 @@ describe('CalendarToolsService.freeSlots', () => {
       (result.body.horarios as Array<{ com: string; dia_da_semana: string }>)[0],
     ).toMatchObject({
       com: 'Ana Lima',
-      dia_da_semana: 'terça-feira',
+      quando: 'terça-feira, 24 de novembro, às 9h',
+      termina_as: '9h30',
     });
     expect(result.body.orientacao).toContain('agendar_compromisso');
     // Só datas na API do Bitrix24, com um dia de folga de cada lado; filtro de usuário ativo.
@@ -371,9 +388,12 @@ describe('CalendarToolsService.freeSlots', () => {
       });
       const result = await service.freeSlots(caller);
       expect(portalCalls('calendar.accessibility.get')[0]!.params.users).toEqual([508, 418]);
-      const [first, second] = result.body.horarios as Array<{ hora_inicio: string; com: string }>;
-      expect(first).toMatchObject({ hora_inicio: '09:00', com: 'Bruno Reis' });
-      expect(second).toMatchObject({ hora_inicio: '09:30', com: 'Ana Lima' });
+      const [first, second] = result.body.horarios as Array<{
+        usar_ao_agendar: string;
+        com: string;
+      }>;
+      expect(first).toMatchObject({ usar_ao_agendar: '2026-11-24 09:00', com: 'Bruno Reis' });
+      expect(second).toMatchObject({ usar_ao_agendar: '2026-11-24 09:30', com: 'Ana Lima' });
     });
 
     it('usuário inativo da lista é ignorado', async () => {
@@ -521,10 +541,8 @@ describe('CalendarToolsService.book', () => {
     expect(result.outcome).toBe('ok');
     expect(result.body).toMatchObject({
       agendado: true,
-      data: '2026-11-24',
-      dia_da_semana: 'terça-feira',
-      hora_inicio: '09:00',
-      hora_fim: '09:30',
+      quando: 'terça-feira, 24 de novembro, às 9h',
+      termina_as: '9h30',
       duracao_minutos: 30,
       fuso_horario: SP,
       com: 'Ana Lima',
@@ -558,12 +576,10 @@ describe('CalendarToolsService.book', () => {
       [
         'agendado',
         'com',
-        'data',
-        'dia_da_semana',
         'duracao_minutos',
         'fuso_horario',
-        'hora_fim',
-        'hora_inicio',
+        'quando',
+        'termina_as',
         'mensagem',
       ].sort(),
     );
@@ -636,8 +652,7 @@ describe('CalendarToolsService.book', () => {
 
     expect(result.outcome).toBe('not_found');
     expect(result.body.erro).toBe('Esse horário não está mais disponível.');
-    const alternatives = result.body.alternativas as Array<{ hora_inicio: string }>;
-    expect(alternatives.map((slot) => slot.hora_inicio)).toEqual(['09:30', '10:00', '10:30']);
+    expect(slotStarts(result.body.alternativas)).toEqual(['09:30', '10:00', '10:30']);
     expect(created).toEqual([]);
   });
 
@@ -877,7 +892,7 @@ describe('CalendarToolsService.clientAppointments', () => {
     service.clientAppointments(caller, { cliente });
   const shown = (body: Record<string, unknown>) =>
     (body.agendamentos as Array<Record<string, unknown>>).map(
-      (item) => `${item.data} ${item.hora_inicio}-${item.hora_fim} ${item.com}`,
+      (item) => `${item.quando} até ${item.termina_as} · ${item.com}`,
     );
 
   it('devolve os compromissos futuros do cliente, do mais próximo ao mais distante', async () => {
@@ -889,12 +904,12 @@ describe('CalendarToolsService.clientAppointments', () => {
     expect(result.outcome).toBe('ok');
     expect(result.count).toBe(2);
     expect(shown(result.body)).toEqual([
-      '2026-11-25 10:00-10:45 Ana Lima',
-      '2026-12-02 15:00-15:30 Ana Lima',
+      w('2026-11-25 10:00-10:45 Ana Lima'),
+      w('2026-12-02 15:00-15:30 Ana Lima'),
     ]);
     expect(result.body.agendamentos).toMatchObject([
-      { dia_da_semana: 'quarta-feira', duracao_minutos: 45 },
-      { dia_da_semana: 'quarta-feira', duracao_minutos: 30 },
+      { quando: 'quarta-feira, 25 de novembro, às 10h', duracao_minutos: 45 },
+      { quando: 'quarta-feira, 2 de dezembro, às 15h', duracao_minutos: 30 },
     ]);
     expect(result.body.fuso_horario).toBe(SP);
   });
@@ -903,7 +918,10 @@ describe('CalendarToolsService.clientAppointments', () => {
     const { service } = setup({ client: maria(null), activities: [todo('2026-11-25', 9)] });
     const [first] = (await list(service)).body.agendamentos as Array<Record<string, unknown>>;
     // O portal escreve 15:00+03:00 (= 09:00 em São Paulo): a agenda mostra 09:00.
-    expect(first).toMatchObject({ data: '2026-11-25', hora_inicio: '09:00', hora_fim: '09:30' });
+    expect(first).toMatchObject({
+      quando: 'quarta-feira, 25 de novembro, às 9h',
+      termina_as: '9h30',
+    });
   });
 
   it('pede ao CRM só o necessário: dono, provedor, responsáveis e janela de 60 dias, sem título', async () => {
@@ -935,11 +953,9 @@ describe('CalendarToolsService.clientAppointments', () => {
     );
     expect(Object.keys((result.body.agendamentos as object[])[0]!).sort()).toEqual([
       'com',
-      'data',
-      'dia_da_semana',
       'duracao_minutos',
-      'hora_fim',
-      'hora_inicio',
+      'quando',
+      'termina_as',
     ]);
   });
 
@@ -960,7 +976,7 @@ describe('CalendarToolsService.clientAppointments', () => {
       activities: [todo('2026-11-25', 10, { RESPONSIBLE_ID: 999 }), todo('2026-11-26', 10)],
     });
     const result = await list(service);
-    expect(shown(result.body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+    expect(shown(result.body)).toEqual([w('2026-11-26 10:00-10:30 Ana Lima')]);
   });
 
   it('fora da janela (passado ou além de 60 dias): não aparece, mesmo que o portal devolva', async () => {
@@ -975,7 +991,7 @@ describe('CalendarToolsService.clientAppointments', () => {
       ],
     });
     const result = await list(service);
-    expect(shown(result.body)).toEqual(['2026-12-10 10:00-10:30 Ana Lima']);
+    expect(shown(result.body)).toEqual([w('2026-12-10 10:00-10:30 Ana Lima')]);
   });
 
   it.each([
@@ -1003,7 +1019,7 @@ describe('CalendarToolsService.clientAppointments', () => {
       client: maria(null),
       activities: [todo('2026-11-25', 10, { OWNER_ID: 13 }), todo('2026-11-26', 10)],
     });
-    expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+    expect(shown((await list(service)).body)).toEqual([w('2026-11-26 10:00-10:30 Ana Lima')]);
   });
 
   it('devolve no máximo 10 e avisa que há mais', async () => {
@@ -1038,7 +1054,7 @@ describe('CalendarToolsService.clientAppointments', () => {
       ],
       ignoreFilter: true,
     });
-    expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+    expect(shown((await list(service)).body)).toEqual([w('2026-11-26 10:00-10:30 Ana Lima')]);
   });
 
   describe('de quem são as agendas', () => {
@@ -1054,8 +1070,8 @@ describe('CalendarToolsService.clientAppointments', () => {
           .RESPONSIBLE_ID,
       ).toEqual([508, 418]);
       expect(shown(result.body)).toEqual([
-        '2026-11-25 10:00-10:30 Bruno Reis',
-        '2026-11-26 10:00-10:30 Ana Lima',
+        w('2026-11-25 10:00-10:30 Bruno Reis'),
+        w('2026-11-26 10:00-10:30 Ana Lima'),
       ]);
     });
 
@@ -1073,7 +1089,7 @@ describe('CalendarToolsService.clientAppointments', () => {
         (portalCalls('crm.activity.list')[0]!.params.filter as Record<string, unknown>)
           .RESPONSIBLE_ID,
       ).toEqual([418]);
-      expect(shown(result.body)).toEqual(['2026-11-25 10:00-10:30 Bruno Reis']);
+      expect(shown(result.body)).toEqual([w('2026-11-25 10:00-10:30 Bruno Reis')]);
     });
 
     it('responsável do cliente ausente: não há agenda e o CRM não é consultado', async () => {
@@ -1095,7 +1111,7 @@ describe('CalendarToolsService.clientAppointments', () => {
         ignoreFilter: true,
         activities: [todo('2026-11-25', 10, { RESPONSIBLE_ID: 418 }), todo('2026-11-26', 10)],
       });
-      expect(shown((await list(service)).body)).toEqual(['2026-11-26 10:00-10:30 Ana Lima']);
+      expect(shown((await list(service)).body)).toEqual([w('2026-11-26 10:00-10:30 Ana Lima')]);
     });
   });
 
@@ -1309,8 +1325,7 @@ describe('ocupação lida do portal (o timestamp não é UTC)', () => {
     '~USER_OFFSET_FROM': userOffset,
     TZ_FROM: timezone,
   });
-  const starts = (body: Record<string, unknown>) =>
-    (body.horarios as Array<Record<string, string>>).map((slot) => slot.hora_inicio);
+  const starts = (body: Record<string, unknown>) => slotStarts(body.horarios);
   // 10:00–11:00 em Nova York = 15:00Z–16:00Z = 12:00–13:00 em São Paulo.
   const newYork = () =>
     eventIn('America/New_York', -7200, '2026-11-24T15:00:00Z', '2026-11-24T16:00:00Z');
@@ -1392,5 +1407,114 @@ describe('ocupação lida do portal (o timestamp não é UTC)', () => {
       events: { 508: [free] },
     });
     expect((await service.freeSlots(caller)).count).toBe(6);
+  });
+});
+
+describe('o que o agente fala ao cliente: data e hora por extenso', () => {
+  /** Nenhum valor que o agente poderia repetir ao cliente traz `2026-11-12` nem `09:30`. */
+  const raw = /\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2}/;
+  const withoutZone = (body: Record<string, unknown>) => {
+    const copy = { ...body };
+    delete copy.fuso_horario;
+    return JSON.stringify(copy);
+  };
+  const withoutInternal = (items: unknown) =>
+    JSON.stringify(
+      (items as Array<Record<string, unknown>>).map(
+        ({ usar_ao_agendar: _internal, ...rest }) => rest,
+      ),
+    );
+
+  it('horários livres: "quando" por extenso, e o valor cru só em "usar_ao_agendar"', async () => {
+    const { service } = setup();
+    const { body } = await service.freeSlots(caller);
+    const slots = body.horarios as Array<Record<string, string>>;
+    expect(slots.map((slot) => slot.quando).slice(0, 3)).toEqual([
+      'terça-feira, 24 de novembro, às 9h',
+      'terça-feira, 24 de novembro, às 9h30',
+      'terça-feira, 24 de novembro, às 10h',
+    ]);
+    expect(slots[0]).toEqual({
+      quando: 'terça-feira, 24 de novembro, às 9h',
+      termina_as: '9h30',
+      com: 'Ana Lima',
+      usar_ao_agendar: '2026-11-24 09:00',
+    });
+    // Tudo que não é o valor interno está em linguagem falada.
+    expect(withoutInternal(slots)).not.toMatch(raw);
+  });
+
+  it('os horários não trazem os campos antigos, que o agente repetia como vinham', async () => {
+    const { service } = setup();
+    const slot = ((await service.freeSlots(caller)).body.horarios as Array<object>)[0]!;
+    for (const old of ['data', 'hora_inicio', 'hora_fim', 'dia_da_semana']) {
+      expect(slot).not.toHaveProperty(old);
+    }
+  });
+
+  it('o valor interno é exatamente o que agendar_compromisso aceita', async () => {
+    const { service, created } = setup({ client: maria(null) });
+    const first = (
+      (await service.freeSlots(caller)).body.horarios as Array<Record<string, string>>
+    )[1]!;
+    const booked = await service.book(caller, { cliente: 'ref', inicio: first.usar_ao_agendar });
+    expect(booked.outcome).toBe('ok');
+    expect(booked.body.quando).toBe(first.quando);
+    expect(created).toHaveLength(1);
+  });
+
+  it('alternativas também vêm por extenso', async () => {
+    const { service } = setup({
+      client: maria(null),
+      events: { 508: [event('busy', '2026-11-24T12:00:00Z', '2026-11-24T12:30:00Z')] },
+    });
+    const { body } = await service.book(caller, { cliente: 'ref', inicio: '2026-11-24 09:00' });
+    expect(withoutInternal(body.alternativas)).not.toMatch(raw);
+    expect((body.alternativas as Array<Record<string, string>>)[0]!.quando).toBe(
+      'terça-feira, 24 de novembro, às 9h30',
+    );
+  });
+
+  it('confirmação do agendamento: data e hora por extenso, sem formato cru', async () => {
+    const { service } = setup({ client: maria(null) });
+    const { body } = await service.book(caller, { cliente: 'ref', inicio: '2026-11-24 09:30' });
+    expect(body.quando).toBe('terça-feira, 24 de novembro, às 9h30');
+    expect(body.termina_as).toBe('10h');
+    expect(withoutZone(body)).not.toMatch(raw);
+  });
+
+  it('compromissos do cliente: por extenso, sem formato cru', async () => {
+    const { service } = setup({
+      client: maria(null),
+      activities: [
+        {
+          OWNER_TYPE_ID: 3,
+          OWNER_ID: 12,
+          PROVIDER_ID: 'CRM_TODO',
+          START_TIME: '2026-11-25T16:00:00+03:00',
+          END_TIME: '2026-11-25T16:30:00+03:00',
+          RESPONSIBLE_ID: 508,
+        },
+      ],
+    });
+    const { body } = await service.clientAppointments(caller, { cliente: 'ref' });
+    expect(withoutZone(body)).not.toMatch(raw);
+    expect((body.agendamentos as Array<Record<string, string>>)[0]!.quando).toBe(
+      'quarta-feira, 25 de novembro, às 10h',
+    );
+  });
+
+  it('em outro ano a data cita o ano', async () => {
+    // Terça 29/12/2026; a próxima sexta é 1º de janeiro de 2027.
+    const { service } = setup({
+      row: config({ maxDaysAhead: 7 }),
+      hours: hoursOf({ fri: [['09:00', '10:00']] }),
+    });
+    service.clock = () => Date.parse('2026-12-29T10:00:00Z');
+    const { body } = await service.freeSlots(caller);
+    expect((body.horarios as Array<Record<string, string>>).map((slot) => slot.quando)).toEqual([
+      'sexta-feira, 1 de janeiro de 2027, às 9h',
+      'sexta-feira, 1 de janeiro de 2027, às 9h30',
+    ]);
   });
 });

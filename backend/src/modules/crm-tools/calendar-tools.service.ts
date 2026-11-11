@@ -21,6 +21,8 @@ import {
   localParts,
   searchWindow,
   slotViolation,
+  spokenTime,
+  spokenWhen,
   type SlotViolation,
   zonedToEpoch,
 } from './calendar-slots';
@@ -33,16 +35,6 @@ import { ToolRunner, type ToolResult } from './tool-runner';
 
 /** Ocupam o horário: o evento está como ocupado ou ausente (livre e provisório não bloqueiam). */
 const BLOCKING = new Set(['busy', 'absent']);
-
-const WEEK_DAY_NAMES = [
-  'domingo',
-  'segunda-feira',
-  'terça-feira',
-  'quarta-feira',
-  'quinta-feira',
-  'sexta-feira',
-  'sábado',
-];
 
 /** Prefixo do vínculo de um evento do Calendário com o registro do CRM (`crm_fields`). */
 const CRM_PREFIX = { contact: 'C_', lead: 'L_', company: 'CO_' } as const;
@@ -237,10 +229,8 @@ export class CalendarToolsService {
         agendamentos: shown.map((row) => {
           const start = localParts(row.start, hours.timezone);
           return {
-            data: start.data,
-            dia_da_semana: weekDayName(start.data),
-            hora_inicio: start.hora,
-            hora_fim: localParts(row.end, hours.timezone).hora,
+            quando: spokenWhen(start.data, start.hora, currentYear(now, hours.timezone)),
+            termina_as: spokenTime(localParts(row.end, hours.timezone).hora),
             duracao_minutos: Math.max(0, Math.round((row.end - row.start) / 60_000)),
             com: names.get(row.owner),
           };
@@ -306,7 +296,9 @@ export class CalendarToolsService {
           fuso_horario: hours.timezone,
           duracao_minutos: cfg.slotMinutes,
           periodo: { de: window.first, ate: window.last },
-          horarios: slots.map((slot) => slotView(slot, hours.timezone, names)),
+          horarios: slots.map((slot) =>
+            slotView(slot, hours.timezone, names, currentYear(now, hours.timezone)),
+          ),
           ...(slots.length === 0
             ? { mensagem: `Não há horários disponíveis no período. ${TEAM_WILL_CONTACT}` }
             : { orientacao: (await this.guidance.current()).agenda }),
@@ -469,10 +461,8 @@ export class CalendarToolsService {
 
     const body = {
       agendado: true,
-      data: from.data,
-      dia_da_semana: weekDayName(from.data),
-      hora_inicio: from.hora,
-      hora_fim: to.hora,
+      quando: spokenWhen(from.data, from.hora, currentYear(this.clock(), hours.timezone)),
+      termina_as: spokenTime(to.hora),
       duracao_minutos: cfg.slotMinutes,
       fuso_horario: hours.timezone,
       com: owner.name,
@@ -516,7 +506,9 @@ export class CalendarToolsService {
       erro: 'Esse horário não está mais disponível.',
       fuso_horario: hours.timezone,
       duracao_minutos: cfg.slotMinutes,
-      alternativas: near.map((slot) => slotView(slot, hours.timezone, names)),
+      alternativas: near.map((slot) =>
+        slotView(slot, hours.timezone, names, currentYear(now, hours.timezone)),
+      ),
       ...(near.length === 0
         ? { mensagem: `Não há outro horário próximo disponível. ${TEAM_WILL_CONTACT}` }
         : { orientacao: (await this.guidance.current()).agenda }),
@@ -639,15 +631,23 @@ function bookedKey(caller: CrmCaller, client: Client, start: number): string {
   return `calendar:booked:${digest}`;
 }
 
-function slotView(slot: FreeSlot, timezone: string, names: Map<number, string>) {
+/**
+ * Um horário livre para o agente. `quando` é o que ele diz ao cliente; `usar_ao_agendar` é o valor
+ * interno que volta em `agendar_compromisso` (`inicio`) e que o cliente nunca deve ver.
+ */
+function slotView(slot: FreeSlot, timezone: string, names: Map<number, string>, year: number) {
   const start = localParts(slot.start, timezone);
   return {
-    data: start.data,
-    dia_da_semana: weekDayName(start.data),
-    hora_inicio: start.hora,
-    hora_fim: localParts(slot.end, timezone).hora,
+    quando: spokenWhen(start.data, start.hora, year),
+    termina_as: spokenTime(localParts(slot.end, timezone).hora),
     com: names.get(slot.ownerId),
+    usar_ao_agendar: `${start.data} ${start.hora}`,
   };
+}
+
+/** Ano corrente no fuso da agenda: a data por extenso só cita o ano quando é outro. */
+function currentYear(now: number, timezone: string): number {
+  return Number(localDate(now, timezone).slice(0, 4));
 }
 
 function invalidSlot(
@@ -710,8 +710,4 @@ function cleanSubject(value: unknown): string | null {
 /** Instante em ISO com deslocamento (`2026-11-24T10:00:00+00:00`), formato que o filtro do Bitrix24 aceita. */
 function isoWithOffset(instant: number): string {
   return new Date(instant).toISOString().replace(/\.\d{3}Z$/, '+00:00');
-}
-
-function weekDayName(date: string): string {
-  return WEEK_DAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()]!;
 }

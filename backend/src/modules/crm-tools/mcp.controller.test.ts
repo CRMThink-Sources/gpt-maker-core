@@ -42,7 +42,7 @@ class FakeCalendar {
     return {
       outcome: 'ok',
       count: 1,
-      body: { horarios: [{ data: '2026-11-24', hora_inicio: '09:00' }] },
+      body: { horarios: [{ quando: 'quinta-feira, 12 de novembro, às 9h' }] },
     };
   }
 
@@ -175,6 +175,14 @@ describe('McpController', () => {
     expect(byName.agendar_compromisso!.description).toContain('confirmar a data e a hora');
     expect(byName.agendar_compromisso!.description).toContain('horarios_livres');
     expect(byName.horarios_livres!.description).toContain('a equipe vai retornar');
+    // Data e hora por extenso para falar; o valor cru é interno e volta só em `inicio`.
+    expect(byName.horarios_livres!.description).toContain('"quando"');
+    expect(byName.horarios_livres!.description).toContain('"usar_ao_agendar"');
+    expect(byName.horarios_livres!.description).toContain('nunca deve ver');
+    const inicio = JSON.stringify(byName.agendar_compromisso!.inputSchema.properties!.inicio);
+    expect(inicio).toContain('usar_ao_agendar');
+    expect(inicio).toContain('não mostre ao cliente');
+    expect(byName.agendar_compromisso!.description).toContain('por extenso');
     await client.close();
   });
 
@@ -186,7 +194,7 @@ describe('McpController', () => {
     });
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({
-      horarios: [{ data: '2026-11-24', hora_inicio: '09:00' }],
+      horarios: [{ quando: 'quinta-feira, 12 de novembro, às 9h' }],
     });
     expect(calendar.seen.at(-1)).toEqual({
       tool: 'horarios_livres',

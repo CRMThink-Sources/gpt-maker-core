@@ -86,8 +86,10 @@ export function buildMcpServer(
     {
       title: 'Horários livres na agenda',
       description:
-        'Mostra até 10 horários livres na agenda do atendimento (Calendário do Bitrix24), com data, ' +
-        'hora e com quem será. Use quando o cliente quiser marcar um horário. Só funciona se a ' +
+        'Mostra até 10 horários livres na agenda do atendimento (Calendário do Bitrix24). Cada horário ' +
+        'traz "quando" (a data e a hora por extenso, para dizer ao cliente) e "usar_ao_agendar" (valor ' +
+        'interno para agendar_compromisso, que o cliente nunca deve ver). Use quando o cliente quiser ' +
+        'marcar um horário. Só funciona se a ' +
         'empresa configurou a agenda deste agente; se não houver agenda ou horários, avise que a ' +
         'equipe vai retornar o contato. Se a agenda for a do responsável do cliente, informe a ' +
         'referência do cliente devolvida por "Consultar cliente no CRM".',
@@ -114,8 +116,8 @@ export function buildMcpServer(
         'Marca um compromisso do cliente no Calendário do Bitrix24 em um dos horários livres. ' +
         'ANTES de usar: consulte "horarios_livres", ofereça os horários ao cliente e só chame esta ' +
         'ferramenta depois que ele confirmar a data e a hora. Precisa da referência do cliente ' +
-        'devolvida por "Consultar cliente no CRM". Depois de marcar, confirme ao cliente a data, a ' +
-        'hora e com quem será. Chamar de novo com os mesmos dados não duplica o compromisso. Se o ' +
+        'devolvida por "Consultar cliente no CRM". Depois de marcar, confirme ao cliente a data e a ' +
+        'hora por extenso (campo "quando") e com quem será. Chamar de novo com os mesmos dados não duplica o compromisso. Se o ' +
         'horário já foi ocupado, a resposta traz alternativas para oferecer.',
       inputSchema: {
         cliente: z
@@ -124,7 +126,7 @@ export function buildMcpServer(
         inicio: z
           .string()
           .describe(
-            'Início no horário da agenda, no formato AAAA-MM-DD HH:mm, igual a um dos horários de "horarios_livres" (data e hora_inicio)',
+            'Valor "usar_ao_agendar" do horário escolhido em "horarios_livres" (formato AAAA-MM-DD HH:mm, no horário da agenda). É um valor interno: não mostre ao cliente',
           ),
         assunto: z
           .string()

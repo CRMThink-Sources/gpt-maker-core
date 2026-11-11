@@ -262,3 +262,47 @@ export function eventInterval(event: PortalEventTimes): Interval | null {
   const start = base + wall.getUTCSeconds() * 1000;
   return { start, end: start + (to - from) * 1000 };
 }
+
+const SPOKEN_WEEKDAYS = [
+  'domingo',
+  'segunda-feira',
+  'terça-feira',
+  'quarta-feira',
+  'quinta-feira',
+  'sexta-feira',
+  'sábado',
+];
+const SPOKEN_MONTHS = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+/** Hora como se fala: `09:30` vira `9h30`, `14:00` vira `14h`. */
+export function spokenTime(hora: string): string {
+  const [hour, minute] = hora.split(':').map(Number) as [number, number];
+  return minute ? `${hour}h${String(minute).padStart(2, '0')}` : `${hour}h`;
+}
+
+/**
+ * Data e hora por extenso para o agente dizer ao cliente: `quinta-feira, 12 de novembro, às 9h30`.
+ * O ano só aparece quando não é o corrente (`currentYear`). Existe para o agente nunca mostrar
+ * `2026-11-12 09:30` ao cliente: esse formato é só para passar de volta ao `agendar_compromisso`.
+ */
+export function spokenWhen(date: string, hora: string, currentYear?: number): string {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  const weekday = SPOKEN_WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  const [hour] = hora.split(':').map(Number) as [number];
+  const article = hour <= 1 ? 'à' : 'às';
+  const yearText = currentYear !== undefined && year !== currentYear ? ` de ${year}` : '';
+  return `${weekday}, ${day} de ${SPOKEN_MONTHS[month - 1]}${yearText}, ${article} ${spokenTime(hora)}`;
+}

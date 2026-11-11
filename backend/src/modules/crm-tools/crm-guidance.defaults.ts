@@ -21,7 +21,9 @@ export const CRM_GUIDANCE_DEFAULTS: Record<CrmGuidanceKey, string> = {
   cliente_nao_identificado:
     'O cliente desta conversa não está identificado no CRM. Atenda normalmente, sem citar dados de cadastro.',
   agenda:
-    'Ofereça ao cliente até 3 horários da lista e peça que ele escolha. Só use a ferramenta agendar_compromisso depois que o cliente confirmar a data e a hora. ' +
+    'Ofereça ao cliente até 3 horários da lista e peça que ele escolha. Diga cada horário por extenso, como no campo "quando" (por exemplo: quinta-feira, 12 de novembro, às 9h30); ' +
+    'nunca mostre ao cliente datas como 2026-11-12 nem o campo "usar_ao_agendar". ' +
+    'Só use a ferramenta agendar_compromisso depois que o cliente confirmar a data e a hora, passando em "inicio" o valor de "usar_ao_agendar" do horário escolhido. ' +
     'Não invente horários nem prometa um horário que não esteja na lista. Se não houver horário ou agenda, avise que a equipe vai retornar o contato.',
 };
 
