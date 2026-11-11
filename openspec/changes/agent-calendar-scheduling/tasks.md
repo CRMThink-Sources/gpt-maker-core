@@ -18,9 +18,9 @@
 
 ## 4. Configuração por agente (API)
 
-- [ ] 4.1 Criar `CalendarConfigService` e repository com `tenantId` em toda query: ler, salvar, remover; validar usuários ativos do portal (`UserNamesService`/`user.get`) e exigir `agent_crm_access.status = CONNECTED`; verificar com testes de serviço: salvar, alterar, remover, usuário inexistente/inativo, CRM desativado, agente de outro tenant (404)
-- [ ] 4.2 Expor os endpoints de leitura, gravação e remoção em controller com `@AppAuth()` e DTO via `createZodDto(calendarConfigSchema)`, e devolver `scopeMissing` quando `last_scope_error_at` for recente; verificar com teste de controller e de integração (`backend/test/integration/`) cobrindo isolamento entre tenants
-- [ ] 4.3 Preservar a configuração ao desativar o CRM e voltar a usá-la ao reativar; verificar com teste de integração do ciclo desativar/reativar sem perda de dados
+- [x] 4.1 Criar `CalendarConfigService` e repository com `tenantId` em toda query: ler, salvar, remover; validar usuários ativos do portal (`UserNamesService`/`user.get`) e exigir `agent_crm_access.status = CONNECTED`; verificar com testes de serviço: salvar, alterar, remover, usuário inexistente/inativo, CRM desativado, agente de outro tenant (404)
+- [x] 4.2 Expor os endpoints de leitura, gravação e remoção em controller com `@AppAuth()` e DTO via `createZodDto(calendarConfigSchema)`, e devolver `scopeMissing` quando `last_scope_error_at` for recente; verificar com teste de controller e de integração (`backend/test/integration/`) cobrindo isolamento entre tenants
+- [x] 4.3 Preservar a configuração ao desativar o CRM e voltar a usá-la ao reativar; verificar com teste de integração do ciclo desativar/reativar sem perda de dados
 
 ## 5. Disponibilidade
 
