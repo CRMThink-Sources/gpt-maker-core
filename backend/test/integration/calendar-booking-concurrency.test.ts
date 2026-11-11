@@ -6,6 +6,8 @@ import type { Env } from '../../src/config/env';
 import { CalendarToolsService } from '../../src/modules/crm-tools/calendar-tools.service';
 import type { CalendarConfigRow } from '../../src/modules/crm-tools/calendar-config.repository';
 import type { CrmCaller } from '../../src/modules/crm-tools/crm-access.guard';
+import { CRM_GUIDANCE_DEFAULTS } from '../../src/modules/crm-tools/crm-guidance.defaults';
+import type { CrmGuidanceService } from '../../src/modules/crm-tools/crm-guidance.service';
 import type { Database } from '../../src/shared/database/database.module';
 
 const NOW = Date.parse('2026-11-24T10:00:00Z'); // terça, 07:00 em São Paulo
@@ -139,6 +141,7 @@ describe('agendamento simultâneo da mesma agenda', () => {
       fakeDb,
       redis,
       { CRM_TOOLS_RATE_PER_MINUTE: 1000 } as Env,
+      { current: async () => CRM_GUIDANCE_DEFAULTS } as CrmGuidanceService,
     );
     service.clock = () => NOW;
     return service;

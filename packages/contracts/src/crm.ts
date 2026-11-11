@@ -374,6 +374,7 @@ export const CRM_GUIDANCE_KEYS = [
   'negocios_do_cliente',
   'escopo_dados',
   'cliente_nao_identificado',
+  'agenda',
 ] as const;
 export const crmGuidanceKeySchema = z.enum(CRM_GUIDANCE_KEYS);
 export type CrmGuidanceKey = z.infer<typeof crmGuidanceKeySchema>;
@@ -383,6 +384,7 @@ export const CRM_GUIDANCE_LABELS: Record<CrmGuidanceKey, string> = {
   negocios_do_cliente: 'Negócios do cliente',
   escopo_dados: 'Escopo dos dados',
   cliente_nao_identificado: 'Cliente não identificado',
+  agenda: 'Agenda (horários e agendamento)',
 };
 
 export const CRM_GUIDANCE_MAX = 1000;

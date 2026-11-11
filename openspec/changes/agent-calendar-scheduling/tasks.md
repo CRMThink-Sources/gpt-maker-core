@@ -40,9 +40,9 @@
 
 ## 8. Servidor MCP e orientação ao agente
 
-- [ ] 8.1 Registrar `horarios_livres`, `agendar_compromisso` e `agendamentos_do_cliente` em `buildMcpServer` (descrições em português, esquemas zod, `agendar_compromisso` instruindo a confirmar data e hora com o cliente antes de chamar) e subir `TOOLS_VERSION` para `'3'`; verificar com `mcp.controller.test.ts` que as três aparecem na listagem e que o `CrmToolsSync` pede nova leitura ao GPTMaker
-- [ ] 8.2 Incluir os novos nomes em `ToolName`, nas métricas e no log sem dados pessoais, e acrescentar a orientação de agendamento em `crm-guidance.defaults.ts`; verificar com testes que o log não contém nome, título nem horário do evento e que o limite de 60/min soma as ferramentas novas e antigas
-- [ ] 8.3 Verificar que nenhuma ferramenta de consulta faz chamada de escrita e que `book` só chama `calendar.event.add`; verificar com teste que falha se o cliente simulado do Bitrix24 receber qualquer método de escrita fora desse
+- [x] 8.1 Registrar `horarios_livres`, `agendar_compromisso` e `agendamentos_do_cliente` em `buildMcpServer` (descrições em português, esquemas zod, `agendar_compromisso` instruindo a confirmar data e hora com o cliente antes de chamar) e subir `TOOLS_VERSION` para `'3'`; verificar com `mcp.controller.test.ts` que as três aparecem na listagem e que o `CrmToolsSync` pede nova leitura ao GPTMaker
+- [x] 8.2 Incluir os novos nomes em `ToolName`, nas métricas e no log sem dados pessoais, e acrescentar a orientação de agendamento em `crm-guidance.defaults.ts`; verificar com testes que o log não contém nome, título nem horário do evento e que o limite de 60/min soma as ferramentas novas e antigas
+- [x] 8.3 Verificar que nenhuma ferramenta de consulta faz chamada de escrita e que `book` só chama `calendar.event.add`; verificar com teste que falha se o cliente simulado do Bitrix24 receber qualquer método de escrita fora desse
 
 ## 9. Tela do agente
 

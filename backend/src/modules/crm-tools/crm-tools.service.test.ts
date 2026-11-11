@@ -401,3 +401,21 @@ describe('CrmToolsService.calendarClient', () => {
     });
   });
 });
+
+describe('as ferramentas do CRM são somente leitura', () => {
+  it('nenhuma chamada ao Bitrix24 cria, altera ou apaga dado', async () => {
+    const { service, crm } = setup();
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    await service.identifyClient(caller, CHAT);
+    await service.clientDeals(caller, ref, 'todos');
+    await service.pipelineStages(caller);
+    await service.pipelineStages(caller, 'Vendas B2B');
+    await service.calendarClient(caller, ref);
+
+    const methods = [...new Set(crm.calls.map((call) => call.method))];
+    expect(methods.length).toBeGreaterThan(0);
+    const write =
+      /\.(add|update|delete|set|start|import|merge|register|bind|unbind|move|send|run|complete|attach|detach)(\.|$)/i;
+    expect(methods.filter((method) => write.test(method))).toEqual([]);
+  });
+});

@@ -20,6 +20,9 @@ export const CRM_GUIDANCE_DEFAULTS: Record<CrmGuidanceKey, string> = {
     'Valor "não informado" significa que o negócio não tem valor cadastrado.',
   cliente_nao_identificado:
     'O cliente desta conversa não está identificado no CRM. Atenda normalmente, sem citar dados de cadastro.',
+  agenda:
+    'Ofereça ao cliente até 3 horários da lista e peça que ele escolha. Só use a ferramenta agendar_compromisso depois que o cliente confirmar a data e a hora. ' +
+    'Não invente horários nem prometa um horário que não esteja na lista. Se não houver horário ou agenda, avise que a equipe vai retornar o contato.',
 };
 
 export type CrmGuidance = Record<CrmGuidanceKey, string>;

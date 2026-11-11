@@ -1,11 +1,14 @@
 import type { BusinessHours, WeekDay } from '@gptmaker/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeRedis } from '../../../test/support/fake-redis';
 import type { Env } from '../../config/env';
 import type { Database } from '../../shared/database/database.module';
 import { BitrixError } from '../bitrix';
 import type { CalendarConfigRow } from './calendar-config.repository';
 import { CalendarToolsService } from './calendar-tools.service';
+import { CRM_GUIDANCE_DEFAULTS } from './crm-guidance.defaults';
+import type { CrmGuidanceService } from './crm-guidance.service';
 import type { CrmCaller } from './crm-access.guard';
 
 const caller: CrmCaller = { tenantId: 'tenant-a', agentId: 'agent-1', installationId: 101 };
@@ -98,6 +101,8 @@ function setup(
           userId: number | null;
         };
     failWith?: { method: string; error: Error };
+    /** Orientações editadas no backoffice (sobrepõem o padrão). */
+    guidance?: { agenda?: string };
     /** Atividades do CRM do portal simulado (`crm.activity.list`). */
     activities?: PortalActivity[];
     /** O portal ignora os filtros do pedido e devolve tudo: prova a reconferência no código. */
@@ -195,6 +200,9 @@ function setup(
     fakeDb,
     redis.asRedis(),
     { CRM_TOOLS_RATE_PER_MINUTE: options.ratePerMinute ?? 60 } as Env,
+    {
+      current: async () => ({ ...CRM_GUIDANCE_DEFAULTS, ...options.guidance }),
+    } as CrmGuidanceService,
   );
   service.clock = () => NOW;
   const portalCalls = (method: string) => calls.filter((call) => call.method === method);
@@ -249,6 +257,17 @@ describe('CalendarToolsService.freeSlots', () => {
       to: '2026-11-26',
     });
     expect(portalCalls('user.get')[0]!.params).toEqual({ FILTER: { ID: [508], ACTIVE: true } });
+  });
+
+  it('a orientação vem do texto editável no backoffice, e sem edição vale o padrão', async () => {
+    const padrao = await setup().service.freeSlots(caller);
+    expect(padrao.body.orientacao).toBe(CRM_GUIDANCE_DEFAULTS.agenda);
+    expect(String(padrao.body.orientacao)).toContain('agendar_compromisso');
+
+    const editado = await setup({
+      guidance: { agenda: 'Ofereça só 2 horários.' },
+    }).service.freeSlots(caller);
+    expect(editado.body.orientacao).toBe('Ofereça só 2 horários.');
   });
 
   it('evento marcado como livre ou provisório não bloqueia o horário', async () => {
@@ -1110,5 +1129,151 @@ describe('CalendarToolsService.clientAppointments', () => {
     bitrix.call.mockClear();
     expect((await list(service)).outcome).toBe('rate_limited');
     expect(bitrix.call).not.toHaveBeenCalled();
+  });
+});
+
+describe('registro das ferramentas de agenda', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('nenhum registro traz nome, horário, assunto ou data do compromisso', async () => {
+    const logs: unknown[][] = [];
+    for (const method of ['log', 'warn', 'error', 'debug', 'verbose'] as const) {
+      vi.spyOn(Logger.prototype, method).mockImplementation((...args: unknown[]) => {
+        logs.push(args);
+      });
+    }
+    const subject = 'Visita técnica confidencial';
+    const activity: PortalActivity = {
+      OWNER_TYPE_ID: 3,
+      OWNER_ID: 12,
+      PROVIDER_ID: 'CRM_TODO',
+      START_TIME: '2026-11-25T16:00:00+03:00',
+      END_TIME: '2026-11-25T16:30:00+03:00',
+      RESPONSIBLE_ID: 508,
+      SUBJECT: subject,
+    };
+
+    const ok = setup({ client: maria(null), activities: [activity] });
+    await ok.service.freeSlots(caller);
+    await ok.service.book(caller, { cliente: 'ref', inicio: '2026-11-24 09:00', assunto: subject });
+    await ok.service.clientAppointments(caller, { cliente: 'ref' });
+
+    // Também no caminho de falha, que registra o erro do Bitrix24.
+    const failing = setup({
+      client: maria(null),
+      failAdd: new BitrixError('UNAVAILABLE', 'calendar.event.add', 'NETWORK_ERROR', 'fora'),
+    });
+    await failing.service.book(caller, {
+      cliente: 'ref',
+      inicio: '2026-11-24 09:00',
+      assunto: subject,
+    });
+
+    const tools = logs
+      .map(([first]) => (first as { tool?: string }).tool)
+      .filter((tool): tool is string => Boolean(tool));
+    expect(tools).toEqual(
+      expect.arrayContaining(['horarios_livres', 'agendar_compromisso', 'agendamentos_do_cliente']),
+    );
+    expect(JSON.stringify(logs)).not.toMatch(
+      /Maria Souza|Ana Lima|Bruno Reis|Visita técnica|confidencial|09:00|2026-11-2\d/,
+    );
+  });
+});
+
+/** Nome de método do Bitrix24 que cria, altera ou apaga (qualquer escrita). */
+const WRITE_METHOD =
+  /\.(add|update|delete|set|start|import|merge|register|bind|unbind|move|send|run|complete|attach|detach)(\.|$)/i;
+
+describe('o que as ferramentas de agenda escrevem no Bitrix24 (spec agent-crm-tools: somente leitura, exceto agendar)', () => {
+  const methodsOf = (calls: Array<{ method: string }>) => [...new Set(calls.map((c) => c.method))];
+
+  it('as ferramentas de consulta não fazem nenhuma chamada de escrita, em nenhum modo de agenda', async () => {
+    const activity: PortalActivity = {
+      OWNER_TYPE_ID: 3,
+      OWNER_ID: 12,
+      PROVIDER_ID: 'CRM_TODO',
+      START_TIME: '2026-11-25T16:00:00+03:00',
+      END_TIME: '2026-11-25T16:30:00+03:00',
+      RESPONSIBLE_ID: 508,
+    };
+    const used = new Set<string>();
+    for (const row of [
+      config(),
+      config({ mode: 'USER_LIST', userIds: [508, 418] }),
+      config({ mode: 'CLIENT_OWNER', userIds: [] }),
+    ]) {
+      const { service, calls, created } = setup({
+        row,
+        client: maria(418),
+        activities: [activity],
+      });
+      await service.freeSlots(caller, { cliente: 'ref' });
+      await service.freeSlots(caller, { cliente: 'ref', aPartirDe: '2026-11-25' });
+      await service.clientAppointments(caller, { cliente: 'ref' });
+      methodsOf(calls).forEach((method) => used.add(method));
+      expect(created).toEqual([]);
+    }
+    // Só leitura: usuários, ocupação da agenda e atividades do CRM.
+    expect([...used].sort()).toEqual([
+      'calendar.accessibility.get',
+      'crm.activity.list',
+      'user.get',
+    ]);
+    expect([...used].filter((method) => WRITE_METHOD.test(method))).toEqual([]);
+  });
+
+  it('agendar escreve uma única vez, só com calendar.event.add, e nada mais de escrita', async () => {
+    const outcomes = [
+      { setup: {}, input: { inicio: '2026-11-24 09:00' } }, // cria
+      {
+        setup: { events: { 508: [event('busy', '2026-11-24T12:00:00Z', '2026-11-24T12:30:00Z')] } },
+        input: { inicio: '2026-11-24 09:00' },
+      }, // tomado
+      { setup: {}, input: { inicio: '2026-11-24 08:00' } }, // fora do expediente
+      { setup: { client: { found: false as const } }, input: { inicio: '2026-11-24 09:00' } }, // cliente inválido
+      {
+        setup: {
+          failAdd: new BitrixError('UNAVAILABLE', 'calendar.event.add', 'NETWORK_ERROR', 'fora'),
+        },
+        input: { inicio: '2026-11-24 09:00' },
+      }, // falha
+    ];
+    const writes: string[] = [];
+    for (const { setup: options, input } of outcomes) {
+      const { service, calls } = setup({ client: maria(null), ...options });
+      await service.book(caller, { cliente: 'ref', ...input });
+      writes.push(...methodsOf(calls).filter((method) => WRITE_METHOD.test(method)));
+    }
+    // Das cinco situações, a criação foi tentada duas vezes (a que deu certo e a que o portal recusou).
+    expect(writes).toEqual(['calendar.event.add', 'calendar.event.add']);
+  });
+
+  it('um método de escrita inesperado é pego: o detector reconhece os nomes de escrita do Bitrix24', () => {
+    for (const method of [
+      'calendar.event.add',
+      'calendar.event.update',
+      'calendar.event.delete',
+      'crm.contact.add',
+      'crm.deal.update',
+      'crm.activity.todo.add',
+      'imopenlines.bot.session.message.send',
+      'bizproc.workflow.start',
+      'tasks.task.add',
+    ]) {
+      expect(WRITE_METHOD.test(method)).toBe(true);
+    }
+    for (const method of [
+      'user.get',
+      'calendar.accessibility.get',
+      'calendar.event.get',
+      'crm.activity.list',
+      'crm.contact.get',
+      'crm.deal.list',
+      'crm.status.list',
+      'imopenlines.dialog.get',
+    ]) {
+      expect(WRITE_METHOD.test(method)).toBe(false);
+    }
   });
 });

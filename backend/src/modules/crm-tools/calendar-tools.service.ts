@@ -26,6 +26,7 @@ import {
 import { CalendarConfigRepository, type CalendarConfigRow } from './calendar-config.repository';
 import { CalendarConfigService } from './calendar-config.service';
 import type { CrmCaller } from './crm-access.guard';
+import { CrmGuidanceService } from './crm-guidance.service';
 import { CrmToolsService } from './crm-tools.service';
 import { ToolRunner, type ToolResult } from './tool-runner';
 
@@ -90,10 +91,6 @@ const LOCK_BUSY = result('unavailable', {
   erro: 'Outro agendamento está sendo finalizado nesta agenda. Tente de novo em instantes.',
 });
 
-const GUIDANCE =
-  'Ofereça ao cliente até 3 destes horários e peça que ele escolha. Só use "agendar_compromisso" ' +
-  'depois que o cliente confirmar data e hora. Não invente horários que não estão na lista.';
-
 interface PortalUser {
   ID: string | number;
   NAME?: string;
@@ -146,6 +143,7 @@ export class CalendarToolsService {
     @Inject(DB) db: Database,
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(ENV) env: Env,
+    private readonly guidance: CrmGuidanceService,
   ) {
     this.runner = new ToolRunner(db, redis, env);
     this.lock = new DistributedLock(redis);
@@ -308,7 +306,7 @@ export class CalendarToolsService {
           horarios: slots.map((slot) => slotView(slot, hours.timezone, names)),
           ...(slots.length === 0
             ? { mensagem: `Não há horários disponíveis no período. ${TEAM_WILL_CONTACT}` }
-            : { orientacao: GUIDANCE }),
+            : { orientacao: (await this.guidance.current()).agenda }),
         },
         slots.length,
       );
@@ -518,10 +516,7 @@ export class CalendarToolsService {
       alternativas: near.map((slot) => slotView(slot, hours.timezone, names)),
       ...(near.length === 0
         ? { mensagem: `Não há outro horário próximo disponível. ${TEAM_WILL_CONTACT}` }
-        : {
-            orientacao:
-              'Ofereça estas alternativas ao cliente e, quando ele escolher e confirmar, use "agendar_compromisso" de novo.',
-          }),
+        : { orientacao: (await this.guidance.current()).agenda }),
     });
   }
 
