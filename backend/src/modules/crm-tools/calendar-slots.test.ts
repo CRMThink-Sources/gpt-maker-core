@@ -476,16 +476,17 @@ describe('eventInterval (período real de um evento do portal)', () => {
       ).toEqual(span('2026-11-20T15:00:00Z', '2026-11-20T15:30:00Z'));
     });
 
-    it('texto ilegível ou fora dos dias pedidos: cai no timestamp, sem quebrar', () => {
-      // Sem leitura válida do texto não há como achar a ocorrência: vale o período da série.
-      for (const [from, to] of [
-        ['amanhã', 'depois'],
-        ['12/11/2030 12:00:00', '12/11/2030 13:30:00'],
-      ] as const) {
-        const result = lunch(from, to)!;
-        expect(result.start).toBe(Date.parse('2024-08-28T15:00:00Z'));
-        expect(result.end - result.start).toBeGreaterThan(365 * 24 * 3600_000);
-      }
+    it('ocorrência do dia antes da janela (borda do fuso) também vale pelo texto', () => {
+      // Medido no portal: o pedido a partir de 10/11 devolve também a ocorrência de 09/11.
+      expect(lunch('09/11/2026 12:00:00', '09/11/2026 13:30:00')).toEqual(
+        span('2026-11-09T15:00:00Z', '2026-11-09T16:30:00Z'),
+      );
+    });
+
+    it('texto ilegível: sem como achar a ocorrência, vale o período da série', () => {
+      const result = lunch('amanhã', 'depois')!;
+      expect(result.start).toBe(Date.parse('2024-08-28T15:00:00Z'));
+      expect(result.end - result.start).toBeGreaterThan(365 * 24 * 3600_000);
     });
   });
 

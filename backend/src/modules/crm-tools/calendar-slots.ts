@@ -241,7 +241,7 @@ const PORTAL_DATE = /^(\d{1,4})[./-](\d{1,2})[./-](\d{1,4})[ T](\d{1,2}):(\d{2})
 /**
  * Lê o texto de data do portal (`24/11/2026 14:00:00`, no idioma do usuário) como hora de parede,
  * em milissegundos "como se fosse UTC". Dia e mês trocam de lugar conforme o idioma: vale a leitura
- * que cai nos dias pedidos (`window`); sem como decidir, dia/mês/ano. `null` se não houver leitura válida.
+ * mais próxima dos dias pedidos (`window`); em empate, dia/mês/ano. `null` se não houver leitura válida.
  */
 function parsePortalWall(value: unknown, window?: { first: string; last: string }): number | null {
   const match = typeof value === 'string' ? PORTAL_DATE.exec(value.trim()) : null;
@@ -263,12 +263,19 @@ function parsePortalWall(value: unknown, window?: { first: string; last: string 
       probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d
     );
   });
-  const inside = valid.filter(([y, mo, d]) => {
-    if (!window) return true;
-    const day = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    return day >= window.first && day <= window.last;
-  });
-  const chosen = inside[0];
+  // O portal também devolve ocorrências de bordas (o dia antes do pedido, por causa do fuso): a janela
+  // só desempata dia/mês, escolhendo a leitura mais próxima dela, e nunca descarta o texto.
+  const distance = ([y, mo, d]: [number, number, number]) => {
+    if (!window) return 0;
+    const day = Date.UTC(y, mo - 1, d);
+    const first = Date.parse(window.first);
+    const last = Date.parse(window.last);
+    return day < first ? first - day : day > last ? day - last : 0;
+  };
+  const chosen = valid.reduce<[number, number, number] | undefined>(
+    (best, reading) => (!best || distance(reading) < distance(best) ? reading : best),
+    undefined,
+  );
   if (!chosen || hh > 23 || mm > 59 || ss > 59) return null;
   return Date.UTC(chosen[0], chosen[1] - 1, chosen[2], hh, mm, ss);
 }

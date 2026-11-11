@@ -124,6 +124,9 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   `12:00Z` e offset `-7200`), logo bate com `TS + ~USER_OFFSET_FROM` num evento comum e não bate
   numa ocorrência de série. O formato do texto segue o idioma do usuário (`dd/mm/aaaa` no portal
   de teste).
+  O portal devolve também a ocorrência do **dia antes** do período pedido (pedido de 10/11 a 19/11
+  trouxe 09/11): essa ocorrência de borda também precisa ser lida pelo texto, senão a série inteira
+  bloqueia o usuário.
 - **Sem proteção contra choque**: um segundo `calendar.event.add` no mesmo horário e na mesma agenda
   foi aceito e criou outro evento (id diferente), sem erro. A exclusividade do horário é do app.
 - **Evento privado**: `private_event: 'Y'` volta em `PRIVATE_EVENT` como `"1"` (não `"Y"`).

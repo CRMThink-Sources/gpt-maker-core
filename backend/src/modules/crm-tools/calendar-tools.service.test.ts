@@ -415,7 +415,12 @@ describe('CalendarToolsService.freeSlots', () => {
         events: {
           // Ana (508) ocupada às 09:00; Bruno (418) tem o almoço recorrente.
           508: [event('busy', '2026-11-24T12:00:00Z', '2026-11-24T12:30:00Z')],
-          418: [lunch],
+          // O portal devolve também a ocorrência do dia antes do pedido (borda do fuso): medido
+          // com o usuário 418 (09/11 num pedido a partir de 10/11).
+          418: [
+            { ...lunch, DATE_FROM: '22/11/2026 12:00:00', DATE_TO: '22/11/2026 13:30:00' },
+            lunch,
+          ],
         },
       });
       const { body } = await service.freeSlots(caller);
