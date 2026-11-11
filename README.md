@@ -64,7 +64,7 @@ npm run test:integration -w backend      # Testcontainers (precisa de Docker)
 ## CI/CD
 
 - `ci.yml`: lint, formatação, tipos, fronteiras de módulos, testes unitários e de integração, build; em PR também o build das imagens. O `GITHUB_TOKEN` do workflow lê o SDK da plataforma (`packages: read`); o pacote precisa liberar este repositório em _Manage Actions access_.
-- `release.yml`: push em `main` publica `ghcr.io/<owner>/gptmaker-backend` e `gptmaker-frontend` com a tag do SHA.
+- `release.yml`: push em `master` publica `ghcr.io/<owner>/gptmaker-backend` e `gptmaker-frontend` com a tag do SHA.
 - `deploy.yml`: staging automático após o release; produção manual (`workflow_dispatch` com a tag) com aprovação no GitHub Environment `production`. O script `infra/deploy/deploy.sh` faz health check e rollback para a tag anterior.
 
 Configuração por GitHub Environment (`staging`, `production`):
