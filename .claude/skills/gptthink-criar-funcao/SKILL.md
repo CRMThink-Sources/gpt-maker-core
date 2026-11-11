@@ -10,7 +10,7 @@ O cliente do GPTThink não escreve prompt: ele escolhe uma **função** e respon
 Arquivos desta skill:
 - `referencia/formato.md`: todos os campos, limites e ações. Leia antes de escrever o JSON.
 - `referencia/blocos.json`: os blocos compartilhados (`comum`, `registro`, `duvida`, `transferir`, `crm`) com os ids dos campos de cada um.
-- `exemplos/suporte.json` e `exemplos/sdr.json` (funções publicadas), `exemplos/cobranca.json`, `exemplos/recepcao.json` e `exemplos/suporte-spa.json` (geradas com esta skill, aprovadas pela checagem real). Copie a estrutura da mais parecida. A `recepcao.json` é o modelo de **transferência entre agentes**; a `suporte-spa.json`, de **chamado num processo inteligente (SPA)**.
+- `exemplos/suporte.json` e `exemplos/sdr.json` (funções publicadas), `exemplos/cobranca.json`, `exemplos/recepcao.json` e `exemplos/suporte-spa.json` (geradas com esta skill, aprovadas pela checagem real). Copie a estrutura da mais parecida. A `recepcao.json` é o modelo de **transferência entre agentes**; a `suporte-spa.json`, de **chamado num processo inteligente (SPA)**; a `agendamento-calendario.json`, de **agendar no Calendário do Bitrix24** com as ferramentas MCP (veja "Ferramentas do CRM e da agenda" na skill `gptthink-function-templates`).
 - `scripts/validar.mjs`: a checagem de publicação do backoffice, sem dependências.
 - `scripts/gerar-referencia.ts` (só no repositório): regenera `blocos.json` e os exemplos do seed com `npx tsx .claude/skills/gptthink-criar-funcao/scripts/gerar-referencia.ts`. Rode depois de mudar um bloco ou template do seed; um teste do backend acusa quando a referência fica velha.
 
@@ -146,6 +146,10 @@ Use quando o registro do atendimento vai para um **processo inteligente** (SPA) 
 6. **Quando todo caso não resolvido vira chamado** (agente de primeiro atendimento antes do suporte humano), use só os blocos `comum` e `crm`. A ação "Registrar dúvida" do bloco `duvida` vale "quando você não conseguir resolver", e a "Transferir para atendente" do bloco `transferir` vale "quando o cliente pedir uma pessoa": as duas competem com "Abrir chamado", e o agente pode transferir sem abrir o SPA. Diga no `behavior` quando abrir o chamado sem tentar resolver (urgente, pedido de pessoa, cliente irritado, assuntos listados) e transfira só pela intenção do chamado.
 
 O cliente, no formulário, escolhe o SPA, o funil, a etapa inicial e o campo de cada valor. Valor opcional sem campo não é gravado.
+
+## Funções que usam ferramentas MCP (agenda)
+
+Quando a função agenda ou consulta o CRM, o comportamento cita as ferramentas pelo nome (`horarios_livres`, `agendar_compromisso`, `agendamentos_do_cliente`) e inclui o bloco `crm` (`crmAccess: true`). Quem atende e as regras de horário são do card **Agenda** do agente, não do formulário da função. Mande o agente **dizer horários por extenso** (campo `quando`), **passar `usar_ao_agendar` em `inicio`** e lembrar que **`agendar_compromisso` só marca na segunda chamada**, depois do "sim" do cliente. Modelo validado: `exemplos/agendamento-calendario.json` (pior caso 2890/3000). Regras completas na skill `gptthink-function-templates`.
 
 ## Critério de revisão do formulário
 
