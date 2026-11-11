@@ -29,4 +29,24 @@ export class DistributedLock {
       await this.redis.eval(RELEASE, 1, `lock:${key}`, token);
     }
   }
+
+  /**
+   * Como `runExclusive`, mas espera até `waitMs` pelo lock (tentando a cada `retryMs`) antes de
+   * desistir com `{ ran: false }`. Para operações curtas que não podem rodar duas vezes ao mesmo
+   * tempo e que o chamador prefere atrasar a recusar (ex.: agendar no mesmo horário).
+   */
+  async runExclusiveWaiting<T>(
+    key: string,
+    ttlMs: number,
+    waitMs: number,
+    fn: () => Promise<T>,
+    retryMs = 100,
+  ): Promise<{ ran: true; result: T } | { ran: false }> {
+    const deadline = Date.now() + waitMs;
+    for (;;) {
+      const outcome = await this.runExclusive(key, ttlMs, fn);
+      if (outcome.ran || Date.now() >= deadline) return outcome;
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
+    }
+  }
 }

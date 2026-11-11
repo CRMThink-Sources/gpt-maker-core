@@ -345,3 +345,59 @@ describe('CrmToolsService.pipelineStages', () => {
     });
   });
 });
+
+describe('CrmToolsService.calendarClient', () => {
+  it('devolve tipo, id, nome e responsável do cliente da referência', async () => {
+    const { service } = setup();
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    await expect(service.calendarClient(caller, ref)).resolves.toEqual({
+      found: true,
+      type: 'contact',
+      id: 12,
+      name: 'Maria Souza',
+      userId: 7,
+    });
+  });
+
+  it('referência emitida para outro tenant: não encontrado, sem consultar o Bitrix24', async () => {
+    const { service, crm } = setup();
+    const ref = service.refs.issue('tenant-b', 'contact', 12);
+    await expect(service.calendarClient(caller, ref)).resolves.toEqual({ found: false });
+    expect(crm.calls).toEqual([]);
+  });
+
+  it.each([
+    ['adulterada', (ref: string) => `${ref.slice(0, -2)}AA`],
+    ['sem assinatura', (ref: string) => ref.split('.')[0]!],
+    ['de outro tipo de registro', (ref: string) => `l${ref.slice(1)}`],
+    ['vazia', () => ''],
+  ])('referência %s: não encontrado, sem consultar o Bitrix24', async (_caso, change) => {
+    const { service, crm } = setup();
+    const ref = change(service.refs.issue(caller.tenantId, 'contact', 12));
+    await expect(service.calendarClient(caller, ref)).resolves.toEqual({ found: false });
+    expect(crm.calls).toEqual([]);
+  });
+
+  it('texto que não é referência (número, objeto, ausente): não encontrado', async () => {
+    const { service } = setup();
+    for (const ref of [12, { id: 12 }, null, undefined]) {
+      await expect(service.calendarClient(caller, ref)).resolves.toEqual({ found: false });
+    }
+  });
+
+  it('registro apagado no CRM: não encontrado', async () => {
+    const { service } = setup();
+    const ref = service.refs.issue(caller.tenantId, 'contact', 9999);
+    await expect(service.calendarClient(caller, ref)).resolves.toEqual({ found: false });
+  });
+
+  it('cliente sem responsável: userId nulo', async () => {
+    const { service, crm } = setup();
+    crm.records.contact['12']!.ASSIGNED_BY_ID = '0';
+    const ref = service.refs.issue(caller.tenantId, 'contact', 12);
+    await expect(service.calendarClient(caller, ref)).resolves.toMatchObject({
+      found: true,
+      userId: null,
+    });
+  });
+});

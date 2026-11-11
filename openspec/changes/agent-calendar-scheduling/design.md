@@ -58,12 +58,14 @@ Uma linha por agente: `agent_id` (PK, FK), `tenant_id` (FK), `mode` (`FIXED_USER
 
 ### D4. Criação com trava, revalidação e idempotência
 
-`agendar_compromisso` executa, para a chave `(tenant, agente, cliente, agenda escolhida, início)`:
+`agendar_compromisso` executa, para a chave de repetição `(tenant, agente, cliente, início)` (hash SHA-256, sem dados pessoais):
 
-1. Verifica a referência do cliente (`ClientRefs.verify`) e o início contra as regras de D3 (expediente, grade, antecedência, janela).
-2. Adquire um `DistributedLock` curto por `(tenant, usuário-dono)`, relê a ocupação do dia (`accessibility.get`) e confirma que o slot continua livre; no modo `USER_LIST`, escolhe o primeiro usuário da lista livre.
-3. Consulta a chave de idempotência no Redis (`calendar:booked:<hash>`, TTL 24 h); se existir, devolve o agendamento já feito.
-4. Chama `calendar.event.add` (`type: user`, `ownerId`, `auto_detect_section: Y`, `from`/`to` com `timezone_from`/`timezone_to`, `attendees: [ownerId]`, `crm_fields` com o prefixo do cliente, `name` e `description` curtos, `accessibility: busy`) e grava a chave com o id do evento.
+1. Valida o formato do início (`AAAA-MM-DD HH:mm` na hora de parede da agenda) e as regras de D3 (dia que já passou, depois da janela, fora da grade do expediente, antes da antecedência), **antes** de qualquer chamada ao Bitrix24.
+2. Verifica a referência do cliente (`ClientRefs.verify`, que lê o nome e o responsável) e consulta a chave de repetição no Redis (`calendar:booked:<hash>`, TTL de 15 minutos: cobre a repetição do GPTMaker e a insistência do agente sem confirmar por horas um compromisso que a equipe já apagou ou remarcou); se existir, devolve o agendamento já feito, sem consultar o portal.
+3. Adquire, em ordem fixa, um `DistributedLock` por `(tenant, usuário)` de cada usuário da agenda, **esperando até 3 s** (`runExclusiveWaiting`): uma segunda chamada igual espera a primeira e a vê pronta, em vez de ser recusada. Dentro do lock, confere a chave de novo (a espera pode ter durado o suficiente para a primeira terminar), relê a ocupação do dia (`accessibility.get`) e escolhe o primeiro usuário livre; sem ninguém livre, responde que o horário não está disponível e devolve até 3 alternativas, as mais próximas do pedido.
+4. Se já passaram mais de 5 s desde o início da chamada, **não cria** (o agente pode já ter recebido "indisponível" pelo limite de 10 s da ferramenta). Senão chama `calendar.event.add` (`type: user`, `ownerId`, `auto_detect_section: Y`, `from`/`to` com `timezone_from`/`timezone_to`, `attendees: [ownerId]`, `crm_fields` com o prefixo do cliente, `name` e `description` curtos, `accessibility: busy`) e só então grava a chave de repetição com o resultado, sem identificadores internos.
+
+O acesso negado na agenda do dono não tenta outra agenda e a falta do escopo `calendar` marca o aviso do painel; qualquer outra falha do Bitrix24 na criação responde "não foi possível agendar agora" sem gravar a chave.
 
 O lock reduz a corrida entre dois agentes do próprio sistema; agendamentos feitos diretamente por pessoas no Bitrix24 no mesmo instante ainda podem colidir (aceito, ver Riscos).
 
@@ -76,7 +78,9 @@ O lock reduz a corrida entre dois agentes do próprio sistema; agendamentos feit
 - `CLIENT_OWNER`: `ASSIGNED_BY_ID` do contato, lead ou empresa identificado na conversa (já lido por `identifyClient`/`getRecord`); sem responsável ou inativo, responde "sem agenda" (sem fallback silencioso).
 - `USER_LIST`: todos os usuários da lista para a disponibilidade; na criação, o primeiro livre na ordem configurada.
 
-O agente nunca informa nem recebe ids de usuário; recebe o nome (via `UserNamesService`) e a referência do cliente.
+O agente nunca informa nem recebe ids de usuário; recebe o nome (lido junto da conferência de usuário ativo, `user.get`) e a referência do cliente. Os campos de usuário que o modelo enviar no pedido (`ownerId`, `attendees`, `crm_fields`, `type`) são ignorados: o dono vem só da configuração ou do responsável do cliente.
+
+No modo `CLIENT_OWNER` o evento pode cair na agenda de **qualquer usuário ativo do portal** que seja responsável por aquele cliente, mesmo fora de uma lista configurada: é a regra escolhida (a agenda é de quem cuida do cliente) e vale a mesma permissão do administrador que instalou o app (D7).
 
 - *Alternativa descartada*: rodízio ponderado ou por menor carga no `USER_LIST`: exige contar eventos por usuário a cada agendamento e não foi pedido. Fica como evolução.
 
@@ -118,6 +122,7 @@ Seção "Agenda" ao lado do acesso ao CRM em `/app` (só habilitada com o CRM co
 - **Fuso e formato de data do Bitrix24** (strings de data dependem do idioma do usuário) → usar sempre timestamps UTC na leitura e enviar `timezone_from`/`timezone_to` explícitos na escrita; testes com fusos diferentes.
 - **Tenants existentes sem o escopo** → as ferramentas respondem "não liberado" e o painel avisa; nada quebra para quem não usa agenda. Reinstalar é passo operacional (ver Migration Plan).
 - **Primeira escrita das ferramentas do agente** (risco de duplicidade, de dado errado no CRM do cliente) → escopo mínimo (somente evento), cliente obrigatório, idempotência, revalidação, teste de integração e auditoria com `auditor-multitenant`.
+- **Criação lenta além do tempo da ferramenta** (o Bitrix24 tem timeout de 15 s e a ferramenta, 10 s) → o agente pode receber "indisponível" e o evento ser criado logo depois. A mesma chamada de novo é coberta pela chave de repetição; escolher outro horário não é, e criaria um segundo compromisso. Mitigação: não começar a criar depois de 5 s e a releitura da ocupação, que enxerga o evento já criado. Risco residual aceito; se aparecer em produção, reduzir `BITRIX_TIMEOUT_MS` nas chamadas de escrita.
 - **Agente agenda sem confirmação do cliente** → orientação na descrição e na orientação do CRM; monitorar nas conversas de teste; sem controle técnico possível além disso.
 
 ## Migration Plan
@@ -131,4 +136,5 @@ Seção "Agenda" ao lado do acesso ao CRM em `/app` (só habilitada com o CRM co
 ## Open Questions
 
 - Incluir lembrete (`remind`) padrão no evento criado (ex.: 30 minutos antes)? Não muda specs nem tarefas; decidir após o piloto.
+- Limite de agendamentos por cliente e por dia (ou por agente e por hora): hoje só vale o limite geral de 60 chamadas por minuto por agente, e um cliente que manipule o agente por injeção de prompt poderia marcar muitos horários distintos. Não está na spec; decidir se o produto quer o teto antes de ligar a ferramenta em produção.
 - Cache curto da disponibilidade por (tenant, usuário) para reduzir chamadas ao Bitrix24, caso a medição em produção justifique.

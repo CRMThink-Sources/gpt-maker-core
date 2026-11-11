@@ -185,3 +185,35 @@ export function freeSlots(query: SlotQuery): FreeSlot[] {
   }
   return slots;
 }
+
+export type SlotViolation = 'past' | 'window' | 'grid' | 'notice';
+
+/**
+ * Por que `start` não pode ser usado, ignorando a ocupação das agendas (spec
+ * agent-calendar-scheduling, `agendar_compromisso`): dia que já passou, depois da janela de busca,
+ * fora da grade do expediente (fora do horário, no meio de um passo ou sem caber no intervalo) ou
+ * antes da antecedência mínima. `null` = respeita as regras.
+ */
+export function slotViolation(
+  rules: Pick<SlotQuery, 'now' | 'hours' | 'slotMinutes' | 'minNoticeMinutes' | 'maxDaysAhead'>,
+  start: number,
+): SlotViolation | null {
+  const { hours, slotMinutes } = rules;
+  const date = localDate(start, hours.timezone);
+  const window = searchWindow(rules.now, hours.timezone, rules.maxDaysAhead);
+  if (date < window.first) return 'past';
+  if (date > window.last) return 'window';
+  const onGrid = hours.days[weekDayOf(date)].some((interval) => {
+    const end = toMinutes(interval.end);
+    for (
+      let minute = toMinutes(interval.start);
+      minute + slotMinutes <= end;
+      minute += slotMinutes
+    ) {
+      if (zonedToEpoch(date, minute, hours.timezone) === start) return true;
+    }
+    return false;
+  });
+  if (!onGrid) return 'grid';
+  return start < rules.now + rules.minNoticeMinutes * MINUTE_MS ? 'notice' : null;
+}

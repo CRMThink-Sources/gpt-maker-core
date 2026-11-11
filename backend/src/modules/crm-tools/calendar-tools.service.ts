@@ -1,9 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { BusinessHours } from '@gptmaker/contracts';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DB, type Database } from '../../shared/database/database.module';
+import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { AgentRepository } from '../agents';
 import { BitrixClient, BitrixError } from '../bitrix';
@@ -11,10 +13,15 @@ import {
   addDays,
   type AgendaBusy,
   DEFAULT_CALENDAR_HOURS,
+  type FreeSlot,
   freeSlots,
   type Interval,
+  localDate,
   localParts,
   searchWindow,
+  slotViolation,
+  type SlotViolation,
+  zonedToEpoch,
 } from './calendar-slots';
 import { CalendarConfigRepository, type CalendarConfigRow } from './calendar-config.repository';
 import { CalendarConfigService } from './calendar-config.service';
@@ -35,35 +42,48 @@ const WEEK_DAY_NAMES = [
   'sábado',
 ];
 
+/** Prefixo do vínculo de um evento do Calendário com o registro do CRM (`crm_fields`). */
+const CRM_PREFIX = { contact: 'C_', lead: 'L_', company: 'CO_' } as const;
+
+/** O lock cobre a releitura da ocupação e a criação; expira sozinho se o processo morrer. */
+const LOCK_TTL_MS = 30_000;
+/** Quanto uma chamada espera por outra que mexe na mesma agenda (a ferramenta tem 10 s). */
+const LOCK_WAIT_MS = 3_000;
+/** Depois disso não se começa a criar: o agente já pode ter recebido "indisponível". */
+const SOFT_DEADLINE_MS = 5_000;
+/**
+ * Quanto tempo a mesma chamada de agendamento devolve o mesmo resultado. Curto de propósito: cobre
+ * a repetição do GPTMaker e a insistência do agente, e não confirma por horas um compromisso que a
+ * equipe já apagou ou remarcou no Bitrix24.
+ */
+const BOOKED_TTL_SECONDS = 15 * 60;
+const MAX_ALTERNATIVES = 3;
+const TITLE_MAX = 100;
+const SUBJECT_MAX = 200;
+
 const TEAM_WILL_CONTACT = 'Avise o cliente que a equipe vai retornar o contato.';
 
-const NOT_CONFIGURED: ToolResult = {
-  outcome: 'not_found',
-  count: 0,
-  body: { erro: `A agenda deste agente não está configurada. ${TEAM_WILL_CONTACT}` },
-};
+const result = (outcome: ToolResult['outcome'], body: Record<string, unknown>, count = 0) =>
+  ({ outcome, count, body }) satisfies ToolResult;
 
-const SCOPE_MISSING: ToolResult = {
-  outcome: 'unavailable',
-  count: 0,
-  body: {
-    erro: `O calendário do Bitrix24 não está liberado para este aplicativo. ${TEAM_WILL_CONTACT}`,
-  },
-};
-
-const CLIENT_NOT_FOUND: ToolResult = {
-  outcome: 'not_found',
-  count: 0,
-  body: {
-    erro: 'Cliente não encontrado. Use a referência devolvida por "Consultar cliente no CRM".',
-  },
-};
-
-const NO_AGENDA: ToolResult = {
-  outcome: 'not_found',
-  count: 0,
-  body: { erro: `Não há agenda disponível para este cliente. ${TEAM_WILL_CONTACT}` },
-};
+const NOT_CONFIGURED = result('not_found', {
+  erro: `A agenda deste agente não está configurada. ${TEAM_WILL_CONTACT}`,
+});
+const SCOPE_MISSING = result('unavailable', {
+  erro: `O calendário do Bitrix24 não está liberado para este aplicativo. ${TEAM_WILL_CONTACT}`,
+});
+const CLIENT_NOT_FOUND = result('not_found', {
+  erro: 'Cliente não encontrado. Use a referência devolvida por "Consultar cliente no CRM".',
+});
+const NO_AGENDA = result('not_found', {
+  erro: `Não há agenda disponível para este cliente. ${TEAM_WILL_CONTACT}`,
+});
+const BOOK_FAILED = result('unavailable', {
+  erro: `Não foi possível agendar agora. ${TEAM_WILL_CONTACT}`,
+});
+const LOCK_BUSY = result('unavailable', {
+  erro: 'Outro agendamento está sendo finalizado nesta agenda. Tente de novo em instantes.',
+});
 
 const GUIDANCE =
   'Ofereça ao cliente até 3 destes horários e peça que ele escolha. Só use "agendar_compromisso" ' +
@@ -81,14 +101,28 @@ interface AccessibilityEvent {
   DATE_TO_TS_UTC?: string | number;
 }
 
+interface AgendaUser {
+  id: number;
+  name: string;
+}
+
+type Client = Extract<Awaited<ReturnType<CrmToolsService['calendarClient']>>, { found: true }>;
+
+type Locked =
+  | { kind: 'booked' | 'done'; result: ToolResult }
+  | { kind: 'taken' | 'slow' | 'scope' | 'failed' }
+  | { kind: 'denied'; owner: string };
+
 /**
  * Ferramentas de agenda do agente sobre o Calendário do Bitrix24 (spec agent-calendar-scheduling,
- * design D1/D3). Rodam no mesmo executor das ferramentas do CRM: o limite por agente soma as duas.
- * O tenant e o agente vêm sempre da credencial já verificada (`CrmCaller`).
+ * design D1 a D5). Rodam no mesmo executor das ferramentas do CRM: o limite por agente soma as
+ * duas. O tenant e o agente vêm sempre da credencial já verificada (`CrmCaller`).
  */
 @Injectable()
 export class CalendarToolsService {
+  private readonly logger = new Logger(CalendarToolsService.name);
   private readonly runner: ToolRunner;
+  private readonly lock: DistributedLock;
   /** Relógio; os testes o trocam. */
   clock: () => number = () => Date.now();
 
@@ -99,15 +133,23 @@ export class CalendarToolsService {
     private readonly configs: CalendarConfigRepository,
     private readonly agents: AgentRepository,
     @Inject(DB) db: Database,
-    @Inject(REDIS) redis: Redis,
+    @Inject(REDIS) private readonly redis: Redis,
     @Inject(ENV) env: Env,
   ) {
     this.runner = new ToolRunner(db, redis, env);
+    this.lock = new DistributedLock(redis);
   }
 
   /** Ferramenta `horarios_livres`: até 10 horários livres a partir da agenda configurada. */
   freeSlots(caller: CrmCaller, input: { cliente?: unknown; aPartirDe?: unknown } = {}) {
     return this.runner.run(caller, 'horarios_livres', () => this.findFreeSlots(caller, input));
+  }
+
+  /** Ferramenta `agendar_compromisso`: cria o evento num horário livre, no máximo uma vez. */
+  book(caller: CrmCaller, input: { cliente?: unknown; inicio?: unknown; assunto?: unknown } = {}) {
+    return this.runner.run(caller, 'agendar_compromisso', () =>
+      this.createAppointment(caller, input),
+    );
   }
 
   private async findFreeSlots(
@@ -117,29 +159,30 @@ export class CalendarToolsService {
     const cfg = await this.configs.find(caller.tenantId, caller.agentId);
     if (!cfg) return NOT_CONFIGURED;
 
-    const agent = await this.agents.getById(caller.tenantId, caller.agentId);
-    const hours: BusinessHours = agent.businessHours ?? DEFAULT_CALENDAR_HOURS;
+    const hours = await this.hoursOf(caller);
     const now = this.clock();
     const window = searchWindow(now, hours.timezone, cfg.maxDaysAhead);
 
     const from = parseDate(input.aPartirDe);
     if (from === 'invalid' || (from && (from < window.first || from > window.last))) {
-      return {
-        outcome: 'not_found',
-        count: 0,
-        body: {
-          erro: 'Data fora do período em que há agenda.',
-          periodo_permitido: { de: window.first, ate: window.last },
-        },
-      };
+      return result('not_found', {
+        erro: 'Data fora do período em que há agenda.',
+        periodo_permitido: { de: window.first, ate: window.last },
+      });
     }
 
     try {
-      const owners = await this.owners(caller, cfg, input.cliente);
-      if ('result' in owners) return owners.result;
-      if (owners.users.length === 0) return NO_AGENDA;
+      let client: Client | null = null;
+      if (cfg.mode === 'CLIENT_OWNER') {
+        const found = await this.crm.calendarClient(caller, input.cliente);
+        if (!found.found) return CLIENT_NOT_FOUND;
+        client = found;
+      }
+      const agenda = await this.agendaUsers(caller, cfg, client);
+      if ('result' in agenda) return agenda.result;
+      if (agenda.users.length === 0) return NO_AGENDA;
 
-      const agendas = await this.busy(caller, owners.users, window);
+      const agendas = await this.busy(caller, agenda.users, window.first, window.last);
       const slots = freeSlots({
         now,
         from: from ?? undefined,
@@ -151,29 +194,103 @@ export class CalendarToolsService {
       });
       await this.scopeWorked(caller, cfg);
 
-      const names = new Map(owners.users.map((user) => [user.id, user.name]));
-      return {
-        outcome: 'ok',
-        count: slots.length,
-        body: {
+      const names = new Map(agenda.users.map((user) => [user.id, user.name]));
+      return result(
+        'ok',
+        {
           fuso_horario: hours.timezone,
           duracao_minutos: cfg.slotMinutes,
           periodo: { de: window.first, ate: window.last },
-          horarios: slots.map((slot) => {
-            const start = localParts(slot.start, hours.timezone);
-            return {
-              data: start.data,
-              dia_da_semana: weekDayName(start.data),
-              hora_inicio: start.hora,
-              hora_fim: localParts(slot.end, hours.timezone).hora,
-              com: names.get(slot.ownerId),
-            };
-          }),
+          horarios: slots.map((slot) => slotView(slot, hours.timezone, names)),
           ...(slots.length === 0
             ? { mensagem: `Não há horários disponíveis no período. ${TEAM_WILL_CONTACT}` }
             : { orientacao: GUIDANCE }),
         },
-      };
+        slots.length,
+      );
+    } catch (error) {
+      if (error instanceof BitrixError && error.isScopeMissing) {
+        await this.config.markScopeMissing(caller.tenantId, caller.agentId);
+        return SCOPE_MISSING;
+      }
+      throw error;
+    }
+  }
+
+  private async createAppointment(
+    caller: CrmCaller,
+    input: { cliente?: unknown; inicio?: unknown; assunto?: unknown },
+  ): Promise<ToolResult> {
+    const startedAt = Date.now();
+    const cfg = await this.configs.find(caller.tenantId, caller.agentId);
+    if (!cfg) return NOT_CONFIGURED;
+
+    const hours = await this.hoursOf(caller);
+    const now = this.clock();
+    const start = parseLocalStart(input.inicio, hours.timezone);
+    if (start === null) {
+      return result('not_found', {
+        erro: 'Informe o início como AAAA-MM-DD HH:mm, no horário da agenda.',
+        fuso_horario: hours.timezone,
+      });
+    }
+    const rules = {
+      now,
+      hours,
+      slotMinutes: cfg.slotMinutes,
+      minNoticeMinutes: cfg.minNoticeMinutes,
+      maxDaysAhead: cfg.maxDaysAhead,
+    };
+    const violation = slotViolation(rules, start);
+    if (violation) return invalidSlot(violation, rules, hours);
+
+    try {
+      const client = await this.crm.calendarClient(caller, input.cliente);
+      if (!client.found) return CLIENT_NOT_FOUND;
+
+      const key = bookedKey(caller, client, start);
+      const repeated = await this.alreadyBooked(key);
+      if (repeated) return repeated;
+
+      const agenda = await this.agendaUsers(caller, cfg, client);
+      if ('result' in agenda) return agenda.result;
+      if (agenda.users.length === 0) return NO_AGENDA;
+
+      const locks = agenda.users.map((user) => `calendar:${caller.tenantId}:${user.id}`).sort();
+      const outcome = await this.withLocks(locks, () =>
+        this.bookLocked({
+          caller,
+          cfg,
+          hours,
+          client,
+          start,
+          key,
+          users: agenda.users,
+          startedAt,
+          subject: cleanSubject(input.assunto),
+        }),
+      );
+      if (!outcome.ran) return LOCK_BUSY;
+
+      const done = outcome.result;
+      switch (done.kind) {
+        case 'booked':
+        case 'done':
+          if (done.kind === 'booked') await this.scopeWorked(caller, cfg);
+          return done.result;
+        case 'taken':
+          return this.alternatives(caller, { cfg, hours, now, users: agenda.users, start });
+        case 'scope':
+          await this.config.markScopeMissing(caller.tenantId, caller.agentId);
+          return SCOPE_MISSING;
+        case 'denied':
+          return result('unavailable', {
+            erro: `O aplicativo não tem permissão para marcar na agenda de ${done.owner}. ${TEAM_WILL_CONTACT}`,
+          });
+        case 'slow':
+        case 'failed':
+          return BOOK_FAILED;
+      }
     } catch (error) {
       if (error instanceof BitrixError && error.isScopeMissing) {
         await this.config.markScopeMissing(caller.tenantId, caller.agentId);
@@ -184,26 +301,147 @@ export class CalendarToolsService {
   }
 
   /**
+   * Dentro do lock da agenda (design D4): confere de novo a repetição (uma chamada que esperou o
+   * lock já encontra a primeira pronta), relê a ocupação do dia, escolhe o primeiro usuário livre e
+   * cria. Se a criação falhar no meio (tempo esgotado), o evento pode existir mesmo assim; a
+   * releitura da próxima tentativa o enxerga como ocupado e não cria outro.
+   */
+  private async bookLocked(args: {
+    caller: CrmCaller;
+    cfg: CalendarConfigRow;
+    hours: BusinessHours;
+    client: Client;
+    start: number;
+    key: string;
+    users: AgendaUser[];
+    startedAt: number;
+    subject: string | null;
+  }): Promise<Locked> {
+    const { caller, cfg, hours, client, start, key, users, subject } = args;
+    const repeated = await this.alreadyBooked(key);
+    if (repeated) return { kind: 'done', result: repeated };
+
+    const end = start + cfg.slotMinutes * 60_000;
+    const day = localDate(start, hours.timezone);
+    const agendas = await this.busy(caller, users, day, day);
+    const free = agendas.find((agenda) => !agenda.busy.some((b) => b.start < end && b.end > start));
+    if (!free) return { kind: 'taken' };
+    if (Date.now() - args.startedAt > SOFT_DEADLINE_MS) return { kind: 'slow' };
+
+    const owner = users.find((user) => user.id === free.ownerId)!;
+    const from = localParts(start, hours.timezone);
+    const to = localParts(end, hours.timezone);
+    let created: unknown;
+    try {
+      ({ result: created } = await this.bitrix.call<number | string>(
+        caller.installationId,
+        'calendar.event.add',
+        {
+          type: 'user',
+          ownerId: owner.id,
+          auto_detect_section: 'Y',
+          name: `Agendamento: ${client.name ?? 'cliente'}`.slice(0, TITLE_MAX),
+          description: `Compromisso marcado pelo agente de IA.${subject ? `\nAssunto: ${subject}` : ''}`,
+          from: `${from.data} ${from.hora}:00`,
+          to: `${to.data} ${to.hora}:00`,
+          timezone_from: hours.timezone,
+          timezone_to: hours.timezone,
+          attendees: [owner.id],
+          accessibility: 'busy',
+          importance: 'normal',
+          is_meeting: 'N',
+          crm_fields: [`${CRM_PREFIX[client.type]}${client.id}`],
+        },
+      ));
+    } catch (error) {
+      if (!(error instanceof BitrixError)) throw error;
+      if (error.isScopeMissing) return { kind: 'scope' };
+      if (error.code === 'ACCESS_DENIED') return { kind: 'denied', owner: owner.name };
+      this.logger.warn({ err: error }, 'calendar.event.add falhou');
+      return { kind: 'failed' };
+    }
+    if (!(Number(created) > 0)) return { kind: 'failed' };
+
+    const body = {
+      agendado: true,
+      data: from.data,
+      dia_da_semana: weekDayName(from.data),
+      hora_inicio: from.hora,
+      hora_fim: to.hora,
+      duracao_minutos: cfg.slotMinutes,
+      fuso_horario: hours.timezone,
+      com: owner.name,
+      ...(subject ? { assunto: subject } : {}),
+      mensagem:
+        'Compromisso marcado no calendário. Confirme com o cliente a data, a hora e com quem será.',
+    };
+    await this.remember(key, body);
+    return { kind: 'booked', result: result('ok', body, 1) };
+  }
+
+  /** Horário tomado: até 3 alternativas, as mais próximas do pedido. */
+  private async alternatives(
+    caller: CrmCaller,
+    args: {
+      cfg: CalendarConfigRow;
+      hours: BusinessHours;
+      now: number;
+      users: AgendaUser[];
+      start: number;
+    },
+  ): Promise<ToolResult> {
+    const { cfg, hours, now, users, start } = args;
+    const window = searchWindow(now, hours.timezone, cfg.maxDaysAhead);
+    const agendas = await this.busy(caller, users, localDate(start, hours.timezone), window.last);
+    const near = freeSlots({
+      now,
+      from: localDate(start, hours.timezone),
+      hours,
+      slotMinutes: cfg.slotMinutes,
+      minNoticeMinutes: cfg.minNoticeMinutes,
+      maxDaysAhead: cfg.maxDaysAhead,
+      agendas,
+      limit: 30,
+    })
+      .sort((a, b) => Math.abs(a.start - start) - Math.abs(b.start - start))
+      .slice(0, MAX_ALTERNATIVES)
+      .sort((a, b) => a.start - b.start);
+    const names = new Map(users.map((user) => [user.id, user.name]));
+    return result('not_found', {
+      erro: 'Esse horário não está mais disponível.',
+      fuso_horario: hours.timezone,
+      duracao_minutos: cfg.slotMinutes,
+      alternativas: near.map((slot) => slotView(slot, hours.timezone, names)),
+      ...(near.length === 0
+        ? { mensagem: `Não há outro horário próximo disponível. ${TEAM_WILL_CONTACT}` }
+        : {
+            orientacao:
+              'Ofereça estas alternativas ao cliente e, quando ele escolher e confirmar, use "agendar_compromisso" de novo.',
+          }),
+    });
+  }
+
+  /**
    * Usuários cuja agenda vale nesta chamada, conforme o modo (design D5), já filtrados pelos que
    * existem e estão ativos no portal. Na ordem configurada (a primeira agenda livre vence).
    */
-  private async owners(
+  private async agendaUsers(
     caller: CrmCaller,
     cfg: CalendarConfigRow,
-    cliente: unknown,
-  ): Promise<{ users: Array<{ id: number; name: string }> } | { result: ToolResult }> {
+    client: Client | null,
+  ): Promise<{ users: AgendaUser[] } | { result: ToolResult }> {
     let ids = cfg.userIds;
     if (cfg.mode === 'CLIENT_OWNER') {
-      const responsible = await this.crm.clientResponsible(caller, cliente);
-      if (!responsible.found) return { result: CLIENT_NOT_FOUND };
-      if (responsible.userId === null) return { result: NO_AGENDA };
-      ids = [responsible.userId];
+      if (!client?.userId) return { result: NO_AGENDA };
+      ids = [client.userId];
     }
-    const { result } = await this.bitrix.call<PortalUser[]>(caller.installationId, 'user.get', {
-      FILTER: { ID: ids, ACTIVE: true },
-    });
+    const { result: found } = await this.bitrix.call<PortalUser[]>(
+      caller.installationId,
+      'user.get',
+      { FILTER: { ID: ids, ACTIVE: true } },
+    );
     const active = new Map(
-      (Array.isArray(result) ? result : []).map((user) => [
+      (Array.isArray(found) ? found : []).map((user) => [
         Number(user.ID),
         [user.NAME, user.LAST_NAME].filter(Boolean).join(' ').trim() || 'a equipe',
       ]),
@@ -213,21 +451,22 @@ export class CalendarToolsService {
     };
   }
 
-  /** Períodos ocupados de cada usuário na janela, em UTC, só com os eventos que bloqueiam. */
+  /** Períodos ocupados de cada usuário entre os dias (inclusive), em UTC, só os que bloqueiam. */
   private async busy(
     caller: CrmCaller,
-    users: Array<{ id: number }>,
-    window: { first: string; last: string },
+    users: AgendaUser[],
+    firstDay: string,
+    lastDay: string,
   ): Promise<AgendaBusy[]> {
     // A API recebe só datas: uma folga de um dia de cada lado cobre o deslocamento do fuso.
-    const { result } = await this.bitrix.call<
+    const { result: byUserOrList } = await this.bitrix.call<
       Record<string, AccessibilityEvent[]> | AccessibilityEvent[]
     >(caller.installationId, 'calendar.accessibility.get', {
       users: users.map((user) => user.id),
-      from: addDays(window.first, -1),
-      to: addDays(window.last, 1),
+      from: addDays(firstDay, -1),
+      to: addDays(lastDay, 1),
     });
-    const byUser = Array.isArray(result) ? {} : (result ?? {});
+    const byUser = Array.isArray(byUserOrList) ? {} : (byUserOrList ?? {});
     return users.map((user) => ({
       ownerId: user.id,
       busy: (byUser[String(user.id)] ?? [])
@@ -240,12 +479,87 @@ export class CalendarToolsService {
     }));
   }
 
+  private async hoursOf(caller: CrmCaller): Promise<BusinessHours> {
+    const agent = await this.agents.getById(caller.tenantId, caller.agentId);
+    return agent.businessHours ?? DEFAULT_CALENDAR_HOURS;
+  }
+
   /** Uma chamada ao Calendário funcionou: o aviso de escopo ausente some. */
   private async scopeWorked(caller: CrmCaller, cfg: CalendarConfigRow): Promise<void> {
     if (cfg.lastScopeErrorAt) {
       await this.config.clearScopeMissing(caller.tenantId, caller.agentId);
     }
   }
+
+  /** Locks na ordem das chaves (sem impasse entre agendamentos que dividem usuários). */
+  private async withLocks<T>(
+    keys: string[],
+    fn: () => Promise<T>,
+  ): Promise<{ ran: true; result: T } | { ran: false }> {
+    const [first, ...rest] = keys;
+    if (first === undefined) return { ran: true, result: await fn() };
+    const outcome = await this.lock.runExclusiveWaiting(first, LOCK_TTL_MS, LOCK_WAIT_MS, () =>
+      this.withLocks(rest, fn),
+    );
+    return outcome.ran ? outcome.result : { ran: false };
+  }
+
+  private async alreadyBooked(key: string): Promise<ToolResult | null> {
+    const raw = await this.redis.get(key);
+    if (!raw) return null;
+    try {
+      return result('ok', JSON.parse(raw) as Record<string, unknown>, 1);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Guarda o resultado 24 h: a mesma chamada de novo devolve o agendamento já feito. */
+  private async remember(key: string, body: Record<string, unknown>): Promise<void> {
+    await this.redis
+      .set(key, JSON.stringify(body), 'EX', BOOKED_TTL_SECONDS)
+      .catch((error: unknown) =>
+        this.logger.warn({ err: error }, 'agendamento feito, mas a chave de repetição não gravou'),
+      );
+  }
+}
+
+/** Mesma chamada = mesmo cliente, no mesmo horário, para o mesmo agente. Sem dados pessoais na chave. */
+function bookedKey(caller: CrmCaller, client: Client, start: number): string {
+  const digest = createHash('sha256')
+    .update(`${caller.tenantId}|${caller.agentId}|${client.type}:${client.id}|${start}`)
+    .digest('hex');
+  return `calendar:booked:${digest}`;
+}
+
+function slotView(slot: FreeSlot, timezone: string, names: Map<number, string>) {
+  const start = localParts(slot.start, timezone);
+  return {
+    data: start.data,
+    dia_da_semana: weekDayName(start.data),
+    hora_inicio: start.hora,
+    hora_fim: localParts(slot.end, timezone).hora,
+    com: names.get(slot.ownerId),
+  };
+}
+
+function invalidSlot(
+  violation: SlotViolation,
+  rules: { now: number; hours: BusinessHours; minNoticeMinutes: number; maxDaysAhead: number },
+  hours: BusinessHours,
+): ToolResult {
+  const window = searchWindow(rules.now, hours.timezone, rules.maxDaysAhead);
+  const reason: Record<SlotViolation, string> = {
+    past: 'Esse horário já passou.',
+    window: 'Esse horário está depois do período em que há agenda.',
+    grid: 'Esse horário está fora do expediente ou não é um dos horários oferecidos. Use "horarios_livres" e escolha um da lista.',
+    notice: `Esse horário está antes da antecedência mínima de ${rules.minNoticeMinutes} minutos.`,
+  };
+  return result('not_found', {
+    erro: reason[violation],
+    periodo_permitido: { de: window.first, ate: window.last },
+    fuso_horario: hours.timezone,
+  });
 }
 
 /** `AAAA-MM-DD` válido; ausente = `null`; qualquer outra coisa = `'invalid'`. */
@@ -256,6 +570,34 @@ function parseDate(value: unknown): string | null | 'invalid' {
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
     ? 'invalid'
     : value;
+}
+
+/** `AAAA-MM-DD HH:mm` (ou com `T`) na hora de parede da agenda ⇒ instante; inválido ⇒ `null`. */
+function parseLocalStart(value: unknown, timezone: string): number | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::00)?$/.exec(value.trim());
+  if (!match) return null;
+  const [, date, hour, minute] = match;
+  if (parseDate(date) === 'invalid' || Number(hour) > 23 || Number(minute) > 59) return null;
+  return zonedToEpoch(date!, Number(hour) * 60 + Number(minute), timezone);
+}
+
+/**
+ * Assunto livre do agente: uma linha, sem controle, curto e sem `[ ] < >`: a descrição do evento
+ * do Bitrix24 interpreta BBCode e HTML, e o texto vem do cliente final.
+ */
+function cleanSubject(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = Array.from(value, (char) => {
+    const code = char.charCodeAt(0);
+    return code < 32 || code === 127 ? ' ' : char;
+  })
+    .join('')
+    .replace(/[[\]<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, SUBJECT_MAX);
+  return text || null;
 }
 
 function weekDayName(date: string): string {

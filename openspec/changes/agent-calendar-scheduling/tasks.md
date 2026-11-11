@@ -29,9 +29,9 @@
 
 ## 6. Agendamento
 
-- [ ] 6.1 Implementar `CalendarToolsService.book` na ordem do design D4: verificar referência do cliente e regras do horário, lock distribuído por (tenant, usuário), releitura da ocupação, escolha do primeiro usuário livre, idempotência em Redis (24 h) e `calendar.event.add` com `crm_fields`; verificar com testes de serviço: sucesso, horário tomado (devolve até 3 alternativas), início fora das regras, referência de outro tenant, repetição da mesma chamada, falha do Bitrix24 ao criar (sem chave de idempotência gravada) e acesso negado na agenda do dono (resposta "sem permissão nessa agenda", sem criar em outra agenda e sem repetir a chamada)
-- [ ] 6.2 Garantir que a resposta de `book` não traz identificadores internos e que o título e a descrição do evento são curtos e sem dados além do nome do cliente; verificar com teste que inspeciona o corpo da resposta e o payload enviado ao Bitrix24
-- [ ] 6.3 Escrever um teste de integração com Redis (Testcontainers) que dispara duas chamadas concorrentes para o mesmo horário e verifica que só um `calendar.event.add` é feito; verificar com o teste passando em `npm run test:integration -w backend`
+- [x] 6.1 Implementar `CalendarToolsService.book` na ordem do design D4: verificar referência do cliente e regras do horário, lock distribuído por (tenant, usuário), releitura da ocupação, escolha do primeiro usuário livre, idempotência em Redis (15 min) e `calendar.event.add` com `crm_fields`; verificar com testes de serviço: sucesso, horário tomado (devolve até 3 alternativas), início fora das regras, referência de outro tenant, repetição da mesma chamada, falha do Bitrix24 ao criar (sem chave de idempotência gravada) e acesso negado na agenda do dono (resposta "sem permissão nessa agenda", sem criar em outra agenda e sem repetir a chamada)
+- [x] 6.2 Garantir que a resposta de `book` não traz identificadores internos e que o título e a descrição do evento são curtos e sem dados além do nome do cliente; verificar com teste que inspeciona o corpo da resposta e o payload enviado ao Bitrix24
+- [x] 6.3 Escrever um teste de integração com Redis (Testcontainers) que dispara duas chamadas concorrentes para o mesmo horário e verifica que só um `calendar.event.add` é feito; verificar com o teste passando em `npm run test:integration -w backend`
 
 ## 7. Agendamentos do cliente
 

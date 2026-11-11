@@ -8,6 +8,7 @@ import {
   localDate,
   localParts,
   searchWindow,
+  slotViolation,
   type SlotQuery,
   zonedToEpoch,
 } from './calendar-slots';
@@ -344,5 +345,39 @@ describe('funções de data e fuso', () => {
       first: '2026-11-24',
       last: '2026-12-01',
     });
+  });
+});
+
+describe('slotViolation', () => {
+  const rules = {
+    now: at('2026-11-24T10:00:00Z'), // terça 07:00 em São Paulo
+    hours: hoursOf(SP, { tue: [['09:00', '12:00']], wed: [['09:00', '12:00']] }),
+    slotMinutes: 30,
+    minNoticeMinutes: 60,
+    maxDaysAhead: 1,
+  };
+
+  it.each([
+    ['horário dentro das regras', '2026-11-24T13:00:00Z', null],
+    ['último horário que cabe no expediente', '2026-11-24T14:30:00Z', null],
+    ['dia seguinte, dentro da janela', '2026-11-25T12:00:00Z', null],
+    ['dia que já passou', '2026-11-23T12:00:00Z', 'past'],
+    ['depois da janela de busca', '2026-12-01T12:00:00Z', 'window'],
+    ['fora do expediente (antes)', '2026-11-24T11:00:00Z', 'grid'],
+    ['fora do expediente (depois do fim)', '2026-11-24T15:00:00Z', 'grid'],
+    ['não alinhado à grade de 30 minutos', '2026-11-24T13:15:00Z', 'grid'],
+    ['compromisso que não cabe até o fim do expediente', '2026-11-24T14:45:00Z', 'grid'],
+  ])('%s', (_caso, start, expected) => {
+    expect(slotViolation(rules, at(start))).toBe(expected);
+  });
+
+  it('dia sem expediente (quinta, com a janela cobrindo o dia)', () => {
+    expect(slotViolation({ ...rules, maxDaysAhead: 3 }, at('2026-11-26T12:00:00Z'))).toBe('grid');
+  });
+
+  it('antes da antecedência mínima: às 08:30 com 60 minutos, 09:00 não e 09:30 sim', () => {
+    const later = { ...rules, now: at('2026-11-24T11:30:00Z') };
+    expect(slotViolation(later, at('2026-11-24T12:00:00Z'))).toBe('notice');
+    expect(slotViolation(later, at('2026-11-24T12:30:00Z'))).toBeNull();
   });
 });

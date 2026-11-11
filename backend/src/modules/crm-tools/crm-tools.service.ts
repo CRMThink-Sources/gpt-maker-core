@@ -165,21 +165,30 @@ export class CrmToolsService {
   }
 
   /**
-   * Responsável (`ASSIGNED_BY_ID`) do cliente da referência, para a agenda no modo "responsável do
-   * cliente no CRM" (spec agent-calendar-scheduling). Referência inválida, adulterada ou de outro
-   * tenant, ou registro apagado, contam como cliente não encontrado. Não passa pelo executor das
-   * ferramentas: quem chama já está dentro dele.
+   * Cliente da referência para as ferramentas de agenda (spec agent-calendar-scheduling): tipo, id,
+   * nome e responsável (`ASSIGNED_BY_ID`). Referência inválida, adulterada ou de outro tenant, ou
+   * registro apagado, contam como cliente não encontrado. Não passa pelo executor das ferramentas:
+   * quem chama já está dentro dele.
    */
-  async clientResponsible(
+  async calendarClient(
     caller: CrmCaller,
     ref: unknown,
-  ): Promise<{ found: false } | { found: true; userId: number | null }> {
+  ): Promise<
+    | { found: false }
+    | { found: true; type: ClientType; id: number; name: string | null; userId: number | null }
+  > {
     const client = this.refs.verify(caller.tenantId, ref);
     if (!client) return { found: false };
     const record = await this.getRecord(caller, client.type, client.id);
     if (!record) return { found: false };
     const userId = Number(record.ASSIGNED_BY_ID);
-    return { found: true, userId: userId > 0 ? userId : null };
+    return {
+      found: true,
+      type: client.type,
+      id: client.id,
+      name: displayName(client.type, record),
+      userId: userId > 0 ? userId : null,
+    };
   }
 
   pipelineStages(caller: CrmCaller, pipelineName?: string) {
