@@ -54,6 +54,8 @@ interface PortalEvent {
   DATE_TO_TS_UTC: string;
   '~USER_OFFSET_FROM': number;
   TZ_FROM: string;
+  DATE_FROM?: string;
+  DATE_TO?: string;
 }
 
 /**
@@ -394,6 +396,38 @@ describe('CalendarToolsService.freeSlots', () => {
       }>;
       expect(first).toMatchObject({ usar_ao_agendar: '2026-11-24 09:00', com: 'Bruno Reis' });
       expect(second).toMatchObject({ usar_ao_agendar: '2026-11-24 09:30', com: 'Ana Lima' });
+    });
+
+    it('almoço recorrente de um usuário só bloqueia a hora do almoço dele, não a agenda inteira', async () => {
+      // Valores reais do portal: a série vai de 2024 a 2038; o texto traz o dia (12:00–13:30 locais).
+      const lunch: PortalEvent = {
+        ACCESSIBILITY: 'busy',
+        DATE_FROM_TS_UTC: '1724846400',
+        DATE_TO_TS_UTC: '2145992400',
+        '~USER_OFFSET_FROM': 0,
+        TZ_FROM: 'America/Sao_Paulo',
+        DATE_FROM: '24/11/2026 12:00:00',
+        DATE_TO: '24/11/2026 13:30:00',
+      };
+      const { service } = setup({
+        row: row(),
+        hours: hoursOf({ tue: [['09:00', '15:00']] }),
+        events: {
+          // Ana (508) ocupada às 09:00; Bruno (418) tem o almoço recorrente.
+          508: [event('busy', '2026-11-24T12:00:00Z', '2026-11-24T12:30:00Z')],
+          418: [lunch],
+        },
+      });
+      const { body } = await service.freeSlots(caller);
+      const slots = body.horarios as Array<{ usar_ao_agendar: string; com: string }>;
+      const by = (time: string) =>
+        slots.find((slot) => slot.usar_ao_agendar === `2026-11-24 ${time}`);
+      // Às 09:00 só o Bruno está livre; ele aparece, o que não acontecia com a série bloqueando tudo.
+      expect(by('09:00')?.com).toBe('Bruno Reis');
+      // No almoço dele a Ana atende; nas demais horas, a primeira da lista.
+      expect(by('12:00')?.com).toBe('Ana Lima');
+      expect(by('13:00')?.com).toBe('Ana Lima');
+      expect(by('10:00')?.com).toBe('Ana Lima');
     });
 
     it('usuário inativo da lista é ignorado', async () => {

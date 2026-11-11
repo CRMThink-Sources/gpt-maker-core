@@ -102,6 +102,8 @@ interface AccessibilityEvent {
   DATE_TO_TS_UTC?: string | number;
   '~USER_OFFSET_FROM'?: string | number;
   TZ_FROM?: string;
+  DATE_FROM?: string;
+  DATE_TO?: string;
 }
 
 interface AgendaUser {
@@ -572,6 +574,9 @@ export class CalendarToolsService {
             toTs: event.DATE_TO_TS_UTC,
             userOffset: event['~USER_OFFSET_FROM'],
             timezone: event.TZ_FROM,
+            dateFrom: event.DATE_FROM,
+            dateTo: event.DATE_TO,
+            window: { first: addDays(firstDay, -1), last: addDays(lastDay, 1) },
           }),
         )
         .filter((interval): interval is Interval => interval !== null),

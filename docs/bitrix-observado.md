@@ -114,6 +114,16 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   `TS + ~USER_OFFSET_FROM`, e o instante real sai de convertê-la com `TZ_FROM`
   (`eventInterval` em `crm-tools/calendar-slots.ts`). A duração (`TO - FROM`) é a real. A
   `START_TIME` das atividades do CRM **é** o instante real, com o deslocamento do portal.
+- **Eventos recorrentes (2026-11-11, lista de usuários)**: `calendar.accessibility.get` e
+  `calendar.event.get` devolvem **uma linha por ocorrência**, com `DATE_FROM`/`DATE_TO` do dia, mas
+  com `DATE_FROM_TS_UTC`/`DATE_TO_TS_UTC` da **série inteira** (o "Horário de Almoço" do usuário 418,
+  todos os dias 12:00–13:30, vinha de 2024 a 2038). Quem lê só o timestamp vê o usuário ocupado o
+  tempo todo (era o bug: o segundo usuário da lista nunca oferecia horário). `calendar.event.get`
+  traz também `RRULE` e `DT_LENGTH`; `accessibility.get` não. O texto `DATE_FROM` vem na hora de
+  parede **do fuso do evento** (evento de 10:00 em Nova York criado pela API vem `10:00:00`, com TS
+  `12:00Z` e offset `-7200`), logo bate com `TS + ~USER_OFFSET_FROM` num evento comum e não bate
+  numa ocorrência de série. O formato do texto segue o idioma do usuário (`dd/mm/aaaa` no portal
+  de teste).
 - **Sem proteção contra choque**: um segundo `calendar.event.add` no mesmo horário e na mesma agenda
   foi aceito e criou outro evento (id diferente), sem erro. A exclusividade do horário é do app.
 - **Evento privado**: `private_event: 'Y'` volta em `PRIVATE_EVENT` como `"1"` (não `"Y"`).

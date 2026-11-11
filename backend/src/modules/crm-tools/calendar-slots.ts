@@ -229,6 +229,48 @@ export interface PortalEventTimes {
   userOffset?: unknown;
   /** `TZ_FROM`: fuso do evento (nome IANA). */
   timezone?: unknown;
+  /** `DATE_FROM`/`DATE_TO`: texto da ocorrência, na hora de parede do fuso do evento. */
+  dateFrom?: unknown;
+  dateTo?: unknown;
+  /** Dias (`AAAA-MM-DD`) pedidos ao portal: desambigua o formato do texto (dia/mês). */
+  window?: { first: string; last: string };
+}
+
+const PORTAL_DATE = /^(\d{1,4})[./-](\d{1,2})[./-](\d{1,4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+
+/**
+ * Lê o texto de data do portal (`24/11/2026 14:00:00`, no idioma do usuário) como hora de parede,
+ * em milissegundos "como se fosse UTC". Dia e mês trocam de lugar conforme o idioma: vale a leitura
+ * que cai nos dias pedidos (`window`); sem como decidir, dia/mês/ano. `null` se não houver leitura válida.
+ */
+function parsePortalWall(value: unknown, window?: { first: string; last: string }): number | null {
+  const match = typeof value === 'string' ? PORTAL_DATE.exec(value.trim()) : null;
+  if (!match) return null;
+  const [a, b, c] = [match[1]!, match[2]!, match[3]!];
+  const [hh, mm, ss] = [Number(match[4]), Number(match[5]), Number(match[6] ?? 0)];
+  const readings: Array<[number, number, number]> =
+    a.length === 4
+      ? [[Number(a), Number(b), Number(c)]]
+      : c.length === 4
+        ? [
+            [Number(c), Number(b), Number(a)],
+            [Number(c), Number(a), Number(b)],
+          ]
+        : [];
+  const valid = readings.filter(([y, mo, d]) => {
+    const probe = new Date(Date.UTC(y, mo - 1, d));
+    return (
+      probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d
+    );
+  });
+  const inside = valid.filter(([y, mo, d]) => {
+    if (!window) return true;
+    const day = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return day >= window.first && day <= window.last;
+  });
+  const chosen = inside[0];
+  if (!chosen || hh > 23 || mm > 59 || ss > 59) return null;
+  return Date.UTC(chosen[0], chosen[1] - 1, chosen[2], hh, mm, ss);
 }
 
 /**
@@ -241,6 +283,12 @@ export interface PortalEventTimes {
  * e offset −7200. Logo, a hora de parede **no fuso do evento** é `TS + ~USER_OFFSET_FROM`, e o
  * instante real sai de convertê-la com `TZ_FROM`. A duração (`TO − FROM`) é a real. Sem fuso
  * válido não há como corrigir: vale o timestamp como veio.
+ *
+ * **Eventos recorrentes**: o portal devolve uma linha por ocorrência, mas os timestamps são os da
+ * série (de 2024 a 2038, por exemplo). `DATE_FROM`/`DATE_TO` trazem a ocorrência, na hora de parede
+ * do fuso do evento (medido: evento de 10:00 em Nova York vem como `10:00:00`). Quando esse texto
+ * não bate com `TS + ~USER_OFFSET_FROM`, é uma ocorrência: vale o texto e a duração dele. Sem isso
+ * a série inteira bloqueava a agenda.
  */
 export function eventInterval(event: PortalEventTimes): Interval | null {
   const from = Number(event.fromTs);
@@ -251,7 +299,20 @@ export function eventInterval(event: PortalEventTimes): Interval | null {
   if (!timezone) return { start: from * 1000, end: to * 1000 };
 
   const offset = Number(event.userOffset ?? 0);
-  const wall = new Date((from + (Number.isFinite(offset) ? offset : 0)) * 1000);
+  let wallSeconds = from + (Number.isFinite(offset) ? offset : 0);
+  let durationSeconds = to - from;
+  const textFrom = parsePortalWall(event.dateFrom, event.window);
+  const textTo = parsePortalWall(event.dateTo, event.window);
+  if (
+    textFrom !== null &&
+    textTo !== null &&
+    textTo >= textFrom &&
+    Math.abs(textFrom / 1000 - wallSeconds) > 60
+  ) {
+    wallSeconds = textFrom / 1000;
+    durationSeconds = (textTo - textFrom) / 1000;
+  }
+  const wall = new Date(wallSeconds * 1000);
   const base = zonedToEpoch(
     wall.toISOString().slice(0, 10),
     wall.getUTCHours() * 60 + wall.getUTCMinutes(),
@@ -260,7 +321,7 @@ export function eventInterval(event: PortalEventTimes): Interval | null {
   // Hora que não existe no fuso (salto do horário de verão): sem como corrigir com segurança.
   if (base === null) return { start: from * 1000, end: to * 1000 };
   const start = base + wall.getUTCSeconds() * 1000;
-  return { start, end: start + (to - from) * 1000 };
+  return { start, end: start + durationSeconds * 1000 };
 }
 
 const SPOKEN_WEEKDAYS = [

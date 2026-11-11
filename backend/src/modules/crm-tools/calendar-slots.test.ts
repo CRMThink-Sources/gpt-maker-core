@@ -428,6 +428,67 @@ describe('eventInterval (período real de um evento do portal)', () => {
     expect(actual).toEqual(expected);
   });
 
+  describe('ocorrência de evento recorrente', () => {
+    const window = { first: '2026-11-10', last: '2026-11-19' };
+    // Valores reais do portal de teste: "Horário de Almoço" do usuário 418, todo dia, 12:00–13:30 em
+    // São Paulo. Os timestamps são os da série (agosto de 2024 a janeiro de 2038); o texto é do dia.
+    const lunch = (dateFrom: string, dateTo: string) =>
+      eventInterval({
+        fromTs: '1724846400',
+        toTs: '2145992400',
+        userOffset: 0,
+        timezone: 'America/Sao_Paulo',
+        dateFrom,
+        dateTo,
+        window,
+      });
+
+    it('vale o dia da ocorrência e a duração dela, não o período da série', () => {
+      expect(lunch('12/11/2026 12:00:00', '12/11/2026 13:30:00')).toEqual(
+        span('2026-11-12T15:00:00Z', '2026-11-12T16:30:00Z'),
+      );
+    });
+
+    it('a mesma série em outro dia dá outra ocorrência', () => {
+      expect(lunch('13/11/2026 12:00:00', '13/11/2026 13:30:00')).toEqual(
+        span('2026-11-13T15:00:00Z', '2026-11-13T16:30:00Z'),
+      );
+    });
+
+    it('portal com mês antes do dia: vale a leitura que cai nos dias pedidos', () => {
+      expect(lunch('11/12/2026 12:00:00', '11/12/2026 13:30:00')).toEqual(
+        span('2026-11-12T15:00:00Z', '2026-11-12T16:30:00Z'),
+      );
+    });
+
+    it('evento comum de outro fuso continua pelo timestamp (o texto bate com TS + deslocamento)', () => {
+      // Medido: 10:00 em Nova York criado pela API volta como 10:00:00, TS 12:00Z e offset -7200.
+      expect(
+        eventInterval({
+          fromTs: '1795176000',
+          toTs: '1795177800',
+          userOffset: -7200,
+          timezone: 'America/New_York',
+          dateFrom: '20/11/2026 10:00:00',
+          dateTo: '20/11/2026 10:30:00',
+          window: { first: '2026-11-19', last: '2026-11-21' },
+        }),
+      ).toEqual(span('2026-11-20T15:00:00Z', '2026-11-20T15:30:00Z'));
+    });
+
+    it('texto ilegível ou fora dos dias pedidos: cai no timestamp, sem quebrar', () => {
+      // Sem leitura válida do texto não há como achar a ocorrência: vale o período da série.
+      for (const [from, to] of [
+        ['amanhã', 'depois'],
+        ['12/11/2030 12:00:00', '12/11/2030 13:30:00'],
+      ] as const) {
+        const result = lunch(from, to)!;
+        expect(result.start).toBe(Date.parse('2024-08-28T15:00:00Z'));
+        expect(result.end - result.start).toBeGreaterThan(365 * 24 * 3600_000);
+      }
+    });
+  });
+
   it('a duração do evento é preservada', () => {
     const result = portal('2026-11-12T14:20:00Z', '2026-11-12T14:50:00Z', 0, 'America/Sao_Paulo')!;
     expect(result.end - result.start).toBe(30 * 60_000);
