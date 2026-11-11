@@ -46,8 +46,8 @@
 
 ## 9. Tela do agente
 
-- [ ] 9.1 Criar `calendar-card.tsx` ao lado do `crm-access-card.tsx` em `frontend/src/app/app/agents/[id]/` (modo, seletor de usuários com `lib/portal-users.ts`, duração, antecedência, janela, remover, desabilitado sem CRM conectado, alerta "reautorizar o app" quando `scopeMissing`) e o cliente de API em `frontend/src/lib/`; verificar com testes de componente: escolher modo, validar limites, remover, estado sem CRM, alerta de escopo
-- [ ] 9.2 Revisar a tela e os testes com o agente `revisor-frontend`, conferindo a doc do Next em `node_modules/next/dist/docs/`; verificar com o relatório sem bloqueantes
+- [x] 9.1 Criar `calendar-card.tsx` ao lado do `crm-access-card.tsx` em `frontend/src/app/app/agents/[id]/` (modo, seletor de usuários com `lib/portal-users.ts`, duração, antecedência, janela, remover, desabilitado sem CRM conectado, alerta "reautorizar o app" quando `scopeMissing`) e o cliente de API em `frontend/src/lib/`; verificar com testes de componente: escolher modo, validar limites, remover, estado sem CRM, alerta de escopo
+- [x] 9.2 Revisar a tela e os testes com o agente `revisor-frontend`, conferindo a doc do Next em `node_modules/next/dist/docs/`; verificar com o relatório sem bloqueantes
 
 ## 10. Verificação integrada e operação
 
