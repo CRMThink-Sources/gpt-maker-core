@@ -143,3 +143,9 @@ timezone_from, timezone_to, attendees, accessibility, crm_fields }`: devolve o i
   minuto, com `+00:00`), `PROVIDER_ID` e `RESPONSIBLE_ID` como lista são todos respeitados.
 - **Ainda sem como distinguir**: uma atividade `CRM_TODO` criada à mão, sem evento, é indistinguível
   pelos campos acima e seria listada como compromisso.
+- **Validação ponta a ponta (tarefa 10.1, 2026-11-11, local com túnel)**: com o agente no chat de teste
+  e o contato de teste, o agente ofereceu os horários **por extenso**, recusou um horário que já tinha
+  compromisso e criou **um** evento (09:30–10:00 em Brasília, vinculado ao contato, com a atividade
+  `CRM_TODO` em `15:30+03:00`, o mesmo instante). Repetir a confirmação e `agendamentos_do_cliente`
+  também foram testados pelo responsável. Variações (responsável do cliente, lista de usuários) e a
+  conversa real na Linha Aberta ficam para o staging.

@@ -51,6 +51,6 @@
 
 ## 10. Verificação integrada e operação
 
-- [ ] 10.1 Validar no chat de teste do app e numa conversa real da Linha Aberta (portal de teste): consultar horários, agendar, repetir a chamada, consultar os agendamentos, sem escopo e com agenda removida; verificar com os cenários da spec `agent-calendar-scheduling` conferidos um a um e os resultados anotados em `docs/bitrix-observado.md`
+- [x] 10.1 Validar no chat de teste do app e numa conversa real da Linha Aberta (portal de teste): consultar horários, agendar, repetir a chamada, consultar os agendamentos, sem escopo e com agenda removida; verificar com os cenários da spec `agent-calendar-scheduling` conferidos um a um e os resultados anotados em `docs/bitrix-observado.md`
 - [ ] 10.2 Auditar o diff com `revisor-codigo`, `auditor-multitenant` e `guardiao-migracoes`, e `npm run build -w @gptmaker/contracts`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run depcruise`, `npm test` e `npm run test:integration -w backend`; verificar com os relatórios e comandos sem erro novo
 - [ ] 10.3 Documentar a reautorização do escopo `calendar` e o rollback (remover a configuração) em `docs/runbook.md` e a nova capacidade no `README`/docs conforme o padrão do projeto; verificar com o passo a passo executado no portal de teste
