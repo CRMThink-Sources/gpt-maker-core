@@ -65,3 +65,14 @@ Criar, concluir e cancelar MUST exigir a permissão de gestão; listar MUST exig
 #### Scenario: Sem permissão de gestão
 - **WHEN** um usuário sem permissão de gestão tenta criar, concluir ou cancelar uma conexão OAuth
 - **THEN** o sistema recusa como não autorizado
+
+### Requirement: Conclusão quando o painel já concluiu
+Se a conclusão com `code` falhar mas a conexão já responder no GPTMaker (por exemplo, o painel do GPTMaker consumiu o código antes), o sistema MUST tratá-la como concluída. O usuário MUST poder pedir "Atualizar status" de uma conexão pendente sem informar `code`, e o sistema MUST concluí-la se a conexão já responder, ou mantê-la pendente se não.
+
+#### Scenario: Código já consumido pelo painel
+- **WHEN** o usuário informa um `code` já usado, mas a conexão já está ativa no GPTMaker
+- **THEN** a conexão fica `connected` com as ferramentas listadas
+
+#### Scenario: Atualizar status ainda pendente
+- **WHEN** o usuário pede "Atualizar status" e a conexão ainda não foi autorizada
+- **THEN** a conexão continua aguardando autorização, sem erro

@@ -4,7 +4,9 @@
 
 A v1 (`agent-mcp-connections`) guarda cada conexão em `agent_mcp_connection` e conversa com o GPTMaker por `addMcp`, `listMcpTools`, `activateMcpTool`/`deactivateMcpTool`, `syncMcpTools` e `deleteMcp`. O `mcpAddAckSchema` já aceita `connected` e `url`. O OpenAPI do GPTMaker descreve o OAuth assim: `POST /agent/{agentId}/mcp/add` com `authType: OAUTH` devolve `{ success, connected, id, url }`; depois do consentimento, `POST /mcp/connect` com `{ code, state }` devolve `{ success, agentId, mcpId }`. O GPTMaker guarda e renova os tokens; o ThinkFlow nunca os vê. Ver proposal.md para a motivação.
 
-Lacuna central: o `redirect_uri` é decidido pelo GPTMaker (o `mcp/add` não aceita um). Não se sabe, sem testar em staging, para onde o provedor redireciona depois do consentimento (página do painel do GPTMaker ou outro endereço) nem se o painel conclui sozinho a conexão.
+**Observado em 2026-11-12** (conexão criada no painel do GPTMaker contra o servidor `hubthink`): a URL de autorização é `https://<servidor>/authorize?response_type=code&client_id=…&redirect_uri=https://app.gptmaker.ai/browse/oauth/mcp&scope=mcp&state=<uuid>&code_challenge=…&code_challenge_method=S256`. Ou seja: (a) o `redirect_uri` é uma página do próprio GPTMaker, fixo e fora do nosso controle (o `mcp/add` não aceita um), então o ThinkFlow não recebe o callback; (b) o fluxo usa PKCE e o `code_verifier` fica com o GPTMaker, ligado ao `state` (por isso o `connect` só pede `code` e `state`); (c) o `state` é um UUID presente na URL de autorização.
+
+Lacuna que resta: a página `app.gptmaker.ai/browse/oauth/mcp` conclui a conexão sozinha com a sessão do painel? Se sim, para um usuário sem login no GPTMaker (o caso dos clientes do ThinkFlow, que usam a conta partner) ela provavelmente pede login e não conclui, deixando o `code` na barra de endereço; se o usuário estiver logado, ela pode consumir o `code` (uso único) antes de o ThinkFlow chamar `connect`.
 
 ## Goals / Non-Goals
 
@@ -13,17 +15,19 @@ Lacuna central: o `redirect_uri` é decidido pelo GPTMaker (o `mcp/add` não ace
 - Não guardar nenhum segredo do provedor (`code`, tokens) e impedir que um `code` de outra conexão seja aplicado à conexão errada (`state`).
 
 **Non-Goals:**
-- Callback próprio no ThinkFlow (depende de o GPTMaker aceitar `redirect_uri`; ver Open Questions).
+- Callback próprio no ThinkFlow (o `redirect_uri` é fixo do GPTMaker).
 - Editar conexões OAuth, renovar ou revogar tokens (a renovação é do GPTMaker).
 - Importar conexões OAuth criadas direto no painel do GPTMaker.
 
 ## Decisions
 
-**D1. A conclusão é um passo explícito do usuário, com `code` + `state`.** O backend expõe `POST /app/agents/:agentId/mcp-connections/:id/oauth/complete` com `{ code, state }`. O frontend aceita também a URL de retorno inteira colada e extrai `code` e `state` no cliente (função pura em `lib/`). Alternativa descartada: endpoint de callback público no ThinkFlow, porque o `redirect_uri` não é controlável pela API; se a spike (tarefa 1.1) mostrar que é, esse endpoint chama o mesmo service sem mudar o contrato.
+**D1. A conclusão é um passo explícito do usuário, com `code` + `state`.** O backend expõe `POST /app/agents/:agentId/mcp-connections/:id/oauth/complete` com `{ code, state }`. O frontend aceita também a URL de retorno inteira colada e extrai `code` e `state` no cliente (função pura em `lib/`). Alternativa descartada: endpoint de callback público no ThinkFlow, porque o `redirect_uri` é fixo na página do GPTMaker (observado em 2026-11-12); o `code` fica na barra de endereço dessa página, de onde o usuário o copia.
 
 **D2. Estado `PENDING_AUTH` e `state` guardados na linha.** Acrescentar `PENDING_AUTH` ao enum `mcp_connection_status` e as colunas `oauth_state` (extraído da query `state` da URL de autorização devolvida), `authorization_url` (só enquanto pendente) e `oauth_started_at`. O `state` é valor de correlação, não credencial de acesso. A comparação do `state` informado com o guardado é em tempo constante. Migration nova (`db:generate`), sem tocar nas existentes. Alternativa descartada: não guardar `state` e confiar só no GPTMaker; perderia a proteção contra aplicar um retorno a uma conexão errada.
 
 **D3. `mcp/add` com `OAUTH` não lista nem ativa ferramentas.** Se `connected` vier `true`, segue o caminho da v1 (listar e ativar). Se `false`, grava `PENDING_AUTH`, `gptmakerMcpId = id` e devolve `authorizationUrl`. Pendência antiga não é apagada por tempo: o usuário a cancela ou refaz; assim nunca some uma autorização em curso.
+
+**D4a. Concluir é idempotente em relação ao painel.** Se `connect` falhar (código já consumido pela página do GPTMaker ou expirado), o service relê `tools` do `mcpId` provisório: se a conexão responde, marca `connected` e aplica as ferramentas ("já concluída no GPTMaker"); senão mantém `PENDING_AUTH` com o motivo. Um botão "Atualizar status" dispara só essa releitura, sem `code`.
 
 **D4. Concluir chama `connectMcp` e troca o id.** `GptMakerClient.connectMcp({ code, state })` faz `POST /mcp/connect`. O `mcpId` devolvido substitui o provisório (podem diferir); depois `applyTools` como na criação, e `authorization_url`/`oauth_state` são limpos. Falha do GPTMaker mantém `PENDING_AUTH` com `last_error` resumido (sem o `code`). O `code` não entra em log, em `last_error` nem no banco.
 
@@ -35,12 +39,13 @@ Lacuna central: o `redirect_uri` é decidido pelo GPTMaker (o `mcp/add` não ace
 
 ## Risks / Trade-offs
 
-- [O provedor pode redirecionar para uma página do GPTMaker que já conclui a conexão sozinha, deixando o passo manual redundante] → A spike (1.1) confirma; se for o caso, "Concluir" vira "Atualizar status", relendo `tools` para ver se a conexão ficou ativa.
+- [A página do GPTMaker pode consumir o `code` antes do ThinkFlow] → D4a: a falha do `connect` não encerra o fluxo, relê as ferramentas e conclui se a conexão já existe.
 - [Colar `code` e `state` é trabalhoso para o usuário] → Aceitar a URL inteira e extrair no cliente; texto de ajuda na tela.
 - [`code` exposto em histórico do navegador ou log de proxy] → Vale por poucos minutos e uma única vez; o backend não o registra e o frontend não o guarda.
 - [Tokens expiram e o GPTMaker pode não renovar] → Fora do escopo; a lista de ferramentas já marca `error` quando a conexão falha e o usuário refaz a conexão.
 
 ## Open Questions
 
-- Para onde o provedor redireciona e o painel do GPTMaker conclui sozinho? Define se D1 fica só com o passo manual ou ganha o callback (spike 1.1, em staging, com um servidor MCP OAuth de teste).
-- A URL de autorização expira? Se sim, em quanto tempo, e um `add` repetido para a mesma URL cria duplicata?
+- O que a página `app.gptmaker.ai/browse/oauth/mcp` mostra para quem não tem login no GPTMaker, e com login ela conclui a conexão? (Confirmar na spike 1.1; D1 e D4a cobrem os dois casos.)
+- A URL de autorização expira e um `add` repetido para a mesma URL cria duplicata?
+- O `mcpId` do `connect` é igual ao `id` do `add`?

@@ -2,8 +2,8 @@
 
 ## 1. Validação do comportamento do GPTMaker
 
-- [ ] 1.1 (exige staging/GPTMaker real) Em staging, criar uma conexão `OAUTH` contra um servidor MCP OAuth de teste, seguir a URL, observar para onde o provedor redireciona e se o painel conclui sozinho, e exercitar `mcp/connect`; registrar em `docs/gptmaker-mcp.md` (datado) o redirecionamento, o formato de `code`/`state`, se o `mcpId` do `connect` difere do `id` do `add`, a validade da URL e o erro de código inválido; verificar relendo o doc.
-- [ ] 1.2 Decidir com o resultado de 1.1 se o passo "Concluir" é manual, "Atualizar status" ou callback, e atualizar D1 e o spec se mudar; verificar que `openspec validate agent-mcp-oauth` continua passando.
+- [ ] 1.1 (parcial: redirecionamento observado em 2026-11-12, ver design.md) Em staging com a conta partner, sem login no painel do GPTMaker: criar uma conexão `OAUTH`, autorizar, anotar o que a página `app.gptmaker.ai/browse/oauth/mcp` mostra e se o `code`/`state` ficam na URL; chamar `mcp/connect` com eles e registrar em `docs/gptmaker-mcp.md` (datado) o resultado, se o `mcpId` difere do `id` do `add`, a validade da URL e o erro de código inválido ou consumido; verificar relendo o doc.
+- [ ] 1.2 Com o resultado de 1.1, confirmar D1/D4a (passo manual com releitura) ou simplificar para "Atualizar status", e ajustar o spec se mudar; verificar que `openspec validate agent-mcp-oauth` continua passando.
 
 ## 2. Contratos e cliente GPTMaker
 
@@ -19,6 +19,7 @@
 
 - [ ] 4.1 Em `agent-mcp.service.ts`, criação com `OAUTH` (D3): `connected: true` segue a v1, `false` grava `PENDING_AUTH` e devolve `authorizationUrl`, falha do GPTMaker não deixa linha; verificar com testes unitários dos três cenários e de URL insegura.
 - [ ] 4.2 Implementar `completeOAuth` (D4): valida estado pendente, compara `state` em tempo constante, chama `connectMcp`, troca o `mcpId`, aplica ferramentas, limpa o `state`; falha mantém pendente com motivo sem o `code`; verificar com testes de `state` divergente, código recusado, já concluída e sucesso.
+- [ ] 4.2a Implementar a releitura de D4a (falha de `connect` ou "Atualizar status" relê `tools` e conclui se a conexão já existe); verificar com testes de "código consumido pelo painel" (conclui) e "código inválido e sem conexão" (continua pendente).
 - [ ] 4.3 Implementar cancelar/refazer (D5) e a recusa de edição `OAUTH` (D6, 409); verificar com testes dos cenários "Cancelar pendente", "404 do GPTMaker ao cancelar" e "Editar conexão OAuth".
 - [ ] 4.4 Expor `POST .../:id/oauth/complete` e `POST .../:id/oauth/restart` no controller (`@AppAuth('manage')`, DTO via contratos); verificar com `npm run depcruise` e teste HTTP de 403 sem `manage` e 404 entre tenants (integração).
 - [ ] 4.5 Teste que garante que `code` e `state` não aparecem em logs, respostas de erro, `last_error` nem no banco; verificar passando e passar pelo `auditor-multitenant`.
