@@ -176,6 +176,13 @@
       "when": 1793988791925,
       "tag": "0024_agent_out_of_hours_transfer",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794419424483,
+      "tag": "0025_agent_calendar_config",
+      "breakpoints": true
     }
   ]
 }

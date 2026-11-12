@@ -127,6 +127,28 @@ Referência das funções atuais (pior caso): SDR 2997, Agendamento 2639, Suport
 - Ao publicar a função num agente, o publicador ativa o acesso ao CRM se ainda não estiver ativo. Se não conectar (ou `CRM_TOOLS_ENABLED` desligado), a publicação falha e pode ser repetida. Tirar o bloco depois não desliga o acesso.
 - O sandbox não tem acesso ao CRM: lá a ação não existe. Teste a consulta no chat de teste do app, com um cliente simulado.
 
+## Ferramentas do CRM e da agenda (MCP)
+
+Com o acesso ao CRM ligado, o agente também recebe ferramentas MCP (specs `agent-crm-tools` e `agent-calendar-scheduling`; detalhes em `docs/crm-tools.md`). A função **cita a ferramenta pelo nome no comportamento**; não há ação de bloco para elas.
+
+| Ferramenta                              | Para quê                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------- |
+| `negocios_do_cliente`, `etapas_do_funil` | consultar negócios e funis do cliente (só leitura)                        |
+| `horarios_livres`                       | até 10 horários livres na agenda configurada para o agente                |
+| `agendar_compromisso`                   | marca o compromisso no Calendário do Bitrix24                             |
+| `agendamentos_do_cliente`               | o que o cliente já tem marcado (só data, hora e com quem; nunca o título) |
+
+Regras para escrever a função de agenda (modelo: `exemplos/agendamento-calendario.json`):
+
+- **Quem atende não é da função.** Usuário fixo, responsável do cliente no CRM ou lista de até 10 usuários, duração, antecedência e dias à frente se configuram no card **Agenda** do agente. A função não pergunta nem cita usuário, agenda ou id.
+- **Fale por extenso.** Os horários vêm com `quando` ("quinta-feira, 12 de novembro, às 9h30"), `termina_as` e `com`; `usar_ao_agendar` (`AAAA-MM-DD HH:mm`) é interno. O comportamento manda dizer `quando` e **nunca** mostrar data no formato técnico nem `usar_ao_agendar`; ao agendar, passa esse valor em `inicio`, sem alterar.
+- **Marcar é em duas chamadas.** A 1ª chamada de `agendar_compromisso` não marca: devolve "nada foi marcado ainda" com data, hora e com quem. O agente diz isso ao cliente, pede o "sim" e só então chama de novo, igual. Sem essa regra o modelo marcava tomando a resposta a outra pergunta (o assunto) como escolha do horário.
+- **Cliente identificado primeiro.** Exige a intenção de sistema "Consultar cliente no CRM" (bloco `crm`); sem cliente, não agende.
+- **Sem remarcar nem cancelar.** Escolha no formulário entre transferir ou orientar a equipe; a função não promete o que a ferramenta não faz.
+- **Sem horário, sem agenda ou sem o escopo do Calendário:** avisar que a equipe retorna ou transferir (escolha no formulário). O agente nunca inventa horário.
+- Mudou nome, descrição ou esquema de uma ferramenta no código? Suba `TOOLS_VERSION` (`mcp.controller.ts`) e reinicie **API e worker**; senão o agente continua com o texto antigo.
+- O sandbox do backoffice não tem CRM nem agenda. Teste no chat de teste do agente, com cliente simulado (roteiro: `docs/roteiro-teste-agenda.md`).
+
 ## Checklist antes de publicar
 
 - [ ] Prévia sem erros, e o comportamento compilado lido com as opções mais longas.

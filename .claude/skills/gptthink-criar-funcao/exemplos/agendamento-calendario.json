@@ -1,0 +1,146 @@
+{
+  "agentType": "SUPPORT",
+  "settings": {
+    "enabledHumanTransfer": true,
+    "limitSubjects": true
+  },
+  "profile": {
+    "jobName": "{{empresa.nome}}",
+    "jobDescription": "{{empresa.descricao}}",
+    "jobSite": ""
+  },
+  "blocks": [
+    "comum",
+    "registro",
+    "duvida",
+    "transferir",
+    "crm"
+  ],
+  "crmAccess": true,
+  "assist": {
+    "enabled": true
+  },
+  "fields": [
+    {
+      "kind": "CHOICE",
+      "id": "agenda.assunto",
+      "label": "Perguntar o assunto do compromisso",
+      "required": true,
+      "options": [
+        {
+          "value": "sim",
+          "label": "Sim, perguntar o assunto",
+          "snippet": "Pergunte o assunto do compromisso, se o cliente ainda não disse, e use-o ao agendar."
+        },
+        {
+          "value": "nao",
+          "label": "Não perguntar",
+          "snippet": "Não pergunte o assunto; use só o que o cliente já disse."
+        }
+      ]
+    },
+    {
+      "kind": "CHOICE",
+      "id": "agenda.sem_horario",
+      "label": "Sem horário livre, agenda indisponível ou cliente não identificado",
+      "required": true,
+      "options": [
+        {
+          "value": "transferir",
+          "label": "Transferir para um atendente",
+          "snippet": "Use a ação \"Transferir para atendente\"."
+        },
+        {
+          "value": "retorno",
+          "label": "Avisar que a equipe vai retornar",
+          "snippet": "Avise que a equipe vai retornar o contato."
+        }
+      ]
+    },
+    {
+      "kind": "CHOICE",
+      "id": "agenda.alterar",
+      "label": "Cliente quer remarcar ou cancelar",
+      "help": "O agente só marca horários; remarcar e cancelar ficam com a equipe.",
+      "required": true,
+      "options": [
+        {
+          "value": "transferir",
+          "label": "Transferir para um atendente",
+          "snippet": "Você não remarca nem cancela: use a ação \"Transferir para atendente\"."
+        },
+        {
+          "value": "orientar",
+          "label": "Orientar a falar com a equipe",
+          "snippet": "Você não remarca nem cancela: oriente o cliente a falar com a equipe{{agenda.contato}}.",
+          "dependents": [
+            {
+              "kind": "TEXT",
+              "id": "agenda.contato",
+              "label": "Contato da equipe (opcional)",
+              "help": "Ex.: ' pelo WhatsApp (11) 99999-0000'. Começa com o conectivo.",
+              "required": false,
+              "maxLength": 80,
+              "placeholder": " pelo telefone (11) 3000-0000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "KNOWLEDGE",
+      "id": "base.servicos",
+      "label": "Serviços e assuntos atendidos",
+      "help": "O que pode ser agendado, duração e preparo.",
+      "required": false,
+      "maxItems": 15,
+      "review": {
+        "rubric": "Cada item é um serviço ou assunto agendável, com o que é, duração aproximada e o que o cliente deve levar ou saber."
+      },
+      "subfields": [
+        {
+          "id": "titulo",
+          "label": "Serviço",
+          "required": true,
+          "maxLength": 100
+        },
+        {
+          "id": "descricao",
+          "label": "Descrição",
+          "required": true,
+          "maxLength": 600,
+          "multiline": true
+        }
+      ],
+      "format": "Serviço: {{titulo}}\n{{descricao}}"
+    },
+    {
+      "kind": "KNOWLEDGE",
+      "id": "base.faq",
+      "label": "Perguntas frequentes",
+      "required": false,
+      "maxItems": 20,
+      "review": {
+        "rubric": "A pergunta está como o cliente escreveria; a resposta é direta e completa."
+      },
+      "subfields": [
+        {
+          "id": "pergunta",
+          "label": "Pergunta",
+          "required": true,
+          "maxLength": 200
+        },
+        {
+          "id": "resposta",
+          "label": "Resposta",
+          "required": true,
+          "maxLength": 800,
+          "multiline": true
+        }
+      ],
+      "format": "Pergunta: {{pergunta}}\nResposta: {{resposta}}"
+    }
+  ],
+  "behavior": "Você é {{agente.nome}}, do agendamento da {{empresa.nome}}. {{empresa.descricao}}\nSua função é marcar horários na agenda da empresa. Você não inventa horários.\n\n{{bloco.crm}}\n\nCOMO AGENDAR\n- Antes de agendar, identifique o cliente com a ação \"Consultar cliente no CRM\". Sem cliente identificado, não agende. {{agenda.sem_horario}}\n- {{agenda.assunto}}\n- Chame `horarios_livres` e ofereça no máximo 3 horários, ditos por extenso como em `quando` (ex.: quinta-feira, 12 de novembro, às 9h30). Nunca mostre datas como 2026-11-12 nem `usar_ao_agendar`. Peça que o cliente escolha.\n- `agendar_compromisso` marca só na 2ª chamada. Na 1ª (`inicio` = `usar_ao_agendar`, sem alterar), ela diz que nada foi marcado: diga data, hora e com quem será e peça a confirmação. Com o \"sim\", chame de novo, igual.\n- Nunca invente nem prometa horário fora da lista. Se o horário não estiver mais livre, ofereça as alternativas devolvidas.\n- Informe os horários no horário de Brasília, como a agenda devolve.\n- Se o cliente perguntar o que já tem marcado, use `agendamentos_do_cliente` e diga só data, hora e com quem.\n- Nunca fale de ids, ferramentas ou termos técnicos.\n\nSEM HORÁRIO OU AGENDA INDISPONÍVEL\n{{agenda.sem_horario}}\n\nREMARCAR OU CANCELAR\n{{agenda.alterar}}\n\n{{bloco.duvida}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas e diretas.\n\n{{avancado.instrucoes_adicionais}}",
+  "intentions": []
+}

@@ -2,12 +2,14 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
+import { CalendarToolsService } from './calendar-tools.service';
 import { CrmAccessGuard, type CrmCaller } from './crm-access.guard';
 import { CrmToolsService, type ToolResult } from './crm-tools.service';
-import { McpController } from './mcp.controller';
+import { McpController, TOOLS_VERSION } from './mcp.controller';
 
 const caller: CrmCaller = { tenantId: 't1', agentId: 'a1', installationId: 101 };
 
@@ -32,17 +34,43 @@ class FakeTools {
   }
 }
 
+/** Ferramentas de agenda falsas: registram a chamada e devolvem um resultado fixo. */
+class FakeCalendar {
+  readonly seen: Array<{ tool: string; caller: CrmCaller; input: unknown }> = [];
+
+  async freeSlots(who: CrmCaller, input: unknown): Promise<ToolResult> {
+    this.seen.push({ tool: 'horarios_livres', caller: who, input });
+    return {
+      outcome: 'ok',
+      count: 1,
+      body: { horarios: [{ quando: 'quinta-feira, 12 de novembro, às 9h' }] },
+    };
+  }
+
+  async book(who: CrmCaller, input: unknown): Promise<ToolResult> {
+    this.seen.push({ tool: 'agendar_compromisso', caller: who, input });
+    return { outcome: 'ok', count: 1, body: { agendado: true } };
+  }
+
+  async clientAppointments(who: CrmCaller, input: unknown): Promise<ToolResult> {
+    this.seen.push({ tool: 'agendamentos_do_cliente', caller: who, input });
+    return { outcome: 'not_found', count: 0, body: { erro: 'Cliente não encontrado.' } };
+  }
+}
+
 // Servidor MCP sem estado sobre HTTP real, com o cliente oficial (tarefa 5.4).
 describe('McpController', () => {
   let app: INestApplication;
   let url: URL;
   const tools = new FakeTools();
+  const calendar = new FakeCalendar();
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [McpController],
       providers: [
         { provide: CrmToolsService, useValue: tools },
+        { provide: CalendarToolsService, useValue: calendar },
         { provide: ENV, useValue: { CRM_TOOLS_ENABLED: true } as Env },
       ],
     })
@@ -78,11 +106,43 @@ describe('McpController', () => {
     return client;
   }
 
-  it('lista as duas ferramentas com descrições em pt-BR', async () => {
+  // O GPTMaker só relê as ferramentas quando TOOLS_VERSION muda (`CrmToolsSync`). Mudou nome,
+  // descrição ou esquema sem subir a versão, os agentes continuam com o texto antigo: foi o que
+  // fez o agente repetir "2026-11-12 09:00" ao cliente. Este teste amarra a versão ao conteúdo.
+  it('o conteúdo das ferramentas só muda junto com TOOLS_VERSION', async () => {
+    const PUBLISHED: Record<string, string> = {
+      '4': '5e6fc8d577d4f66788672f9f00a4bff6dae42a4c6258f9439662b80037065526',
+      '5': 'b9adc3c2fada58d1a6286287f256ca9045a1b43085c3878f80b91d6c1eda5938',
+    };
+    const client = await connect();
+    const { tools: listed } = await client.listTools();
+    await client.close();
+    const published = listed
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const hash = createHash('sha256').update(JSON.stringify(published)).digest('hex');
+    expect(
+      PUBLISHED[TOOLS_VERSION],
+      `TOOLS_VERSION ${TOOLS_VERSION} sem hash registrado: registre ${hash}`,
+    ).toBeDefined();
+    expect(
+      hash,
+      `As ferramentas mudaram: suba TOOLS_VERSION (mcp.controller.ts) e registre o hash ${hash} para a nova versão`,
+    ).toBe(PUBLISHED[TOOLS_VERSION]);
+  });
+
+  it('lista as ferramentas do CRM e as de agenda com descrições em pt-BR', async () => {
     const client = await connect();
     const { tools: listed } = await client.listTools();
     expect(listed.map((tool) => tool.name).sort()).toEqual([
+      'agendamentos_do_cliente',
+      'agendar_compromisso',
       'etapas_do_funil',
+      'horarios_livres',
       'negocios_do_cliente',
     ]);
     const deals = listed.find((tool) => tool.name === 'negocios_do_cliente')!;
@@ -118,6 +178,105 @@ describe('McpController', () => {
     });
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain('Cliente não encontrado');
+    await client.close();
+  });
+
+  it('as ferramentas de agenda pedem o que precisam e orientam a confirmar com o cliente', async () => {
+    const client = await connect();
+    const { tools: listed } = await client.listTools();
+    const byName = Object.fromEntries(listed.map((tool) => [tool.name, tool]));
+
+    expect(byName.horarios_livres!.inputSchema.required ?? []).toEqual([]);
+    expect(Object.keys(byName.horarios_livres!.inputSchema.properties!).sort()).toEqual([
+      'a_partir_de',
+      'cliente',
+    ]);
+    expect(byName.agendar_compromisso!.inputSchema.required).toEqual(
+      expect.arrayContaining(['cliente', 'inicio']),
+    );
+    expect(byName.agendar_compromisso!.inputSchema.required).not.toContain('assunto');
+    expect(byName.agendamentos_do_cliente!.inputSchema.required).toEqual(['cliente']);
+    // O agente só pode informar cliente, início, assunto e data: nada de usuário, agenda ou ids.
+    const allowed = new Set(['cliente', 'inicio', 'assunto', 'a_partir_de']);
+    for (const name of ['horarios_livres', 'agendar_compromisso', 'agendamentos_do_cliente']) {
+      const fields = Object.keys(byName[name]!.inputSchema.properties!);
+      expect(fields.every((field) => allowed.has(field))).toBe(true);
+    }
+    expect(byName.agendar_compromisso!.description).toContain('confirmar a data e a hora');
+    expect(byName.agendar_compromisso!.description).toContain('horarios_livres');
+    expect(byName.horarios_livres!.description).toContain('a equipe vai retornar');
+    // Data e hora por extenso para falar; o valor cru é interno e volta só em `inicio`.
+    expect(byName.horarios_livres!.description).toContain('"quando"');
+    expect(byName.horarios_livres!.description).toContain('"usar_ao_agendar"');
+    expect(byName.horarios_livres!.description).toContain('nunca deve ver');
+    const inicio = JSON.stringify(byName.agendar_compromisso!.inputSchema.properties!.inicio);
+    expect(inicio).toContain('usar_ao_agendar');
+    expect(inicio).toContain('não mostre ao cliente');
+    expect(byName.agendar_compromisso!.description).toContain('por extenso');
+    await client.close();
+  });
+
+  it('horarios_livres chega ao serviço com o agente da credencial e a data renomeada', async () => {
+    const client = await connect();
+    const result = await client.callTool({
+      name: 'horarios_livres',
+      arguments: { cliente: 'c12.ok', a_partir_de: '2026-11-25' },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      horarios: [{ quando: 'quinta-feira, 12 de novembro, às 9h' }],
+    });
+    expect(calendar.seen.at(-1)).toEqual({
+      tool: 'horarios_livres',
+      caller,
+      input: { cliente: 'c12.ok', aPartirDe: '2026-11-25' },
+    });
+    await client.close();
+  });
+
+  it('agendar_compromisso repassa cliente, início e assunto, e só eles', async () => {
+    const client = await connect();
+    const result = await client.callTool({
+      name: 'agendar_compromisso',
+      arguments: {
+        cliente: 'c12.ok',
+        inicio: '2026-11-24 09:00',
+        assunto: 'Visita',
+        // Campos que o modelo tente passar por conta própria não chegam ao serviço.
+        ownerId: 999,
+        usuario: 999,
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(calendar.seen.at(-1)).toEqual({
+      tool: 'agendar_compromisso',
+      caller,
+      input: { cliente: 'c12.ok', inicio: '2026-11-24 09:00', assunto: 'Visita' },
+    });
+    await client.close();
+  });
+
+  it('agendar_compromisso sem o início é recusado antes de chegar ao serviço', async () => {
+    const client = await connect();
+    const before = calendar.seen.length;
+    const result = await client.callTool({
+      name: 'agendar_compromisso',
+      arguments: { cliente: 'c12.ok' },
+    });
+    expect(result.isError).toBe(true);
+    expect(calendar.seen).toHaveLength(before);
+    await client.close();
+  });
+
+  it('erro de negócio da agenda volta como resultado com isError', async () => {
+    const client = await connect();
+    const result = await client.callTool({
+      name: 'agendamentos_do_cliente',
+      arguments: { cliente: 'inventada' },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('Cliente não encontrado');
+    expect(calendar.seen.at(-1)).toMatchObject({ tool: 'agendamentos_do_cliente', caller });
     await client.close();
   });
 

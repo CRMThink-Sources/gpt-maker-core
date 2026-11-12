@@ -28,4 +28,13 @@ export class BitrixError extends Error {
   get isTransient(): boolean {
     return this.kind === 'UNAVAILABLE' || this.kind === 'RATE_LIMITED';
   }
+
+  /**
+   * O app instalado não tem o escopo do método (`insufficient_scope`, ex.: `calendar`). Continua
+   * `API_ERROR` de propósito: `getRecord` e o consumer de entrada já tratam esse tipo, e um tipo
+   * novo mudaria o caminho deles (spec `agent-calendar-scheduling`, design D7).
+   */
+  get isScopeMissing(): boolean {
+    return this.code === 'insufficient_scope';
+  }
 }

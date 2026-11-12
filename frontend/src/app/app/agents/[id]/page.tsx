@@ -13,6 +13,7 @@ import { useAppSession } from '../../session-provider';
 import { type AgentFormValues, initialValues } from '../agent-fields';
 import { AgentForm, type SectionKey } from '../agent-form';
 import { useAgent } from './agent-context';
+import { CalendarCard } from './calendar-card';
 import { CrmAccessCard } from './crm-access-card';
 
 const MANAGED = new Set<string>(FUNCTION_MANAGED_SETTINGS);
@@ -126,6 +127,7 @@ export default function AgentSettingsPage() {
         />
       )}
       <CrmAccessCard />
+      <CalendarCard />
     </>
   );
 }

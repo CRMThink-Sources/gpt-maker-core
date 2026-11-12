@@ -1,25 +1,70 @@
 /**
- * Marca do app (GPT Think AI): um balão de conversa (o agente atendendo no canal) com uma faísca
- * (a IA) dentro, sobre gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
+ * Marca do app (GPT Think AI): o mascote robô (engrenagem na cabeça, visor com olhos sorrindo) sobre
+ * gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
  */
 export function LogoMark({ className = 'size-8' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true">
       <defs>
-        <linearGradient id="logo-gradient" x1="0" y1="0" x2="32" y2="32">
-          <stop offset="0" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#5b21b6" />
+        <linearGradient id="lm-brand" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5A1FE0" />
+          <stop offset="1" stopColor="#4410CC" />
+        </linearGradient>
+        <radialGradient id="sunA" cx="0" cy="0" r="290" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFA23E" />
+          <stop offset=".3" stopColor="#FF8A4C" />
+          <stop offset=".6" stopColor="#D9468F" stopOpacity=".65" />
+          <stop offset="1" stopColor="#7A2BE0" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="sunB" cx="512" cy="512" r="260" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFA23E" />
+          <stop offset=".3" stopColor="#FF8A4C" />
+          <stop offset=".6" stopColor="#D9468F" stopOpacity=".65" />
+          <stop offset="1" stopColor="#7A2BE0" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="lm-shell" gradientUnits="userSpaceOnUse" x1="0" y1="84" x2="0" y2="353">
+          <stop offset="0" stopColor="#F6F2FF" />
+          <stop offset="1" stopColor="#CDC2F5" />
+        </linearGradient>
+        <linearGradient id="lm-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#F4F0FF" />
+          <stop offset="1" stopColor="#D2C8F7" />
+        </linearGradient>
+        <linearGradient id="lm-visor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#261D57" />
+          <stop offset="1" stopColor="#150F35" />
+        </linearGradient>
+        <linearGradient id="lm-glow" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#5ED8FF" />
+          <stop offset="1" stopColor="#7FA8FF" />
+        </linearGradient>
+        <linearGradient id="lm-ora" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#FFB04A" />
+          <stop offset="1" stopColor="#FF7A3C" />
         </linearGradient>
       </defs>
-      <rect width="32" height="32" rx="8" fill="url(#logo-gradient)" />
+      <rect width="512" height="512" rx="112" fill="url(#lm-brand)" />
+      <g stroke="url(#lm-ora)" strokeWidth="15" strokeLinecap="round" opacity=".95">
+        <line x1="405" y1="98" x2="429" y2="62" />
+        <line x1="430" y1="126" x2="469" y2="106" />
+        <line x1="443" y1="162" x2="484" y2="160" />
+      </g>
+      <rect x="71" y="204" width="56" height="102" rx="38" fill="#1C1640" />
+      <rect x="385" y="204" width="56" height="102" rx="38" fill="#1C1640" />
+      <rect x="83" y="226" width="13" height="60" rx="6.5" fill="url(#lm-glow)" />
+      <rect x="416" y="226" width="13" height="60" rx="6.5" fill="url(#lm-glow)" />
+      <rect x="192" y="346" width="126" height="30" rx="14" fill="#B8A9EF" />
+      <rect x="156" y="365" width="199" height="81" rx="36" fill="url(#lm-body)" />
+      <rect x="222" y="394" width="67" height="14" rx="7" fill="url(#lm-glow)" />
       <path
-        d="M11.5 7.5h9a4.5 4.5 0 0 1 4.5 4.5v5a4.5 4.5 0 0 1-4.5 4.5H15.2l-4.3 3.7c-.5.4-1.2.1-1.2-.6v-3.4A4.5 4.5 0 0 1 7 17V12a4.5 4.5 0 0 1 4.5-4.5z"
-        fill="white"
+        fill="url(#lm-shell)"
+        d="M120 188 L108 160 Q106 151 114 144 L150 114 Q159 108 168 114 L190 133 L216 127 L220 100 Q222 84 238 84 L278 84 Q294 84 296 100 L298 127 L322 133 L344 114 Q353 108 362 114 L398 144 Q406 151 404 160 L392 188 Q404 200 404 232 L404 300 Q404 353 351 353 L161 353 Q108 353 108 300 L108 232 Q108 200 120 188 Z"
       />
-      <path
-        d="M16 10.2Q16.5 14 20.3 14.5Q16.5 15 16 18.8Q15.5 15 11.7 14.5Q15.5 14 16 10.2Z"
-        fill="#6d28d9"
-      />
+      <rect x="142" y="176" width="228" height="137" rx="62" fill="url(#lm-visor)" />
+      <g fill="none" stroke="url(#lm-glow)" strokeWidth="15" strokeLinecap="round">
+        <path d="M168 267 Q204 207 240 267" />
+        <path d="M274 267 Q310 207 346 267" />
+      </g>
     </svg>
   );
 }

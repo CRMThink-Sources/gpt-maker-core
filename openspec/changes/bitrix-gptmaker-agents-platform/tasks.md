@@ -169,7 +169,7 @@
 - [ ] 16.3 Tracing OpenTelemetry (`@opentelemetry/sdk-node`) API → fila → worker (~6h)
 - [ ] 16.4 Revisão de segurança: isolamento de tenant, validação de webhooks (Bitrix, GPTMaker, `crmthink-platform`), cifragem, firewall, CSP (~10h)
 - [ ] 16.5 Teste de carga do fluxo de mensagens no Droplet (k6) (~8h)
-- [ ] 16.6 Runbook (DLQ, reautorização de tenant, rotação de segredos, restore de backup, fechamento mensal, eventos de pagamento pendentes) (~8h)
+- [x] 16.6 Runbook (DLQ, reautorização de tenant, rotação de segredos, restore de backup, fechamento mensal, eventos de pagamento pendentes) (~8h) — `docs/runbook.md`, escrito a partir do código e da infra; registra as lacunas (sem reprocesso de DLQ/eventos esgotados, sem rotação da `DATA_ENCRYPTION_KEY`, sem backup automatizado, sem disparo manual da reconciliação). Procedimentos de restore e de SQL manual ainda precisam ser ensaiados no staging
 - [ ] 16.7 Piloto com 1–3 clientes (trial e assinaturas `manual`) e acompanhamento da reconciliação (~16h de esforço, ~2 semanas de calendário)
 - [ ] 16.8 Abertura geral com Stripe live no `crmthink-platform` (~4h)
 
