@@ -27,4 +27,4 @@ A v1 de `agent-mcp-connections` só aceita servidores MCP sem autenticação ou 
 - `packages/contracts`: `mcpAuthTypeSchema` e a validação de criação passam a aceitar `OAUTH`; novos schemas de conclusão e `McpConnectionView` com `status: 'pending_auth'` e `authorizationUrl`.
 - Frontend: `mcp-connections-card.tsx` e `lib/mcp-connections.ts`.
 - Docs: `docs/gptmaker-mcp.md` (fluxo OAuth e lacunas).
-- Depende da change `agent-mcp-connections` (mesma branch, não arquivada).
+- Depende da change `agent-mcp-connections`, cujo plano está neste repositório mas cuja implementação foi removida (2026-11-12) até o GPTMaker destravar o OAuth.
