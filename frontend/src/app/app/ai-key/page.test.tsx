@@ -23,7 +23,7 @@ afterEach(() => {
   api.mockReset();
 });
 
-describe('tela da chave de IA (6.3)', () => {
+describe('tela da chave Vibecode (6.3)', () => {
   it('chave salva: mostra o final e abre com o campo vazio', async () => {
     api.mockResolvedValueOnce(
       view({ configured: true, last4: '1a2b', verifiedAt: '2026-11-03T12:00:00Z' }),
