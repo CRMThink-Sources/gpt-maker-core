@@ -6,7 +6,11 @@ A v1 (`agent-mcp-connections`) guarda cada conexão em `agent_mcp_connection` e 
 
 **Observado em 2026-11-12** (conexão criada no painel do GPTMaker contra o servidor `hubthink`): a URL de autorização é `https://<servidor>/authorize?response_type=code&client_id=…&redirect_uri=https://app.gptmaker.ai/browse/oauth/mcp&scope=mcp&state=<uuid>&code_challenge=…&code_challenge_method=S256`. Ou seja: (a) o `redirect_uri` é uma página do próprio GPTMaker, fixo e fora do nosso controle (o `mcp/add` não aceita um), então o ThinkFlow não recebe o callback; (b) o fluxo usa PKCE e o `code_verifier` fica com o GPTMaker, ligado ao `state` (por isso o `connect` só pede `code` e `state`); (c) o `state` é um UUID presente na URL de autorização.
 
-Lacuna que resta: a página `app.gptmaker.ai/browse/oauth/mcp` conclui a conexão sozinha com a sessão do painel? Se sim, para um usuário sem login no GPTMaker (o caso dos clientes do ThinkFlow, que usam a conta partner) ela provavelmente pede login e não conclui, deixando o `code` na barra de endereço; se o usuário estiver logado, ela pode consumir o `code` (uso único) antes de o ThinkFlow chamar `connect`.
+**Teste no navegador em 2026-11-12, com o hubthink já autenticado:**
+- Com sessão no GPTMaker: o navegador vai de `/authorize` direto para `app.gptmaker.ai/browse/oauth/mcp?code=…&state=…` e termina em `app.gptmaker.ai/browse` (dashboard). A página conclui a conexão sozinha e o `code` não fica na barra de endereço.
+- Sem sessão no GPTMaker (o caso do cliente do ThinkFlow): o navegador termina na tela de login `app.gptmaker.ai/?goBack=<caminho codificado>&state=<uuid>`. O `code` (64 caracteres) fica **dentro do `goBack`** (`/browse/oauth/mcp?code=…`) e o `state` fica solto na URL, igual ao da conexão. A conexão não conclui, porque o cliente não tem login no GPTMaker.
+
+Portanto o passo manual é necessário para o cliente sem conta no GPTMaker, e a releitura (D4a) cobre quem tem sessão.
 
 ## Goals / Non-Goals
 
@@ -21,7 +25,7 @@ Lacuna que resta: a página `app.gptmaker.ai/browse/oauth/mcp` conclui a conexã
 
 ## Decisions
 
-**D1. A conclusão é um passo explícito do usuário, com `code` + `state`.** O backend expõe `POST /app/agents/:agentId/mcp-connections/:id/oauth/complete` com `{ code, state }`. O frontend aceita também a URL de retorno inteira colada e extrai `code` e `state` no cliente (função pura em `lib/`). Alternativa descartada: endpoint de callback público no ThinkFlow, porque o `redirect_uri` é fixo na página do GPTMaker (observado em 2026-11-12); o `code` fica na barra de endereço dessa página, de onde o usuário o copia.
+**D1. A conclusão é um passo explícito do usuário, com `code` + `state`.** O backend expõe `POST /app/agents/:agentId/mcp-connections/:id/oauth/complete` com `{ code, state }`. O frontend aceita a URL colada e extrai `code` e `state` no cliente (função pura em `lib/`). Formatos a aceitar: `…?code=…&state=…` (retorno direto) e a URL de login `app.gptmaker.ai/?goBack=<caminho codificado com code>&state=…` (o `code` vem dentro de `goBack`, observado em 2026-11-12); o `code` é decodificado do `goBack` e o `state` é o do nível de cima. Alternativa descartada: endpoint de callback público no ThinkFlow, porque o `redirect_uri` é fixo na página do GPTMaker (observado em 2026-11-12); o `code` fica na barra de endereço dessa página, de onde o usuário o copia.
 
 **D2. Estado `PENDING_AUTH` e `state` guardados na linha.** Acrescentar `PENDING_AUTH` ao enum `mcp_connection_status` e as colunas `oauth_state` (extraído da query `state` da URL de autorização devolvida), `authorization_url` (só enquanto pendente) e `oauth_started_at`. O `state` é valor de correlação, não credencial de acesso. A comparação do `state` informado com o guardado é em tempo constante. Migration nova (`db:generate`), sem tocar nas existentes. Alternativa descartada: não guardar `state` e confiar só no GPTMaker; perderia a proteção contra aplicar um retorno a uma conexão errada.
 
@@ -46,6 +50,6 @@ Lacuna que resta: a página `app.gptmaker.ai/browse/oauth/mcp` conclui a conexã
 
 ## Open Questions
 
-- O que a página `app.gptmaker.ai/browse/oauth/mcp` mostra para quem não tem login no GPTMaker, e com login ela conclui a conexão? (Confirmar na spike 1.1; D1 e D4a cobrem os dois casos.)
 - A URL de autorização expira e um `add` repetido para a mesma URL cria duplicata?
+- Com o `code` tirado da tela de login do GPTMaker, `POST /mcp/connect` conclui a conexão sem sessão do GPTMaker? (Esperado que sim: o `connect` só recebe `code` e `state`; confirmar na tarefa 1.1.)
 - O `mcpId` do `connect` é igual ao `id` do `add`?

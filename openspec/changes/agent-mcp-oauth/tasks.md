@@ -2,7 +2,7 @@
 
 ## 1. Validação do comportamento do GPTMaker
 
-- [ ] 1.1 (parcial: redirecionamento observado em 2026-11-12, ver design.md) Em staging com a conta partner, sem login no painel do GPTMaker: criar uma conexão `OAUTH`, autorizar, anotar o que a página `app.gptmaker.ai/browse/oauth/mcp` mostra e se o `code`/`state` ficam na URL; chamar `mcp/connect` com eles e registrar em `docs/gptmaker-mcp.md` (datado) o resultado, se o `mcpId` difere do `id` do `add`, a validade da URL e o erro de código inválido ou consumido; verificar relendo o doc.
+- [ ] 1.1 (parcial: redirecionamento observado em 2026-11-12, ver design.md) Em staging com a conta partner, criar uma conexão `OAUTH` nova, autorizar sem sessão no GPTMaker, copiar a URL da tela de login e chamar `mcp/connect` com `code` e `state`; registrar em `docs/gptmaker-mcp.md` (datado) o resultado, se o `mcpId` difere do `id` do `add`, a validade da URL e o erro de código inválido ou consumido; verificar relendo o doc.
 - [ ] 1.2 Com o resultado de 1.1, confirmar D1/D4a (passo manual com releitura) ou simplificar para "Atualizar status", e ajustar o spec se mudar; verificar que `openspec validate agent-mcp-oauth` continua passando.
 
 ## 2. Contratos e cliente GPTMaker
@@ -26,7 +26,7 @@
 
 ## 5. Frontend
 
-- [ ] 5.1 Em `frontend/src/lib/mcp-connections.ts`, funções `completeMcpOAuth`/`restartMcpOAuth` e `parseOAuthReturn(url|texto)` que extrai `code` e `state`; verificar com testes de lógica pura (URL inteira, só código, texto inválido).
+- [ ] 5.1 Em `frontend/src/lib/mcp-connections.ts`, funções `completeMcpOAuth`/`restartMcpOAuth` e `parseOAuthReturn(url|texto)` que extrai `code` e `state`; verificar com testes de lógica pura (retorno direto `?code&state`, tela de login `?goBack=<codificado com code>&state`, só código, texto inválido).
 - [ ] 5.2 Em `mcp-connections-card.tsx`: seletor "OAuth" no formulário (sem cabeçalhos), estado "Aguardando autorização" com botões Autorizar (abre a URL em nova janela), campo para colar o retorno + Concluir, e Cancelar; edição desabilitada para OAuth com explicação; verificar com testes de componente (Testing Library) do que o usuário vê e faz em cada estado.
 - [ ] 5.3 Revisar com o `revisor-frontend` (Next 16 conferido em `node_modules/next/dist/docs/`); verificar que o parecer não aponta pendências.
 
