@@ -61,14 +61,14 @@ export default function AiKeyPage() {
   }
 
   if (!session.user.isAdmin) {
-    return <Alert tone="warning">Só administradores do portal configuram a chave de IA.</Alert>;
+    return <Alert tone="warning">Só administradores do portal configuram a chave Vibecode.</Alert>;
   }
   if (!view) return error ? <Alert tone="error">{error}</Alert> : <Loading />;
 
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader
-        title="Chave de IA"
+        title="Chave Vibecode"
         description="Use a sua chave do Vibecode do Bitrix24 para a revisão por IA da função, sem gastar créditos."
       />
       {error && <Alert tone="error">{error}</Alert>}
