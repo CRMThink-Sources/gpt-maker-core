@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 320" width="1100" height="320" role="img" aria-label="GPTThink">
+  <g transform="translate(0 0) scale(0.625)">
+    <image href="icon.svg" width="512" height="512"/>
+  </g>
+  <text x="360" y="208" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="150" font-weight="800" letter-spacing="-4">
+    <tspan fill="#1B1A3F">GPT</tspan><tspan fill="#5B4DF5">Think</tspan>
+  </text>
+</svg>
