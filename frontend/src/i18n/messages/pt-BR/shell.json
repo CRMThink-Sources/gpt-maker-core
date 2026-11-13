@@ -14,5 +14,7 @@
   "portal": "{role} · portal {code}",
   "authError": "O Bitrix24 recusou a autorização do app e o atendimento dos agentes está pausado. Um administrador do portal precisa reinstalar o app para restabelecer o acesso.",
   "soon": "Em breve",
+  "support": "Suporte",
+  "supportLink": "Falar com o suporte",
   "tagline": "Agentes de IA para Bitrix24"
 }

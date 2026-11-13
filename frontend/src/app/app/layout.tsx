@@ -17,6 +17,7 @@ export default async function ClientAppLayout({ children }: LayoutProps<'/app'>)
     appCode: process.env.PUBLIC_APP_CODE || 'crmthink.homolog-thinkflow',
     apiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? 'http://localhost:3001',
     stripePublishableKey: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || null,
+    supportUrl: process.env.PUBLIC_SUPPORT_URL || null,
   };
   return (
     <I18nProvider>

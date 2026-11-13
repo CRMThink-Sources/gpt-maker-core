@@ -14,5 +14,7 @@
   "portal": "{role} · portal {code}",
   "authError": "Bitrix24 rejected the app authorization and the agents' service is paused. A portal administrator needs to reinstall the app to restore access.",
   "soon": "Soon",
+  "support": "Support",
+  "supportLink": "Talk to support",
   "tagline": "AI agents for Bitrix24"
 }
