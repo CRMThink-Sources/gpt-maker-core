@@ -10,6 +10,7 @@ import {
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { CheckIcon, SparkIcon } from '@/components/icons';
 import { Alert, buttonClass, Card, Loading, PageHeader, Spinner } from '@/components/ui';
+import { useErrorMessage, useT, type T } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { bx24Call } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
@@ -31,16 +32,28 @@ const FIELDS: Array<{ key: keyof TrialRequest; type: string; autoComplete: strin
 
 type FieldErrors = Partial<Record<keyof TrialRequest, string>>;
 
+/** Mensagens conhecidas do schema (pt-BR) viram chaves; as demais vêm como a plataforma mandou. */
+const KNOWN_ISSUES: Record<string, string> = {
+  'Preencha este campo': 'trial.validation.required',
+  'E-mail inválido': 'trial.validation.invalidEmail',
+};
+
+function issueMessage(message: string | undefined, t: T): string {
+  if (!message) return t('trial.validation.invalidField');
+  const key = KNOWN_ISSUES[message];
+  return key ? t(key) : message;
+}
+
 /**
  * Campos recusados, do zod local (`path: ['phone']`) ou da plataforma repassada pela API
  * (`path: 'phone'`).
  */
-function fieldErrors(details: unknown): FieldErrors {
+function fieldErrors(details: unknown, t: T): FieldErrors {
   if (!Array.isArray(details)) return {};
   const errors: FieldErrors = {};
   for (const issue of details as Array<{ path?: unknown; message?: string }>) {
     const key = (Array.isArray(issue.path) ? issue.path[0] : issue.path) as keyof TrialRequest;
-    if (key in TRIAL_FIELD_LABELS && !errors[key]) errors[key] = issue.message ?? 'Campo inválido';
+    if (key in TRIAL_FIELD_LABELS && !errors[key]) errors[key] = issueMessage(issue.message, t);
   }
   return errors;
 }
@@ -56,6 +69,8 @@ async function currentUserEmail(): Promise<string> {
 
 function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => void }) {
   const { session, api } = useAppSession();
+  const t = useT('plan');
+  const errorText = useErrorMessage('plan');
   const [values, setValues] = useState<TrialRequest>({
     name: session.user.name,
     email: '',
@@ -82,7 +97,7 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
     setError(null);
     const parsed = trialRequestSchema.safeParse(values);
     if (!parsed.success) {
-      setErrors(fieldErrors(parsed.error.issues));
+      setErrors(fieldErrors(parsed.error.issues, t));
       return;
     }
     setErrors({});
@@ -96,12 +111,12 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
       );
     } catch (e) {
       if (e instanceof ApiRequestError && e.code === 'VALIDATION_ERROR') {
-        setErrors(fieldErrors(e.details));
-        setError('Confira os campos destacados.');
+        setErrors(fieldErrors(e.details, t));
+        setError(t('trial.checkFields'));
       } else if (e instanceof ApiRequestError && e.status === 409) {
         onActivated({ state: 'unavailable', trialEndsAt: null });
       } else {
-        setError(errorMessage(e, 'Não foi possível ativar o teste. Tente de novo.'));
+        setError(errorMessage(e, t('trial.activateFailed'), errorText));
       }
     } finally {
       setSending(false);
@@ -112,7 +127,7 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
     <form onSubmit={submit} noValidate className="mt-5 space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         {FIELDS.map(({ key, type, autoComplete }) => (
-          <Field key={key} label={TRIAL_FIELD_LABELS[key]}>
+          <Field key={key} label={t(`trial.fields.${key}`)}>
             <input
               type={type}
               autoComplete={autoComplete}
@@ -131,11 +146,9 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={sending} className={buttonClass()}>
           {sending && <Spinner className="size-4" />}
-          Ativar teste grátis
+          {t('trial.activate')}
         </button>
-        <p className="text-xs text-zinc-500">
-          Os dados ficam com a CRMThink para acompanhar o seu teste.
-        </p>
+        <p className="text-xs text-zinc-500">{t('trial.privacy')}</p>
       </div>
     </form>
   );
@@ -147,6 +160,8 @@ function TrialForm({ onActivated }: { onActivated: (status: TrialStatusView) => 
  */
 export default function PlanPage() {
   const { session, api } = useAppSession();
+  const t = useT('plan');
+  const errorText = useErrorMessage('plan');
   const [status, setStatus] = useState<TrialStatusView | null>(null);
   const [summary, setSummary] = useState<CreditSummaryView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -162,10 +177,12 @@ export default function PlanPage() {
         setStatus(s);
         setSummary(credits);
       })
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, 'Não foi possível carregar.')));
+      .catch((e: unknown) => !cancelled && setError(errorMessage(e, t('loadFailed'), errorText)));
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, loadSummary]);
 
   // Trial confirmado: os 500 créditos já estão no saldo.
@@ -203,10 +220,7 @@ export default function PlanPage() {
 
   return (
     <>
-      <PageHeader
-        title="Créditos e plano"
-        description="Saldo, plano, consumo dos agentes e teste grátis do app."
-      />
+      <PageHeader title={t('title')} description={t('description')} />
       {error && <Alert tone="error">{error}</Alert>}
       {(!status || !summary) && !error && <Loading />}
 
@@ -215,17 +229,15 @@ export default function PlanPage() {
           <div className="flex items-start gap-3">
             <SparkIcon className="mt-0.5 size-6 shrink-0 text-brand-600" />
             <div>
-              <h2 className="text-lg font-semibold text-zinc-900">Teste grátis por 14 dias</h2>
-              <p className="mt-1 text-sm text-zinc-600">
-                Ganhe 500 créditos para seus agentes atenderem no Bitrix24, sem cartão de crédito.
-              </p>
+              <h2 className="text-lg font-semibold text-zinc-900">{t('trial.offerTitle')}</h2>
+              <p className="mt-1 text-sm text-zinc-600">{t('trial.offerText')}</p>
             </div>
           </div>
           {session.canManage ? (
             <TrialForm onActivated={setStatus} />
           ) : (
             <Alert tone="warning" className="mt-5">
-              Somente o administrador do app pode ativar o teste grátis.
+              {t('trial.adminOnly')}
             </Alert>
           )}
         </Card>
@@ -235,10 +247,8 @@ export default function PlanPage() {
         <Card className="flex items-center gap-3 p-6">
           <Spinner />
           <div>
-            <p className="font-medium text-zinc-900">Ativando seu teste grátis…</p>
-            <p className="text-sm text-zinc-500">
-              Os créditos aparecem em instantes. Você pode continuar usando o app.
-            </p>
+            <p className="font-medium text-zinc-900">{t('trial.activating')}</p>
+            <p className="text-sm text-zinc-500">{t('trial.activatingHint')}</p>
           </div>
         </Card>
       )}
@@ -246,10 +256,7 @@ export default function PlanPage() {
       {status?.state === 'unavailable' && summary && !paid && (
         <Card className="flex items-start gap-3 p-6">
           <CheckIcon className="mt-0.5 size-5 shrink-0 text-zinc-400" />
-          <p className="text-sm text-zinc-600">
-            O teste grátis já foi utilizado neste portal. Escolha um plano abaixo para seus agentes
-            continuarem atendendo.
-          </p>
+          <p className="text-sm text-zinc-600">{t('trial.used')}</p>
         </Card>
       )}
 

@@ -11,6 +11,7 @@ import {
   type SyntheticEvent,
   type SVGProps,
 } from 'react';
+import { useT } from '@/i18n';
 import { ChatIcon, ClockIcon, SparkIcon, UserIcon } from '@/components/icons';
 import { buttonClass, Card } from '@/components/ui';
 import {
@@ -22,46 +23,30 @@ import {
 } from './agent-fields';
 import { BusinessHoursFields, businessHoursProblem } from './business-hours-fields';
 
-const GROUPING: Record<NonNullable<AgentSettings['messageGroupingTime']>, string> = {
-  NO_GROUP: 'Não agrupar',
-  FIVE_SEC: '5 segundos',
-  TEN_SEC: '10 segundos',
-  THIRD_SEC: '30 segundos',
-  ONE_MINUTE: '1 minuto',
-};
+const GROUPING_KEYS = [
+  'NO_GROUP',
+  'FIVE_SEC',
+  'TEN_SEC',
+  'THIRD_SEC',
+  'ONE_MINUTE',
+] as const satisfies ReadonlyArray<NonNullable<AgentSettings['messageGroupingTime']>>;
 
 const DAILY_LIMITS = [20, 50, 100, 200, 500, 1000] as const;
 
-const LIMIT_ACTIONS: Record<NonNullable<AgentSettings['maxDailyMessagesLimitAction']>, string> = {
-  TEMP_BLOCK_30S: 'Pausar por 30 segundos',
-  TEMP_BLOCK_5M: 'Pausar por 5 minutos',
-  TEMP_BLOCK_10M: 'Pausar por 10 minutos',
-  TEMP_BLOCK_30M: 'Pausar por 30 minutos',
-  TEMP_BLOCK_1H: 'Pausar por 1 hora',
-  BLOCK: 'Parar de responder no dia',
-  TRANSFER: 'Transferir para um atendente',
-};
+const LIMIT_ACTION_KEYS = [
+  'TEMP_BLOCK_30S',
+  'TEMP_BLOCK_5M',
+  'TEMP_BLOCK_10M',
+  'TEMP_BLOCK_30M',
+  'TEMP_BLOCK_1H',
+  'BLOCK',
+  'TRANSFER',
+] as const satisfies ReadonlyArray<NonNullable<AgentSettings['maxDailyMessagesLimitAction']>>;
 
 /** Settings operacionais; os gerenciados pela função (transferência, emojis...) ficam na aba Função. */
 type Toggle = 'enabledReminder' | 'splitMessages' | 'signMessages';
 
-const TOGGLES: Array<{ key: Toggle; label: string; hint: string }> = [
-  {
-    key: 'enabledReminder',
-    label: 'Lembrar o cliente',
-    hint: 'Manda um lembrete quando o cliente para de responder no meio da conversa.',
-  },
-  {
-    key: 'splitMessages',
-    label: 'Dividir respostas longas',
-    hint: 'Respostas grandes chegam em várias mensagens curtas, como uma pessoa escreveria.',
-  },
-  {
-    key: 'signMessages',
-    label: 'Assinar as mensagens',
-    hint: 'Inclui o nome do agente em cada resposta.',
-  },
-];
+const TOGGLES: Toggle[] = ['enabledReminder', 'splitMessages', 'signMessages'];
 
 export type SectionKey = 'identity' | 'model' | 'service' | 'hours';
 
@@ -69,38 +54,27 @@ export type SectionKey = 'identity' | 'model' | 'service' | 'hours';
 const SECTIONS: Array<{
   key: SectionKey;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  title: string;
-  description: string;
   /** Campos do formulário que pertencem à seção (para marcar alteração não salva). */
   fields: Array<keyof AgentFormValues>;
 }> = [
   {
     key: 'identity',
     icon: UserIcon,
-    title: 'Identidade',
-    description: 'Como o agente se apresenta aos clientes no chat.',
     fields: ['name', 'avatarUrl'],
   },
   {
     key: 'model',
     icon: SparkIcon,
-    title: 'Modelo de IA',
-    description: 'Cada resposta do agente consome créditos conforme o modelo.',
     fields: ['modelId'],
   },
   {
     key: 'service',
     icon: ChatIcon,
-    title: 'Atendimento',
-    description:
-      'Ajustes da conversa. Transferência, emojis e assuntos vêm da função do agente (aba Função).',
     fields: ['settings'],
   },
   {
     key: 'hours',
     icon: ClockIcon,
-    title: 'Horário de funcionamento',
-    description: 'Dias e horários em que o agente responde. Fora deles, ele não atende.',
     fields: ['businessHours', 'outOfHoursMessage', 'outOfHoursTransfer'],
   },
 ];
@@ -110,7 +84,7 @@ const SECTIONS: Array<{
  * inativas ficam montadas e ocultas, para o formulário validar e salvar todas juntas.
  */
 function Section({
-  section: { key, icon: Icon, title, description },
+  section: { key, icon: Icon },
   active,
   disabled,
   flush = false,
@@ -123,6 +97,9 @@ function Section({
   flush?: boolean;
   children: ReactNode;
 }) {
+  const t = useT('agentForm.sections');
+  const title = t(`${key}.title`);
+  const description = t(`${key}.description`);
   return (
     <div hidden={!active} data-section={key} role="tabpanel" aria-label={title}>
       <Card>
@@ -153,13 +130,14 @@ function SectionNav({
   changed: Set<SectionKey>;
   onSelect: (key: SectionKey) => void;
 }) {
+  const t = useT('agentForm.sections');
   return (
     <nav
       role="tablist"
-      aria-label="Seções das configurações"
+      aria-label={t('navLabel')}
       className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:self-start md:overflow-visible md:px-0"
     >
-      {SECTIONS.map(({ key, icon: Icon, title }) => {
+      {SECTIONS.map(({ key, icon: Icon }) => {
         const selected = key === active;
         return (
           <button
@@ -175,9 +153,9 @@ function SectionNav({
             }`}
           >
             <Icon className="size-4.5 shrink-0" />
-            <span className="flex-1">{title}</span>
+            <span className="flex-1">{t(`${key}.title`)}</span>
             {changed.has(key) && (
-              <span className="size-2 rounded-full bg-amber-500" title="Alterações não salvas" />
+              <span className="size-2 rounded-full bg-amber-500" title={t('unsaved')} />
             )}
           </button>
         );
@@ -247,6 +225,7 @@ export function AgentForm({
   section: SectionKey;
   onSectionChange: (section: SectionKey) => void;
 }) {
+  const t = useT('agentForm');
   const [values, setValues] = useState<AgentFormValues>(initial);
   const [saving, setSaving] = useState(false);
   // Um campo inválido por tentativa de salvar: o primeiro leva à sua seção.
@@ -257,7 +236,7 @@ export function AgentForm({
   const setSetting = <K extends keyof AgentSettings>(key: K, value: AgentSettings[K]) =>
     setValues((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
 
-  const hoursProblem = businessHoursProblem(values.businessHours);
+  const hoursProblem = businessHoursProblem(values.businessHours, t);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -332,17 +311,17 @@ export function AgentForm({
           <div className="divide-y divide-zinc-100">
             {TOGGLES.map((toggle) => (
               <SwitchRow
-                key={toggle.key}
-                label={toggle.label}
-                hint={toggle.hint}
-                checked={settings[toggle.key] ?? false}
-                onChange={(value) => setSetting(toggle.key, value)}
+                key={toggle}
+                label={t(`toggles.${toggle}.label`)}
+                hint={t(`toggles.${toggle}.hint`)}
+                checked={settings[toggle] ?? false}
+                onChange={(value) => setSetting(toggle, value)}
               />
             ))}
           </div>
           <div className="space-y-5 border-t border-zinc-100 p-5">
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Juntar mensagens seguidas do cliente">
+              <Field label={t('service.groupMessages')}>
                 <select
                   className={inputClass}
                   value={settings.messageGroupingTime ?? ''}
@@ -353,15 +332,17 @@ export function AgentForm({
                     )
                   }
                 >
-                  {!settings.messageGroupingTime && <option value="">Padrão</option>}
-                  {Object.entries(GROUPING).map(([value, label]) => (
+                  {!settings.messageGroupingTime && (
+                    <option value="">{t('service.default')}</option>
+                  )}
+                  {GROUPING_KEYS.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(`grouping.${value}`)}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Fuso horário">
+              <Field label={t('service.timezone')}>
                 <input
                   className={inputClass}
                   placeholder="America/Sao_Paulo"
@@ -370,7 +351,7 @@ export function AgentForm({
                   onChange={(e) => setSetting('timezone', e.target.value || undefined)}
                 />
               </Field>
-              <Field label="Limite de mensagens por contato no dia">
+              <Field label={t('service.dailyLimit')}>
                 <select
                   className={inputClass}
                   value={
@@ -387,16 +368,18 @@ export function AgentForm({
                     )
                   }
                 >
-                  {settings.maxDailyMessages === undefined && <option value="">Padrão</option>}
-                  <option value="none">Sem limite</option>
+                  {settings.maxDailyMessages === undefined && (
+                    <option value="">{t('service.default')}</option>
+                  )}
+                  <option value="none">{t('service.noLimit')}</option>
                   {DAILY_LIMITS.map((limit) => (
                     <option key={limit} value={limit}>
-                      {limit} mensagens
+                      {t('service.messages', { count: limit })}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Ao atingir o limite">
+              <Field label={t('service.onLimit')}>
                 <select
                   className={inputClass}
                   value={settings.maxDailyMessagesLimitAction ?? ''}
@@ -407,10 +390,12 @@ export function AgentForm({
                     )
                   }
                 >
-                  {!settings.maxDailyMessagesLimitAction && <option value="">Padrão</option>}
-                  {Object.entries(LIMIT_ACTIONS).map(([value, label]) => (
+                  {!settings.maxDailyMessagesLimitAction && (
+                    <option value="">{t('service.default')}</option>
+                  )}
+                  {LIMIT_ACTION_KEYS.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(`limitActions.${value}`)}
                     </option>
                   ))}
                 </select>
@@ -427,7 +412,7 @@ export function AgentForm({
           <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
             <span className="flex items-center gap-2 text-sm text-zinc-700">
               <span className="size-2 rounded-full bg-amber-500" />
-              Alterações não salvas
+              {t('sections.unsaved')}
             </span>
             <div className="flex gap-2">
               <button
@@ -436,10 +421,10 @@ export function AgentForm({
                 disabled={saving}
                 className={buttonClass('ghost')}
               >
-                Descartar
+                {t('bar.discard')}
               </button>
               <button type="submit" disabled={saving} className={buttonClass('primary')}>
-                {saving ? 'Salvando…' : 'Salvar alterações'}
+                {saving ? t('bar.saving') : t('bar.save')}
               </button>
             </div>
           </div>

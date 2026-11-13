@@ -1,0 +1,230 @@
+{
+  "identity": {
+    "nameLabel": "Name",
+    "nameHint": "This is the name customers see in the chat.",
+    "namePlaceholder": "E.g.: Ana, from Example Store",
+    "photoLabel": "Photo",
+    "photoHint": "Optional. HTTPS link to a square image."
+  },
+  "model": {
+    "ariaLabel": "Model",
+    "none": "No model available at the moment.",
+    "credits": "{count, plural, =1 {# credit per response} other {# credits per response}}",
+    "outOfPlan": "Current model, no longer included in your plan."
+  },
+  "sections": {
+    "navLabel": "Settings sections",
+    "unsaved": "Unsaved changes",
+    "identity": {
+      "title": "Identity",
+      "description": "How the agent introduces itself to customers in the chat."
+    },
+    "model": {
+      "title": "AI model",
+      "description": "Each agent response uses credits depending on the model."
+    },
+    "service": {
+      "title": "Service",
+      "description": "Conversation settings. Transfer, emojis and topics come from the agent's function (Function tab)."
+    },
+    "hours": {
+      "title": "Business hours",
+      "description": "Days and times when the agent responds. Outside them, it does not respond."
+    }
+  },
+  "grouping": {
+    "NO_GROUP": "Do not group",
+    "FIVE_SEC": "5 seconds",
+    "TEN_SEC": "10 seconds",
+    "THIRD_SEC": "30 seconds",
+    "ONE_MINUTE": "1 minute"
+  },
+  "limitActions": {
+    "TEMP_BLOCK_30S": "Pause for 30 seconds",
+    "TEMP_BLOCK_5M": "Pause for 5 minutes",
+    "TEMP_BLOCK_10M": "Pause for 10 minutes",
+    "TEMP_BLOCK_30M": "Pause for 30 minutes",
+    "TEMP_BLOCK_1H": "Pause for 1 hour",
+    "BLOCK": "Stop responding for the day",
+    "TRANSFER": "Transfer to a human agent"
+  },
+  "toggles": {
+    "enabledReminder": {
+      "label": "Remind the customer",
+      "hint": "Sends a reminder when the customer stops responding in the middle of the conversation."
+    },
+    "splitMessages": {
+      "label": "Split long responses",
+      "hint": "Long responses arrive as several short messages, the way a person would write."
+    },
+    "signMessages": {
+      "label": "Sign messages",
+      "hint": "Includes the agent's name in every response."
+    }
+  },
+  "service": {
+    "groupMessages": "Group consecutive customer messages",
+    "default": "Default",
+    "timezone": "Time zone",
+    "dailyLimit": "Daily message limit per contact",
+    "noLimit": "No limit",
+    "messages": "{count} messages",
+    "onLimit": "When the limit is reached"
+  },
+  "bar": {
+    "discard": "Discard",
+    "saving": "Saving…",
+    "save": "Save changes"
+  },
+  "hours": {
+    "days": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    },
+    "problems": {
+      "withDay": "{day}: {message}",
+      "timeFormat": "use HH:mm",
+      "startBeforeEnd": "the start must be before the end",
+      "invalidTimezone": "invalid time zone",
+      "overlap": "overlapping intervals"
+    },
+    "always": "24 hours",
+    "inside": "Within business hours now",
+    "outside": "Outside business hours now",
+    "enable": "Set business hours",
+    "disabledHint": "With no business hours set, the agent responds 24 hours a day, every day.",
+    "timezone": "Time zone",
+    "timezoneHint": "The hours below apply in this time zone (e.g.: America/Sao_Paulo, America/Manaus).",
+    "closed": "No service",
+    "startLabel": "{day}: start",
+    "endLabel": "{day}: end",
+    "removeLabel": "{day}: remove interval",
+    "remove": "Remove",
+    "to": "to",
+    "add": "Add interval",
+    "transfer": "Transfer to a human agent",
+    "transferHint": "Outside business hours, the conversation goes to the available operator of the Open Channel and the agent stops responding in it. For the service to happen, the Open Channel's working hours must be configured in Bitrix24. The conversation only returns to the agent when the operator closes it.",
+    "messageLabel": "Out-of-hours message (optional)",
+    "messageHintTransfer": "Sent to the customer before the conversation goes to the human agent, without using credits. If blank, the conversation is transferred without notice.",
+    "messageHintSilent": "Sent once every 12 hours to anyone who writes outside business hours, without using credits. If blank, the agent stays silent. Messages sent outside business hours are not answered later."
+  },
+  "image": {
+    "label": "Image (optional)",
+    "alt": "Image attached to the training",
+    "attached": "Image attached",
+    "choose": "Choose image",
+    "uploading": "Uploading…",
+    "replace": "Replace image",
+    "add": "Add image",
+    "remove": "Remove image",
+    "hint": "PNG, JPEG or WebP, up to {max} MB. The agent uses the image together with the text.",
+    "invalidType": "Only PNG, JPEG and WebP images are accepted.",
+    "tooLarge": "The image exceeds the {max} MB limit."
+  },
+  "pickers": {
+    "stageWon": "{name} (won)",
+    "stageLost": "{name} (lost)",
+    "pipelineTyped": "Pipeline (CATEGORY_ID)",
+    "pipelineTypedHint": "0 is the general pipeline. Applies only to new deals.",
+    "stageTyped": "Stage (STAGE_ID)",
+    "stageTypedHint": "E.g.: NEW, or C3:NEW in another pipeline.",
+    "pipeline": "Pipeline",
+    "pipelineHint": "For new deals. An existing deal stays in its own pipeline.",
+    "loadingPipelines": "Loading pipelines…",
+    "stage": "Stage",
+    "stageMissing": "Stage {stage} does not exist in this pipeline; choose another.",
+    "stageHint": "An existing deal also moves to this stage.",
+    "chooseStage": "Choose the stage…",
+    "loadingStages": "Loading stages…",
+    "responsible": "Responsible",
+    "userIdHint": "Enter the user ID in Bitrix24.",
+    "user": "User #{id}",
+    "noneChosen": "None chosen",
+    "choose": "Choose",
+    "users": "Users",
+    "usersHint": "They receive one at a time, in rotation.",
+    "userIdsHint": "User IDs in Bitrix24, separated by commas. {hint}",
+    "removeUser": "Remove {name}",
+    "addUser": "Add",
+    "openLine": "Bitrix24 open channel",
+    "openLineIdHint": "Enter the open channel ID in Bitrix24.",
+    "chooseOpenLine": "Choose a channel",
+    "agent": "Agent",
+    "noOtherAgent": "Create another agent to be able to transfer to it.",
+    "chooseAgent": "Choose an agent",
+    "agentRemoved": "Agent removed: choose another"
+  },
+  "spa": {
+    "type": "Smart process",
+    "search": "Type to search for the SPA…",
+    "loading": "Loading…",
+    "pipeline": "Pipeline",
+    "initialStage": "Initial stage",
+    "firstOfPipeline": "The first in the pipeline",
+    "mapping": "Which SPA field each piece of information goes to",
+    "optional": "(optional)",
+    "byItemName": "By item name",
+    "loadingFields": "Loading fields…",
+    "chooseField": "Choose the field…",
+    "dontSave": "Do not save",
+    "fieldRemoved": "Field removed ({code}): choose another",
+    "listSuffix": "(list)",
+    "noResults": "No results"
+  },
+  "wizard": {
+    "title": "New agent",
+    "steps": {
+      "function": {
+        "title": "Function",
+        "description": "What the agent will do. Each agent has one function."
+      },
+      "identity": {
+        "title": "Identity",
+        "description": "How the agent introduces itself and which AI model it uses."
+      },
+      "form": {
+        "title": "Form",
+        "description": "Tell us about your business; the agent's text is ours."
+      },
+      "preview": {
+        "title": "Preview",
+        "description": "Review what will be created before confirming."
+      }
+    },
+    "stepCounter": "Step {step} of {total}",
+    "confirmDiscard": "Discard what you have filled in?",
+    "keepEditing": "Keep editing",
+    "discard": "Discard",
+    "back": "Back",
+    "cancel": "Cancel",
+    "busy": "Please wait…",
+    "create": "Create agent",
+    "viewPreview": "View preview",
+    "next": "Next",
+    "noFunctions": "No function available at the moment.",
+    "singleModel": "Your plan includes only this model ({credits}).",
+    "pickFunction": "Choose the agent's function.",
+    "reviewFields": "Review the highlighted fields in the form."
+  },
+  "failures": {
+    "loadFunctions": "Could not load the functions.",
+    "loadForm": "Could not load the function's form.",
+    "preview": "Could not build the preview.",
+    "create": "Could not create the agent. Please try again.",
+    "uploadImage": "Could not upload the image. Please try again."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "TENANT_AGENT_LIMIT": "You have reached the agent limit. Remove an agent to create another.",
+    "AGENT_NOT_FOUND": "Agent not found",
+    "FUNCTION_NOT_FOUND": "Function not found",
+    "FUNCTION_ANSWERS_INVALID": "Review the form answers",
+    "MODEL_NOT_ALLOWED": "Model inactive or not allowed by the plan",
+    "AGENT_CREATION_IN_PROGRESS": "Another agent is being created; wait and try again"
+  }
+}

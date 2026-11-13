@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { AppShell } from './app-shell';
+import { I18nProvider } from '@/i18n';
 import { SessionProvider } from './session-provider';
 
 export const metadata: Metadata = { title: 'GPTMaker' };
@@ -18,8 +19,10 @@ export default async function ClientAppLayout({ children }: LayoutProps<'/app'>)
     stripePublishableKey: process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY || null,
   };
   return (
-    <SessionProvider config={config}>
-      <AppShell>{children}</AppShell>
-    </SessionProvider>
+    <I18nProvider>
+      <SessionProvider config={config}>
+        <AppShell>{children}</AppShell>
+      </SessionProvider>
+    </I18nProvider>
   );
 }

@@ -19,6 +19,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, Loading } from '@/components/ui';
+import { useErrorMessage, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../../../session-provider';
@@ -30,12 +31,6 @@ import { attentionCount, withGapItem } from '../../review-logic';
 import { ReviewPanel } from '../../review-ui';
 import { useAiKey, useFunctionReview } from '../../use-function-review';
 import { useAgent } from '../agent-context';
-
-const MODES: Record<FunctionMode, string> = {
-  SIMPLE: 'Simples',
-  ADVANCED: 'Avançado',
-  TAKEN_OVER: 'Controle assumido',
-};
 
 /** Pedido de troca de modo esperando confirmação; cada escolha vira um botão. */
 type ModeRequest = {
@@ -50,20 +45,19 @@ function issuesOf(error: unknown): AnswerIssue[] | null {
 }
 
 function CreatedNotice() {
+  const t = useT('agentFunction');
   const created = useSearchParams().get('created');
   if (!created) return null;
-  return (
-    <Alert tone="success">
-      Agente criado e já ativo. A base de conhecimento e as ações estão sendo aplicadas; o status
-      aparece abaixo.
-    </Alert>
-  );
+  return <Alert tone="success">{t('createdNotice')}</Alert>;
 }
 
 /** Aba Função: formulário, modos e publicação (spec agent-function-configuration). */
 export default function AgentFunctionPage() {
   const { session, api } = useAppSession();
   const { agent, setAgent } = useAgent();
+  const t = useT('agentFunction');
+  const tc = useT('common');
+  const translateError = useErrorMessage('agentFunction');
   const transferAgents = useTransferAgents(agent.id);
   const [config, setConfig] = useState<AgentFunctionConfigView | null>(null);
   const [answers, setAnswers] = useState<FunctionAnswers>({});
@@ -125,12 +119,12 @@ export default function AgentFunctionPage() {
     api<AgentFunctionConfigView>(`${base}/function`)
       .then((view) => !cancelled && apply(view, true))
       .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar a função do agente.')),
+        (e: unknown) => !cancelled && setError(errorMessage(e, t('loadError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, base, apply]);
 
   // Publicação em andamento: acompanha até terminar e atualiza o agente do cabeçalho. O
@@ -143,14 +137,14 @@ export default function AgentFunctionPage() {
     async (view: AgentFunctionConfigView) => {
       setAgent(await api<AgentView>(base));
       if (view.publication.status === 'IDLE') {
-        setNotice('Publicação concluída: o agente já está com a nova configuração.');
+        setNotice(t('publishDone'));
         await load(true);
       } else {
         // A falha aparece no próprio aviso, com "Tentar de novo".
         setNotice(null);
       }
     },
-    [api, base, load, setAgent],
+    [api, base, load, setAgent, t],
   );
 
   useEffect(() => {
@@ -192,10 +186,10 @@ export default function AgentFunctionPage() {
     try {
       await api(`${base}/function/draft`, { method: 'PUT', body: JSON.stringify({ answers }) });
       setIssues([]);
-      setNotice('Rascunho salvo. O agente só muda quando você publicar.');
+      setNotice(t('draftSaved'));
     } catch (e) {
       setIssues(issuesOf(e) ?? []);
-      setError(errorMessage(e, 'Não foi possível salvar o rascunho.'));
+      setError(errorMessage(e, t('draftError'), translateError));
     } finally {
       setBusy(false);
     }
@@ -220,12 +214,12 @@ export default function AgentFunctionPage() {
       });
       setIssues(result.issues);
       if (result.issues.length) {
-        setError('Revise os campos destacados antes de publicar.');
+        setError(t('reviewFields'));
       } else {
         setPreview(result);
       }
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível montar a prévia.'));
+      setError(errorMessage(e, t('previewError'), translateError));
     } finally {
       setBusy(false);
     }
@@ -239,18 +233,14 @@ export default function AgentFunctionPage() {
         body: JSON.stringify(publishBody()),
       });
       setPreview(null);
-      setNotice(
-        result.status === 'NOTHING'
-          ? 'Nada mudou: o agente já está assim.'
-          : 'Publicando… Os treinamentos e as ações são aplicados em segundo plano.',
-      );
+      setNotice(result.status === 'NOTHING' ? t('nothingChanged') : t('publishing'));
       const view = await load(false);
       // O worker pode terminar antes desta leitura: aí o acompanhamento nem começa.
       if (result.status === 'PENDING' && view.publication.status !== 'PENDING') await settle(view);
     } catch (e) {
       setPreview(null);
       setIssues(issuesOf(e) ?? issues);
-      setError(errorMessage(e, 'Não foi possível publicar.'));
+      setError(errorMessage(e, t('publishError'), translateError));
     } finally {
       setBusy(false);
     }
@@ -263,7 +253,7 @@ export default function AgentFunctionPage() {
     try {
       setConfig(await api<AgentFunctionConfigView>(`${base}/function/retry`, { method: 'POST' }));
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível repetir a publicação.'));
+      setError(errorMessage(e, t('retryError'), translateError));
     } finally {
       setBusy(false);
     }
@@ -287,7 +277,7 @@ export default function AgentFunctionPage() {
       // Campo novo da versão: aparece destacado no formulário antes da prévia.
       setIssues(result.issues);
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível comparar com a versão nova.'));
+      setError(errorMessage(e, t('compareError'), translateError));
     } finally {
       setBusy(false);
     }
@@ -298,7 +288,7 @@ export default function AgentFunctionPage() {
     if (config?.mode === 'TAKEN_OVER' && to !== 'TAKEN_OVER') setTakenOver('');
     setMode(to);
     setModeRequest(null);
-    setNotice('Modo alterado. Publique para aplicar no agente.');
+    setNotice(t('modeChanged'));
   }
 
   if (!config) return error ? <Alert tone="error">{error}</Alert> : <Loading />;
@@ -310,14 +300,10 @@ export default function AgentFunctionPage() {
       </Suspense>
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
-      {pending && (
-        <Alert tone="warning">
-          Publicação em andamento. Os treinamentos e as ações estão sendo aplicados no agente.
-        </Alert>
-      )}
+      {pending && <Alert tone="warning">{t('pending')}</Alert>}
       {config.publication.status === 'FAILED' && (
         <Alert tone="error">
-          <p>A última publicação não terminou: {config.publication.error}</p>
+          <p>{t('lastFailed', { error: config.publication.error ?? '' })}</p>
           {!readOnly && (
             <button
               type="button"
@@ -325,7 +311,7 @@ export default function AgentFunctionPage() {
               disabled={busy}
               onClick={retry}
             >
-              {busy ? 'Repetindo…' : 'Tentar de novo'}
+              {busy ? t('retrying') : t('retry')}
             </button>
           )}
         </Alert>
@@ -334,19 +320,20 @@ export default function AgentFunctionPage() {
       {config.updateAvailable && (
         <Alert tone="warning">
           <p>
-            Há uma versão nova da função {config.function.name} (versão {config.latestVersion}; o
-            agente está na {config.version}). Confira o que muda e publique quando quiser.
+            {t('updateAvailable', {
+              name: config.function.name,
+              latest: config.latestVersion,
+              current: config.version ?? '',
+            })}
           </p>
           {update ? (
             <div className="mt-3 space-y-2">
               {update.plan.behavior.changed ? (
                 <BehaviorDiff lines={update.plan.behavior.diff} />
               ) : (
-                <p>O texto do agente não muda; a versão nova altera outras partes da função.</p>
+                <p>{t('updateNoTextChange')}</p>
               )}
-              {update.issues.length > 0 && (
-                <p>A versão nova pede respostas novas: preencha os campos destacados abaixo.</p>
-              )}
+              {update.issues.length > 0 && <p>{t('updateNeedsAnswers')}</p>}
             </div>
           ) : (
             <button
@@ -355,7 +342,7 @@ export default function AgentFunctionPage() {
               disabled={busy}
               onClick={showUpdate}
             >
-              Ver o que muda no texto
+              {t('showUpdate')}
             </button>
           )}
         </Alert>
@@ -367,7 +354,9 @@ export default function AgentFunctionPage() {
           <p className="mt-0.5 text-sm text-zinc-500">{config.function.description}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone={mode === 'SIMPLE' ? 'zinc' : 'amber'}>Modo {MODES[mode]}</Badge>
+          <Badge tone={mode === 'SIMPLE' ? 'zinc' : 'amber'}>
+            {t('modeBadge', { mode: t(`modes.${mode}`) })}
+          </Badge>
           {!readOnly && mode === 'SIMPLE' && (
             <button
               type="button"
@@ -375,13 +364,13 @@ export default function AgentFunctionPage() {
               disabled={pending}
               onClick={() =>
                 setModeRequest({
-                  title: 'Ligar o modo avançado?',
-                  text: 'O modo avançado libera instruções adicionais e treinamento por site e vídeo. Instruções mal escritas podem piorar o atendimento: prefira o formulário sempre que possível.',
-                  choices: [{ to: 'ADVANCED', label: 'Continuar' }],
+                  title: t('requests.toAdvanced.title'),
+                  text: t('requests.toAdvanced.text'),
+                  choices: [{ to: 'ADVANCED', label: t('continue') }],
                 })
               }
             >
-              Modo avançado
+              {t('advancedMode')}
             </button>
           )}
           {!readOnly && mode === 'ADVANCED' && (
@@ -391,13 +380,13 @@ export default function AgentFunctionPage() {
               disabled={pending}
               onClick={() =>
                 setModeRequest({
-                  title: 'Voltar ao modo simples?',
-                  text: 'Ao publicar, as instruções adicionais e os treinamentos por site e vídeo serão removidos.',
-                  choices: [{ to: 'SIMPLE', label: 'Continuar' }],
+                  title: t('requests.toSimple.title'),
+                  text: t('requests.toSimple.text'),
+                  choices: [{ to: 'SIMPLE', label: t('continue') }],
                 })
               }
             >
-              Voltar ao modo simples
+              {t('backToSimple')}
             </button>
           )}
           {!readOnly && config.canTakeOver && mode !== 'TAKEN_OVER' && (
@@ -407,13 +396,17 @@ export default function AgentFunctionPage() {
               disabled={pending}
               onClick={() =>
                 setModeRequest({
-                  title: 'Assumir o controle do texto?',
-                  text: `Você passa a editar o texto do agente livremente. O agente deixa de receber as melhorias da função até voltar ao formulário.${mode === 'ADVANCED' ? ' Os treinamentos por site e vídeo são do modo avançado e saem ao publicar.' : ''}`,
-                  choices: [{ to: 'TAKEN_OVER', label: 'Continuar' }],
+                  title: t('requests.toTakeOver.title'),
+                  text: t(
+                    mode === 'ADVANCED'
+                      ? 'requests.toTakeOver.textAdvanced'
+                      : 'requests.toTakeOver.text',
+                  ),
+                  choices: [{ to: 'TAKEN_OVER', label: t('continue') }],
                 })
               }
             >
-              Assumir controle
+              {t('takeOver')}
             </button>
           )}
           {!readOnly && mode === 'TAKEN_OVER' && (
@@ -423,16 +416,16 @@ export default function AgentFunctionPage() {
               disabled={pending}
               onClick={() =>
                 setModeRequest({
-                  title: 'Voltar ao formulário?',
-                  text: 'As edições feitas no texto do agente serão perdidas. O texto volta a ser montado pelo formulário, na versão mais recente da função. No modo avançado você pode acrescentar instruções e treinar por site e vídeo.',
+                  title: t('requests.toForm.title'),
+                  text: t('requests.toForm.text'),
                   choices: [
-                    { to: 'ADVANCED', label: 'Voltar no modo avançado' },
-                    { to: 'SIMPLE', label: 'Voltar no modo simples' },
+                    { to: 'ADVANCED', label: t('requests.toForm.advanced') },
+                    { to: 'SIMPLE', label: t('requests.toForm.simple') },
                   ],
                 })
               }
             >
-              Voltar ao formulário
+              {t('backToForm')}
             </button>
           )}
         </div>
@@ -441,8 +434,11 @@ export default function AgentFunctionPage() {
       {mode === 'ADVANCED' && (
         <Card className="p-5">
           <Field
-            label="Instruções adicionais"
-            hint={`Entram no fim do texto do agente. ${additional.length}/${FUNCTION_ADDITIONAL_INSTRUCTIONS_MAX} caracteres.`}
+            label={t('additional.label')}
+            hint={t('additional.hint', {
+              count: additional.length,
+              max: FUNCTION_ADDITIONAL_INSTRUCTIONS_MAX,
+            })}
           >
             <textarea
               className={`${inputClass} min-h-24`}
@@ -458,8 +454,11 @@ export default function AgentFunctionPage() {
       {mode === 'TAKEN_OVER' && (
         <Card className="p-5">
           <Field
-            label="Texto do agente"
-            hint={`Edição livre. ${takenOver.length}/${FUNCTION_BEHAVIOR_MAX} caracteres.`}
+            label={t('takenOverText.label')}
+            hint={t('takenOverText.hint', {
+              count: takenOver.length,
+              max: FUNCTION_BEHAVIOR_MAX,
+            })}
           >
             <textarea
               className={`${inputClass} min-h-64 font-mono text-xs`}
@@ -538,7 +537,7 @@ export default function AgentFunctionPage() {
             disabled={busy || pending}
             onClick={saveDraft}
           >
-            Salvar rascunho
+            {t('saveDraft')}
           </button>
           <button
             type="button"
@@ -546,7 +545,7 @@ export default function AgentFunctionPage() {
             disabled={busy || pending}
             onClick={() => void openPreview()}
           >
-            Ver prévia e publicar
+            {t('previewAndPublish')}
           </button>
         </div>
       )}
@@ -562,7 +561,7 @@ export default function AgentFunctionPage() {
                 className={buttonClass('secondary')}
                 onClick={() => setModeRequest(null)}
               >
-                Cancelar
+                {tc('cancel')}
               </button>
               {modeRequest.choices.map((choice, index) => (
                 <button
@@ -585,8 +584,8 @@ export default function AgentFunctionPage() {
 
       {attention !== null && (
         <Modal
-          title={`${attention} ${attention === 1 ? 'ponto de atenção' : 'pontos de atenção'}`}
-          description="Os avisos não impedem a publicação, mas o agente atende melhor com eles resolvidos."
+          title={t('attention.title', { count: attention })}
+          description={t('attention.description')}
           onRequestClose={() => setAttention(null)}
           footer={
             <div className="flex justify-end gap-2">
@@ -595,32 +594,29 @@ export default function AgentFunctionPage() {
                 className={buttonClass('secondary')}
                 onClick={() => setAttention(null)}
               >
-                Revisar
+                {t('attention.review')}
               </button>
               <button
                 type="button"
                 className={buttonClass('primary')}
                 onClick={() => void openPreview(true)}
               >
-                Publicar mesmo assim
+                {t('attention.publishAnyway')}
               </button>
             </div>
           }
         >
-          <p className="text-sm text-zinc-700">
-            Os campos com aviso estão destacados no formulário. Você pode corrigir antes ou seguir
-            para a prévia.
-          </p>
+          <p className="text-sm text-zinc-700">{t('attention.body')}</p>
         </Modal>
       )}
 
       {preview && (
         <Modal
-          title="Prévia da publicação"
+          title={t('preview.title')}
           description={
             preview.version.from !== null && preview.version.from !== preview.version.to
-              ? `A função passa da versão ${preview.version.from} para a ${preview.version.to}.`
-              : 'Confira o que muda no agente.'
+              ? t('preview.versionChange', { from: preview.version.from, to: preview.version.to })
+              : t('preview.default')
           }
           onRequestClose={() => !busy && setPreview(null)}
           footer={
@@ -631,7 +627,7 @@ export default function AgentFunctionPage() {
                 disabled={busy}
                 onClick={() => setPreview(null)}
               >
-                Voltar
+                {t('preview.back')}
               </button>
               <button
                 type="button"
@@ -639,14 +635,14 @@ export default function AgentFunctionPage() {
                 disabled={busy || preview.compiled.errors.length > 0}
                 onClick={publish}
               >
-                {busy ? 'Publicando…' : 'Publicar'}
+                {busy ? t('preview.publishing') : t('preview.publish')}
               </button>
             </div>
           }
         >
           <FunctionPreviewView
             preview={preview}
-            modeChange={mode !== config.mode ? MODES[mode].toLowerCase() : null}
+            modeChange={mode !== config.mode ? t(`modes.${mode}`).toLowerCase() : null}
           />
         </Modal>
       )}

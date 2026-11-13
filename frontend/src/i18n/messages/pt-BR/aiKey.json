@@ -1,0 +1,32 @@
+{
+  "title": "Chave Vibecode",
+  "description": "Use a sua chave do Vibecode do Bitrix24 para a revisão por IA da função, sem gastar créditos.",
+  "adminOnly": "Só administradores do portal configuram a chave Vibecode.",
+  "configured": "Chave configurada, final {last4}.",
+  "configuredVerified": "Chave configurada, final {last4}, testada em {date}.",
+  "notConfigured": "Nenhuma chave salva. A revisão por IA usa os créditos do app.",
+  "notConfiguredUnavailable": "Nenhuma chave salva. A revisão por IA usa os créditos do app e, no momento, está indisponível sem uma chave própria.",
+  "replaceKey": "Trocar a chave",
+  "keyLabel": "Chave do Vibecode",
+  "hints": {
+    "scope": "Crie a chave só com o escopo vibe:ai: ela não precisa de acesso aos dados do portal.",
+    "sent": "O texto da função e da base é enviado ao Vibecode na revisão por IA.",
+    "stored": "A chave é guardada cifrada e não aparece de novo depois de salva."
+  },
+  "testing": "Testando…",
+  "testAndSave": "Testar e salvar",
+  "removeKey": "Remover chave",
+  "saved": "Chave testada e salva.",
+  "removed": "Chave removida. A revisão por IA passa a usar créditos.",
+  "errors": {
+    "load": "Não foi possível carregar a chave.",
+    "save": "Não foi possível salvar a chave.",
+    "remove": "Não foi possível remover a chave.",
+    "AI_KEY_REQUIRED": "Para revisar com IA, informe a chave do Vibecode.",
+    "AI_KEY_INVALID": "O Vibecode não aceitou a chave. Confira se ela foi copiada inteira e se ainda está ativa.",
+    "AI_KEY_SCOPE": "A chave precisa ter o escopo vibe:ai.",
+    "AI_NO_BALANCE": "A conta do Vibecode ficou sem saldo ou cota.",
+    "AI_MODEL_UNAVAILABLE": "A chave não tem acesso ao modelo usado na revisão, ou ele está fora do ar.",
+    "AI_UNAVAILABLE": "A revisão por IA está fora do ar agora. Tente de novo em instantes."
+  }
+}

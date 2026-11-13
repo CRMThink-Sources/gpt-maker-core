@@ -1,0 +1,243 @@
+{
+  "events": {
+    "onFirstInteraction": {
+      "label": "Customer's first conversation",
+      "description": "The customer talks to the agent for the first time."
+    },
+    "onStartInteraction": {
+      "label": "Conversation start",
+      "description": "A conversation starts (including from customers who have talked before)."
+    },
+    "onNewMessage": {
+      "label": "New message",
+      "description": "Every message from the customer or the agent."
+    },
+    "onFinishInteraction": {
+      "label": "Conversation end",
+      "description": "The conversation is closed."
+    },
+    "onTransfer": {
+      "label": "Transfer to a human",
+      "description": "The agent hands the conversation over to a team member."
+    },
+    "onLackKnowLedge": {
+      "label": "Agent has no answer",
+      "description": "The agent could not answer a question."
+    },
+    "onCreateEvent": {
+      "label": "Appointment created",
+      "description": "The agent booked an appointment."
+    },
+    "onCancelEvent": {
+      "label": "Appointment canceled",
+      "description": "An appointment booked by the agent was canceled."
+    }
+  },
+  "actions": {
+    "CREATE_LEAD": {
+      "label": "Create lead",
+      "description": "New lead in the CRM."
+    },
+    "UPSERT_DEAL": {
+      "label": "Create or update deal",
+      "description": "Updates the conversation's deal or creates one in the chosen pipeline."
+    },
+    "TIMELINE_COMMENT": {
+      "label": "Timeline comment",
+      "description": "Comment on the conversation's deal, lead, contact or company."
+    },
+    "CREATE_TASK": {
+      "label": "Create task",
+      "description": "Task for a portal user."
+    },
+    "START_BIZPROC": {
+      "label": "Start business process",
+      "description": "Runs a business process on the conversation's entity."
+    },
+    "OUTBOUND_WEBHOOK": {
+      "label": "Call external URL",
+      "description": "Sends the event to another system (signed POST)."
+    },
+    "CREATE_SPA_ITEM": {
+      "label": "Create SPA item",
+      "description": "New item in a smart process, with the fields chosen by the customer."
+    },
+    "TRANSFER_TO_HUMAN": {
+      "label": "Transfer to an agent",
+      "description": "After the agent replies, the conversation goes to a team member."
+    }
+  },
+  "defaults": {
+    "leadTitle": "Lead from '{{contact.name | \"customer\"}}'",
+    "dealTitle": "Deal with '{{contact.name | \"customer\"}}'",
+    "timelineText": "Conversation with agent '{{agent.name}}': '{{event.name}}'",
+    "taskTitle": "Follow up with '{{contact.name | \"customer\"}}'",
+    "spaTitle": "Ticket from '{{contact.name}}'"
+  },
+  "sample": {
+    "contactName": "Maria Souza",
+    "messageText": "I would like a quote for 10 units",
+    "agentName": "Your agent"
+  },
+  "variables": {
+    "contact_name": "Customer name",
+    "contact_phone": "Customer phone",
+    "message_text": "Message text (message events)",
+    "message_role": "Message author: user (customer) or assistant (agent)",
+    "agent_name": "Agent name",
+    "agent_id": "Agent id in the app",
+    "event_name": "Event that fired the trigger",
+    "event_date": "Event date and time (ISO 8601)",
+    "dialog_id": "Open Channel dialog in Bitrix24 (chat9498)",
+    "dialog_chatId": "Open Channel chat number, without \"chat\" (9498)",
+    "dialog_sessionId": "Current Open Channel session in Bitrix24",
+    "interaction_id": "Conversation in GPTMaker",
+    "interaction_protocol": "Conversation protocol in GPTMaker"
+  },
+  "templateErrors": {
+    "unpaired": "unmatched '{{ }}' braces",
+    "invalid": "invalid variable: {token}",
+    "unknown": "unknown variable: {token}"
+  },
+  "status": {
+    "SUCCESS": "Executed",
+    "FAILED": "Failed",
+    "PENDING": "Retrying"
+  },
+  "result": {
+    "lead": "Lead #{id}",
+    "deal": "Deal #{id}",
+    "dealNew": "Deal #{id} (new)",
+    "comment": "Comment on {entityType} #{entityId}",
+    "task": "Task #{id}",
+    "spaItem": "SPA item #{id}",
+    "workflow": "Process {id}",
+    "http": "HTTP {status}"
+  },
+  "template": {
+    "insertIn": "Insert variable in {label}",
+    "addVariable": "+ variable",
+    "example": "Example:",
+    "empty": "(empty)"
+  },
+  "options": {
+    "legend": "Possible values (use the code):",
+    "fill": "Fill with {id}"
+  },
+  "fieldMap": {
+    "required": "(required)",
+    "crmField": "CRM field",
+    "typeNameOrCode": "Type the field name or code",
+    "codePlaceholder": "FIELD CODE",
+    "removeField": "Remove field {name}",
+    "notFound": "Field not found in this portal's CRM. Check the code.",
+    "value": "Value",
+    "add": "Field",
+    "loading": "Loading CRM fields…",
+    "loadFailed": "Could not read the CRM fields; enter the codes (e.g. TITLE, NAME, PHONE, UF_CRM_...).",
+    "paramNames": "Enter the parameter names as they appear in the process template."
+  },
+  "config": {
+    "comment": "Comment",
+    "commentHint": "Goes to the deal, lead, contact or company linked to the conversation.",
+    "title": "Title",
+    "description": "Description",
+    "responsible": "Responsible",
+    "rotation": "{count, plural, one {# user} other {# users}}, in rotation",
+    "deadline": "Deadline (days)",
+    "deadlineHint": "Empty: no deadline.",
+    "templateId": "Process template (id)",
+    "runOn": "Run on",
+    "docDeal": "Conversation's deal",
+    "docLead": "Conversation's lead",
+    "docContact": "Conversation's contact",
+    "docCompany": "Conversation's company",
+    "parameters": "Parameters (optional)",
+    "targetOperator": "Any available Open Channel operator",
+    "targetOperatorHint": "Follows the queue configured on the line.",
+    "targetUser": "A specific user",
+    "targetUserHint": "E.g. the salesperson in charge of this subject.",
+    "openChannel": "Open channel {id}",
+    "agentUser": "Agent",
+    "webhookHint": "Receives a JSON POST with the event, signed in the X-GPTMaker-Signature header.",
+    "url": "URL"
+  },
+  "issue": {
+    "name": "Name",
+    "action": "Action {number}",
+    "actions": "Actions",
+    "trigger": "Trigger",
+    "review": "review this field"
+  },
+  "editor": {
+    "saveFailed": "Could not save the trigger. Please try again.",
+    "editTitle": "Edit trigger",
+    "newTitle": "New trigger",
+    "description": "When the event happens, the actions run in Bitrix24 in this order.",
+    "active": "Active",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save",
+    "name": "Name",
+    "namePlaceholder": "E.g. Lead at the end of the conversation",
+    "when": "When",
+    "actions": "Actions"
+  },
+  "actionsEditor": {
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "remove": "Remove",
+    "add": "Add action",
+    "addOption": "+ Add action"
+  },
+  "page": {
+    "loadFailed": "Could not load the triggers.",
+    "actionFailed": "Could not complete the operation. Please try again.",
+    "new": "New trigger",
+    "title": "Triggers",
+    "description": "Automatic actions in Bitrix24 when something happens in the agent's conversations: create a lead, move a deal, add a comment, open a task.",
+    "emptyTitle": "No triggers yet",
+    "emptyDescription": "Example: at the end of each conversation, create a lead with the customer's name and a comment with the summary.",
+    "active": "Active",
+    "inactive": "Inactive",
+    "confirmRemove": "Remove?",
+    "cancel": "Cancel",
+    "removing": "Removing…",
+    "remove": "Remove",
+    "history": "History",
+    "saving": "Saving…",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "edit": "Edit"
+  },
+  "secrets": {
+    "title": "Outbound webhook secret",
+    "description": "Save it now: it will not be shown again.",
+    "saved": "I have saved it",
+    "usageStart": "Use the secret in the system that receives the calls to verify the signature in the header",
+    "usageWhere": "where",
+    "usageIs": "is the HMAC-SHA256 of",
+    "signedBody": "t.body",
+    "copied": "Copied",
+    "copy": "Copy"
+  },
+  "history": {
+    "loadFailed": "Could not load the history.",
+    "title": "History · {name}",
+    "description": "Last 100 actions run by this trigger.",
+    "refresh": "Refresh",
+    "close": "Close",
+    "empty": "No executions yet. The trigger runs when the event “{event}” happens.",
+    "dialog": "dialog {id}",
+    "attempts": "{count, plural, one {# attempt} other {# attempts}}",
+    "nextAttempt": "next attempt {date}"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "TRIGGER_NOT_FOUND": "Trigger not found",
+    "TRIGGER_ACTION_NOT_FOUND": "This trigger has no such action",
+    "TRIGGER_LIMIT": "The agent already has 50 triggers",
+    "TRIGGER_ACTION_TYPE_CHANGED": "To change the type, remove the action and create another one",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support"
+  }
+}

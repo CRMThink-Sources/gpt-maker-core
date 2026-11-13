@@ -4,8 +4,8 @@ import type { IntentionView } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { BoltIcon, GlobeIcon, PlusIcon } from '@/components/icons';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading } from '@/components/ui';
-import { errorMessage } from '@/lib/agents';
-import { ACTION_TYPES } from '@/lib/triggers';
+import { useErrorMessage, useT } from '@/i18n';
+import { actionType, apiFailure } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { useAgent } from '../agent-context';
 import { ExecutionsModal } from './executions-modal';
@@ -15,6 +15,9 @@ import { formOf, IntentionEditor } from './intention-editor';
 export default function AgentIntentionsPage() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('intentions');
+  const tt = useT('triggers');
+  const errorMessage = useErrorMessage('intentions');
   const [intentions, setIntentions] = useState<IntentionView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<IntentionView | 'new' | null>(null);
@@ -29,22 +32,21 @@ export default function AgentIntentionsPage() {
     try {
       setIntentions(await api<IntentionView[]>(base));
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar as intenções.'));
+      setError(apiFailure(e, errorMessage, t('page.loadFailed')));
     }
-  }, [api, base]);
+  }, [api, base, t, errorMessage]);
 
   useEffect(() => {
     let cancelled = false;
     api<IntentionView[]>(base)
       .then((data) => !cancelled && setIntentions(data))
       .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar as intenções.')),
+        (e: unknown) => !cancelled && setError(apiFailure(e, errorMessage, t('page.loadFailed'))),
       );
     return () => {
       cancelled = true;
     };
-  }, [api, base]);
+  }, [api, base, t, errorMessage]);
 
   async function run(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
@@ -53,7 +55,7 @@ export default function AgentIntentionsPage() {
       await action();
       await reload();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível concluir. Tente de novo.'));
+      setError(apiFailure(e, errorMessage, t('page.actionFailed')));
     } finally {
       setBusyId(null);
       setConfirmingId(null);
@@ -63,7 +65,7 @@ export default function AgentIntentionsPage() {
   const add = canManage && (
     <button type="button" onClick={() => setEditing('new')} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Nova intenção
+      {t('page.new')}
     </button>
   );
 
@@ -71,11 +73,8 @@ export default function AgentIntentionsPage() {
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Intenções</h2>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Deixe o agente agir durante a conversa: registrar lead, negócio ou tarefa no Bitrix24,
-            ou consultar seus sistemas (status de pedido, segunda via, agendamento).
-          </p>
+          <h2 className="text-lg font-semibold text-zinc-900">{t('page.title')}</h2>
+          <p className="mt-0.5 text-sm text-zinc-500">{t('page.description')}</p>
         </div>
         {add}
       </div>
@@ -93,8 +92,8 @@ export default function AgentIntentionsPage() {
           {intentions.length === 0 ? (
             <EmptyState
               icon={<GlobeIcon className="size-6" />}
-              title="Nenhuma intenção ainda"
-              description="Exemplo: quando o cliente perguntar pelo pedido, o agente pede o número, consulta a sua API e responde com o status e a previsão de entrega."
+              title={t('page.emptyTitle')}
+              description={t('page.emptyDescription')}
               action={add}
             />
           ) : (
@@ -116,16 +115,16 @@ export default function AgentIntentionsPage() {
                           {intention.name}
                         </p>
                         <Badge tone={intention.active ? 'green' : 'zinc'}>
-                          {intention.active ? 'Ativa' : 'Desativada'}
+                          {intention.active ? t('page.active') : t('page.inactive')}
                         </Badge>
-                        {intention.managed && <Badge tone="brand">da função</Badge>}
-                        {!intention.synced && <Badge tone="amber">Sincronizando</Badge>}
+                        {intention.managed && <Badge tone="brand">{t('page.fromFunction')}</Badge>}
+                        {!intention.synced && <Badge tone="amber">{t('page.syncing')}</Badge>}
                       </div>
                       {intention.kind === 'BITRIX' ? (
                         <p className="mt-0.5 truncate text-xs text-zinc-500">
                           <span className="font-medium">Bitrix24:</span>{' '}
                           {intention.actions
-                            .map((action) => ACTION_TYPES[action.type].label)
+                            .map((action) => actionType(tt, action.type).label)
                             .join(', ')}
                         </p>
                       ) : (
@@ -136,21 +135,22 @@ export default function AgentIntentionsPage() {
                       )}
                       {intention.fields.length > 0 && (
                         <p className="mt-0.5 text-xs text-zinc-500">
-                          Coleta: {intention.fields.map((field) => field.name).join(', ')}
+                          {t('page.collects')}{' '}
+                          {intention.fields.map((field) => field.name).join(', ')}
                         </p>
                       )}
                     </div>
 
                     {confirmingId === intention.id ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-zinc-600">Remover?</span>
+                        <span className="text-sm text-zinc-600">{t('page.confirmRemove')}</span>
                         <button
                           type="button"
                           onClick={() => setConfirmingId(null)}
                           disabled={busy}
                           className={buttonClass('secondary', 'sm')}
                         >
-                          Cancelar
+                          {t('page.cancel')}
                         </button>
                         <button
                           type="button"
@@ -162,7 +162,7 @@ export default function AgentIntentionsPage() {
                           disabled={busy}
                           className={buttonClass('danger', 'sm')}
                         >
-                          {busy ? 'Removendo…' : 'Remover'}
+                          {busy ? t('page.removing') : t('page.remove')}
                         </button>
                       </div>
                     ) : (
@@ -173,7 +173,7 @@ export default function AgentIntentionsPage() {
                             onClick={() => setHistory(intention)}
                             className={buttonClass('ghost', 'sm')}
                           >
-                            Histórico
+                            {t('page.history')}
                           </button>
                         )}
                         {canManage && !intention.managed && (
@@ -194,7 +194,11 @@ export default function AgentIntentionsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              {busy ? 'Salvando…' : intention.active ? 'Desativar' : 'Ativar'}
+                              {busy
+                                ? t('page.saving')
+                                : intention.active
+                                  ? t('page.deactivate')
+                                  : t('page.activate')}
                             </button>
                             <button
                               type="button"
@@ -202,7 +206,7 @@ export default function AgentIntentionsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost', 'sm')}
                             >
-                              Editar
+                              {t('page.edit')}
                             </button>
                             <button
                               type="button"
@@ -210,7 +214,7 @@ export default function AgentIntentionsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost-danger', 'sm')}
                             >
-                              Remover
+                              {t('page.remove')}
                             </button>
                           </>
                         )}

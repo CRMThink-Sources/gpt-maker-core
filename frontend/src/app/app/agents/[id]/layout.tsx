@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
 import { ChatIcon } from '@/components/icons';
 import { Alert, Avatar, Badge, buttonClass, Loading, PageHeader } from '@/components/ui';
-import { AGENT_TYPES, agentStatus, errorMessage } from '@/lib/agents';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
+import { agentStatus, agentTypeLabel, errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
 import { AgentContext } from './agent-context';
 import { TestChatModal } from './test-chat-modal';
@@ -16,6 +17,9 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
   const { id } = use(params);
   const { api, session } = useAppSession();
   const pathname = usePathname();
+  const t = useT('agentDetail');
+  const format = useFormat();
+  const translateError = useErrorMessage('agentDetail');
   const [agent, setAgent] = useState<AgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -26,11 +30,12 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
       .then((row) => !cancelled && setAgent(row))
       .catch(
         (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar o agente.')),
+          !cancelled && setError(errorMessage(e, t('layout.loadError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, id]);
 
   const context = useMemo(() => (agent ? { agent, setAgent } : null), [agent]);
@@ -38,7 +43,7 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
   if (error) {
     return (
       <>
-        <PageHeader title="Agente" back={{ href: '/app', label: 'Agentes' }} />
+        <PageHeader title={t('layout.agent')} back={{ href: '/app', label: t('layout.agents') }} />
         <Alert tone="error">{error}</Alert>
       </>
     );
@@ -49,33 +54,33 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
   const tabs = [
     {
       href: `${base}/function`,
-      label: 'Função',
+      label: t('layout.tabs.function'),
       active: pathname.startsWith(`${base}/function`),
     },
-    { href: base, label: 'Configurações', active: pathname === base },
+    { href: base, label: t('layout.tabs.settings'), active: pathname === base },
     {
       href: `${base}/trainings`,
-      label: 'Treinamentos',
+      label: t('layout.tabs.trainings'),
       active: pathname.startsWith(`${base}/trainings`),
     },
     {
       href: `${base}/intentions`,
-      label: 'Intenções',
+      label: t('layout.tabs.intentions'),
       active: pathname.startsWith(`${base}/intentions`),
     },
     {
       href: `${base}/triggers`,
-      label: 'Gatilhos',
+      label: t('layout.tabs.triggers'),
       active: pathname.startsWith(`${base}/triggers`),
     },
   ];
-  const status = agentStatus(agent!);
+  const status = agentStatus(agent!, t);
   const canTest = session.canManage && agent!.status === 'ACTIVE';
 
   return (
     <AgentContext.Provider value={context}>
       <PageHeader
-        back={{ href: '/app', label: 'Agentes' }}
+        back={{ href: '/app', label: t('layout.agents') }}
         title={
           <span className="flex items-center gap-3">
             <Avatar name={agent!.name} src={agent!.avatarUrl} />
@@ -92,14 +97,20 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
                 className={buttonClass('secondary', 'sm')}
               >
                 <ChatIcon className="size-4" />
-                Testar
+                {t('layout.test')}
               </button>
             )}
           </>
         }
-        description={`${AGENT_TYPES[agent!.type]} · criado em ${new Date(agent!.createdAt).toLocaleDateString('pt-BR')}`}
+        description={t('layout.description', {
+          type: agentTypeLabel(agent!.type, t),
+          date: format.dateTime(new Date(agent!.createdAt), { dateStyle: 'short' }),
+        })}
       />
-      <nav className="-mt-2 mb-6 flex gap-6 border-b border-zinc-200" aria-label="Seções do agente">
+      <nav
+        className="-mt-2 mb-6 flex gap-6 border-b border-zinc-200"
+        aria-label={t('layout.sections')}
+      >
         {tabs.map((tab) => (
           <Link
             key={tab.href}
@@ -117,7 +128,7 @@ export default function AgentLayout({ params, children }: LayoutProps<'/app/agen
       </nav>
       {agent!.status === 'OUT_OF_SYNC' && (
         <Alert tone="warning" className="mb-6">
-          O agente não foi encontrado no GPTMaker e não pode ser alterado. Fale com o suporte.
+          {t('layout.outOfSync')}
         </Alert>
       )}
       {children}

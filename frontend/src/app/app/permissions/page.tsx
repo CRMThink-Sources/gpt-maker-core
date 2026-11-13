@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { PlusIcon, UsersIcon } from '@/components/icons';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
 import { Alert, Avatar, buttonClass, Card, EmptyState, Loading, PageHeader } from '@/components/ui';
 import { bx24SelectUsers } from '@/lib/bx24';
 import { ApiRequestError } from '@/lib/platform-session';
@@ -17,6 +18,9 @@ interface GrantedUser {
 /** Concessão de permissão: o admin do portal escolhe quem pode gerenciar agentes. */
 export default function PermissionsPage() {
   const { session, api } = useAppSession();
+  const t = useT('permissions');
+  const format = useFormat();
+  const errorText = useErrorMessage('permissions');
   const [users, setUsers] = useState<GrantedUser[] | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +46,12 @@ export default function PermissionsPage() {
         setUsers(list.granted);
         setNames(list.names);
       })
-      .catch(() => !cancelled && setError('Não foi possível carregar as permissões.'));
+      .catch(() => !cancelled && setError(t('errors.load')));
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchList, session.user.isAdmin]);
 
   async function run(action: () => Promise<unknown>) {
@@ -55,7 +61,7 @@ export default function PermissionsPage() {
       await action();
       show(await fetchList());
     } catch (e) {
-      setError(e instanceof ApiRequestError ? e.message : 'Não foi possível salvar.');
+      setError(e instanceof ApiRequestError ? errorText(e) : t('errors.save'));
     } finally {
       setBusy(false);
     }
@@ -76,13 +82,13 @@ export default function PermissionsPage() {
 
   const header = (
     <PageHeader
-      title="Permissões"
-      description="Administradores do portal sempre podem criar, editar, treinar e configurar gatilhos. Autorize aqui outros usuários; os demais só consultam."
+      title={t('title')}
+      description={t('description')}
       actions={
         session.user.isAdmin && (
           <button type="button" onClick={add} disabled={busy} className={buttonClass('primary')}>
             <PlusIcon className="size-4" />
-            Autorizar usuários
+            {t('authorize')}
           </button>
         )
       }
@@ -93,7 +99,7 @@ export default function PermissionsPage() {
     return (
       <>
         {header}
-        <Alert tone="warning">Somente administradores do portal gerenciam permissões.</Alert>
+        <Alert tone="warning">{t('adminOnly')}</Alert>
       </>
     );
   }
@@ -113,21 +119,24 @@ export default function PermissionsPage() {
           {users.length === 0 ? (
             <EmptyState
               icon={<UsersIcon className="size-6" />}
-              title="Só administradores gerenciam agentes"
-              description="Autorize outros usuários do portal para que também possam criar e editar agentes."
+              title={t('empty.title')}
+              description={t('empty.description')}
             />
           ) : (
             <ul className="divide-y divide-zinc-100">
               {users.map((user) => {
-                const name = names[user.bitrixUserId] ?? `Usuário #${user.bitrixUserId}`;
+                const name =
+                  names[user.bitrixUserId] ?? t('userFallback', { id: user.bitrixUserId });
                 return (
                   <li key={user.bitrixUserId} className="flex items-center gap-4 px-5 py-4 text-sm">
                     <Avatar name={name} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-zinc-900">{name}</p>
                       <p className="text-xs text-zinc-500">
-                        Autorizado por {names[user.grantedBy] ?? `#${user.grantedBy}`} em{' '}
-                        {new Date(user.grantedAt).toLocaleDateString('pt-BR')}
+                        {t('grantedBy', {
+                          name: names[user.grantedBy] ?? `#${user.grantedBy}`,
+                          date: format.dateTime(new Date(user.grantedAt), { dateStyle: 'short' }),
+                        })}
                       </p>
                     </div>
                     <button
@@ -136,7 +145,7 @@ export default function PermissionsPage() {
                       disabled={busy}
                       className={buttonClass('ghost-danger', 'sm')}
                     >
-                      Remover acesso
+                      {t('revoke')}
                     </button>
                   </li>
                 );

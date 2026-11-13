@@ -1,0 +1,18 @@
+{
+  "agents": "Agents",
+  "crm": "CRM for the agent",
+  "plan": "Credits and plan",
+  "settings": "Settings",
+  "permissions": "Permissions",
+  "aiKey": "Vibecode key",
+  "notifications": "Notices",
+  "closeMenu": "Close menu",
+  "openMenu": "Open menu",
+  "roleAdmin": "Administrator",
+  "roleManager": "Manages agents",
+  "roleReadOnly": "Read only",
+  "portal": "{role} · portal {code}",
+  "authError": "Bitrix24 rejected the app authorization and the agents' service is paused. A portal administrator needs to reinstall the app to restore access.",
+  "soon": "Soon",
+  "tagline": "AI agents for Bitrix24"
+}

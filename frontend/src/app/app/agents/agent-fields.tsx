@@ -3,7 +3,8 @@
 import type { AgentSettings, AgentView, AvailableModel, BusinessHours } from '@gptmaker/contracts';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui';
-import { credits } from '@/lib/agents';
+import { useErrorMessage, useT } from '@/i18n';
+import { ApiRequestError } from '@/lib/platform-session';
 
 /**
  * Valores do formulário como o usuário os digitou; as telas montam o corpo da API. Comportamento,
@@ -64,26 +65,37 @@ export function Field({
   );
 }
 
+/**
+ * Mensagem de uma falha de chamada à API: erro com código conhecido vem traduzido; qualquer outra
+ * falha (rede, resposta sem envelope `HTTP_*`) usa o texto `fallback` da operação.
+ */
+export function useApiFailure() {
+  const message = useErrorMessage('agentForm');
+  return (error: unknown, fallback: string): string =>
+    error instanceof ApiRequestError && !error.code.startsWith('HTTP_') ? message(error) : fallback;
+}
+
 export function IdentityFields({ values, set, autoFocus }: FieldsProps & { autoFocus?: boolean }) {
+  const t = useT('agentForm');
   return (
     <>
       <div className="flex items-center gap-4">
         <Avatar name={values.name || '?'} src={values.avatarUrl || null} size="lg" />
         <div className="flex-1">
-          <Field label="Nome" hint="É o nome que o cliente vê no chat.">
+          <Field label={t('identity.nameLabel')} hint={t('identity.nameHint')}>
             <input
               className={inputClass}
               required
               maxLength={100}
               autoFocus={autoFocus}
-              placeholder="Ex.: Ana, da Loja Exemplo"
+              placeholder={t('identity.namePlaceholder')}
               value={values.name}
               onChange={(e) => set('name', e.target.value)}
             />
           </Field>
         </div>
       </div>
-      <Field label="Foto" hint="Opcional. Link https de uma imagem quadrada.">
+      <Field label={t('identity.photoLabel')} hint={t('identity.photoHint')}>
         <input
           className={inputClass}
           type="url"
@@ -107,6 +119,7 @@ export function ModelFields({
   /** Modelo atual do agente, mostrado mesmo se o plano não o oferece mais. */
   currentModel?: AgentView['model'];
 }) {
+  const t = useT('agentForm');
   const options: Array<Pick<AvailableModel, 'id' | 'displayName' | 'creditsPerResponse'>> = [
     ...models,
   ];
@@ -114,10 +127,10 @@ export function ModelFields({
   if (outOfPlan) options.unshift(currentModel);
 
   if (options.length === 0) {
-    return <p className="text-sm text-red-700">Nenhum modelo disponível no momento.</p>;
+    return <p className="text-sm text-red-700">{t('model.none')}</p>;
   }
   return (
-    <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Modelo">
+    <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('model.ariaLabel')}>
       {options.map((model) => {
         const selected = values.modelId === model.id;
         const description = models.find((entry) => entry.id === model.id)?.description;
@@ -139,13 +152,11 @@ export function ModelFields({
             />
             <span className="font-medium text-zinc-900">{model.displayName}</span>
             <span className="mt-0.5 text-xs font-medium text-brand-700">
-              {credits(model.creditsPerResponse)}
+              {t('model.credits', { count: model.creditsPerResponse })}
             </span>
             {description && <span className="mt-2 text-xs text-zinc-500">{description}</span>}
             {outOfPlan && model.id === currentModel.id && (
-              <span className="mt-2 text-xs text-amber-700">
-                Modelo atual, não está mais no seu plano.
-              </span>
+              <span className="mt-2 text-xs text-amber-700">{t('model.outOfPlan')}</span>
             )}
           </label>
         );

@@ -107,10 +107,11 @@ export class AgentPlanModels implements TenantLifecycleListener, OnModuleInit {
           .map((a) => a.id)
           .sort()
           .join(',')}`,
-        message: MESSAGES.modelDowngraded({
-          agents: changed.map((a) => a.name),
-          model: fallback.displayName,
-        }),
+        message: (locale) =>
+          MESSAGES.modelDowngraded(locale, {
+            agents: changed.map((a) => a.name),
+            model: fallback.displayName,
+          }),
       });
     }
     return changed.map((a) => a.id);

@@ -6,7 +6,7 @@ import type {
   TestExchangeView,
   TestMessageInput,
 } from '@gptmaker/contracts';
-import { errorMessage } from './agents';
+import type { createFormat, T } from '@/i18n';
 import { ApiRequestError, type PlatformSessionClient } from './platform-session';
 
 /** `api` da sessão do iframe (`useAppSession().api`). */
@@ -78,32 +78,20 @@ export function noCredit(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === 'NO_CREDIT';
 }
 
-const MESSAGES: Record<string, string> = {
-  TEST_REPLY_PENDING:
-    'O agente ainda está respondendo a mensagem anterior. Aguarde a resposta antes de enviar outra.',
-  NO_CREDIT:
-    'Sua conta está sem créditos para respostas do agente. Adicione créditos para continuar testando.',
-  TEST_REPLY_FAILED:
-    'O agente não respondeu desta vez. Tente enviar a mensagem de novo em alguns instantes.',
-  AGENT_NOT_ACTIVE: 'O agente não está ativo. Ative o agente para testá-lo.',
-  CRM_UNAVAILABLE: 'O Bitrix24 não respondeu agora. Aguarde um pouco e tente de novo.',
-};
-
-/** Mensagem para o usuário no teste do agente. */
-export function agentTestErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiRequestError && MESSAGES[error.code]) return MESSAGES[error.code]!;
-  return errorMessage(error, fallback);
-}
-
 /** Data/hora curta e relativa para a lista de conversas ("agora", "há 5 min", "ontem, 14:02"). */
-export function formatWhen(iso: string, now: Date = new Date()): string {
+export function formatWhen(
+  iso: string,
+  t: T,
+  format: ReturnType<typeof createFormat>,
+  now: Date = new Date(),
+): string {
   const date = new Date(iso);
   const diffMin = Math.floor((now.getTime() - date.getTime()) / 60_000);
-  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  if (diffMin < 1) return 'agora';
-  if (diffMin < 60) return `há ${diffMin} min`;
+  const time = format.dateTime(date, { hour: '2-digit', minute: '2-digit' });
+  if (diffMin < 1) return t('when.now');
+  if (diffMin < 60) return t('when.minutesAgo', { count: diffMin });
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (date.getTime() >= startOfToday) return `hoje, ${time}`;
-  if (date.getTime() >= startOfToday - 86_400_000) return `ontem, ${time}`;
-  return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  if (date.getTime() >= startOfToday) return t('when.today', { time });
+  if (date.getTime() >= startOfToday - 86_400_000) return t('when.yesterday', { time });
+  return format.dateTime(date, { dateStyle: 'short', timeStyle: 'short' });
 }

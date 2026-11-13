@@ -1,0 +1,170 @@
+{
+  "title": "Credits and plan",
+  "description": "Balance, plan, agent usage, and the app free trial.",
+  "loadFailed": "Could not load.",
+  "intervals": {
+    "monthly": "month",
+    "quarterly": "quarter",
+    "semiannual": "half-year",
+    "yearly": "year"
+  },
+  "cycleCredits": {
+    "monthly": "per month",
+    "quarterly": "per quarter",
+    "semiannual": "per half-year",
+    "yearly": "per year"
+  },
+  "trial": {
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone or WhatsApp",
+      "company": "Company",
+      "role": "Job title"
+    },
+    "validation": {
+      "required": "Fill in this field",
+      "invalidEmail": "Invalid email",
+      "invalidField": "Invalid field"
+    },
+    "checkFields": "Check the highlighted fields.",
+    "activateFailed": "Could not start the trial. Please try again.",
+    "activate": "Start free trial",
+    "privacy": "Your details stay with CRMThink to follow your trial.",
+    "offerTitle": "14-day free trial",
+    "offerText": "Get 500 credits for your agents to serve customers on Bitrix24, no credit card required.",
+    "adminOnly": "Only the app administrator can start the free trial.",
+    "activating": "Starting your free trial…",
+    "activatingHint": "The credits will show up in a moment. You can keep using the app.",
+    "used": "The free trial has already been used on this portal. Choose a plan below so your agents can keep serving customers."
+  },
+  "balance": {
+    "title": "Balance",
+    "total": "Total available",
+    "trial": "Free trial",
+    "plan": "Plan",
+    "extra": "Extra",
+    "until": "Until {date}",
+    "validUntil": "Plan and extra credits are valid until {date}",
+    "renewsAt": "Renews on {date}",
+    "cancelsAt": "Subscription ends on {date}",
+    "consumed": "{count, plural, one {# credit used since {date}} other {# credits used since {date}}}",
+    "noCredits": "No credits: new messages are transferred to human agents until there is a balance.",
+    "status": {
+      "trialing": "Free trial",
+      "active": "Active plan",
+      "past_due": "Payment pending",
+      "cancelled": "Subscription ended",
+      "trial_expired": "Trial ended"
+    }
+  },
+  "usage": {
+    "title": "Usage per day",
+    "description": "Credits and responses per agent. Periods of up to {days} days.",
+    "from": "From",
+    "to": "To",
+    "agent": "Agent",
+    "allAgents": "All",
+    "empty": "No usage in the period.",
+    "day": "Day",
+    "responses": "Responses",
+    "credits": "Credits",
+    "noAgent": "No agent",
+    "functionReview": "Function review",
+    "fields": "{count, plural, one {# field} other {# fields}}",
+    "total": "Total",
+    "loadFailed": "Could not load the usage."
+  },
+  "entries": {
+    "title": "Transactions",
+    "description": "Credits received, expirations, and adjustments. Response usage is shown above.",
+    "empty": "No transactions yet.",
+    "loadMore": "Load more",
+    "loadFailed": "Could not load the transactions.",
+    "types": {
+      "GRANT": "Credit granted",
+      "TOPUP": "Extra credits",
+      "ADJUSTMENT": "Adjustment",
+      "EXPIRE": "Expiration",
+      "REFUND": "Refund"
+    },
+    "wallets": {
+      "TRIAL": "free trial",
+      "PLAN": "plan",
+      "EXTRA": "extra"
+    }
+  },
+  "checkout": {
+    "openFailed": "Could not open the payment. Please try again.",
+    "subscribeTitle": "Subscribe to {name}",
+    "buyTitle": "Buy {name}",
+    "extraValidUntil": "Extra credits are valid until {date}, along with the plan credits.",
+    "close": "Close",
+    "cancel": "Cancel",
+    "opening": "Opening the payment…",
+    "confirmingPlan": "Payment received. Confirming the plan…",
+    "confirmingCredits": "Payment received. Confirming the credits…",
+    "planActive": "{name} is active. The plan credits are already in your balance.",
+    "creditsAdded": "{count, plural, one {# credit added to your balance.} other {# credits added to your balance.}}",
+    "slow": "The payment was completed and the confirmation is taking longer than usual. The credits will appear in your balance as soon as it arrives; you do not need to pay again."
+  },
+  "change": {
+    "doneImmediate": "Plan changed to {name}. The prorated credits will appear in your balance shortly.",
+    "scheduledAt": "Change to {name} scheduled for {date}. Until then, your current plan remains in effect.",
+    "scheduledRenewal": "Change to {name} scheduled for the renewal. Until then, your current plan remains in effect.",
+    "failed": "Could not change the plan. Please try again.",
+    "title": "Switch to {name}",
+    "cancel": "Cancel",
+    "confirm": "Confirm change",
+    "from": "From",
+    "to": "to",
+    "currentPlan": "current plan",
+    "detail": "{credits} credits per cycle, {price}{interval}",
+    "upgradeBefore": "The change takes effect",
+    "now": "now",
+    "upgradeAfter": "Your card is charged only for the prorated difference for the rest of the cycle, and you immediately receive the prorated portion of the additional credits.",
+    "downgradeBefore": "The change takes effect at the",
+    "nextRenewal": "next renewal",
+    "downgradeAfter": "Until then, your current plan and its credits remain in effect. If an agent uses an AI model that the new plan does not include, it will use the default model."
+  },
+  "offer": {
+    "credits": "{count, plural, one {# credit} other {# credits}}",
+    "creditsPerCycle": "{count, plural, one {# credit} other {# credits}} {cycle}"
+  },
+  "section": {
+    "title": "Plan",
+    "current": "Current plan: {name}.",
+    "choose": "Choose a plan so your agents can keep serving customers.",
+    "managePayment": "Manage payment",
+    "pastDue": "The last payment was not approved. Update your card in “Manage payment” to avoid interrupting your agents.",
+    "pastDueUntil": "The last payment was not approved. Update your card in “Manage payment” by {date}; after that, the agents will be paused until the payment is settled.",
+    "nextPlanAt": "Change to {name} scheduled for {date}. Until then, your current plan remains in effect.",
+    "nextPlanRenewal": "Change to {name} scheduled for the renewal. Until then, your current plan remains in effect.",
+    "manual": "Your subscription was contracted through CRMThink: to change plans, contact the sales team.",
+    "adminOnly": "Only the app administrator can subscribe to plans.",
+    "checkoutUnavailable": "Subscribing through the app is not available in this environment. Contact CRMThink.",
+    "subscribe": "Subscribe",
+    "noPlans": "No plans available at the moment.",
+    "currentBadge": "Current plan",
+    "changeToThis": "Switch to this plan",
+    "extraTitle": "Extra credits",
+    "extraValidUntil": "Valid until {date}, along with the plan credits.",
+    "extraValidCycle": "Valid until the end of the plan cycle.",
+    "extraRequiresPlan": "Available to those with an active plan.",
+    "buy": "Buy",
+    "loadFailed": "Could not load the plans.",
+    "portalFailed": "Could not open the payment portal."
+  },
+  "errors": {
+    "PLAN_NOT_AVAILABLE": "Plan unavailable.",
+    "SAME_PLAN": "This is already your plan.",
+    "PACKAGE_REQUIRES_PLAN": "Credit packages require an active plan.",
+    "MANUAL_SUBSCRIPTION": "Your subscription was contracted through CRMThink. To change plans, contact the sales team.",
+    "NO_GATEWAY_SUBSCRIPTION": "This subscription is not paid by card through the app. Contact CRMThink to change the payment.",
+    "SUBSCRIPTION_ALREADY_EXISTS": "This portal already has an active plan. To change it, use the plan change option.",
+    "PAYMENTS_UNAVAILABLE": "Payments are unavailable at the moment. Try again in a moment.",
+    "TRIAL_ALREADY_USED": "The trial period for this portal has already been used.",
+    "TRIAL_UNAVAILABLE": "The free trial is not available at the moment.",
+    "VALIDATION_ERROR": "Check the registration details."
+  }
+}

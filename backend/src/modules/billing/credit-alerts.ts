@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Locale } from '@gptmaker/contracts';
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { creditLedger } from '../../shared/database/schema/index';
@@ -67,11 +68,12 @@ export class CreditAlerts {
 
       const message =
         alert === 'CREDIT_ZERO'
-          ? MESSAGES.creditZero()
-          : MESSAGES.credit80({
-              consumedPercent: Math.floor((100 * consumed) / (consumed + balance.total)),
-              remaining: balance.total,
-            });
+          ? (locale: Locale) => MESSAGES.creditZero(locale)
+          : (locale: Locale) =>
+              MESSAGES.credit80(locale, {
+                consumedPercent: Math.floor((100 * consumed) / (consumed + balance.total)),
+                remaining: balance.total,
+              });
       await this.notifications.notify({ tenantId, type: alert, dedupeKey: grant.id, message });
       return alert;
     } catch (error) {

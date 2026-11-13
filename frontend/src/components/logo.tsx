@@ -1,5 +1,9 @@
+'use client';
+
+import { useT } from '@/i18n';
+
 /**
- * Marca do app (GPT Think AI): o mascote robô (engrenagem na cabeça, visor com olhos sorrindo) sobre
+ * Marca do app (GPTThink): o mascote robô (engrenagem na cabeça, visor com olhos sorrindo) sobre
  * gradiente da cor da marca. Mesmo desenho de `public/brand/*.svg` e `app/icon.svg`.
  */
 export function LogoMark({ className = 'size-8' }: { className?: string }) {
@@ -74,14 +78,13 @@ const TONES = {
   light: {
     name: 'text-zinc-900',
     accent: 'text-brand-600',
-    ai: 'text-zinc-400',
     sub: 'text-zinc-500',
   },
   /** Sobre fundo escuro (aside). */
-  dark: { name: 'text-white', accent: 'text-brand-400', ai: 'text-zinc-500', sub: 'text-zinc-400' },
+  dark: { name: 'text-white', accent: 'text-brand-400', sub: 'text-zinc-400' },
 } as const;
 
-/** Logo completo: marca e "GPT Think AI", como em `public/brand/gptthink-logo.svg`. */
+/** Logo completo: marca e "GPTThink", como em `public/brand/gptthink-logo.svg`. */
 export function Logo({
   subtitle = true,
   tone = 'light',
@@ -89,18 +92,16 @@ export function Logo({
   subtitle?: boolean;
   tone?: keyof typeof TONES;
 }) {
+  const t = useT('shell');
   const colors = TONES[tone];
   return (
     <span className="flex items-center gap-2.5">
       <LogoMark />
       <span className="leading-tight">
         <span className={`block text-[15px] font-semibold tracking-tight ${colors.name}`}>
-          GPT <span className={colors.accent}>Think</span>{' '}
-          <span className={`font-medium ${colors.ai}`}>AI</span>
+          GPT<span className={colors.accent}>Think</span>
         </span>
-        {subtitle && (
-          <span className={`block text-[11px] ${colors.sub}`}>Agentes de IA para Bitrix24</span>
-        )}
+        {subtitle && <span className={`block text-[11px] ${colors.sub}`}>{t('tagline')}</span>}
       </span>
     </span>
   );

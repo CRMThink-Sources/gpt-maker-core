@@ -1,0 +1,149 @@
+{
+  "title": "CRM para o agente",
+  "description": "Escolha os campos do Bitrix24 que o agente pode ler e explique o que cada um significa no seu negócio.",
+  "refresh": "Atualizar do Bitrix24",
+  "refreshing": "Atualizando…",
+  "off": "O acesso do agente ao CRM ainda não está disponível.",
+  "retry": "Tentar de novo",
+  "loading": "Lendo os campos do seu Bitrix24…",
+  "readOnly": "Você pode consultar estas configurações. Para alterá-las, peça acesso a um administrador.",
+  "refreshed": "Campos atualizados do Bitrix24.",
+  "refreshUnavailable": "O Bitrix24 não respondeu agora. Os campos abaixo são da última leitura; tente de novo em instantes.",
+  "tabsLabel": "Seções do CRM",
+  "loadedAt": "Dados lidos do Bitrix24 em {date}.",
+  "entities": {
+    "lead": "Leads",
+    "deal": "Negócios",
+    "contact": "Contatos",
+    "company": "Empresas"
+  },
+  "steps": {
+    "choose": {
+      "title": "Escolha os campos",
+      "text": "Só os campos adicionados aqui chegam ao agente. O resto do Bitrix24 fica invisível para ele."
+    },
+    "explain": {
+      "title": "Explique o que significam",
+      "text": "A descrição diz ao agente como interpretar o campo no seu negócio."
+    }
+  },
+  "usage": {
+    "contact": "O agente usa estes campos ao identificar o cliente da conversa.",
+    "deal": "O agente lê estes campos nos negócios do cliente (até 10, do mais recente para o mais antigo).",
+    "lead": "Usados quando a conversa está ligada a um lead e ainda não há contato.",
+    "company": "Usados quando a conversa está ligada só a uma empresa."
+  },
+  "reads": "{count, plural, one {O agente lê # campo} other {O agente lê # campos}} de {entity}.",
+  "noFields": "O agente ainda não lê nenhum campo de {entity}.",
+  "noFieldsHint": "Use \"Adicionar campos\" para escolher.",
+  "addFields": "Adicionar campos",
+  "allAdded": "Todos os campos já foram adicionados",
+  "preview": {
+    "title": "O que o agente recebe",
+    "note": "Exemplo com valores fictícios, não é um cliente real.",
+    "none": "O agente não recebe dados de {entity}.",
+    "byField": {
+      "NAME": "Maria",
+      "SECOND_NAME": "Aparecida",
+      "LAST_NAME": "Souza",
+      "POST": "Gerente comercial",
+      "COMMENTS": "Prefere contato por WhatsApp",
+      "ADDRESS": "Av. Paulista, 1000 - São Paulo",
+      "deal_TITLE": "Implantação do CRM",
+      "lead_TITLE": "Contato pelo site",
+      "company_TITLE": "ACME Ltda",
+      "lead_COMPANY_TITLE": "ACME Ltda"
+    },
+    "byType": {
+      "string": "Exemplo",
+      "integer": "42",
+      "double": "42",
+      "money": "R$ 1.500,00",
+      "date": "15/03/2026",
+      "datetime": "15/03/2026 14:30",
+      "boolean": "Sim",
+      "char": "Sim",
+      "user": "Ana (responsável)",
+      "employee": "Ana (responsável)",
+      "crm_multifield": "(11) 91234-5678",
+      "crm_currency": "Real",
+      "crm_category": "Vendas",
+      "crm_stage": "Proposta enviada",
+      "url": "https://exemplo.com.br",
+      "address": "Av. Paulista, 1000 - São Paulo"
+    }
+  },
+  "fieldTypes": {
+    "string": "Texto",
+    "integer": "Número inteiro",
+    "double": "Número",
+    "money": "Valor",
+    "date": "Data",
+    "datetime": "Data e hora",
+    "enumeration": "Lista",
+    "crm_status": "Lista do CRM",
+    "boolean": "Sim/não",
+    "char": "Sim/não",
+    "user": "Usuário",
+    "employee": "Usuário",
+    "crm_multifield": "Telefone, e-mail ou contato",
+    "crm_currency": "Moeda",
+    "crm_category": "Funil",
+    "crm_stage": "Etapa do funil",
+    "url": "Link",
+    "address": "Endereço"
+  },
+  "boolean": {
+    "yes": "Sim",
+    "no": "Não"
+  },
+  "options": {
+    "more": "{list} e mais {count}"
+  },
+  "accessStatus": {
+    "DISABLED": "Desligado",
+    "CONNECTING": "Conectando",
+    "CONNECTED": "Conectado",
+    "ERROR": "Erro ao conectar"
+  },
+  "codeInBitrix": "Código no Bitrix24: {code}",
+  "badges": {
+    "custom": "Personalizado",
+    "personal": "Dado pessoal",
+    "missing": "Não existe mais no portal"
+  },
+  "remove": "Remover",
+  "removing": "Removendo…",
+  "cancel": "Cancelar",
+  "save": "Salvar",
+  "descriptionOf": "Descrição de {label} para o agente",
+  "descriptionPlaceholder": "Ex.: \"Plano contratado pelo cliente; Ouro dá direito a suporte 24h\"",
+  "editDescriptionOf": "Editar a descrição de {label}",
+  "editDescription": "Editar descrição",
+  "addDescription": "+ Adicionar descrição",
+  "noDescription": "Sem descrição: explique o que este campo significa no seu negócio.",
+  "writeDescription": "Escrever descrição",
+  "addFailed": "{count, plural, one {Não foi possível adicionar # campo. Ele continua marcado; tente de novo.} other {Não foi possível adicionar # campos. Eles continuam marcados; tente de novo.}}",
+  "modal": {
+    "title": "Adicionar campos de {entity}",
+    "description": "Marque os campos do seu Bitrix24 que o agente pode ler.",
+    "searchLabel": "Buscar campo",
+    "searchPlaceholder": "Buscar pelo nome ou código do campo",
+    "selected": "{count, plural, =0 {Nenhum selecionado} one {# selecionado} other {# selecionados}}",
+    "adding": "Adicionando…",
+    "addMany": "Adicionar {count} campos",
+    "addOne": "Adicionar campo",
+    "note": "Depois de adicionar, descreva o que cada campo significa no seu negócio. Telefone e e-mail são dados pessoais: adicione só se o agente realmente precisar deles.",
+    "allAdded": "Todos os campos já foram adicionados.",
+    "noResults": "Nenhum campo encontrado com essa busca."
+  },
+  "errors": {
+    "load": "Não foi possível carregar os campos do CRM.",
+    "refresh": "Não foi possível atualizar do Bitrix24. Tente de novo.",
+    "saveField": "Não foi possível salvar este campo. Tente de novo.",
+    "invalidDescription": "Revise a descrição.",
+    "CRM_UNAVAILABLE": "O Bitrix24 não respondeu agora. Aguarde um pouco e tente de novo.",
+    "CRM_ACCESS_BUSY": "Outra alteração do acesso ao CRM deste agente está em andamento. Aguarde alguns segundos e tente de novo.",
+    "CRM_FIELD_NOT_FOUND": "Campo não encontrado no CRM"
+  }
+}

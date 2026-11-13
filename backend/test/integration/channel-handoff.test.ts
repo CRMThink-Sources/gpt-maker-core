@@ -11,7 +11,7 @@ import { DeliveryFailureHandler } from '../../src/modules/channel/delivery-failu
 import type { InboundMessage } from '../../src/modules/channel/inbound-message';
 import { sentMarkerKey } from '../../src/modules/channel/reply-publisher';
 import {
-  NO_CREDIT_NOTICE,
+  NO_CREDIT_NOTICES,
   NoCreditHandler,
   noCreditMarkerKey,
 } from '../../src/modules/channel/no-credit.handler';
@@ -166,13 +166,27 @@ describe('mensagem que o agente não responde', () => {
       {
         botId: 456,
         dialogId: 'chat9498',
-        fields: { message: NO_CREDIT_NOTICE, system: true },
+        fields: { message: NO_CREDIT_NOTICES['pt-BR'], system: true },
       },
     ]);
     expect(await wiremock.bodies('POST', OPERATOR)).toMatchObject([{ CHAT_ID: 9498 }]);
     expect(await logOf(inbound)).toMatchObject([
       { direction: 'IN', status: 'BLOCKED_NO_CREDIT', attempts: 1, dialogId: 'chat9498' },
     ]);
+  });
+
+  it.each(['en', 'es'] as const)('avisa no idioma do tenant (%s)', async (locale) => {
+    await db.update(tenant).set({ locale }).where(eq(tenant.id, tenantId));
+    try {
+      await stubPortal();
+      await handler.handle(message(`chat-${locale}`), 77, 0);
+      expect(await wiremock.bodies('POST', SEND)).toMatchObject([
+        { fields: { message: NO_CREDIT_NOTICES[locale], system: true } },
+      ]);
+      expect(NO_CREDIT_NOTICES[locale]).not.toBe(NO_CREDIT_NOTICES['pt-BR']);
+    } finally {
+      await db.update(tenant).set({ locale: 'pt-BR' }).where(eq(tenant.id, tenantId));
+    }
   });
 
   it('mensagens seguidas no mesmo diálogo: um aviso só, todas registradas', async () => {

@@ -8,6 +8,7 @@ import {
 import { useState, type FormEvent } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass } from '@/components/ui';
+import { useErrorMessage, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
@@ -29,6 +30,9 @@ export function EditTextTrainingModal({
   onSaved: () => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('trainings');
+  const tc = useT('common');
+  const translateError = useErrorMessage('trainings');
   const [text, setText] = useState(training.text ?? '');
   const [image, setImage] = useState<{ id: string; url: string } | null>(
     training.image ? { id: training.image.id, url: training.image.url } : null,
@@ -52,15 +56,15 @@ export function EditTextTrainingModal({
       });
       onSaved();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível salvar. Tente de novo.'));
+      setError(errorMessage(e, t('edit.error'), translateError));
       setSaving(false);
     }
   }
 
   return (
     <Modal
-      title="Editar texto"
-      description="O agente passa a usar o texto e a imagem novos nas respostas."
+      title={t('edit.title')}
+      description={t('edit.description')}
       onRequestClose={() => !saving && onClose()}
       footer={
         <div className="flex justify-end gap-2">
@@ -70,7 +74,7 @@ export function EditTextTrainingModal({
             disabled={saving}
             className={buttonClass('secondary')}
           >
-            Cancelar
+            {tc('cancel')}
           </button>
           <button
             type="submit"
@@ -78,7 +82,7 @@ export function EditTextTrainingModal({
             disabled={!changed || text.trim() === '' || saving}
             className={buttonClass('primary')}
           >
-            {saving ? 'Salvando…' : 'Salvar'}
+            {saving ? t('edit.saving') : tc('save')}
           </button>
         </div>
       }
@@ -90,7 +94,10 @@ export function EditTextTrainingModal({
       )}
       <form id="edit-text-training" onSubmit={submit}>
         <fieldset disabled={saving} className="space-y-5">
-          <Field label="Texto" hint={`${text.length} de ${TRAINING_TEXT_MAX} caracteres`}>
+          <Field
+            label={t('add.textLabel')}
+            hint={t('add.textCount', { count: text.length, max: TRAINING_TEXT_MAX })}
+          >
             <textarea
               className={inputClass}
               rows={6}

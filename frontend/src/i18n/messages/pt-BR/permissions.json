@@ -1,0 +1,18 @@
+{
+  "title": "Permissões",
+  "description": "Administradores do portal sempre podem criar, editar, treinar e configurar gatilhos. Autorize aqui outros usuários; os demais só consultam.",
+  "authorize": "Autorizar usuários",
+  "adminOnly": "Somente administradores do portal gerenciam permissões.",
+  "empty": {
+    "title": "Só administradores gerenciam agentes",
+    "description": "Autorize outros usuários do portal para que também possam criar e editar agentes."
+  },
+  "userFallback": "Usuário #{id}",
+  "grantedBy": "Autorizado por {name} em {date}",
+  "revoke": "Remover acesso",
+  "errors": {
+    "load": "Não foi possível carregar as permissões.",
+    "save": "Não foi possível salvar.",
+    "INVALID_USER": "Id de usuário do Bitrix inválido"
+  }
+}

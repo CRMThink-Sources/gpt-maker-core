@@ -5,7 +5,6 @@ import type {
   ChangePlanView,
   CheckoutSessionView,
   CreditSummaryView,
-  PlanInterval,
   PlanOfferView,
   PlansView,
   PurchaseStatusView,
@@ -15,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass, Card, Loading, Spinner } from '@/components/ui';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../session-provider';
 
@@ -23,30 +23,18 @@ const POLL_MS = 3000;
 /** Depois disso, a tela para de esperar e avisa que os créditos chegam em instantes. */
 const POLL_LIMIT_MS = 3 * 60_000;
 
-const INTERVALS: Record<PlanInterval, string> = {
-  monthly: 'mês',
-  quarterly: 'trimestre',
-  semiannual: 'semestre',
-  yearly: 'ano',
-};
+type Format = ReturnType<typeof useFormat>;
 
-const CYCLE_CREDITS: Record<PlanInterval, string> = {
-  monthly: 'por mês',
-  quarterly: 'por trimestre',
-  semiannual: 'por semestre',
-  yearly: 'por ano',
-};
-
-function price(cents: number): string {
-  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+function price(format: Format, cents: number): string {
+  return format.number(cents / 100, { style: 'currency', currency: 'BRL' });
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+function formatDate(format: Format, iso: string): string {
+  return format.dateTime(new Date(iso), { timeZone: 'America/Sao_Paulo', dateStyle: 'short' });
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
+function formatDateTime(format: Format, iso: string): string {
+  return format.dateTime(new Date(iso), {
     timeZone: 'America/Sao_Paulo',
     dateStyle: 'short',
     timeStyle: 'short',
@@ -81,6 +69,9 @@ function CheckoutModal({
   onSettled: () => void;
 }) {
   const { api, config } = useAppSession();
+  const t = useT('plan');
+  const format = useFormat();
+  const errorText = useErrorMessage('plan');
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<CheckoutState>({ step: 'starting' });
 
@@ -111,7 +102,7 @@ function CheckoutModal({
         if (!cancelled) {
           setState({
             step: 'error',
-            message: errorMessage(e, 'Não foi possível abrir o pagamento. Tente de novo.'),
+            message: errorMessage(e, t('checkout.openFailed'), errorText),
           });
         }
       }
@@ -120,6 +111,8 @@ function CheckoutModal({
       cancelled = true;
       checkout?.destroy();
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, config.stripePublishableKey, offer.id]);
 
   // Pagamento concluído: espera o evento chegar ao backend.
@@ -155,10 +148,14 @@ function CheckoutModal({
   const finished = state.step === 'done' || state.step === 'slow' || state.step === 'error';
   return (
     <Modal
-      title={kind === 'subscription' ? `Contratar ${offer.name}` : `Comprar ${offer.name}`}
+      title={
+        kind === 'subscription'
+          ? t('checkout.subscribeTitle', { name: offer.name })
+          : t('checkout.buyTitle', { name: offer.name })
+      }
       description={
         kind === 'package' && expiresAt
-          ? `Os créditos adicionais valem até ${formatDate(expiresAt)}, junto com os créditos do plano.`
+          ? t('checkout.extraValidUntil', { date: formatDate(format, expiresAt) })
           : undefined
       }
       onRequestClose={() => {
@@ -172,34 +169,31 @@ function CheckoutModal({
             disabled={state.step === 'processing'}
             className={buttonClass(finished ? 'primary' : 'secondary')}
           >
-            {finished ? 'Fechar' : 'Cancelar'}
+            {finished ? t('checkout.close') : t('checkout.cancel')}
           </button>
         </div>
       }
     >
-      {state.step === 'starting' && <Loading label="Abrindo o pagamento…" />}
+      {state.step === 'starting' && <Loading label={t('checkout.opening')} />}
       {state.step === 'error' && <Alert tone="error">{state.message}</Alert>}
       {state.step === 'processing' && (
         <div className="flex items-center gap-3 py-6">
           <Spinner />
           <p className="text-sm text-zinc-700">
-            Pagamento recebido. Confirmando {kind === 'subscription' ? 'o plano' : 'os créditos'}…
+            {kind === 'subscription'
+              ? t('checkout.confirmingPlan')
+              : t('checkout.confirmingCredits')}
           </p>
         </div>
       )}
       {state.step === 'done' && (
         <Alert tone="success">
           {kind === 'subscription'
-            ? `${offer.name} ativo. Os créditos do plano já estão no saldo.`
-            : `${offer.credits.toLocaleString('pt-BR')} créditos adicionados ao saldo.`}
+            ? t('checkout.planActive', { name: offer.name })
+            : t('checkout.creditsAdded', { count: offer.credits })}
         </Alert>
       )}
-      {state.step === 'slow' && (
-        <Alert tone="warning">
-          O pagamento foi concluído e a confirmação está demorando. Os créditos aparecem no saldo
-          assim que ela chegar; não é preciso pagar de novo.
-        </Alert>
-      )}
+      {state.step === 'slow' && <Alert tone="warning">{t('checkout.slow')}</Alert>}
       {/* O Stripe monta o checkout aqui; some quando o pagamento termina. */}
       <div
         ref={container}
@@ -226,6 +220,9 @@ function ChangePlanModal({
   onDone: (notice: string) => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('plan');
+  const format = useFormat();
+  const errorText = useErrorMessage('plan');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const upgrade = !current || target.credits > current.credits;
@@ -240,20 +237,23 @@ function ChangePlanModal({
       });
       onDone(
         result.effective === 'immediate'
-          ? `Plano alterado para ${target.name}. Os créditos proporcionais aparecem no saldo em instantes.`
-          : `Troca para ${target.name} agendada${
-              result.effectiveAt ? ` para ${formatDate(result.effectiveAt)}` : ' para a renovação'
-            }. Até lá, o plano atual continua valendo.`,
+          ? t('change.doneImmediate', { name: target.name })
+          : result.effectiveAt
+            ? t('change.scheduledAt', {
+                name: target.name,
+                date: formatDate(format, result.effectiveAt),
+              })
+            : t('change.scheduledRenewal', { name: target.name }),
       );
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível trocar de plano. Tente de novo.'));
+      setError(errorMessage(e, t('change.failed'), errorText));
       setBusy(false);
     }
   }
 
   return (
     <Modal
-      title={`Mudar para ${target.name}`}
+      title={t('change.title', { name: target.name })}
       onRequestClose={() => !busy && onClose()}
       footer={
         <div className="flex justify-end gap-2">
@@ -263,7 +263,7 @@ function ChangePlanModal({
             disabled={busy}
             className={buttonClass('secondary')}
           >
-            Cancelar
+            {t('change.cancel')}
           </button>
           <button
             type="button"
@@ -272,27 +272,31 @@ function ChangePlanModal({
             className={buttonClass('primary')}
           >
             {busy && <Spinner className="size-4" />}
-            Confirmar troca
+            {t('change.confirm')}
           </button>
         </div>
       }
     >
       <div className="space-y-3 text-sm text-zinc-700">
         <p>
-          De <strong>{current?.name ?? 'plano atual'}</strong> para <strong>{target.name}</strong> (
-          {target.credits.toLocaleString('pt-BR')} créditos por ciclo, {price(target.amount)}
-          {target.interval ? `/${INTERVALS[target.interval]}` : ''}).
+          {t('change.from')} <strong>{current?.name ?? t('change.currentPlan')}</strong>{' '}
+          {t('change.to')} <strong>{target.name}</strong> (
+          {t('change.detail', {
+            credits: format.number(target.credits),
+            price: price(format, target.amount),
+            interval: target.interval ? `/${t(`intervals.${target.interval}`)}` : '',
+          })}
+          ).
         </p>
         {upgrade ? (
           <p>
-            A troca vale <strong>agora</strong>. O cartão é cobrado só pela diferença proporcional
-            ao que resta do ciclo, e você recebe na hora a parte proporcional dos créditos a mais.
+            {t('change.upgradeBefore')} <strong>{t('change.now')}</strong>.{' '}
+            {t('change.upgradeAfter')}
           </p>
         ) : (
           <p>
-            A troca vale na <strong>próxima renovação</strong>. Até lá, o plano atual e os créditos
-            dele continuam valendo. Se algum agente usar um modelo de IA que o novo plano não
-            inclui, ele passa a usar o modelo padrão.
+            {t('change.downgradeBefore')} <strong>{t('change.nextRenewal')}</strong>.{' '}
+            {t('change.downgradeAfter')}
           </p>
         )}
         {error && <Alert tone="error">{error}</Alert>}
@@ -310,19 +314,27 @@ function OfferCard({
   kind: 'subscription' | 'package';
   action?: React.ReactNode;
 }) {
+  const t = useT('plan');
+  const format = useFormat();
   return (
     <Card className="flex flex-col p-5">
       <p className="text-sm font-semibold text-zinc-900">{offer.name}</p>
       <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
-        {price(offer.amount)}
+        {price(format, offer.amount)}
         {offer.interval && (
-          <span className="text-sm font-normal text-zinc-500">/{INTERVALS[offer.interval]}</span>
+          <span className="text-sm font-normal text-zinc-500">
+            /{t(`intervals.${offer.interval}`)}
+          </span>
         )}
       </p>
       <p className="mt-2 flex items-center gap-1.5 text-sm text-zinc-600">
         <CheckIcon className="size-4 text-brand-600" />
-        {offer.credits.toLocaleString('pt-BR')} créditos{' '}
-        {kind === 'subscription' && offer.interval ? CYCLE_CREDITS[offer.interval] : ''}
+        {kind === 'subscription' && offer.interval
+          ? t('offer.creditsPerCycle', {
+              count: offer.credits,
+              cycle: t(`cycleCredits.${offer.interval}`),
+            })
+          : t('offer.credits', { count: offer.credits })}
       </p>
       {action && <div className="mt-4">{action}</div>}
     </Card>
@@ -341,6 +353,9 @@ export function PlansSection({
   onChanged: () => void;
 }) {
   const { session, api, config } = useAppSession();
+  const t = useT('plan');
+  const format = useFormat();
+  const errorText = useErrorMessage('plan');
   const [plans, setPlans] = useState<PlansView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buying, setBuying] = useState<{
@@ -356,12 +371,13 @@ export function PlansSection({
     api<PlansView>('/app/plans')
       .then((view) => !cancelled && setPlans(view))
       .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os planos.')),
+        (e: unknown) => !cancelled && setError(errorMessage(e, t('section.loadFailed'), errorText)),
       );
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
   const status = summary.subscription?.status;
@@ -384,7 +400,7 @@ export function PlansSection({
       const { url } = await api<BillingPortalView>('/app/billing-portal', { method: 'POST' });
       window.open(url, '_blank', 'noopener');
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível abrir o portal de pagamento.'));
+      setError(errorMessage(e, t('section.portalFailed'), errorText));
     } finally {
       setPortalBusy(false);
     }
@@ -407,11 +423,13 @@ export function PlansSection({
     <section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-zinc-900">Plano</h2>
+          <h2 className="text-base font-semibold text-zinc-900">{t('section.title')}</h2>
           <p className="mt-0.5 text-sm text-zinc-500">
             {paid
-              ? `Plano atual: ${currentPlan?.name ?? `#${summary.subscription!.planId}`}.`
-              : 'Escolha um plano para seus agentes continuarem atendendo.'}
+              ? t('section.current', {
+                  name: currentPlan?.name ?? `#${summary.subscription!.planId}`,
+                })
+              : t('section.choose')}
           </p>
         </div>
         {paid && session.canManage && (
@@ -422,17 +440,16 @@ export function PlansSection({
             className={buttonClass('secondary')}
           >
             {portalBusy && <Spinner className="size-4" />}
-            Gerenciar pagamento
+            {t('section.managePayment')}
           </button>
         )}
       </div>
 
       {status === 'past_due' && (
         <Alert tone="warning" className="mb-3">
-          O último pagamento não foi aprovado. Atualize o cartão em “Gerenciar pagamento”
           {summary.graceUntil
-            ? ` até ${formatDateTime(summary.graceUntil)}; depois disso, os agentes ficam pausados até a regularização.`
-            : ' para não interromper o atendimento dos agentes.'}
+            ? t('section.pastDueUntil', { date: formatDateTime(format, summary.graceUntil) })
+            : t('section.pastDue')}
         </Alert>
       )}
       {error && (
@@ -447,25 +464,25 @@ export function PlansSection({
       )}
       {paid && summary.subscription?.nextPlanId && (
         <Alert tone="warning" className="mb-3">
-          Troca para {nextPlan?.name ?? `o plano #${summary.subscription.nextPlanId}`} agendada
-          {summary.expiresAt ? ` para ${formatDate(summary.expiresAt)}` : ' para a renovação'}. Até
-          lá, o plano atual continua valendo.
+          {summary.expiresAt
+            ? t('section.nextPlanAt', {
+                name: nextPlan?.name ?? `#${summary.subscription.nextPlanId}`,
+                date: formatDate(format, summary.expiresAt),
+              })
+            : t('section.nextPlanRenewal', {
+                name: nextPlan?.name ?? `#${summary.subscription.nextPlanId}`,
+              })}
         </Alert>
       )}
-      {paid && manual && (
-        <p className="mb-3 text-sm text-zinc-500">
-          Sua assinatura foi contratada com a CRMThink: para trocar de plano, fale com o time
-          comercial.
-        </p>
-      )}
+      {paid && manual && <p className="mb-3 text-sm text-zinc-500">{t('section.manual')}</p>}
       {!session.canManage && !paid && (
         <Alert tone="warning" className="mb-3">
-          Somente o administrador do app pode contratar planos.
+          {t('section.adminOnly')}
         </Alert>
       )}
       {session.canManage && config.stripePublishableKey === null && (
         <Alert tone="warning" className="mb-3">
-          A contratação pelo app não está disponível neste ambiente. Fale com a CRMThink.
+          {t('section.checkoutUnavailable')}
         </Alert>
       )}
 
@@ -478,11 +495,11 @@ export function PlansSection({
               key={offer.id}
               offer={offer}
               kind="subscription"
-              action={buyButton(offer, 'subscription', 'Contratar')}
+              action={buyButton(offer, 'subscription', t('section.subscribe'))}
             />
           ))}
           {plans.subscriptions.length === 0 && (
-            <p className="text-sm text-zinc-500">Nenhum plano disponível no momento.</p>
+            <p className="text-sm text-zinc-500">{t('section.noPlans')}</p>
           )}
         </div>
       )}
@@ -498,7 +515,9 @@ export function PlansSection({
                 kind="subscription"
                 action={
                   isCurrent ? (
-                    <p className="text-center text-sm font-medium text-brand-700">Plano atual</p>
+                    <p className="text-center text-sm font-medium text-brand-700">
+                      {t('section.currentBadge')}
+                    </p>
                   ) : session.canManage && !manual ? (
                     <button
                       type="button"
@@ -508,7 +527,7 @@ export function PlansSection({
                       }}
                       className={`${buttonClass('secondary')} w-full`}
                     >
-                      Mudar para este plano
+                      {t('section.changeToThis')}
                     </button>
                   ) : undefined
                 }
@@ -520,13 +539,13 @@ export function PlansSection({
 
       {plans && plans.packages.length > 0 && (
         <div className="mt-6">
-          <h3 className="text-sm font-semibold text-zinc-900">Créditos adicionais</h3>
+          <h3 className="text-sm font-semibold text-zinc-900">{t('section.extraTitle')}</h3>
           <p className="mt-0.5 mb-3 text-sm text-zinc-500">
             {status === 'active'
               ? summary.expiresAt
-                ? `Valem até ${formatDate(summary.expiresAt)}, junto com os créditos do plano.`
-                : 'Valem até o fim do ciclo do plano.'
-              : 'Disponíveis para quem tem um plano ativo.'}
+                ? t('section.extraValidUntil', { date: formatDate(format, summary.expiresAt) })
+                : t('section.extraValidCycle')
+              : t('section.extraRequiresPlan')}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {plans.packages.map((offer) => (
@@ -534,7 +553,9 @@ export function PlansSection({
                 key={offer.id}
                 offer={offer}
                 kind="package"
-                action={status === 'active' ? buyButton(offer, 'package', 'Comprar') : undefined}
+                action={
+                  status === 'active' ? buyButton(offer, 'package', t('section.buy')) : undefined
+                }
               />
             ))}
           </div>

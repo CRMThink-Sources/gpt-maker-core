@@ -15,7 +15,8 @@ import {
   Loading,
   PageHeader,
 } from '@/components/ui';
-import { AGENT_TYPES, agentStatus, credits, errorMessage, inactiveBySystem } from '@/lib/agents';
+import { agentStatus, agentTypeLabel, credits, errorMessage, inactiveBySystem } from '@/lib/agents';
+import { useErrorMessage, useT } from '@/i18n';
 import { CreateAgentWizard } from './agents/create-agent-wizard';
 import { useAppSession } from './session-provider';
 
@@ -32,6 +33,9 @@ function Stat({ label, value, hint }: { label: string; value: number; hint?: str
 /** Lista de agentes do tenant com as ações de inativar, reativar e remover. */
 export default function AgentsPage() {
   const { session, api } = useAppSession();
+  const t = useT('home');
+  const tAgent = useT('agentDetail');
+  const errorText = useErrorMessage('home');
   const [agents, setAgents] = useState<AgentView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -55,13 +59,12 @@ export default function AgentsPage() {
     let cancelled = false;
     fetchAgents()
       .then((list) => !cancelled && setAgents(list))
-      .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os agentes.')),
-      );
+      .catch((e: unknown) => !cancelled && setError(errorMessage(e, t('errors.load'), errorText)));
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchAgents]);
 
   // Oferta do teste grátis (spec payments-integration); falha aqui só esconde o aviso.
@@ -83,7 +86,7 @@ export default function AgentsPage() {
       await action();
       setAgents(await fetchAgents());
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível concluir. Tente de novo.'));
+      setError(errorMessage(e, t('errors.action'), errorText));
     } finally {
       setBusyId(null);
       setConfirmingId(null);
@@ -103,7 +106,7 @@ export default function AgentsPage() {
   const newAgent = session.canManage && (
     <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Novo agente
+      {t('newAgent')}
     </button>
   );
 
@@ -111,30 +114,26 @@ export default function AgentsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Agentes"
-        description="Agentes de IA que atendem seus clientes nos canais abertos do Bitrix24."
-        actions={newAgent}
-      />
+      <PageHeader title={t('title')} description={t('description')} actions={newAgent} />
 
       {trialAvailable && (
         <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="flex items-start gap-3">
             <SparkIcon className="mt-0.5 size-5 shrink-0 text-brand-600" />
             <p className="text-sm text-zinc-700">
-              <span className="font-medium text-zinc-900">Teste grátis por 14 dias.</span> Ganhe 500
-              créditos para seus agentes começarem a atender.
+              <span className="font-medium text-zinc-900">{t('trial.title')}</span>{' '}
+              {t('trial.text')}
             </p>
           </div>
           <Link href="/app/plan" className={buttonClass('secondary', 'sm')}>
-            Ativar teste
+            {t('trial.action')}
           </Link>
         </Card>
       )}
 
       {!session.canManage && (
         <Alert tone="warning" className="mb-6">
-          Você pode consultar os agentes. Para alterá-los, peça acesso a um administrador do portal.
+          {t('readOnly')}
         </Alert>
       )}
 
@@ -150,9 +149,9 @@ export default function AgentsPage() {
         <>
           {agents.length > 0 && (
             <div className="mb-6 grid grid-cols-3 gap-4">
-              <Stat label="Agentes" value={agents.length} />
-              <Stat label="Ativos" value={active} hint="respondendo agora" />
-              <Stat label="Inativos" value={agents.length - active} />
+              <Stat label={t('stats.agents')} value={agents.length} />
+              <Stat label={t('stats.active')} value={active} hint={t('stats.activeHint')} />
+              <Stat label={t('stats.inactive')} value={agents.length - active} />
             </div>
           )}
 
@@ -160,11 +159,9 @@ export default function AgentsPage() {
             {agents.length === 0 ? (
               <EmptyState
                 icon={<BotIcon className="size-6" />}
-                title="Nenhum agente ainda"
+                title={t('empty.title')}
                 description={
-                  session.canManage
-                    ? 'Crie o primeiro agente para começar a atender pelos canais abertos.'
-                    : 'Quando um agente for criado, ele aparece aqui.'
+                  session.canManage ? t('empty.descriptionManage') : t('empty.descriptionReadOnly')
                 }
                 action={newAgent}
               />
@@ -172,7 +169,7 @@ export default function AgentsPage() {
               <ul className="divide-y divide-zinc-100">
                 {agents.map((agent) => {
                   const busy = busyId === agent.id;
-                  const status = agentStatus(agent);
+                  const status = agentStatus(agent, tAgent);
                   return (
                     <li
                       key={agent.id}
@@ -190,27 +187,25 @@ export default function AgentsPage() {
                           <Badge tone={status.tone}>{status.label}</Badge>
                         </div>
                         <p className="mt-0.5 text-xs text-zinc-500">
-                          {AGENT_TYPES[agent.type]} · {agent.model.displayName} ·{' '}
-                          {credits(agent.model.creditsPerResponse)}
+                          {agentTypeLabel(agent.type, tAgent)} · {agent.model.displayName} ·{' '}
+                          {credits(agent.model.creditsPerResponse, tAgent)}
                         </p>
                         {agent.status === 'OUT_OF_SYNC' && (
-                          <p className="mt-1 text-xs text-amber-800">
-                            O agente não foi encontrado no GPTMaker. Fale com o suporte.
-                          </p>
+                          <p className="mt-1 text-xs text-amber-800">{t('outOfSync')}</p>
                         )}
                       </div>
 
                       {session.canManage &&
                         (confirmingId === agent.id ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-600">Remover este agente?</span>
+                            <span className="text-sm text-zinc-600">{t('removeConfirm')}</span>
                             <button
                               type="button"
                               onClick={() => setConfirmingId(null)}
                               disabled={busy}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              Cancelar
+                              {t('cancel')}
                             </button>
                             <button
                               type="button"
@@ -218,7 +213,7 @@ export default function AgentsPage() {
                               disabled={busy}
                               className={buttonClass('danger', 'sm')}
                             >
-                              {busy ? 'Removendo…' : 'Remover'}
+                              {busy ? t('removing') : t('remove')}
                             </button>
                           </div>
                         ) : (
@@ -231,10 +226,10 @@ export default function AgentsPage() {
                                 className={buttonClass('ghost', 'sm')}
                               >
                                 {busy
-                                  ? 'Aguarde…'
+                                  ? t('wait')
                                   : agent.status === 'ACTIVE'
-                                    ? 'Inativar'
-                                    : 'Reativar'}
+                                    ? t('deactivate')
+                                    : t('reactivate')}
                               </button>
                             )}
                             <button
@@ -243,13 +238,13 @@ export default function AgentsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost-danger', 'sm')}
                             >
-                              Remover
+                              {t('remove')}
                             </button>
                             <Link
                               href={`/app/agents/${agent.id}`}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              Editar
+                              {t('edit')}
                             </Link>
                           </div>
                         ))}

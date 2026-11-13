@@ -8,16 +8,21 @@ import {
   Inject,
   Param,
   Post,
+  Put,
 } from '@nestjs/common';
 import { createZodDto } from 'nestjs-zod';
+import { updateLocaleSchema } from '@gptmaker/contracts';
 import { z } from 'zod';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DomainError } from '../../shared/http/api-exception.filter';
 import { AppAuth, type AppSession, CurrentSession } from './app-session.guard';
+import { TenantService } from './tenant.service';
 import { type GrantedUser, PermissionService } from './permission.service';
 
 const bitrixUserId = z.string().regex(/^\d+$/, 'id de usuário do Bitrix');
+
+class UpdateLocaleDto extends createZodDto(updateLocaleSchema) {}
 
 class GrantDto extends createZodDto(
   z.object({ bitrixUserIds: z.array(bitrixUserId).min(1).max(100) }),
@@ -28,6 +33,7 @@ class GrantDto extends createZodDto(
 export class AppSessionController {
   constructor(
     private readonly permissions: PermissionService,
+    private readonly tenants: TenantService,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
@@ -36,11 +42,22 @@ export class AppSessionController {
   session(@CurrentSession() session: AppSession) {
     return {
       user: { id: session.userId, name: session.userName, isAdmin: session.isAdmin },
-      tenant: { code: session.tenantCode, status: session.tenantStatus },
+      tenant: { code: session.tenantCode, status: session.tenantStatus, locale: session.locale },
       canManage: session.canManage,
       /** Recursos ligados no ambiente (o painel esconde as telas dos desligados). */
       features: { crmTools: this.env.CRM_TOOLS_ENABLED },
     };
+  }
+
+  /** Idioma do tenant (notificações e avisos do canal); só admin do portal (spec notification-i18n). */
+  @Put('locale')
+  @AppAuth('admin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async updateLocale(
+    @CurrentSession() session: AppSession,
+    @Body() body: UpdateLocaleDto,
+  ): Promise<void> {
+    await this.tenants.setLocale(session.tenantId, body.locale);
   }
 
   @Get('permissions')

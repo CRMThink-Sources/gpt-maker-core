@@ -1,0 +1,112 @@
+{
+  "types": {
+    "TEXT": "Text",
+    "WEBSITE": "Website",
+    "VIDEO": "Video",
+    "DOCUMENT": "Document"
+  },
+  "intervals": {
+    "NEVER": "Do not update",
+    "ONE_HOUR": "Every hour",
+    "FOUR_HOUR": "Every 4 hours",
+    "EIGHT_HOUR": "Every 8 hours",
+    "TWELVE_HOUR": "Every 12 hours",
+    "ONE_DAY": "Every day",
+    "ONE_WEEK": "Every week",
+    "ONE_MONTH": "Every month"
+  },
+  "status": {
+    "done": "Ready",
+    "failed": "Failed",
+    "processing": "Processing"
+  },
+  "page": {
+    "heading": "What the agent knows",
+    "intro": "Knowledge base items come from the form, in the {link} tab. You can also add texts (with an image) here.",
+    "functionTab": "Function",
+    "mediaTakenOver": "To train with websites and videos, go back to the form in advanced mode there.",
+    "mediaTurnOn": "To train with websites and videos, turn on advanced mode there.",
+    "mediaAdvanced": "In advanced mode, websites and videos are added here.",
+    "noCredits": "Training does not use credits.",
+    "add": "Add training",
+    "usageLabel": "Trainings (all agents)",
+    "noLimit": " · no limit",
+    "ofLimit": " of {limit}",
+    "searchPlaceholder": "Search training by title",
+    "searchLabel": "Search training",
+    "noMatch": "No training found for “{query}”.",
+    "emptyTitle": "No trainings yet",
+    "emptyDescription": "Fill in the knowledge base in the form on the Function tab and publish, or add a text here.",
+    "imageAlt": "Training image",
+    "fromFunction": "from function",
+    "manual": "manual",
+    "withSubPages": "with linked pages",
+    "retry": "Resend",
+    "retrying": "Resending…",
+    "confirmRemove": "Remove?",
+    "remove": "Remove",
+    "removing": "Removing…",
+    "edit": "Edit",
+    "showing": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "loadError": "Could not load the trainings.",
+    "actionError": "Could not complete the action. Try again."
+  },
+  "add": {
+    "title": "Add training",
+    "description": "The agent learns from the content and starts using it in its answers.",
+    "typeLabel": "Type",
+    "kinds": {
+      "TEXT": {
+        "label": "Text",
+        "hint": "A text, with an image if you want"
+      },
+      "WEBSITE": {
+        "label": "Website",
+        "hint": "Pages from your website"
+      },
+      "VIDEO": {
+        "label": "Video",
+        "hint": "A video link"
+      }
+    },
+    "textLabel": "Text",
+    "textCount": "{count} of {max} characters",
+    "siteLabel": "Website address",
+    "videoLabel": "Video link",
+    "videoHint": "E.g., a YouTube video explaining the product.",
+    "subPagesLabel": "Also read linked pages",
+    "subPagesHint": "The agent learns from the website pages starting at this address.",
+    "refreshLabel": "Update the content",
+    "refreshHint": "For websites that change often, such as catalogs and prices.",
+    "submit": "Add",
+    "sending": "Sending…",
+    "error": "Could not send the training. Try again."
+  },
+  "edit": {
+    "title": "Edit text",
+    "description": "The agent starts using the new text and image in its answers.",
+    "saving": "Saving…",
+    "error": "Could not save. Try again."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "AGENT_NOT_FOUND": "Agent not found.",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support.",
+    "TRAINING_NOT_FOUND": "Training not found.",
+    "TRAINING_NOT_EDITABLE": "Only text trainings can be edited; remove this one and create another.",
+    "TRAINING_NOT_READY": "The training is still being registered in GPTMaker; try again shortly.",
+    "TRAINING_NOT_FAILED": "Only failed trainings can be resent.",
+    "TRAINING_NOT_RETRYABLE": "This document's file is not stored here; remove it and upload the document again.",
+    "TRAINING_BUSY": "Another training for this agent is being sent; try again shortly.",
+    "TRAINING_MANAGED_BY_FUNCTION": "This training comes from the agent's function form; change the item there.",
+    "TRAINING_IMAGE_NOT_FOUND": "Image not found; upload the image again.",
+    "TRAINING_IMAGE_INVALID": "Upload an image.",
+    "TRAINING_IMAGE_TOO_LARGE": "The image exceeds the maximum allowed size.",
+    "TRAINING_IMAGE_INVALID_TYPE": "Only PNG, JPEG and WebP images are accepted.",
+    "TRAINING_IMAGE_IN_USE": "This image is already used in another training; upload the image again.",
+    "PLAN_TRAINING_LIMIT": "You have reached your plan's training limit. Remove some or change plans.",
+    "GPTMAKER_REJECTED": "GPTMaker rejected the training. Review the content and try again.",
+    "GPTMAKER_UNAVAILABLE": "Could not send the training to GPTMaker right now. Try again shortly."
+  }
+}

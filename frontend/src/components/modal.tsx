@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useT } from '@/i18n';
 import { CloseIcon } from './icons';
 
 /**
@@ -31,6 +32,7 @@ export function Modal({
   bodyClassName?: string;
   children: ReactNode;
 }) {
+  const t = useT('common');
   const close = useRef(onRequestClose);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export function Modal({
               type="button"
               onClick={() => close.current()}
               className="-mr-2 rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-              aria-label="Fechar"
+              aria-label={t('close')}
             >
               <CloseIcon />
             </button>

@@ -3,6 +3,7 @@
 import type { NotificationRecipientsView, NotificationTestView } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { BellIcon, PlusIcon } from '@/components/icons';
+import { useErrorMessage, useT } from '@/i18n';
 import {
   Alert,
   Avatar,
@@ -18,12 +19,7 @@ import { ApiRequestError } from '@/lib/platform-session';
 import { userNames } from '@/lib/portal-users';
 import { useAppSession } from '../session-provider';
 
-const NOTICES = [
-  '80% dos créditos do ciclo consumidos',
-  'Créditos esgotados (as mensagens vão para os atendentes)',
-  'Pagamento da assinatura recusado, com o prazo antes de pausar os agentes',
-  'Fim do período de assinaturas contratadas com a CRMThink',
-];
+const NOTICES = ['credits80', 'creditsOut', 'paymentFailed', 'periodEnd'] as const;
 
 /**
  * Destinatários dos avisos do app (spec credit-billing, "Destinatários de avisos"; tarefa 11.10):
@@ -32,6 +28,8 @@ const NOTICES = [
  */
 export default function NotificationsPage() {
   const { session, api } = useAppSession();
+  const t = useT('notifications');
+  const errorText = useErrorMessage('notifications');
   const [ids, setIds] = useState<string[] | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -53,10 +51,12 @@ export default function NotificationsPage() {
         setIds(list.ids);
         setNames(list.names);
       })
-      .catch(() => !cancelled && setError('Não foi possível carregar os destinatários.'));
+      .catch(() => !cancelled && setError(t('errors.load')));
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchList, session.user.isAdmin]);
 
   async function save(next: string[]) {
@@ -71,7 +71,7 @@ export default function NotificationsPage() {
       setIds(bitrixUserIds);
       setNames(await userNames(bitrixUserIds));
     } catch (e) {
-      setError(e instanceof ApiRequestError ? e.message : 'Não foi possível salvar.');
+      setError(e instanceof ApiRequestError ? errorText(e) : t('errors.save'));
     } finally {
       setBusy(false);
     }
@@ -92,18 +92,14 @@ export default function NotificationsPage() {
         method: 'POST',
       });
       if (result.status === 'SENT') {
-        setNotice(
-          `Aviso de teste enviado para ${result.sentTo.length} ${
-            result.sentTo.length === 1 ? 'pessoa' : 'pessoas'
-          }. Confira as notificações do Bitrix24.`,
-        );
+        setNotice(t('test.sent', { count: result.sentTo.length }));
       } else if (result.status === 'PENDING') {
-        setNotice('O Bitrix24 não respondeu agora; o aviso de teste será reenviado em instantes.');
+        setNotice(t('test.pending'));
       } else {
-        setError('Não foi possível enviar o aviso de teste: nenhum destinatário ativo.');
+        setError(t('test.noRecipient'));
       }
     } catch (e) {
-      setError(e instanceof ApiRequestError ? e.message : 'Não foi possível enviar o teste.');
+      setError(e instanceof ApiRequestError ? errorText(e) : t('errors.test'));
     } finally {
       setTesting(false);
     }
@@ -111,8 +107,8 @@ export default function NotificationsPage() {
 
   const header = (
     <PageHeader
-      title="Avisos"
-      description="Quem recebe no Bitrix24 as notificações de créditos e de pagamento do app."
+      title={t('title')}
+      description={t('description')}
       actions={
         session.user.isAdmin && (
           <div className="flex flex-wrap gap-2">
@@ -123,7 +119,7 @@ export default function NotificationsPage() {
               className={buttonClass('secondary')}
             >
               {testing && <Spinner className="size-4" />}
-              Enviar aviso de teste
+              {t('sendTest')}
             </button>
             <button
               type="button"
@@ -132,7 +128,7 @@ export default function NotificationsPage() {
               className={buttonClass('primary')}
             >
               <PlusIcon className="size-4" />
-              Adicionar pessoas
+              {t('addPeople')}
             </button>
           </div>
         )
@@ -144,9 +140,7 @@ export default function NotificationsPage() {
     return (
       <>
         {header}
-        <Alert tone="warning">
-          Somente administradores do portal escolhem quem recebe os avisos.
-        </Alert>
+        <Alert tone="warning">{t('adminOnly')}</Alert>
       </>
     );
   }
@@ -172,13 +166,13 @@ export default function NotificationsPage() {
           {ids.length === 0 ? (
             <EmptyState
               icon={<BellIcon className="size-6" />}
-              title="Os avisos vão para os administradores do portal"
-              description="Adicione pessoas para que elas recebam os avisos no lugar dos administradores."
+              title={t('empty.title')}
+              description={t('empty.description')}
             />
           ) : (
             <ul className="divide-y divide-zinc-100">
               {ids.map((id) => {
-                const name = names[id] ?? `Usuário #${id}`;
+                const name = names[id] ?? t('userFallback', { id });
                 return (
                   <li key={id} className="flex items-center gap-4 px-5 py-4 text-sm">
                     <Avatar name={name} />
@@ -189,7 +183,7 @@ export default function NotificationsPage() {
                       disabled={busy}
                       className={buttonClass('ghost-danger', 'sm')}
                     >
-                      Remover
+                      {t('remove')}
                     </button>
                   </li>
                 );
@@ -200,16 +194,13 @@ export default function NotificationsPage() {
       )}
 
       <Card className="mt-6 p-5">
-        <h2 className="text-sm font-semibold text-zinc-900">Quando os avisos são enviados</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">{t('whenTitle')}</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-600">
           {NOTICES.map((item) => (
-            <li key={item}>{item}</li>
+            <li key={item}>{t(`when.${item}`)}</li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-zinc-500">
-          Cada aviso sai uma vez por ciclo ou por ocorrência. Pessoas desativadas no portal são
-          ignoradas; se nenhuma restar, os administradores recebem.
-        </p>
+        <p className="mt-3 text-xs text-zinc-500">{t('whenNote')}</p>
       </Card>
     </>
   );

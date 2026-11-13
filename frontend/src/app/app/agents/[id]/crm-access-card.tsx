@@ -4,25 +4,31 @@ import type { CrmAccessView } from '@gptmaker/contracts';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/modal';
-import { Alert, Badge, buttonClass, Card, Spinner, Switch } from '@/components/ui';
-import {
-  CRM_ACCESS_CHANGED_EVENT,
-  CRM_ACCESS_STATUS,
-  crmErrorMessage,
-  getCrmAccess,
-  setCrmAccess,
-} from '@/lib/crm';
-import { formatDateTime } from '@/lib/triggers';
+import { Alert, Badge, buttonClass, Card, Spinner, Switch, type Tone } from '@/components/ui';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
+import { errorMessage } from '@/lib/agents';
+import { CRM_ACCESS_CHANGED_EVENT, getCrmAccess, setCrmAccess } from '@/lib/crm';
 import { useAppSession } from '../../session-provider';
 import { useAgent } from './agent-context';
 
 /** Enquanto outra alteração conecta o agente, confere o estado de tempos em tempos. */
 const POLL_MS = 5_000;
 
+const STATUS_TONE: Record<CrmAccessView['status'], Tone> = {
+  DISABLED: 'zinc',
+  CONNECTING: 'brand',
+  CONNECTED: 'green',
+  ERROR: 'amber',
+};
+
 /** Bloco "Acesso ao CRM" do agente (spec agent-crm-tools); some com o recurso desligado. */
 export function CrmAccessCard() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('agentDetail');
+  const tc = useT('common');
+  const format = useFormat();
+  const translateError = useErrorMessage('agentDetail');
   const [access, setAccess] = useState<CrmAccessView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +46,12 @@ export function CrmAccessCard() {
       .then((view) => !cancelled && setAccess(view))
       .catch(
         (e: unknown) =>
-          !cancelled &&
-          setLoadError(crmErrorMessage(e, 'Não foi possível carregar o acesso ao CRM.')),
+          !cancelled && setLoadError(errorMessage(e, t('crm.loadError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, agent.id, featureOn]);
 
   // Conexão em curso iniciada por outra pessoa/aba: acompanha até terminar.
@@ -69,12 +75,7 @@ export function CrmAccessCard() {
       window.dispatchEvent(new Event(CRM_ACCESS_CHANGED_EVENT));
     } catch (e) {
       setError(
-        crmErrorMessage(
-          e,
-          enabled
-            ? 'Não foi possível ligar o acesso ao CRM. Tente de novo.'
-            : 'Não foi possível desligar o acesso ao CRM. Tente de novo.',
-        ),
+        errorMessage(e, enabled ? t('crm.turnOnError') : t('crm.turnOffError'), translateError),
       );
       // O servidor pode ter mudado o estado mesmo com erro: relê.
       getCrmAccess(api, agent.id)
@@ -96,29 +97,30 @@ export function CrmAccessCard() {
   if (!access || !access.available) return null;
 
   const enabled = access.status !== 'DISABLED';
-  const badge = CRM_ACCESS_STATUS[access.status];
+  // O link fica no meio da frase: a tradução marca o lugar com {link}.
+  const [introBefore, introAfter = ''] = t('crm.intro', { link: '\u0001' }).split('\u0001');
+  const badgeTone = STATUS_TONE[access.status];
 
   return (
     <Card className="mt-6 max-w-5xl">
       <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-zinc-900">Acesso ao CRM</h2>
-            <Badge tone={badge.tone}>{badge.label}</Badge>
+            <h2 className="text-base font-semibold text-zinc-900">{t('crm.title')}</h2>
+            <Badge tone={badgeTone}>{t(`crm.status.${access.status}`)}</Badge>
           </div>
           <p className="mt-1 text-sm text-zinc-500">
-            Com o acesso ligado, o agente consulta no Bitrix24 o cliente da conversa e os negócios
-            dele para responder com mais contexto. Ele só lê os campos liberados em{' '}
+            {introBefore}
             <Link href="/app/crm" className="font-medium text-brand-700 hover:underline">
-              CRM para o agente
+              {t('crm.linkLabel')}
             </Link>
-            .
+            {introAfter}
           </p>
         </div>
         <Switch
           checked={enabled}
           disabled={!canManage || busy !== null}
-          label="Acesso ao CRM"
+          label={t('crm.title')}
           onChange={(value) => (value ? change(true) : setConfirming(true))}
         />
       </div>
@@ -127,23 +129,22 @@ export function CrmAccessCard() {
         {busy && (
           <p className="flex items-center gap-2 text-zinc-600" role="status">
             <Spinner className="size-4" />
-            {busy === 'off'
-              ? 'Desligando o acesso ao CRM…'
-              : 'Conectando o agente ao CRM. Isso pode levar até 30 segundos.'}
+            {busy === 'off' ? t('crm.turningOff') : t('crm.connectingSlow')}
           </p>
         )}
         {busy === null && access.status === 'CONNECTING' && (
           <p className="flex items-center gap-2 text-zinc-600" role="status">
             <Spinner className="size-4" />
-            Conectando o agente ao CRM…
+            {t('crm.connecting')}
           </p>
         )}
         {error && <Alert tone="error">{error}</Alert>}
         {access.status === 'ERROR' && (
           <Alert tone="warning">
             <p>
-              Não foi possível conectar o agente ao CRM
-              {access.lastError ? `: ${access.lastError}` : '.'}
+              {access.lastError
+                ? t('crm.connectErrorWithReason', { reason: access.lastError })
+                : t('crm.connectError')}
             </p>
             {canManage && (
               <button
@@ -152,21 +153,26 @@ export function CrmAccessCard() {
                 disabled={busy !== null}
                 className={`${buttonClass('secondary', 'sm')} mt-2`}
               >
-                Tentar de novo
+                {t('crm.retry')}
               </button>
             )}
           </Alert>
         )}
         <p className="text-xs text-zinc-500">
           {access.lastCallAt
-            ? `Última consulta ao CRM: ${formatDateTime(access.lastCallAt)}.`
-            : 'O agente ainda não consultou o CRM.'}
+            ? t('crm.lastCall', {
+                date: format.dateTime(new Date(access.lastCallAt), {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                }),
+              })
+            : t('crm.neverCalled')}
         </p>
       </div>
 
       {confirming && (
         <Modal
-          title="Desligar o acesso ao CRM?"
+          title={t('crm.confirmTitle')}
           description={agent.name}
           onRequestClose={() => setConfirming(false)}
           footer={
@@ -176,19 +182,15 @@ export function CrmAccessCard() {
                 onClick={() => setConfirming(false)}
                 className={buttonClass('secondary')}
               >
-                Cancelar
+                {tc('cancel')}
               </button>
               <button type="button" onClick={() => change(false)} className={buttonClass('danger')}>
-                Desligar
+                {t('crm.turnOff')}
               </button>
             </div>
           }
         >
-          <p className="text-sm text-zinc-600">
-            O agente deixa de consultar o cliente da conversa e os negócios dele no Bitrix24. As
-            escolhas de campos em &quot;CRM para o agente&quot; continuam salvas e você pode ligar o
-            acesso de novo quando quiser.
-          </p>
+          <p className="text-sm text-zinc-600">{t('crm.confirmBody')}</p>
         </Modal>
       )}
     </Card>

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CRM_ACCESS_CHANGED_EVENT } from '@/lib/crm';
 import { ApiRequestError } from '@/lib/platform-session';
+import { I18nProvider } from '@/i18n';
 import { CrmAccessCard } from './crm-access-card';
 
 const api = vi.fn();
@@ -79,5 +80,24 @@ describe('bloco Acesso ao CRM avisa a agenda', () => {
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }),
     );
     expect(changed).not.toHaveBeenCalled();
+  });
+});
+
+describe('idioma da interface', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('em inglês, rótulos e erros de API saem traduzidos', async () => {
+    window.localStorage.setItem('gptthink.locale', 'en');
+    api.mockResolvedValueOnce(access());
+    api.mockRejectedValueOnce(new ApiRequestError(409, 'CRM_ACCESS_BUSY', 'ocupado'));
+    api.mockResolvedValue(access());
+    render(
+      <I18nProvider>
+        <CrmAccessCard />
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole('switch', { name: 'CRM access' }));
+    expect(await screen.findByText(/Another change to this agent's CRM access/)).toBeTruthy();
+    expect(screen.getByText('Off')).toBeTruthy();
   });
 });
