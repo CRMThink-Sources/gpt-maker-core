@@ -18,6 +18,7 @@ export * from './crm';
 export * from './errors';
 export * from './health';
 export * from './intentions';
+export * from './locale';
 export * from './models';
 export * from './notifications';
 export * from './plans';

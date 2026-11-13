@@ -1,7 +1,9 @@
 'use client';
 
+import type { Locale } from '@gptmaker/contracts';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { LogoMark } from '@/components/logo';
+import { useT } from '@/i18n';
 import { Spinner } from '@/components/ui';
 import { insideBitrix } from '@/lib/bx24';
 import { ApiRequestError, type ClientConfig, PlatformSessionClient } from '@/lib/platform-session';
@@ -9,7 +11,11 @@ import { ApiRequestError, type ClientConfig, PlatformSessionClient } from '@/lib
 /** Resposta de `GET /app/session`. */
 export interface AppSession {
   user: { id: string; name: string; isAdmin: boolean };
-  tenant: { code: string; status: 'ACTIVE' | 'SUSPENDED' | 'AUTH_ERROR' | 'UNINSTALLED' };
+  tenant: {
+    code: string;
+    status: 'ACTIVE' | 'SUSPENDED' | 'AUTH_ERROR' | 'UNINSTALLED';
+    locale: Locale;
+  };
   canManage: boolean;
   /** Recursos ligados no ambiente. */
   features?: { crmTools?: boolean };
@@ -24,7 +30,7 @@ interface SessionContextValue {
 type State =
   | { kind: 'loading' }
   | { kind: 'outside' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; code: string }
   | { kind: 'ready'; session: AppSession };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -35,12 +41,13 @@ export function useAppSession(): SessionContextValue {
   return value;
 }
 
-const ERROR_MESSAGES: Record<string, string> = {
-  INSTALLATION_NOT_ACTIVE: 'O app não está instalado neste portal. Reinstale pelo Bitrix24.',
-  TENANT_NOT_INSTALLED: 'O app não está instalado neste portal. Reinstale pelo Bitrix24.',
-  APP_INACTIVE: 'O app está temporariamente indisponível.',
-  BITRIX_TOKEN_REJECTED: 'O Bitrix24 recusou a autenticação. Recarregue a página.',
-};
+/** Códigos com texto próprio em `session.errors`; os demais caem na mensagem genérica. */
+const KNOWN_ERRORS = new Set([
+  'INSTALLATION_NOT_ACTIVE',
+  'TENANT_NOT_INSTALLED',
+  'APP_INACTIVE',
+  'BITRIX_TOKEN_REJECTED',
+]);
 
 export function SessionProvider({
   config,
@@ -50,6 +57,7 @@ export function SessionProvider({
   children: ReactNode;
 }) {
   const client = useMemo(() => new PlatformSessionClient(config), [config]);
+  const t = useT('session');
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   useEffect(() => {
@@ -65,11 +73,7 @@ export function SessionProvider({
       .catch((error: unknown) => {
         if (cancelled) return;
         const code = error instanceof ApiRequestError ? error.code : '';
-        setState({
-          kind: 'error',
-          message:
-            ERROR_MESSAGES[code] ?? 'Não foi possível abrir o app. Tente recarregar a página.',
-        });
+        setState({ kind: 'error', code });
       });
     return () => {
       cancelled = true;
@@ -92,25 +96,25 @@ export function SessionProvider({
     return (
       <Splash>
         <Spinner className="size-6" />
-        <p className="text-sm text-zinc-500">Conectando ao Bitrix24…</p>
+        <p className="text-sm text-zinc-500">{t('connecting')}</p>
       </Splash>
     );
   }
   if (state.kind === 'outside') {
     return (
       <Splash>
-        <p className="font-medium text-zinc-900">Abra o app pelo Bitrix24</p>
-        <p className="text-sm text-zinc-500">
-          O GPTMaker funciona dentro do seu portal. Abra-o pelo menu de aplicativos do Bitrix24.
-        </p>
+        <p className="font-medium text-zinc-900">{t('openFromBitrix')}</p>
+        <p className="text-sm text-zinc-500">{t('openFromBitrixHint')}</p>
       </Splash>
     );
   }
   if (state.kind === 'error') {
     return (
       <Splash>
-        <p className="font-medium text-zinc-900">Não foi possível abrir o app</p>
-        <p className="text-sm text-red-700">{state.message}</p>
+        <p className="font-medium text-zinc-900">{t('cannotOpen')}</p>
+        <p className="text-sm text-red-700">
+          {KNOWN_ERRORS.has(state.code) ? t(`errors.${state.code}`) : t('cannotOpenRetry')}
+        </p>
       </Splash>
     );
   }

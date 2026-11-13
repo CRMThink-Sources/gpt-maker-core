@@ -1,0 +1,2 @@
+ALTER TABLE "tenant" ADD COLUMN "locale" text DEFAULT 'pt-BR' NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenant" ADD CONSTRAINT "tenant_locale_valid" CHECK ("tenant"."locale" in ('pt-BR', 'en', 'es'));

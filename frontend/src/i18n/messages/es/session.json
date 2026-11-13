@@ -1,0 +1,13 @@
+{
+  "connecting": "Conectando con Bitrix24…",
+  "openFromBitrix": "Abra la app desde Bitrix24",
+  "openFromBitrixHint": "GPTMaker funciona dentro de su portal. Ábralo desde el menú de aplicaciones de Bitrix24.",
+  "cannotOpen": "No se pudo abrir la app",
+  "cannotOpenRetry": "No se pudo abrir la app. Intente recargar la página.",
+  "errors": {
+    "INSTALLATION_NOT_ACTIVE": "La app no está instalada en este portal. Reinstálela desde Bitrix24.",
+    "TENANT_NOT_INSTALLED": "La app no está instalada en este portal. Reinstálela desde Bitrix24.",
+    "APP_INACTIVE": "La app no está disponible temporalmente.",
+    "BITRIX_TOKEN_REJECTED": "Bitrix24 rechazó la autenticación. Recargue la página."
+  }
+}

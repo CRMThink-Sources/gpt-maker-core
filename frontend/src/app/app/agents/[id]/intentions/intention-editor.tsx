@@ -17,8 +17,8 @@ import { BoltIcon, CloseIcon, GlobeIcon, PlusIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
 import { Alert, buttonClass } from '@/components/ui';
-import { errorMessage } from '@/lib/agents';
-import { ACTION_TYPES, newAction, SAMPLE_CONTEXT } from '@/lib/triggers';
+import { type T, useErrorMessage, useFormat, useT } from '@/i18n';
+import { actionType, apiFailure, newAction, sampleContext } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
 import { ActionsEditor, TemplateScopeProvider } from '../triggers/trigger-editor';
@@ -26,14 +26,15 @@ import { ActionsEditor, TemplateScopeProvider } from '../triggers/trigger-editor
 type Form = Required<IntentionInput>;
 type FieldRow = Form['fields'][number];
 
-export const FIELD_TYPES: Record<IntentionFieldType, string> = {
-  STRING: 'Texto',
-  NUMBER: 'Número',
-  BOOLEAN: 'Sim/Não',
-  DATE: 'Data',
-  DATE_TIME: 'Data e hora',
-  URL: 'Link',
-};
+/** Tipos de informação coletada; o nome exibido está em `intentions.fieldTypes`. */
+export const FIELD_TYPES = [
+  'STRING',
+  'NUMBER',
+  'BOOLEAN',
+  'DATE',
+  'DATE_TIME',
+  'URL',
+] as const satisfies readonly IntentionFieldType[];
 
 /** Ações do Bitrix que uma intenção executa (as dos gatilhos, sem o webhook de saída). */
 const BITRIX_ACTIONS = [
@@ -44,18 +45,6 @@ const BITRIX_ACTIONS = [
   'START_BIZPROC',
   'TRANSFER_TO_HUMAN',
 ] as const;
-
-const SECTION_LABELS: Record<string, string> = {
-  actions: 'Ação',
-  name: 'Nome',
-  whenToUse: 'Quando usar',
-  fields: 'Campo',
-  url: 'URL',
-  headers: 'Cabeçalho',
-  params: 'Parâmetro',
-  body: 'Corpo',
-  instructions: 'Instrução',
-};
 
 /** Formulário a partir da intenção salva; cabeçalho com valor gravado vai como `null` (mantém). */
 export function formOf(view: IntentionView | null): Form {
@@ -121,6 +110,7 @@ function WithFields({
   placeholder?: string;
   label: string;
 }) {
+  const t = useT('intentions');
   const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const names = fields.map((field) => intentionJsonName(field.name)).filter(Boolean);
 
@@ -152,9 +142,9 @@ function WithFields({
           value=""
           onChange={(e) => e.target.value && insert(e.target.value)}
           className="mt-0 shrink-0 rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs text-zinc-600"
-          aria-label={`Inserir campo em ${label}`}
+          aria-label={t('withFields.insertIn', { label })}
         >
-          <option value="">+ campo</option>
+          <option value="">{t('withFields.addField')}</option>
           {names.map((name) => (
             <option key={name} value={name}>
               {`{{${name}}}`}
@@ -178,6 +168,7 @@ function Pairs({
   onChange: (rows: Array<{ name: string; value: string | null }>) => void;
   fields: FieldRow[];
 }) {
+  const t = useT('intentions');
   const set = (index: number, patch: Partial<{ name: string; value: string | null }>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   return (
@@ -187,21 +178,21 @@ function Pairs({
           <input
             value={row.name}
             onChange={(e) => set(index, { name: e.target.value })}
-            placeholder={kind === 'header' ? 'Authorization' : 'nome'}
-            aria-label="Nome"
+            placeholder={kind === 'header' ? 'Authorization' : t('pairs.paramName')}
+            aria-label={t('pairs.name')}
             className={`${inputClass} mt-0 w-40 shrink-0`}
           />
           {row.value === null ? (
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="flex-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs text-zinc-500">
-                Valor guardado (oculto)
+                {t('pairs.storedValue')}
               </span>
               <button
                 type="button"
                 onClick={() => set(index, { value: '' })}
                 className={buttonClass('ghost', 'sm')}
               >
-                Trocar
+                {t('pairs.replace')}
               </button>
             </div>
           ) : (
@@ -209,15 +200,15 @@ function Pairs({
               value={row.value}
               onChange={(value) => set(index, { value })}
               fields={fields}
-              label="Valor"
-              placeholder="valor"
+              label={t('pairs.value')}
+              placeholder={t('pairs.valuePlaceholder')}
             />
           )}
           <button
             type="button"
             onClick={() => onChange(rows.filter((_, i) => i !== index))}
             className={buttonClass('ghost', 'sm')}
-            aria-label="Remover"
+            aria-label={t('pairs.remove')}
           >
             <CloseIcon className="size-4" />
           </button>
@@ -230,27 +221,16 @@ function Pairs({
           className={buttonClass('ghost', 'sm')}
         >
           <PlusIcon className="size-4" />
-          {kind === 'header' ? 'Adicionar cabeçalho' : 'Adicionar parâmetro'}
+          {kind === 'header' ? t('pairs.addHeader') : t('pairs.addParam')}
         </button>
       )}
-      {kind === 'header' && (
-        <p className="text-xs text-zinc-500">
-          Valores de cabeçalho (como chaves de API) ficam guardados cifrados e não aparecem de novo.
-        </p>
-      )}
+      {kind === 'header' && <p className="text-xs text-zinc-500">{t('pairs.headerNote')}</p>}
     </div>
   );
 }
 
-const STEPS = [
-  { title: 'Intenção', description: 'Quando o agente deve usar esta intenção.' },
-  {
-    title: 'Informações',
-    description: 'O que o agente pergunta ao cliente antes de agir (opcional).',
-  },
-  { title: 'Ação', description: 'O que acontece com as informações coletadas.' },
-  { title: 'Resposta', description: 'Como o agente responde ao cliente depois da ação.' },
-] as const;
+/** Passos do editor; título e descrição em `intentions.steps.<chave>`. */
+const STEP_KEYS = ['intent', 'info', 'action', 'response'] as const;
 
 /** Passo de cada parte do formulário (para validar só o que está na tela). */
 const STEP_OF: Record<string, number> = {
@@ -275,14 +255,16 @@ function withoutBlankFields(form: Form): Form {
   };
 }
 
-function issuesAt(form: Form, step: number): string[] {
+function issuesAt(t: T, form: Form, step: number): string[] {
   const result = intentionInputSchema.safeParse(withoutBlankFields(form));
   if (result.success) return [];
   return result.error.issues
     .filter((issue) => (STEP_OF[String(issue.path[0])] ?? 3) === step)
     .map((issue) => {
       const [root, index] = issue.path;
-      const label = SECTION_LABELS[String(root)] ?? String(root);
+      const label = t.has(`sections.${String(root)}`)
+        ? t(`sections.${String(root)}`)
+        : String(root);
       return typeof index === 'number'
         ? `${label} ${index + 1}: ${issue.message}`
         : `${label}: ${issue.message}`;
@@ -332,27 +314,32 @@ function Choice({
 }
 
 function IntentStep({ form, set }: { form: Form; set: Setter }) {
+  const t = useT('intentions');
+  const format = useFormat();
   return (
     <div className="space-y-5">
-      <Field label="Nome" hint="Curto e único neste agente. Ex.: Registrar interesse.">
+      <Field label={t('intent.name')} hint={t('intent.nameHint')}>
         <input
           value={form.name}
           onChange={(e) => set('name', e.target.value)}
-          placeholder="Registrar interesse"
+          placeholder={t('intent.namePlaceholder')}
           maxLength={INTENTION_NAME_MAX}
           className={inputClass}
           autoFocus
         />
       </Field>
       <Field
-        label="Quando usar"
-        hint={`É o que o agente lê para decidir usar a intenção. Descreva a situação do cliente, não a ação. ${form.whenToUse.length.toLocaleString('pt-BR')}/${INTENTION_WHEN_TO_USE_MAX.toLocaleString('pt-BR')} caracteres.`}
+        label={t('intent.whenToUse')}
+        hint={t('intent.whenToUseHint', {
+          count: format.number(form.whenToUse.length),
+          max: format.number(INTENTION_WHEN_TO_USE_MAX),
+        })}
       >
         <textarea
           value={form.whenToUse}
           maxLength={INTENTION_WHEN_TO_USE_MAX}
           onChange={(e) => set('whenToUse', e.target.value)}
-          placeholder="Quando o cliente quiser falar com um vendedor ou pedir um orçamento"
+          placeholder={t('intent.whenToUsePlaceholder')}
           className={`${inputClass} min-h-28`}
         />
       </Field>
@@ -361,6 +348,7 @@ function IntentStep({ form, set }: { form: Form; set: Setter }) {
 }
 
 function FieldsStep({ form, set }: { form: Form; set: Setter }) {
+  const t = useT('intentions');
   const setField = (index: number, patch: Partial<FieldRow>) =>
     set(
       'fields',
@@ -370,7 +358,7 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
     <div>
       {form.fields.length === 0 ? (
         <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-center text-sm text-zinc-500">
-          Nenhuma informação: o agente age sem perguntar nada ao cliente.
+          {t('fields.empty')}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -382,8 +370,8 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                   <input
                     value={field.name}
                     onChange={(e) => setField(index, { name: e.target.value })}
-                    placeholder="Ex.: Produto de interesse"
-                    aria-label={`Nome da informação ${index + 1}`}
+                    placeholder={t('fields.namePlaceholder')}
+                    aria-label={t('fields.nameLabel', { number: index + 1 })}
                     maxLength={60}
                     className={`${inputClass} mt-0`}
                     autoFocus={!field.name && index === form.fields.length - 1}
@@ -393,12 +381,12 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                     onChange={(e) =>
                       setField(index, { type: e.target.value as IntentionFieldType })
                     }
-                    aria-label={`Tipo da informação ${index + 1}`}
+                    aria-label={t('fields.typeLabel', { number: index + 1 })}
                     className={`${inputClass} mt-0`}
                   >
-                    {Object.entries(FIELD_TYPES).map(([value, label]) => (
+                    {FIELD_TYPES.map((value) => (
                       <option key={value} value={value}>
-                        {label}
+                        {t(`fieldTypes.${value}`)}
                       </option>
                     ))}
                   </select>
@@ -409,7 +397,7 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                       onChange={(e) => setField(index, { required: e.target.checked })}
                       className="size-4 rounded border-zinc-300 text-brand-600"
                     />
-                    Obrigatória
+                    {t('fields.required')}
                   </label>
                   <button
                     type="button"
@@ -420,7 +408,7 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                       )
                     }
                     className={buttonClass('ghost', 'sm')}
-                    aria-label={`Remover informação ${index + 1}`}
+                    aria-label={t('fields.removeLabel', { number: index + 1 })}
                   >
                     <CloseIcon className="size-4" />
                   </button>
@@ -428,14 +416,14 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
                 <input
                   value={field.description ?? ''}
                   onChange={(e) => setField(index, { description: e.target.value })}
-                  placeholder="Opcional: como pedir ao cliente. Ex.: qual plano ou produto ele quer conhecer"
-                  aria-label={`Descrição da informação ${index + 1}`}
+                  placeholder={t('fields.descriptionPlaceholder')}
+                  aria-label={t('fields.descriptionLabel', { number: index + 1 })}
                   maxLength={500}
                   className={`${inputClass} mt-2`}
                 />
                 {json && (
                   <p className="mt-1.5 text-xs text-zinc-500">
-                    Usada como{' '}
+                    {t('fields.usedAs')}{' '}
                     <code className="rounded bg-zinc-100 px-1 py-0.5 text-zinc-700">
                       {form.kind === 'BITRIX' ? `{{fields.${json}}}` : `{{${json}}}`}
                     </code>
@@ -458,7 +446,7 @@ function FieldsStep({ form, set }: { form: Form; set: Setter }) {
           className={`${buttonClass('secondary', 'sm')} mt-3`}
         >
           <PlusIcon className="size-4" />
-          Adicionar informação
+          {t('fields.add')}
         </button>
       )}
     </div>
@@ -476,11 +464,13 @@ function ActionStep({
   setForm: (update: (current: Form) => Form) => void;
   busy: boolean;
 }) {
+  const t = useT('intentions');
+  const tt = useT('triggers');
   const [tab, setTab] = useState<'params' | 'headers' | 'body'>('params');
   const tabs = [
-    { key: 'params' as const, label: `Parâmetros (${form.params.length})` },
-    { key: 'headers' as const, label: `Cabeçalhos (${form.headers.length})` },
-    ...(form.httpMethod === 'POST' ? [{ key: 'body' as const, label: 'Corpo' }] : []),
+    { key: 'params' as const, label: t('action.tabParams', { count: form.params.length }) },
+    { key: 'headers' as const, label: t('action.tabHeaders', { count: form.headers.length }) },
+    ...(form.httpMethod === 'POST' ? [{ key: 'body' as const, label: t('action.tabBody') }] : []),
   ];
   return (
     <div className="space-y-5">
@@ -493,19 +483,19 @@ function ActionStep({
               kind: 'BITRIX',
               actions: current.actions.length
                 ? current.actions
-                : [newAction('CREATE_LEAD') as IntentionActionInput],
+                : [newAction(tt, 'CREATE_LEAD') as IntentionActionInput],
             }))
           }
           icon={<BoltIcon className="size-5" />}
-          title="Ação no Bitrix24"
-          description="Lead, negócio, tarefa, comentário ou transferência para um atendente."
+          title={t('action.bitrixTitle')}
+          description={t('action.bitrixDescription')}
         />
         <Choice
           selected={form.kind === 'WEBHOOK'}
           onSelect={() => set('kind', 'WEBHOOK')}
           icon={<GlobeIcon className="size-5" />}
-          title="Chamar uma API"
-          description="Consulta ou envia dados para um sistema seu."
+          title={t('action.webhookTitle')}
+          description={t('action.webhookDescription')}
         />
       </div>
 
@@ -517,21 +507,18 @@ function ActionStep({
               .filter((field) => field.json)
               .map((field) => ({
                 path: `fields.${field.json}`,
-                description: `Informação: ${field.name}`,
+                description: t('scope.field', { name: field.name }),
               })),
             allowFields: true,
             sample: {
-              ...SAMPLE_CONTEXT,
+              ...sampleContext(tt),
               fields: Object.fromEntries(
                 form.fields.map((field) => [intentionJsonName(field.name), `(${field.name})`]),
               ),
             },
           }}
         >
-          <p className="text-xs text-zinc-500">
-            Rodam na hora, nesta ordem, no seu portal. Comentário, negócio e transferência usam a
-            conversa em andamento.
-          </p>
+          <p className="text-xs text-zinc-500">{t('action.runNote')}</p>
           <ActionsEditor
             actions={form.actions as IntentionActionInput[]}
             onChange={(actions) => set('actions', actions)}
@@ -549,7 +536,7 @@ function ActionStep({
                 set('httpMethod', method);
                 if (method === 'GET' && tab === 'body') setTab('params');
               }}
-              aria-label="Método"
+              aria-label={t('action.method')}
               className={`${inputClass} mt-0 w-24 shrink-0`}
             >
               <option value="GET">GET</option>
@@ -559,8 +546,8 @@ function ActionStep({
               value={form.url}
               onChange={(value) => set('url', value)}
               fields={form.fields}
-              label="URL"
-              placeholder="https://sua-api.com/pedidos/{{numero_do_pedido}}"
+              label={t('action.url')}
+              placeholder={t('action.urlPlaceholder')}
             />
           </div>
           <div className="mt-4 flex gap-4 border-b border-zinc-200 text-sm">
@@ -589,7 +576,7 @@ function ActionStep({
                     onChange={(e) => set('autoGenerateParams', e.target.checked)}
                     className="size-4 rounded border-zinc-300 text-brand-600"
                   />
-                  O agente monta os parâmetros sozinho
+                  {t('action.autoParams')}
                 </label>
                 <Pairs
                   kind="param"
@@ -621,7 +608,7 @@ function ActionStep({
                     onChange={(e) => set('autoGenerateBody', e.target.checked)}
                     className="size-4 rounded border-zinc-300 text-brand-600"
                   />
-                  O agente monta o corpo sozinho
+                  {t('action.autoBody')}
                 </label>
                 {!form.autoGenerateBody && (
                   <WithFields
@@ -629,8 +616,8 @@ function ActionStep({
                     onChange={(value) => set('body', value || null)}
                     fields={form.fields}
                     multiline
-                    label="Corpo JSON"
-                    placeholder={'{\n  "pedido": "{{numero_do_pedido}}"\n}'}
+                    label={t('action.bodyJson')}
+                    placeholder={t('action.bodyPlaceholder')}
                   />
                 )}
               </>
@@ -643,10 +630,12 @@ function ActionStep({
 }
 
 function ResponseStep({ form, set }: { form: Form; set: Setter }) {
+  const t = useT('intentions');
+  const tt = useT('triggers');
   const what =
     form.kind === 'BITRIX'
-      ? form.actions.map((action) => ACTION_TYPES[action.type].label.toLowerCase()).join(', ')
-      : `${form.httpMethod} ${form.url || '(sem URL)'}`;
+      ? form.actions.map((action) => actionType(tt, action.type).label.toLowerCase()).join(', ')
+      : `${form.httpMethod} ${form.url || t('response.noUrl')}`;
   const collected = form.fields.map((field) => field.name).filter(Boolean);
   return (
     <div className="space-y-5">
@@ -654,26 +643,26 @@ function ResponseStep({ form, set }: { form: Form; set: Setter }) {
         <Choice
           selected={form.responseMode === 'API'}
           onSelect={() => set('responseMode', 'API')}
-          title={form.kind === 'BITRIX' ? 'Pelo resultado das ações' : 'Pelo retorno da API'}
+          title={form.kind === 'BITRIX' ? t('response.byActions') : t('response.byApi')}
           description={
             form.kind === 'BITRIX'
-              ? 'O agente confirma o que foi feito, ex.: "registrei seu interesse".'
-              : 'O agente interpreta o retorno e responde com as informações.'
+              ? t('response.byActionsDescription')
+              : t('response.byApiDescription')
           }
         />
         <Choice
           selected={form.responseMode === 'INSTRUCTIONS'}
           onSelect={() => set('responseMode', 'INSTRUCTIONS')}
-          title="Por uma instrução sua"
-          description="Você escreve como o agente deve responder."
+          title={t('response.byInstruction')}
+          description={t('response.byInstructionDescription')}
         />
       </div>
       {form.responseMode === 'INSTRUCTIONS' && (
-        <Field label="Instrução de resposta">
+        <Field label={t('response.instruction')}>
           <textarea
             value={form.instructions ?? ''}
             onChange={(e) => set('instructions', e.target.value || null)}
-            placeholder="Agradeça, diga que um vendedor vai continuar o atendimento e não prometa prazos"
+            placeholder={t('response.instructionPlaceholder')}
             className={`${inputClass} min-h-24`}
             autoFocus
           />
@@ -681,17 +670,22 @@ function ResponseStep({ form, set }: { form: Form; set: Setter }) {
       )}
 
       <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
-        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Resumo</p>
+        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          {t('response.summary')}
+        </p>
         <p className="mt-2 text-zinc-700">
-          <span className="font-medium text-zinc-900">{form.whenToUse || 'Quando…'}</span>
+          <span className="font-medium text-zinc-900">
+            {form.whenToUse || t('response.whenPlaceholder')}
+          </span>
         </p>
         <p className="mt-1 text-zinc-600">
-          {collected.length
-            ? `O agente pergunta ${collected.join(', ')} e depois `
-            : 'O agente, sem perguntar nada, '}
-          {form.kind === 'BITRIX'
-            ? `faz no Bitrix24: ${what || 'nenhuma ação'}.`
-            : `chama ${what}.`}
+          {t(
+            `response.summary${collected.length ? 'Asks' : 'NoAsk'}${form.kind === 'BITRIX' ? 'Bitrix' : 'Api'}`,
+            {
+              fields: collected.join(', '),
+              what: form.kind === 'BITRIX' ? what || t('response.noAction') : what,
+            },
+          )}
         </p>
         <label className="mt-3 flex items-center gap-2 text-zinc-700">
           <input
@@ -700,7 +694,7 @@ function ResponseStep({ form, set }: { form: Form; set: Setter }) {
             onChange={(e) => set('active', e.target.checked)}
             className="size-4 rounded border-zinc-300 text-brand-600"
           />
-          Intenção ativa
+          {t('response.active')}
         </label>
       </div>
     </div>
@@ -722,16 +716,22 @@ export function IntentionEditor({
   onSaved: () => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('intentions');
+  const errorMessage = useErrorMessage('intentions');
   const [form, setForm] = useState<Form>(() => formOf(intention));
   const [step, setStep] = useState(0);
   // Na edição tudo já está preenchido: todos os passos ficam ao alcance.
-  const [reachable, setReachable] = useState(intention ? STEPS.length - 1 : 0);
+  const [reachable, setReachable] = useState(intention ? STEP_KEYS.length - 1 : 0);
   const [issues, setIssues] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const set: Setter = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const last = step === STEPS.length - 1;
+  const last = step === STEP_KEYS.length - 1;
+  const steps = STEP_KEYS.map((key) => ({
+    title: t(`steps.${key}.title`),
+    description: t(`steps.${key}.description`),
+  }));
 
   function go(target: number) {
     setIssues([]);
@@ -740,7 +740,7 @@ export function IntentionEditor({
   }
 
   async function next() {
-    const problems = issuesAt(form, step);
+    const problems = issuesAt(t, form, step);
     setIssues(problems);
     if (problems.length) return;
     if (!last) {
@@ -749,8 +749,8 @@ export function IntentionEditor({
       return;
     }
     // No último passo, confere tudo (o problema pode estar num passo anterior).
-    for (let index = 0; index < STEPS.length; index++) {
-      const pending = issuesAt(form, index);
+    for (let index = 0; index < STEP_KEYS.length; index++) {
+      const pending = issuesAt(t, form, index);
       if (pending.length) {
         setStep(index);
         setIssues(pending);
@@ -767,18 +767,18 @@ export function IntentionEditor({
       });
       onSaved();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível salvar a intenção.'));
+      setError(apiFailure(e, errorMessage, t('editor.saveFailed')));
       setBusy(false);
     }
   }
 
   return (
     <Modal
-      title={intention ? `Editar intenção` : 'Nova intenção'}
-      description={STEPS[step]!.description}
+      title={intention ? t('editor.editTitle') : t('editor.newTitle')}
+      description={steps[step]!.description}
       header={
         <Stepper
-          steps={STEPS}
+          steps={steps}
           current={step}
           reachable={reachable}
           onSelect={busy ? undefined : go}
@@ -788,7 +788,7 @@ export function IntentionEditor({
       footer={
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-zinc-500">
-            Passo {step + 1} de {STEPS.length}
+            {t('editor.step', { current: step + 1, total: STEP_KEYS.length })}
           </span>
           <div className="flex gap-2">
             {step > 0 ? (
@@ -798,7 +798,7 @@ export function IntentionEditor({
                 disabled={busy}
                 className={buttonClass('secondary')}
               >
-                Voltar
+                {t('editor.back')}
               </button>
             ) : (
               <button
@@ -807,7 +807,7 @@ export function IntentionEditor({
                 disabled={busy}
                 className={buttonClass('secondary')}
               >
-                Cancelar
+                {t('editor.cancel')}
               </button>
             )}
             <button
@@ -816,7 +816,7 @@ export function IntentionEditor({
               disabled={busy}
               className={buttonClass('primary')}
             >
-              {busy ? 'Salvando…' : last ? 'Salvar intenção' : 'Avançar'}
+              {busy ? t('editor.saving') : last ? t('editor.save') : t('editor.next')}
             </button>
           </div>
         </div>

@@ -2,26 +2,11 @@
 
 import type { DiffLine, FunctionPreview } from '@gptmaker/contracts';
 import { Alert, Badge, Card } from '@/components/ui';
+import { type T, useT } from '@/i18n';
 
-const SETTING_LABELS: Record<string, string> = {
-  enabledHumanTransfer: 'Transferência para atendente',
-  enabledEmoji: 'Emojis',
-  limitSubjects: 'Falar só dos assuntos do negócio',
-  onLackKnowLedge: 'Mensagem quando não souber',
-  knowledgeByFunction: 'Busca inteligente na base',
-};
-
-const AGENT_LABELS: Record<string, string> = {
-  agentType: 'Tipo',
-  communicationType: 'Tom',
-  jobName: 'Nome da empresa',
-  jobDescription: 'Sobre a empresa',
-  jobSite: 'Site',
-};
-
-function show(value: unknown): string {
-  if (value === true) return 'sim';
-  if (value === false) return 'não';
+function show(value: unknown, t: T): string {
+  if (value === true) return t('preview.yes');
+  if (value === false) return t('preview.no');
   if (value === null || value === undefined || value === '') return '—';
   return String(value);
 }
@@ -60,6 +45,9 @@ export function FunctionPreviewView({
   preview: FunctionPreview;
   modeChange?: string | null;
 }) {
+  const t = useT('assist');
+  const label = (group: 'agentLabels' | 'settingLabels', key: string) =>
+    t.has(`preview.${group}.${key}`) ? t(`preview.${group}.${key}`) : key;
   const { plan, compiled } = preview;
   const trainings = plan.trainings;
   const intentions = plan.intentions;
@@ -69,11 +57,7 @@ export function FunctionPreviewView({
   return (
     <div className="space-y-5">
       {preview.issues.length > 0 && (
-        <Alert tone="error">
-          Revise o formulário:{' '}
-          {preview.issues.length === 1 ? 'há 1 campo' : `há ${preview.issues.length} campos`} com
-          problema.
-        </Alert>
+        <Alert tone="error">{t('preview.issues', { count: preview.issues.length })}</Alert>
       )}
       {compiled.errors.map((error) => (
         <Alert key={error} tone="error">
@@ -82,39 +66,36 @@ export function FunctionPreviewView({
       ))}
       {plan.empty && preview.mediaToRemove.length === 0 && (
         <Alert tone="success">
-          {modeChange
-            ? `O agente passa para o modo ${modeChange}; o texto, a base e as ações continuam iguais.`
-            : 'Nada muda no agente com estas respostas.'}
+          {modeChange ? t('preview.modeChange', { mode: modeChange }) : t('preview.nothingChanges')}
         </Alert>
       )}
 
       <Card className="space-y-3 p-5">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-zinc-900">Texto do agente</h4>
+          <h4 className="text-sm font-semibold text-zinc-900">{t('preview.agentText')}</h4>
           <span className="text-xs text-zinc-500">
-            {compiled.behavior.length} de 3000 caracteres
+            {t('preview.charCount', { count: compiled.behavior.length })}
           </span>
         </div>
         {plan.behavior.changed ? (
           <BehaviorDiff lines={plan.behavior.diff} />
         ) : (
-          <p className="text-sm text-zinc-500">Sem mudanças.</p>
+          <p className="text-sm text-zinc-500">{t('preview.noChanges')}</p>
         )}
       </Card>
 
       {(plan.agent.length > 0 || plan.settings.length > 0) && (
         <Card className="space-y-2 p-5">
-          <h4 className="text-sm font-semibold text-zinc-900">Configurações</h4>
+          <h4 className="text-sm font-semibold text-zinc-900">{t('preview.settings')}</h4>
           <ul className="space-y-1 text-sm text-zinc-700">
             {plan.agent.map((change) => (
               <li key={change.field}>
-                {AGENT_LABELS[change.field] ?? change.field}: {show(change.from)} →{' '}
-                {show(change.to)}
+                {label('agentLabels', change.field)}: {show(change.from, t)} → {show(change.to, t)}
               </li>
             ))}
             {plan.settings.map((change) => (
               <li key={change.key}>
-                {SETTING_LABELS[change.key] ?? change.key}: {show(change.from)} → {show(change.to)}
+                {label('settingLabels', change.key)}: {show(change.from, t)} → {show(change.to, t)}
               </li>
             ))}
           </ul>
@@ -122,28 +103,28 @@ export function FunctionPreviewView({
       )}
 
       <Card className="space-y-2 p-5">
-        <h4 className="text-sm font-semibold text-zinc-900">Base de conhecimento</h4>
+        <h4 className="text-sm font-semibold text-zinc-900">{t('preview.knowledge')}</h4>
         {trainings.create.length + trainings.update.length + trainings.remove.length === 0 ? (
-          <p className="text-sm text-zinc-500">Sem mudanças.</p>
+          <p className="text-sm text-zinc-500">{t('preview.noChanges')}</p>
         ) : (
           <ul className="space-y-2 text-sm">
             {trainings.create.map((item) => (
               <li key={item.key} className="flex gap-2">
-                <Badge tone="green">novo</Badge>
+                <Badge tone="green">{t('preview.badgeNew')}</Badge>
                 <span className="line-clamp-2 text-zinc-700">{item.text}</span>
               </li>
             ))}
             {trainings.update.map((item) => (
               <li key={item.key} className="flex gap-2">
-                <Badge tone="brand">alterado</Badge>
+                <Badge tone="brand">{t('preview.badgeChanged')}</Badge>
                 <span className="line-clamp-2 text-zinc-700">{item.text}</span>
               </li>
             ))}
             {trainings.remove.length > 0 && (
               <li className="flex gap-2">
-                <Badge tone="amber">removido</Badge>
+                <Badge tone="amber">{t('preview.badgeRemoved')}</Badge>
                 <span className="text-zinc-700">
-                  {trainings.remove.length === 1 ? '1 item' : `${trainings.remove.length} itens`}
+                  {t('preview.removedItems', { count: trainings.remove.length })}
                 </span>
               </li>
             )}
@@ -151,14 +132,13 @@ export function FunctionPreviewView({
         )}
         {preview.mediaToRemove.length > 0 && (
           <p className="text-sm text-amber-700">
-            Saem também {preview.mediaToRemove.length} treinamento(s) de site ou vídeo do modo
-            avançado.
+            {t('preview.mediaRemoved', { count: preview.mediaToRemove.length })}
           </p>
         )}
       </Card>
 
       <Card className="space-y-2 p-5">
-        <h4 className="text-sm font-semibold text-zinc-900">Ações do agente</h4>
+        <h4 className="text-sm font-semibold text-zinc-900">{t('preview.actions')}</h4>
         <ul className="space-y-1 text-sm text-zinc-700">
           {compiled.intentions.map((intention) => {
             const created = intentions.create.some((item) => item.key === intention.key);
@@ -166,14 +146,14 @@ export function FunctionPreviewView({
             return (
               <li key={intention.key} className="flex items-center gap-2">
                 {intention.input.name}
-                {created && <Badge tone="green">nova</Badge>}
-                {updated && <Badge tone="brand">alterada</Badge>}
+                {created && <Badge tone="green">{t('preview.actionNew')}</Badge>}
+                {updated && <Badge tone="brand">{t('preview.actionChanged')}</Badge>}
               </li>
             );
           })}
           {intentions.remove.map((key) => (
             <li key={key} className="flex items-center gap-2 text-zinc-500">
-              {intentionName(key)} <Badge tone="amber">removida</Badge>
+              {intentionName(key)} <Badge tone="amber">{t('preview.actionRemoved')}</Badge>
             </li>
           ))}
         </ul>

@@ -1,0 +1,112 @@
+{
+  "types": {
+    "TEXT": "Texto",
+    "WEBSITE": "Sitio web",
+    "VIDEO": "Video",
+    "DOCUMENT": "Documento"
+  },
+  "intervals": {
+    "NEVER": "No actualizar",
+    "ONE_HOUR": "Cada hora",
+    "FOUR_HOUR": "Cada 4 horas",
+    "EIGHT_HOUR": "Cada 8 horas",
+    "TWELVE_HOUR": "Cada 12 horas",
+    "ONE_DAY": "Todos los días",
+    "ONE_WEEK": "Todas las semanas",
+    "ONE_MONTH": "Todos los meses"
+  },
+  "status": {
+    "done": "Listo",
+    "failed": "Falló",
+    "processing": "Procesando"
+  },
+  "page": {
+    "heading": "Lo que el agente sabe",
+    "intro": "Los elementos de la base provienen del formulario, en la pestaña {link}. También puede agregar textos (con imagen) aquí.",
+    "functionTab": "Función",
+    "mediaTakenOver": "Para entrenar con sitios web y videos, vuelva allí al formulario en modo avanzado.",
+    "mediaTurnOn": "Para entrenar con sitios web y videos, active allí el modo avanzado.",
+    "mediaAdvanced": "En el modo avanzado, los sitios web y los videos se agregan aquí.",
+    "noCredits": "Entrenar no consume créditos.",
+    "add": "Agregar entrenamiento",
+    "usageLabel": "Entrenamientos (todos los agentes)",
+    "noLimit": " · sin límite",
+    "ofLimit": " de {limit}",
+    "searchPlaceholder": "Buscar entrenamiento por título",
+    "searchLabel": "Buscar entrenamiento",
+    "noMatch": "No se encontró ningún entrenamiento para “{query}”.",
+    "emptyTitle": "Aún no hay entrenamientos",
+    "emptyDescription": "Complete la base de conocimiento en el formulario de la pestaña Función y publique, o agregue un texto aquí.",
+    "imageAlt": "Imagen del entrenamiento",
+    "fromFunction": "de la función",
+    "manual": "manual",
+    "withSubPages": "con páginas vinculadas",
+    "retry": "Reenviar",
+    "retrying": "Reenviando…",
+    "confirmRemove": "¿Eliminar?",
+    "remove": "Eliminar",
+    "removing": "Eliminando…",
+    "edit": "Editar",
+    "showing": "Mostrando {shown} de {total}",
+    "showMore": "Mostrar más",
+    "loadError": "No se pudieron cargar los entrenamientos.",
+    "actionError": "No se pudo completar la acción. Inténtelo de nuevo."
+  },
+  "add": {
+    "title": "Agregar entrenamiento",
+    "description": "El agente aprende con el contenido y pasa a usarlo en las respuestas.",
+    "typeLabel": "Tipo",
+    "kinds": {
+      "TEXT": {
+        "label": "Texto",
+        "hint": "Un texto, con imagen si lo desea"
+      },
+      "WEBSITE": {
+        "label": "Sitio web",
+        "hint": "Páginas de su sitio web"
+      },
+      "VIDEO": {
+        "label": "Video",
+        "hint": "Enlace de un video"
+      }
+    },
+    "textLabel": "Texto",
+    "textCount": "{count} de {max} caracteres",
+    "siteLabel": "Dirección del sitio web",
+    "videoLabel": "Enlace del video",
+    "videoHint": "Ej.: un video de YouTube con la explicación del producto.",
+    "subPagesLabel": "Leer también las páginas vinculadas",
+    "subPagesHint": "El agente aprende con las páginas del sitio a partir de esta dirección.",
+    "refreshLabel": "Actualizar el contenido",
+    "refreshHint": "Para sitios que cambian con frecuencia, como catálogo y precios.",
+    "submit": "Agregar",
+    "sending": "Enviando…",
+    "error": "No se pudo enviar el entrenamiento. Inténtelo de nuevo."
+  },
+  "edit": {
+    "title": "Editar texto",
+    "description": "El agente pasa a usar el texto y la imagen nuevos en las respuestas.",
+    "saving": "Guardando…",
+    "error": "No se pudo guardar. Inténtelo de nuevo."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Algunos campos no son válidos. Revíselos e inténtelo de nuevo.",
+    "AGENT_NOT_FOUND": "Agente no encontrado.",
+    "AGENT_OUT_OF_SYNC": "No se encontró el agente en GPTMaker; comuníquese con soporte.",
+    "TRAINING_NOT_FOUND": "Entrenamiento no encontrado.",
+    "TRAINING_NOT_EDITABLE": "Solo se pueden editar entrenamientos de texto; elimine este y cree otro.",
+    "TRAINING_NOT_READY": "El entrenamiento aún se está registrando en GPTMaker; inténtelo de nuevo en unos instantes.",
+    "TRAINING_NOT_FAILED": "Solo se pueden reenviar entrenamientos que fallaron.",
+    "TRAINING_NOT_RETRYABLE": "El archivo de este documento no está guardado aquí; elimínelo y suba el documento de nuevo.",
+    "TRAINING_BUSY": "Se está enviando otro entrenamiento de este agente; inténtelo de nuevo en unos instantes.",
+    "TRAINING_MANAGED_BY_FUNCTION": "Este entrenamiento proviene del formulario de la función del agente; modifique el elemento allí.",
+    "TRAINING_IMAGE_NOT_FOUND": "Imagen no encontrada; suba la imagen de nuevo.",
+    "TRAINING_IMAGE_INVALID": "Suba una imagen.",
+    "TRAINING_IMAGE_TOO_LARGE": "La imagen supera el tamaño máximo permitido.",
+    "TRAINING_IMAGE_INVALID_TYPE": "Solo se aceptan imágenes PNG, JPEG y WebP.",
+    "TRAINING_IMAGE_IN_USE": "Esta imagen ya está en otro entrenamiento; suba la imagen de nuevo.",
+    "PLAN_TRAINING_LIMIT": "Alcanzó el límite de entrenamientos de su plan. Elimine alguno o cambie de plan.",
+    "GPTMAKER_REJECTED": "GPTMaker rechazó el entrenamiento. Revise el contenido e inténtelo de nuevo.",
+    "GPTMAKER_UNAVAILABLE": "No se pudo enviar el entrenamiento a GPTMaker en este momento. Inténtelo de nuevo en unos instantes."
+  }
+}

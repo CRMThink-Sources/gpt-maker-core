@@ -1,0 +1,32 @@
+{
+  "title": "Vibecode key",
+  "description": "Use your Bitrix24 Vibecode key for the AI review of the function, without spending credits.",
+  "adminOnly": "Only portal administrators can configure the Vibecode key.",
+  "configured": "Key configured, ending in {last4}.",
+  "configuredVerified": "Key configured, ending in {last4}, tested on {date}.",
+  "notConfigured": "No key saved. The AI review uses the app credits.",
+  "notConfiguredUnavailable": "No key saved. The AI review uses the app credits and is currently unavailable without your own key.",
+  "replaceKey": "Replace the key",
+  "keyLabel": "Vibecode key",
+  "hints": {
+    "scope": "Create the key with the vibe:ai scope only: it does not need access to portal data.",
+    "sent": "The function and knowledge base text is sent to Vibecode during the AI review.",
+    "stored": "The key is stored encrypted and is not shown again once saved."
+  },
+  "testing": "Testing…",
+  "testAndSave": "Test and save",
+  "removeKey": "Remove key",
+  "saved": "Key tested and saved.",
+  "removed": "Key removed. The AI review will use credits again.",
+  "errors": {
+    "load": "Could not load the key.",
+    "save": "Could not save the key.",
+    "remove": "Could not remove the key.",
+    "AI_KEY_REQUIRED": "To review with AI, provide the Vibecode key.",
+    "AI_KEY_INVALID": "Vibecode did not accept the key. Check that it was copied in full and is still active.",
+    "AI_KEY_SCOPE": "The key must have the vibe:ai scope.",
+    "AI_NO_BALANCE": "The Vibecode account has run out of balance or quota.",
+    "AI_MODEL_UNAVAILABLE": "The key does not have access to the model used in the review, or the model is down.",
+    "AI_UNAVAILABLE": "The AI review is down right now. Try again in a moment."
+  }
+}

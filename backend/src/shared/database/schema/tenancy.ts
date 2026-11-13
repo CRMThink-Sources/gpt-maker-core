@@ -1,4 +1,5 @@
-import { boolean, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { createdAt, timestamptz, updatedAt } from '../columns';
 
 export const tenantStatus = pgEnum('tenant_status', [
@@ -23,6 +24,8 @@ export const tenant = pgTable(
     /** Parceiro: pode assumir o controle do comportamento dos agentes (spec admin-backoffice). */
     isPartner: boolean('is_partner').notNull().default(false),
     suspendedReason: text('suspended_reason'),
+    /** Idioma das mensagens geradas pelo backend para o tenant (spec notification-i18n). */
+    locale: text('locale').notNull().default('pt-BR'),
     installedAt: timestamptz('installed_at').notNull().defaultNow(),
     uninstalledAt: timestamptz('uninstalled_at'),
     createdAt: createdAt(),
@@ -32,6 +35,7 @@ export const tenant = pgTable(
     uniqueIndex('tenant_installation_id_uq').on(t.installationId),
     uniqueIndex('tenant_member_id_uq').on(t.memberId),
     uniqueIndex('tenant_tenant_code_uq').on(t.tenantCode),
+    check('tenant_locale_valid', sql`${t.locale} in ('pt-BR', 'en', 'es')`),
   ],
 );
 

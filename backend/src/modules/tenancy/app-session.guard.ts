@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { type Locale, toLocale } from '@gptmaker/contracts';
 import type { Request } from 'express';
 import { enrichContext } from '../../shared/context/request-context';
 import { DomainError } from '../../shared/http/api-exception.filter';
@@ -28,6 +29,8 @@ export interface AppSession {
   tenantId: string;
   tenantCode: string;
   tenantStatus: TenantStatus;
+  /** Idioma do tenant (mensagens do backend). */
+  locale: Locale;
   installationId: number;
   /** Id do usuário no Bitrix (`sub`). */
   userId: string;
@@ -93,6 +96,7 @@ export class AppSessionGuard implements CanActivate {
       tenantId: tenant.id,
       tenantCode: tenant.tenantCode,
       tenantStatus: tenant.status,
+      locale: toLocale(tenant.locale),
       installationId: claims.installationId,
       userId: claims.sub,
       userName: claims.name,

@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { and, asc, eq, lte, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import type { Locale } from '@gptmaker/contracts';
 import { newTraceId, runWithContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
 import {
@@ -14,6 +15,7 @@ import { DistributedLock } from '../../shared/redis/distributed-lock';
 import { REDIS } from '../../shared/redis/redis.module';
 import { BitrixClient, BitrixError } from '../bitrix';
 import { type Tenant, TenantService } from '../tenancy';
+import { MESSAGES, toLocale } from './messages';
 
 export type NotificationType = (typeof notificationLog.$inferSelect)['type'];
 type LogRow = typeof notificationLog.$inferSelect;
@@ -62,12 +64,22 @@ export class NotificationService {
     tenantId: string;
     type: NotificationType;
     dedupeKey: string;
-    message: string;
+    /** Texto pronto ou função do idioma do tenant (spec notification-i18n). */
+    message: string | ((locale: Locale) => string);
   }): Promise<boolean> {
     try {
+      const message =
+        typeof input.message === 'string'
+          ? input.message
+          : input.message(toLocale((await this.tenants.findById(input.tenantId))?.locale));
       const rows = await this.db
         .insert(notificationLog)
-        .values(input)
+        .values({
+          tenantId: input.tenantId,
+          type: input.type,
+          dedupeKey: input.dedupeKey,
+          message,
+        })
         .onConflictDoNothing({
           target: [notificationLog.tenantId, notificationLog.type, notificationLog.dedupeKey],
         })
@@ -90,8 +102,7 @@ export class NotificationService {
         tenantId,
         type: 'TEST',
         dedupeKey: randomUUID(),
-        message:
-          '[B]ThinkFlow AI[/B]: este é um aviso de teste. É assim que você vai receber os alertas de créditos e de pagamento do app.',
+        message: MESSAGES.test(toLocale((await this.tenants.findById(tenantId))?.locale)),
       })
       .returning();
     this.logger.log({ tenantId, requestedBy }, 'aviso de teste solicitado');

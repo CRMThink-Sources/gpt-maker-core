@@ -90,7 +90,7 @@ describe('fluxo da revisão (6.5)', () => {
     }) as never;
     const { result: hook } = renderHook(() => useFunctionReview(api, BASE));
     await act(() => hook.current.run(['f1'], answers));
-    expect(hook.current.state.error).toBe('Informe a chave do Vibecode.');
+    expect(hook.current.state.error).toBe('Para revisar com IA, informe a chave do Vibecode.');
     expect(hook.current.state.fields).toEqual({});
   });
 

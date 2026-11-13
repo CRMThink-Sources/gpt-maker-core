@@ -4,14 +4,8 @@ import type { TriggerExecutionView, TriggerView } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Loading } from '@/components/ui';
-import { errorMessage } from '@/lib/agents';
-import {
-  ACTION_TYPES,
-  AGENT_EVENTS,
-  executionStatus,
-  formatDateTime,
-  resultSummary,
-} from '@/lib/triggers';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
+import { actionType, agentEvent, apiFailure, executionStatus, resultSummary } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 
 /** Histórico de execuções de um gatilho, mais recentes primeiro. */
@@ -25,6 +19,11 @@ export function HistoryModal({
   onClose: () => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('triggers');
+  const format = useFormat();
+  const errorMessage = useErrorMessage('triggers');
+  const formatDateTime = (iso: string) =>
+    format.dateTime(new Date(iso), { dateStyle: 'short', timeStyle: 'short' });
   const [executions, setExecutions] = useState<TriggerExecutionView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,9 +42,9 @@ export function HistoryModal({
     try {
       setExecutions(await fetchExecutions());
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar o histórico.'));
+      setError(apiFailure(e, errorMessage, t('history.loadFailed')));
     }
-  }, [fetchExecutions]);
+  }, [fetchExecutions, t, errorMessage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,25 +52,25 @@ export function HistoryModal({
       .then((rows) => !cancelled && setExecutions(rows))
       .catch(
         (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar o histórico.')),
+          !cancelled && setError(apiFailure(e, errorMessage, t('history.loadFailed'))),
       );
     return () => {
       cancelled = true;
     };
-  }, [fetchExecutions]);
+  }, [fetchExecutions, t, errorMessage]);
 
   return (
     <Modal
-      title={`Histórico · ${trigger.name}`}
-      description="Últimas 100 ações executadas por este gatilho."
+      title={t('history.title', { name: trigger.name })}
+      description={t('history.description')}
       onRequestClose={onClose}
       footer={
         <div className="flex justify-between gap-2">
           <button type="button" onClick={() => void load()} className={buttonClass('secondary')}>
-            Atualizar
+            {t('history.refresh')}
           </button>
           <button type="button" onClick={onClose} className={buttonClass('primary')}>
-            Fechar
+            {t('history.close')}
           </button>
         </div>
       }
@@ -85,19 +84,18 @@ export function HistoryModal({
         !error && <Loading />
       ) : executions.length === 0 ? (
         <p className="py-8 text-center text-sm text-zinc-500">
-          Nenhuma execução ainda. O gatilho roda quando o evento “
-          {AGENT_EVENTS[trigger.event].label}” acontecer.
+          {t('history.empty', { event: agentEvent(t, trigger.event).label })}
         </p>
       ) : (
         <ul className="divide-y divide-zinc-100">
           {executions.map((execution) => {
-            const status = executionStatus(execution.status);
-            const summary = resultSummary(execution);
+            const status = executionStatus(t, execution.status);
+            const summary = resultSummary(t, execution);
             return (
               <li key={execution.id} className="py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-zinc-900">
-                    {ACTION_TYPES[execution.actionType].label}
+                    {actionType(t, execution.actionType).label}
                   </span>
                   <Badge tone={status.tone}>{status.label}</Badge>
                   <span className="ml-auto text-xs text-zinc-500">
@@ -106,12 +104,12 @@ export function HistoryModal({
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {[
-                    AGENT_EVENTS[execution.event].label,
-                    execution.dialogId && `diálogo ${execution.dialogId}`,
-                    `${execution.attempts} ${execution.attempts === 1 ? 'tentativa' : 'tentativas'}`,
+                    agentEvent(t, execution.event).label,
+                    execution.dialogId && t('history.dialog', { id: execution.dialogId }),
+                    t('history.attempts', { count: execution.attempts }),
                     summary,
                     execution.nextAttemptAt &&
-                      `próxima tentativa ${formatDateTime(execution.nextAttemptAt)}`,
+                      t('history.nextAttempt', { date: formatDateTime(execution.nextAttemptAt) }),
                   ]
                     .filter(Boolean)
                     .join(' · ')}

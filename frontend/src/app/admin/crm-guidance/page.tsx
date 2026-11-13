@@ -10,7 +10,6 @@ import {
 import { useEffect, useState } from 'react';
 import { Alert, Badge, buttonClass, Card, Loading, PageHeader, Spinner } from '@/components/ui';
 import { ApiRequestError } from '@/lib/platform-session';
-import { formatDateTime } from '@/lib/triggers';
 import { inputClass } from '../../app/agents/agent-fields';
 import { useAdmin, useOperator } from '../admin-provider';
 
@@ -23,6 +22,10 @@ const USAGE: Record<CrmGuidanceKey, string> = {
   agenda:
     'Vai na resposta de horarios_livres e nas alternativas de agendar_compromisso: como oferecer os horários e quando marcar.',
 };
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
 
 function message(e: unknown, fallback: string): string {
   return e instanceof ApiRequestError && !e.code.startsWith('HTTP_') ? e.message : fallback;

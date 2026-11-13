@@ -1,0 +1,98 @@
+{
+  "modes": {
+    "SIMPLE": "Simple",
+    "ADVANCED": "Advanced",
+    "TAKEN_OVER": "Manual control"
+  },
+  "modeBadge": "{mode} mode",
+  "createdNotice": "Agent created and already active. The knowledge base and actions are being applied; the status appears below.",
+  "loadError": "Could not load the agent's function.",
+  "publishDone": "Publication complete: the agent is now using the new configuration.",
+  "draftSaved": "Draft saved. The agent only changes when you publish.",
+  "draftError": "Could not save the draft.",
+  "reviewFields": "Review the highlighted fields before publishing.",
+  "previewError": "Could not build the preview.",
+  "nothingChanged": "Nothing changed: the agent is already like this.",
+  "publishing": "Publishing… Trainings and actions are applied in the background.",
+  "publishError": "Could not publish.",
+  "retryError": "Could not retry the publication.",
+  "compareError": "Could not compare with the new version.",
+  "modeChanged": "Mode changed. Publish to apply it to the agent.",
+  "pending": "Publication in progress. Trainings and actions are being applied to the agent.",
+  "lastFailed": "The last publication did not finish: {error}",
+  "retry": "Try again",
+  "retrying": "Retrying…",
+  "updateAvailable": "There is a new version of the {name} function (version {latest}; the agent is on {current}). Check what changes and publish whenever you want.",
+  "updateNoTextChange": "The agent's text does not change; the new version changes other parts of the function.",
+  "updateNeedsAnswers": "The new version asks for new answers: fill in the highlighted fields below.",
+  "showUpdate": "See what changes in the text",
+  "continue": "Continue",
+  "advancedMode": "Advanced mode",
+  "backToSimple": "Back to simple mode",
+  "takeOver": "Take control",
+  "backToForm": "Back to the form",
+  "requests": {
+    "toAdvanced": {
+      "title": "Turn on advanced mode?",
+      "text": "Advanced mode unlocks additional instructions and training with websites and videos. Poorly written instructions can make the service worse: use the form whenever possible."
+    },
+    "toSimple": {
+      "title": "Go back to simple mode?",
+      "text": "When you publish, the additional instructions and the website and video trainings will be removed."
+    },
+    "toTakeOver": {
+      "title": "Take control of the text?",
+      "text": "You will edit the agent's text freely. The agent stops receiving the function's improvements until you go back to the form.",
+      "textAdvanced": "You will edit the agent's text freely. The agent stops receiving the function's improvements until you go back to the form. Website and video trainings belong to advanced mode and are removed when you publish."
+    },
+    "toForm": {
+      "title": "Go back to the form?",
+      "text": "Edits made to the agent's text will be lost. The text is built from the form again, using the latest version of the function. In advanced mode you can add instructions and train with websites and videos.",
+      "advanced": "Go back in advanced mode",
+      "simple": "Go back in simple mode"
+    }
+  },
+  "additional": {
+    "label": "Additional instructions",
+    "hint": "They are added at the end of the agent's text. {count}/{max} characters."
+  },
+  "takenOverText": {
+    "label": "Agent text",
+    "hint": "Free editing. {count}/{max} characters."
+  },
+  "saveDraft": "Save draft",
+  "previewAndPublish": "Preview and publish",
+  "attention": {
+    "title": "{count, plural, one {# attention point} other {# attention points}}",
+    "description": "Warnings do not block publishing, but the agent performs better with them resolved.",
+    "review": "Review",
+    "publishAnyway": "Publish anyway",
+    "body": "Fields with warnings are highlighted in the form. You can fix them first or go on to the preview."
+  },
+  "preview": {
+    "title": "Publication preview",
+    "versionChange": "The function goes from version {from} to {to}.",
+    "default": "Check what changes in the agent.",
+    "back": "Back",
+    "publish": "Publish",
+    "publishing": "Publishing…"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "AGENT_NOT_FOUND": "Agent not found.",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support.",
+    "AGENT_BUSY": "The agent is being changed; wait and try again.",
+    "FUNCTION_NOT_CONFIGURED": "This agent has no function configured.",
+    "FUNCTION_ANSWERS_INVALID": "Review the form answers.",
+    "FUNCTION_COMPILE_FAILED": "Could not build the agent with these answers.",
+    "FUNCTION_PUBLICATION_PENDING": "A publication is in progress; wait for it to finish.",
+    "FUNCTION_NOTHING_TO_RETRY": "There is no failed publication to retry.",
+    "FUNCTION_TAKE_OVER_NOT_ALLOWED": "Only partners can take control of the behavior.",
+    "FUNCTION_NOT_AVAILABLE": "This function is not available.",
+    "FUNCTION_NOT_FOUND": "Function not found.",
+    "FUNCTION_TRANSFER_AGENT_INVALID": "Choose another agent for the transfer.",
+    "PLAN_TRAINING_LIMIT": "You have reached your plan's training limit. Remove knowledge base items or change plans.",
+    "GPTMAKER_REJECTED": "GPTMaker rejected the agent data; nothing was changed. Review the fields.",
+    "GPTMAKER_UNAVAILABLE": "Could not complete the change in GPTMaker right now; nothing was changed. Try again shortly."
+  }
+}
