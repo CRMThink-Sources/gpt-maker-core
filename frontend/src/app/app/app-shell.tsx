@@ -6,6 +6,7 @@ import { useState, type ComponentType, type ReactNode, type SVGProps } from 'rea
 import {
   BellIcon,
   BotIcon,
+  ChatIcon,
   CloseIcon,
   DatabaseIcon,
   MenuIcon,
@@ -29,6 +30,8 @@ interface NavItem {
   adminOnly?: boolean;
   /** Só aparece com as ferramentas do CRM ligadas no ambiente (`features.crmTools` da sessão). */
   requiresCrm?: boolean;
+  /** Link externo (não é rota do app): abre em nova aba e nunca fica "ativo". Vem de `config`. */
+  external?: 'support';
 }
 
 const NAV: Array<{ titleKey?: string; items: NavItem[] }> = [
@@ -82,6 +85,11 @@ const NAV: Array<{ titleKey?: string; items: NavItem[] }> = [
       },
     ],
   },
+  // Canal direto com a CRMThink (spec support-channel): visível a todos os papéis.
+  {
+    titleKey: 'support',
+    items: [{ label: 'supportLink', icon: ChatIcon, external: 'support' }],
+  },
 ];
 
 function roleKey(session: ReturnType<typeof useAppSession>['session']): string {
@@ -91,7 +99,7 @@ function roleKey(session: ReturnType<typeof useAppSession>['session']): string {
 
 /** Layout da área do cliente: aside fixo no desktop, gaveta no celular. */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { session, api } = useAppSession();
+  const { session, api, config } = useAppSession();
   const t = useT('shell');
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -126,7 +134,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         {NAV.map((group, index) => {
           const items = group.items.filter(
             (item) =>
-              (!item.adminOnly || session.user.isAdmin) && (!item.requiresCrm || crmEnabled),
+              (!item.adminOnly || session.user.isAdmin) &&
+              (!item.requiresCrm || crmEnabled) &&
+              (item.external !== 'support' || config.supportUrl),
           );
           if (items.length === 0) return null;
           return (
@@ -139,6 +149,22 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ul className="space-y-0.5">
                 {items.map((item) => {
                   const Icon = item.icon;
+                  if (item.external === 'support' && config.supportUrl) {
+                    return (
+                      <li key={item.label}>
+                        <a
+                          href={config.supportUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setOpen(false)}
+                          className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                        >
+                          <Icon className="size-5 text-zinc-400" />
+                          {t(item.label)}
+                        </a>
+                      </li>
+                    );
+                  }
                   if (!item.href) {
                     return (
                       <li

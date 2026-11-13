@@ -14,6 +14,8 @@ export interface ClientConfig {
   apiBaseUrl: string;
   /** Chave publicável do Stripe (`pk_test_…`/`pk_live_…`) para o checkout embutido; sem ela, a venda fica indisponível. */
   stripePublishableKey: string | null;
+  /** Link do canal de suporte (Bitrix24.Network) aberto em nova aba; sem ele, o item "Suporte" some (spec support-channel). */
+  supportUrl: string | null;
 }
 
 /** Renova antes de vencer para as chamadas não esbarrarem no `exp` (JWT de 15 min). */
