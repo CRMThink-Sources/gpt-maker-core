@@ -1,15 +1,9 @@
 import type { Locale } from '@gptmaker/contracts';
-import {
-  GPTTHINK_MARKET_URL,
-  LANDING_FAQ_IDS,
-  LANDING_FEATURE_IDS,
-  LANDING_TAB_IDS,
-} from '@/lib/landing';
-import { LandingTabs, type LandingTab } from './landing-tabs';
+import { GPTTHINK_MARKET_URL, LANDING_FAQ_IDS, LANDING_FEATURE_IDS } from '@/lib/landing';
+import { LandingTabs } from './landing-tabs';
 import { landingT } from './landing-t';
 import { LanguageSwitcher } from './language-switcher';
-
-const STEPS = [1, 2, 3] as const;
+import { buildTutorialTabs } from './tutorial/tutorial-tabs';
 
 /** CTA de instalar: sempre o Market do Bitrix24, em nova aba (spec landing-page). */
 function InstallLink({ children, className }: { children: string; className: string }) {
@@ -42,15 +36,7 @@ function CheckIcon() {
 export function GptthinkLanding({ locale }: { locale: Locale }) {
   const t = landingT(locale);
 
-  const tabs: LandingTab[] = LANDING_TAB_IDS.map((id) => ({
-    id,
-    label: t(`start.tabs.${id}.label`),
-    title: t(`start.tabs.${id}.title`),
-    steps: STEPS.map((n) => ({
-      text: t(`start.tabs.${id}.step${n}`),
-      counter: t('start.stepOf', { current: n, total: STEPS.length }),
-    })),
-  }));
+  const tabs = buildTutorialTabs(locale);
 
   const primaryBtn =
     'inline-flex items-center justify-center rounded-lg bg-brand-600 px-5 py-3 font-medium text-white hover:bg-brand-700';
@@ -136,11 +122,21 @@ export function GptthinkLanding({ locale }: { locale: Locale }) {
 
         <section
           id="primeiros-passos"
-          className="mx-auto max-w-4xl scroll-mt-20 px-4 py-14 sm:px-6"
+          className="mx-auto max-w-6xl scroll-mt-20 px-4 py-14 sm:px-6"
         >
-          <h2 className="text-3xl font-bold tracking-tight">{t('start.title')}</h2>
-          <p className="mt-3 mb-8 text-zinc-600">{t('start.subtitle')}</p>
-          <LandingTabs tabs={tabs} backLabel={t('start.back')} nextLabel={t('start.next')} />
+          <h2 className="text-center text-3xl font-bold tracking-tight">{t('start.title')}</h2>
+          <p className="mx-auto mt-3 mb-8 max-w-2xl text-center text-zinc-600">
+            {t('start.subtitle')}
+          </p>
+          <LandingTabs
+            tabs={tabs}
+            labels={{
+              back: t('start.back'),
+              next: t('start.next'),
+              finish: t('start.finish'),
+              hint: t('start.hint'),
+            }}
+          />
         </section>
 
         <section id="duvidas" className="mx-auto max-w-3xl scroll-mt-20 px-4 py-14 sm:px-6">

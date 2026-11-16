@@ -11,7 +11,7 @@ Quem chega: (1) quem acabou de instalar o app e precisa saber o que fazer agora;
 ## Objetivos
 
 - Rota pública `/lp/gptthink` (pt-BR) e `/lp/gptthink/en`, `/lp/gptthink/es`, dentro do frontend deste repositório.
-- Mesma estrutura da ThinkZap: cabeçalho com âncoras e seletor de idioma, hero com mockup de conversa, grade de benefícios, tutoriais em abas, FAQ, CTA final, rodapé.
+- Mesma estrutura da ThinkZap: cabeçalho com âncoras e seletor de idioma, hero com mockup de conversa, grade de benefícios, Primeiros passos (tutorial simulado em abas, como os tutoriais da ThinkZap), FAQ, CTA final, rodapé.
 - Páginas estáticas, no idioma certo desde o primeiro byte, com metadados (título, descrição, `hreflang`).
 - Textos nos três idiomas, no mesmo sistema de mensagens que o app já usa.
 
@@ -64,7 +64,7 @@ Quem chega: (1) quem acabou de instalar o app e precisa saber o que fazer agora;
 1. Cabeçalho: Funcionalidades · Primeiros passos · Dúvidas · seletor · "Instalar".
 2. Hero: "Agentes de IA dentro do Bitrix24"; CTA "Instalar no Bitrix24" e "Ver primeiros passos".
 3. Funcionalidades (cards): agentes, treinamento, intenções, funções prontas (SDR, Suporte, Agendamento…), ações no CRM, transferência para humano, fora do horário, chat de teste, créditos por uso.
-4. Primeiros passos (abas): Ativar o app · Criar o agente · Treinar · Intenções e funções · Ativar no canal aberto · Créditos e plano.
+4. Primeiros passos (tutorial simulado: janela do navegador com a tela do Bitrix24/app e destaque laranja clicável): Instalação · Criar o agente · Treinar · Intenções e funções · Canal aberto · Créditos e plano.
 5. Dúvidas frequentes (cerca de 6).
 6. CTA final e rodapé "GPTThink · © 2026".
 

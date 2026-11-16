@@ -10,6 +10,8 @@
 - [x] 2.1 `frontend/src/components/landing/landing-tabs.tsx` (cliente): abas com 3 passos, Voltar/Próximo, limites e reset ao trocar de aba, `role="tablist"/"tab"/"tabpanel"`. Verificar: `landing-tabs.test.tsx` (navegação, limites, reset, `aria-selected`).
 - [x] 2.2 `frontend/src/components/landing/language-switcher.tsx` (servidor): links para as três URLs, idioma atual com `aria-current="page"`. Verificar: `language-switcher.test.tsx`.
 
+- [x] 2.3 Reformular os Primeiros passos como tutorial simulado (formato da LP do ThinkZap): `LandingTabs` com texto, dica, barra, bolinhas e Voltar/Próximo/Concluir; `Hotspot` em `tutorial/tutorial-context.tsx`; 18 telas em `tutorial/screens-*.tsx` (peças em `mock-ui.tsx`) e `buildTutorialTabs`; textos `start`/`screens` nos três idiomas. Verificar: `landing-tabs.test.tsx` (destaque avança, bolinhas, Concluir, limites, teclado) e `tutorial/tutorial-tabs.test.tsx` (cada uma das 18 telas, nos 3 idiomas, tem um único destaque com o nome do alvo e nenhum texto faltando).
+
 ## 3. Página e rotas
 
 - [x] 3.1 `gptthink-landing.tsx` (cabeçalho, hero com mockup, funcionalidades, abas, FAQ, CTA final, rodapé; `<div lang>`; CTAs com `rel="noopener noreferrer"`) e `landing-metadata.ts` (título, descrição, canonical e `hreflang`). Verificar: `gptthink-landing.test.tsx` nos três idiomas.
