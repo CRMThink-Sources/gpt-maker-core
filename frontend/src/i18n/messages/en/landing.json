@@ -1,0 +1,269 @@
+{
+  "meta": {
+    "title": "GPTThink — AI agents inside Bitrix24",
+    "description": "Create, train and deploy AI agents that handle your Bitrix24 open channels, reading and writing data in your CRM."
+  },
+  "nav": {
+    "features": "Features",
+    "start": "Getting started",
+    "faq": "FAQ",
+    "install": "Install",
+    "language": "Language"
+  },
+  "hero": {
+    "title": "Serve your customers with AI agents, without leaving Bitrix24",
+    "subtitle": "Create and train agents that serve your customers on open channels, read and write CRM data, and hand the conversation to a person when needed.",
+    "ctaInstall": "Install on Bitrix24",
+    "ctaStart": "See getting started",
+    "eyebrow": "AI agents inside Bitrix24"
+  },
+  "mock": {
+    "contact": "Open channel · Deal #1042",
+    "customer": "Hi! Do you do installations on weekends?",
+    "agent": "We do! I can book it for Saturday at 9 AM. Does that time work for you?",
+    "note": "The agent updated the deal in the CRM",
+    "name": "Carlos Mendes",
+    "agentLabel": "Ana · AI agent"
+  },
+  "features": {
+    "title": "Everything your agent needs to serve customers",
+    "items": {
+      "agents": {
+        "title": "AI agents",
+        "description": "Create agents with a name, behavior and AI model, and switch them on when they are ready."
+      },
+      "training": {
+        "title": "Training",
+        "description": "Teach the agent with texts, questions and answers, and content from your business."
+      },
+      "intentions": {
+        "title": "Intents",
+        "description": "Define what the agent should do in each situation of the conversation."
+      },
+      "functions": {
+        "title": "Ready-made functions",
+        "description": "Start from templates such as SDR, Support and Scheduling and adjust them to your way of working."
+      },
+      "crm": {
+        "title": "CRM actions",
+        "description": "The agent reads and writes data in Bitrix24 while it serves the customer."
+      },
+      "handoff": {
+        "title": "Handoff to a human",
+        "description": "Pass the conversation to your team when the customer asks or the case requires it."
+      },
+      "offHours": {
+        "title": "Off hours",
+        "description": "Define how the service behaves when your team is not online."
+      },
+      "testChat": {
+        "title": "Test chat",
+        "description": "Talk to the agent before putting it in front of real customers."
+      },
+      "credits": {
+        "title": "Usage-based credits",
+        "description": "Track credit consumption and get warnings before they run out."
+      }
+    },
+    "subtitle": "From training to the open channel, with data in your CRM."
+  },
+  "start": {
+    "title": "Getting started",
+    "subtitle": "Simulations of the real path, inside Bitrix24. Pick a topic and click the orange highlight to move on.",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "stepOf": "Step {current} of {total}",
+    "hint": "Click the orange highlight on the screen:",
+    "screenLabel": "Simulated Bitrix24 screen",
+    "tabs": {
+      "install": {
+        "label": "Installation",
+        "intro": "From the Bitrix24 Market to the app installed on your portal.",
+        "steps": {
+          "1": {
+            "title": "Find GPTThink in the Market",
+            "text": "In your Bitrix24, open the Market, search for GPTThink and click the app card.",
+            "target": "GPTThink"
+          },
+          "2": {
+            "title": "Install from the app page",
+            "text": "The GPTThink page opens over the catalog, with the developer (CRMThink). Click Install.",
+            "target": "INSTALL"
+          },
+          "3": {
+            "title": "Accept the terms and finish",
+            "text": "On the installation screen, accept the Bitrix24 Market terms and finish.",
+            "target": "Finish installation"
+          }
+        }
+      },
+      "create": {
+        "label": "Create the agent",
+        "intro": "From the list of agents to your first agent.",
+        "steps": {
+          "1": {
+            "title": "Start a new agent",
+            "text": "Open GPTThink from the applications menu. In the list of agents, click New agent.",
+            "target": "New agent"
+          },
+          "2": {
+            "title": "Choose the function",
+            "text": "Each agent has a function (Support, SDR, Scheduling…). Pick the one that fits your service and move on.",
+            "target": "Next"
+          },
+          "3": {
+            "title": "Review and create",
+            "text": "In the preview, see what will be created and confirm. You can still adjust everything later.",
+            "target": "Create agent"
+          }
+        }
+      },
+      "train": {
+        "label": "Train",
+        "intro": "What the agent knows about your business.",
+        "steps": {
+          "1": {
+            "title": "Open Trainings",
+            "text": "Inside the agent, go to the Trainings tab.",
+            "target": "Trainings"
+          },
+          "2": {
+            "title": "Add what the agent should know",
+            "text": "The knowledge base items come from the function form, and you can add your own. Training does not use credits.",
+            "target": "Add training"
+          },
+          "3": {
+            "title": "Test the conversation",
+            "text": "With the base ready, click Test and talk to the agent before putting it to work.",
+            "target": "Test"
+          }
+        }
+      },
+      "intentions": {
+        "label": "Intents and functions",
+        "intro": "Actions the agent performs during the conversation.",
+        "steps": {
+          "1": {
+            "title": "Open Intents",
+            "text": "Ready-made functions already bring intents. To see and adjust them, go to the agent’s Intents tab.",
+            "target": "Intents"
+          },
+          "2": {
+            "title": "Create an intent",
+            "text": "Define the name, when to use it and what the agent should collect from the customer. Click New intent.",
+            "target": "New intent"
+          },
+          "3": {
+            "title": "Activate and follow up",
+            "text": "Keep the intent active so the agent can use it, and check History to see when it was used.",
+            "target": "Activate"
+          }
+        }
+      },
+      "channel": {
+        "label": "Open channel",
+        "intro": "Put the agent to work in Bitrix24.",
+        "steps": {
+          "1": {
+            "title": "Open the Open channels",
+            "text": "In the Bitrix24 Contact Center, go to Open channels and open the channel you will use.",
+            "target": "Open channels"
+          },
+          "2": {
+            "title": "Choose the agent",
+            "text": "In the channel settings, under Chatbot, select the GPTThink agent.",
+            "target": "Chatbot"
+          },
+          "3": {
+            "title": "Save and you are done",
+            "text": "Save the channel. The next conversations on it are handled by the agent.",
+            "target": "Save"
+          }
+        }
+      },
+      "credits": {
+        "label": "Credits and plan",
+        "intro": "Balance, usage and free trial.",
+        "steps": {
+          "1": {
+            "title": "Open Credits and plan",
+            "text": "In the GPTThink menu, go to Credits and plan.",
+            "target": "Credits and plan"
+          },
+          "2": {
+            "title": "Start the free trial",
+            "text": "When a free trial is available, start it here so the agent can begin serving.",
+            "target": "Start free trial"
+          },
+          "3": {
+            "title": "Follow the balance",
+            "text": "See the total available and your agents’ usage. You get warnings before credits run out.",
+            "target": "Total available"
+          }
+        }
+      }
+    }
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "q1": "Do I need to know how to code to create an agent?",
+    "a1": "No. You create the agent, describe its behavior and train it in the app itself, inside Bitrix24.",
+    "q2": "On which channels does the agent respond?",
+    "a2": "On the Bitrix24 open channels you connect to the agent.",
+    "q3": "Can the agent use my CRM data?",
+    "a3": "Yes. It can read and write information in Bitrix24 while serving the customer, according to the actions you enable.",
+    "q4": "Can I test the agent before putting it to work?",
+    "a4": "Yes. The test chat lets you talk to the agent before activating it on the channel.",
+    "q5": "What happens when credits run out?",
+    "a5": "Consumption is tracked inside the app, and you get warnings before the balance runs out. Check your balance in the plan area.",
+    "q6": "Can my team take over a conversation?",
+    "a6": "Yes. You define when the conversation goes to a person on your team, and the history stays on the channel."
+  },
+  "cta": {
+    "title": "Bring AI agents into your Bitrix24",
+    "text": "Install from the Bitrix24 Market and follow the getting-started steps to put your agent to work.",
+    "button": "Install on Bitrix24"
+  },
+  "footer": {
+    "text": "AI agents for Bitrix24 · © 2026"
+  },
+  "screens": {
+    "market": {
+      "brand": "Bitrix24 Market",
+      "catalog": "Catalog",
+      "results": "Search results",
+      "free": "Free",
+      "install": "INSTALL",
+      "developer": "Developer"
+    },
+    "install": {
+      "title": "Application installation",
+      "subtitle": "Accept the terms to finish.",
+      "termsMarket": "I have read and accept the Bitrix24 Market Terms of Use",
+      "termsLicense": "I have read and accept the License Agreement",
+      "termsPrivacy": "I have read and accept the Privacy Policy",
+      "conclude": "Finish installation"
+    },
+    "sample": {
+      "agentName": "Ana",
+      "fnSupport": "Support",
+      "fnSdr": "SDR",
+      "fnScheduling": "Scheduling",
+      "intentionName": "Register lead",
+      "intentionFields": "name and phone"
+    },
+    "contact": {
+      "title": "Contact Center",
+      "openChannels": "Open channels",
+      "lineTitle": "Open channel",
+      "chatbot": "Chatbot",
+      "chatbotPlaceholder": "Select the chatbot",
+      "save": "Save"
+    },
+    "plan": {
+      "trialTitle": "Free trial",
+      "trialText": "Start the trial so the agent can begin serving."
+    }
+  }
+}

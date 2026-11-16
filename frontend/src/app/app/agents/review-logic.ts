@@ -16,8 +16,13 @@ import {
   selectedValues,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
+import { createT, type T } from '@/i18n';
+import { DEFAULT_LOCALE } from '@/i18n/config';
 
 /** Lógica pura da revisão (spec agent-knowledge-review), separada da tela para ser testada. */
+
+/** Sem `t` (testes, chamadas fora da tela) vale o idioma padrão. */
+const defaultT = () => createT(DEFAULT_LOCALE, 'assist');
 
 /** Máximo de avisos mostrados por campo; o resto fica em "ver mais" (design D8). */
 export const WARNINGS_PER_FIELD = 3;
@@ -70,10 +75,11 @@ export function reviewCost(
   creditsPerField: number,
   fieldCount: number,
   ownKey: boolean,
+  t: T = defaultT(),
 ): { credits: number; label: string } {
-  if (ownKey) return { credits: 0, label: 'sem uso de créditos' };
+  if (ownKey) return { credits: 0, label: t('review.costNone') };
   const credits = creditsPerField * fieldCount;
-  return { credits, label: `${credits} ${credits === 1 ? 'crédito' : 'créditos'}` };
+  return { credits, label: t('review.cost', { count: credits }) };
 }
 
 /**
@@ -147,13 +153,6 @@ export function attentionCount(form: FunctionTemplateContent, answers: FunctionA
 export function expectationValid(expectation: string): boolean {
   return expectation.trim().length >= EXPECTATION_MIN;
 }
-
-/** Texto do aviso "não pode adicionar" de uma lacuna. */
-export const GAP_REASONS: Record<NonNullable<ReviewGap['reason']>, string> = {
-  FULL: 'O campo já está no máximo de itens.',
-  LIMIT: 'O rascunho passa do limite de caracteres do campo.',
-  REQUIRED: 'O rascunho está incompleto: falta um subcampo obrigatório.',
-};
 
 /** A base com o item sugerido no fim; o `itemKey` é novo e todos os subcampos existem. */
 export function withGapItem(
@@ -237,17 +236,12 @@ export function reviewImpact(results: Array<Pick<ReviewFieldResult, 'items'>>): 
 }
 
 /** Frase do resumo da revisão; `null` quando não há nada a dizer. */
-export function impactMessage(impact: { blocking: number; polishOnly: number }): string | null {
+export function impactMessage(
+  impact: { blocking: number; polishOnly: number },
+  t: T = defaultT(),
+): string | null {
   const parts: string[] = [];
-  if (impact.blocking > 0) {
-    parts.push(
-      impact.blocking === 1
-        ? '1 item atrapalha o agente'
-        : `${impact.blocking} itens atrapalham o agente`,
-    );
-  }
-  if (impact.polishOnly > 0) {
-    parts.push(impact.polishOnly === 1 ? '1 tem melhorias' : `${impact.polishOnly} têm melhorias`);
-  }
-  return parts.length ? parts.join(' e ') : null;
+  if (impact.blocking > 0) parts.push(t('review.impactBlocking', { count: impact.blocking }));
+  if (impact.polishOnly > 0) parts.push(t('review.impactPolish', { count: impact.polishOnly }));
+  return parts.length ? parts.join(t('review.impactJoin')) : null;
 }

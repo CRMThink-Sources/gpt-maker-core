@@ -1,0 +1,149 @@
+{
+  "title": "CRM for the agent",
+  "description": "Choose the Bitrix24 fields the agent can read and explain what each one means for your business.",
+  "refresh": "Refresh from Bitrix24",
+  "refreshing": "Refreshing…",
+  "off": "Agent access to the CRM is not available yet.",
+  "retry": "Try again",
+  "loading": "Reading your Bitrix24 fields…",
+  "readOnly": "You can view these settings. To change them, ask an administrator for access.",
+  "refreshed": "Fields refreshed from Bitrix24.",
+  "refreshUnavailable": "Bitrix24 did not respond right now. The fields below are from the last read; try again in a moment.",
+  "tabsLabel": "CRM sections",
+  "loadedAt": "Data read from Bitrix24 on {date}.",
+  "entities": {
+    "lead": "Leads",
+    "deal": "Deals",
+    "contact": "Contacts",
+    "company": "Companies"
+  },
+  "steps": {
+    "choose": {
+      "title": "Choose the fields",
+      "text": "Only the fields added here reach the agent. The rest of Bitrix24 stays invisible to it."
+    },
+    "explain": {
+      "title": "Explain what they mean",
+      "text": "The description tells the agent how to interpret the field in your business."
+    }
+  },
+  "usage": {
+    "contact": "The agent uses these fields to identify the customer in the conversation.",
+    "deal": "The agent reads these fields on the customer deals (up to 10, from newest to oldest).",
+    "lead": "Used when the conversation is linked to a lead and there is no contact yet.",
+    "company": "Used when the conversation is linked only to a company."
+  },
+  "reads": "{count, plural, one {The agent reads # field} other {The agent reads # fields}} from {entity}.",
+  "noFields": "The agent does not read any {entity} fields yet.",
+  "noFieldsHint": "Use \"Add fields\" to choose.",
+  "addFields": "Add fields",
+  "allAdded": "All fields have already been added",
+  "preview": {
+    "title": "What the agent receives",
+    "note": "Example with fictional values, not a real customer.",
+    "none": "The agent does not receive any {entity} data.",
+    "byField": {
+      "NAME": "Maria",
+      "SECOND_NAME": "Aparecida",
+      "LAST_NAME": "Souza",
+      "POST": "Sales manager",
+      "COMMENTS": "Prefers contact via WhatsApp",
+      "ADDRESS": "Av. Paulista, 1000 - São Paulo",
+      "deal_TITLE": "CRM implementation",
+      "lead_TITLE": "Contact from the website",
+      "company_TITLE": "ACME Ltd",
+      "lead_COMPANY_TITLE": "ACME Ltd"
+    },
+    "byType": {
+      "string": "Example",
+      "integer": "42",
+      "double": "42",
+      "money": "R$ 1,500.00",
+      "date": "03/15/2026",
+      "datetime": "03/15/2026 2:30 PM",
+      "boolean": "Yes",
+      "char": "Yes",
+      "user": "Ana (owner)",
+      "employee": "Ana (owner)",
+      "crm_multifield": "(11) 91234-5678",
+      "crm_currency": "Real",
+      "crm_category": "Sales",
+      "crm_stage": "Proposal sent",
+      "url": "https://example.com",
+      "address": "Av. Paulista, 1000 - São Paulo"
+    }
+  },
+  "fieldTypes": {
+    "string": "Text",
+    "integer": "Integer",
+    "double": "Number",
+    "money": "Amount",
+    "date": "Date",
+    "datetime": "Date and time",
+    "enumeration": "List",
+    "crm_status": "CRM list",
+    "boolean": "Yes/no",
+    "char": "Yes/no",
+    "user": "User",
+    "employee": "User",
+    "crm_multifield": "Phone, email, or contact",
+    "crm_currency": "Currency",
+    "crm_category": "Pipeline",
+    "crm_stage": "Pipeline stage",
+    "url": "Link",
+    "address": "Address"
+  },
+  "boolean": {
+    "yes": "Yes",
+    "no": "No"
+  },
+  "options": {
+    "more": "{list} and {count} more"
+  },
+  "accessStatus": {
+    "DISABLED": "Off",
+    "CONNECTING": "Connecting",
+    "CONNECTED": "Connected",
+    "ERROR": "Connection error"
+  },
+  "codeInBitrix": "Bitrix24 code: {code}",
+  "badges": {
+    "custom": "Custom",
+    "personal": "Personal data",
+    "missing": "No longer exists in the portal"
+  },
+  "remove": "Remove",
+  "removing": "Removing…",
+  "cancel": "Cancel",
+  "save": "Save",
+  "descriptionOf": "Description of {label} for the agent",
+  "descriptionPlaceholder": "E.g.: \"Plan contracted by the customer; Gold includes 24h support\"",
+  "editDescriptionOf": "Edit the description of {label}",
+  "editDescription": "Edit description",
+  "addDescription": "+ Add description",
+  "noDescription": "No description: explain what this field means in your business.",
+  "writeDescription": "Write description",
+  "addFailed": "{count, plural, one {Could not add # field. It stays selected; try again.} other {Could not add # fields. They stay selected; try again.}}",
+  "modal": {
+    "title": "Add {entity} fields",
+    "description": "Select the fields in your Bitrix24 that the agent can read.",
+    "searchLabel": "Search field",
+    "searchPlaceholder": "Search by field name or code",
+    "selected": "{count, plural, =0 {None selected} other {# selected}}",
+    "adding": "Adding…",
+    "addMany": "Add {count} fields",
+    "addOne": "Add field",
+    "note": "After adding, describe what each field means in your business. Phone and email are personal data: add them only if the agent really needs them.",
+    "allAdded": "All fields have already been added.",
+    "noResults": "No fields found for this search."
+  },
+  "errors": {
+    "load": "Could not load the CRM fields.",
+    "refresh": "Could not refresh from Bitrix24. Please try again.",
+    "saveField": "Could not save this field. Please try again.",
+    "invalidDescription": "Review the description.",
+    "CRM_UNAVAILABLE": "Bitrix24 did not respond right now. Wait a moment and try again.",
+    "CRM_ACCESS_BUSY": "Another change to this agent CRM access is in progress. Wait a few seconds and try again.",
+    "CRM_FIELD_NOT_FOUND": "Field not found in the CRM"
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "page": {
+    "loadFailed": "Não foi possível carregar as intenções.",
+    "actionFailed": "Não foi possível concluir. Tente de novo.",
+    "new": "Nova intenção",
+    "title": "Intenções",
+    "description": "Deixe o agente agir durante a conversa: registrar lead, negócio ou tarefa no Bitrix24, ou consultar seus sistemas (status de pedido, segunda via, agendamento).",
+    "emptyTitle": "Nenhuma intenção ainda",
+    "emptyDescription": "Exemplo: quando o cliente perguntar pelo pedido, o agente pede o número, consulta a sua API e responde com o status e a previsão de entrega.",
+    "active": "Ativa",
+    "inactive": "Desativada",
+    "fromFunction": "da função",
+    "syncing": "Sincronizando",
+    "collects": "Coleta:",
+    "confirmRemove": "Remover?",
+    "cancel": "Cancelar",
+    "removing": "Removendo…",
+    "remove": "Remover",
+    "history": "Histórico",
+    "saving": "Salvando…",
+    "deactivate": "Desativar",
+    "activate": "Ativar",
+    "edit": "Editar"
+  },
+  "executions": {
+    "loadFailed": "Não foi possível carregar o histórico.",
+    "title": "Histórico: {name}",
+    "description": "Últimas vezes que o agente usou esta intenção.",
+    "close": "Fechar",
+    "empty": "O agente ainda não usou esta intenção.",
+    "status": {
+      "SUCCESS": "Concluída",
+      "FAILED": "Com falha",
+      "REJECTED": "Recusada"
+    },
+    "dialog": "diálogo {id}",
+    "ok": "ok",
+    "toAgent": "Ao agente: {message}"
+  },
+  "fieldTypes": {
+    "STRING": "Texto",
+    "NUMBER": "Número",
+    "BOOLEAN": "Sim/Não",
+    "DATE": "Data",
+    "DATE_TIME": "Data e hora",
+    "URL": "Link"
+  },
+  "sections": {
+    "actions": "Ação",
+    "name": "Nome",
+    "whenToUse": "Quando usar",
+    "fields": "Campo",
+    "url": "URL",
+    "headers": "Cabeçalho",
+    "params": "Parâmetro",
+    "body": "Corpo",
+    "instructions": "Instrução"
+  },
+  "withFields": {
+    "insertIn": "Inserir campo em {label}",
+    "addField": "+ campo"
+  },
+  "pairs": {
+    "paramName": "nome",
+    "name": "Nome",
+    "storedValue": "Valor guardado (oculto)",
+    "replace": "Trocar",
+    "value": "Valor",
+    "valuePlaceholder": "valor",
+    "remove": "Remover",
+    "addHeader": "Adicionar cabeçalho",
+    "addParam": "Adicionar parâmetro",
+    "headerNote": "Valores de cabeçalho (como chaves de API) ficam guardados cifrados e não aparecem de novo."
+  },
+  "steps": {
+    "intent": {
+      "title": "Intenção",
+      "description": "Quando o agente deve usar esta intenção."
+    },
+    "info": {
+      "title": "Informações",
+      "description": "O que o agente pergunta ao cliente antes de agir (opcional)."
+    },
+    "action": {
+      "title": "Ação",
+      "description": "O que acontece com as informações coletadas."
+    },
+    "response": {
+      "title": "Resposta",
+      "description": "Como o agente responde ao cliente depois da ação."
+    }
+  },
+  "intent": {
+    "name": "Nome",
+    "nameHint": "Curto e único neste agente. Ex.: Registrar interesse.",
+    "namePlaceholder": "Registrar interesse",
+    "whenToUse": "Quando usar",
+    "whenToUseHint": "É o que o agente lê para decidir usar a intenção. Descreva a situação do cliente, não a ação. {count}/{max} caracteres.",
+    "whenToUsePlaceholder": "Quando o cliente quiser falar com um vendedor ou pedir um orçamento"
+  },
+  "fields": {
+    "empty": "Nenhuma informação: o agente age sem perguntar nada ao cliente.",
+    "namePlaceholder": "Ex.: Produto de interesse",
+    "nameLabel": "Nome da informação {number}",
+    "typeLabel": "Tipo da informação {number}",
+    "required": "Obrigatória",
+    "removeLabel": "Remover informação {number}",
+    "descriptionPlaceholder": "Opcional: como pedir ao cliente. Ex.: qual plano ou produto ele quer conhecer",
+    "descriptionLabel": "Descrição da informação {number}",
+    "usedAs": "Usada como",
+    "add": "Adicionar informação"
+  },
+  "action": {
+    "tabParams": "Parâmetros ({count})",
+    "tabHeaders": "Cabeçalhos ({count})",
+    "tabBody": "Corpo",
+    "bitrixTitle": "Ação no Bitrix24",
+    "bitrixDescription": "Lead, negócio, tarefa, comentário ou transferência para um atendente.",
+    "webhookTitle": "Chamar uma API",
+    "webhookDescription": "Consulta ou envia dados para um sistema seu.",
+    "runNote": "Rodam na hora, nesta ordem, no seu portal. Comentário, negócio e transferência usam a conversa em andamento.",
+    "method": "Método",
+    "url": "URL",
+    "urlPlaceholder": "https://sua-api.com/pedidos/'{{'numero_do_pedido'}}'",
+    "autoParams": "O agente monta os parâmetros sozinho",
+    "autoBody": "O agente monta o corpo sozinho",
+    "bodyJson": "Corpo JSON",
+    "bodyPlaceholder": "'{'\n  \"pedido\": \"'{{'numero_do_pedido'}}'\"\n'}'"
+  },
+  "scope": {
+    "field": "Informação: {name}"
+  },
+  "response": {
+    "noUrl": "(sem URL)",
+    "byActions": "Pelo resultado das ações",
+    "byApi": "Pelo retorno da API",
+    "byActionsDescription": "O agente confirma o que foi feito, ex.: \"registrei seu interesse\".",
+    "byApiDescription": "O agente interpreta o retorno e responde com as informações.",
+    "byInstruction": "Por uma instrução sua",
+    "byInstructionDescription": "Você escreve como o agente deve responder.",
+    "instruction": "Instrução de resposta",
+    "instructionPlaceholder": "Agradeça, diga que um vendedor vai continuar o atendimento e não prometa prazos",
+    "summary": "Resumo",
+    "whenPlaceholder": "Quando…",
+    "summaryAsksBitrix": "O agente pergunta {fields} e depois faz no Bitrix24: {what}.",
+    "summaryAsksApi": "O agente pergunta {fields} e depois chama {what}.",
+    "summaryNoAskBitrix": "O agente, sem perguntar nada, faz no Bitrix24: {what}.",
+    "summaryNoAskApi": "O agente, sem perguntar nada, chama {what}.",
+    "noAction": "nenhuma ação",
+    "active": "Intenção ativa"
+  },
+  "editor": {
+    "saveFailed": "Não foi possível salvar a intenção.",
+    "editTitle": "Editar intenção",
+    "newTitle": "Nova intenção",
+    "step": "Passo {current} de {total}",
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "saving": "Salvando…",
+    "save": "Salvar intenção",
+    "next": "Avançar"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Alguns campos estão inválidos. Revise e tente de novo.",
+    "INTENTION_NOT_FOUND": "Intenção não encontrada",
+    "INTENTION_MANAGED_BY_FUNCTION": "Esta intenção vem da função do agente; altere pelo formulário da função",
+    "INTENTION_NAME_RESERVED": "Esse nome é reservado para a consulta do cliente no CRM. Escolha outro nome",
+    "INTENTION_NAME_TAKEN": "Este agente já tem uma intenção com esse nome",
+    "AGENT_OUT_OF_SYNC": "O agente não foi encontrado no GPTMaker; fale com o suporte",
+    "INTENTION_NOT_SYNCED": "A intenção ainda não foi localizada no GPTMaker. Tente de novo em instantes",
+    "INTENTION_BUSY": "Outra intenção deste agente está sendo salva; tente de novo em instantes",
+    "GPTMAKER_TRAIN_FAILED": "O GPTMaker não conseguiu treinar o agente com esta intenção. Revise os textos: descrição de cada campo até 255 caracteres e \"quando usar\" até 512",
+    "GPTMAKER_REJECTED": "O GPTMaker recusou a intenção. Revise os dados e tente de novo",
+    "GPTMAKER_UNAVAILABLE": "Não foi possível salvar a intenção no GPTMaker agora. Tente de novo em instantes"
+  }
+}

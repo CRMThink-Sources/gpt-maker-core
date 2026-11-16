@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createT, useT, type T } from '@/i18n';
 import { bx24Call, insideBitrix } from './bx24';
 
 export type CrmEntity = 'lead' | 'deal';
@@ -35,11 +36,13 @@ interface RawField {
 
 /** Campos que o app preenche sozinho ou que não fazem sentido num template. */
 const HIDDEN = new Set(['ID', 'CATEGORY_ID', 'STAGE_ID', 'CONTACT_ID', 'COMPANY_ID', 'LEAD_ID']);
-/** Sim/não dos campos personalizados. */
-const BOOLEAN_OPTIONS: CrmFieldOption[] = [
-  { id: '1', label: 'Sim' },
-  { id: '0', label: 'Não' },
-];
+/** Sim/não dos campos personalizados (`t` do namespace `crm`). */
+function booleanOptions(t: T): CrmFieldOption[] {
+  return [
+    { id: '1', label: t('boolean.yes') },
+    { id: '0', label: t('boolean.no') },
+  ];
+}
 /** Tipos sem valor em texto (arquivo, vínculos complexos). */
 const UNSUPPORTED_TYPES = new Set([
   'crm_category',
@@ -74,7 +77,8 @@ async function loadFields(entity: CrmEntity): Promise<CrmField[]> {
         if (field.type === 'enumeration' && field.items) {
           options = field.items.map((item) => ({ id: String(item.ID), label: item.VALUE }));
         } else if (field.type === 'boolean') {
-          options = BOOLEAN_OPTIONS;
+          // O rótulo é refeito no idioma ativo em `useCrmFields`; o cache vale para qualquer idioma.
+          options = booleanOptions(createT('pt-BR', 'crm'));
         } else if (field.type === 'crm_status' && field.statusType) {
           options = await statusOptions(field.statusType).catch(() => undefined);
         }
@@ -90,7 +94,9 @@ async function loadFields(entity: CrmEntity): Promise<CrmField[]> {
       }),
   );
   return fields.sort(
-    (a, b) => Number(a.custom) - Number(b.custom) || a.label.localeCompare(b.label, 'pt-BR'),
+    (a, b) =>
+      Number(a.custom) - Number(b.custom) ||
+      a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
   );
 }
 
@@ -130,8 +136,21 @@ export function useCrmFields(entity: CrmEntity | undefined): {
     };
   }, [entity]);
 
-  if (!entity || !insideBitrix()) return { fields: null, failed: true };
-  return state.entity === entity ? state : { fields: null, failed: false };
+  const t = useT('crm');
+  return useMemo(() => {
+    if (!entity || !insideBitrix()) return { fields: null, failed: true };
+    if (state.entity !== entity) return { fields: null, failed: false };
+    // O cache é neutro quanto ao idioma: o sim/não é refeito no idioma ativo.
+    return {
+      ...state,
+      fields:
+        state.fields?.map((field) =>
+          field.type === 'boolean' && field.options
+            ? { ...field, options: booleanOptions(t) }
+            : field,
+        ) ?? null,
+    };
+  }, [entity, state, t]);
 }
 
 export interface DealPipeline {
@@ -159,7 +178,7 @@ async function loadPipelines(): Promise<DealPipeline[]> {
       (a, b) =>
         Number(b.isDefault) - Number(a.isDefault) ||
         a.sort - b.sort ||
-        a.name.localeCompare(b.name, 'pt-BR'),
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
     )
     .map(({ id, name }) => ({ id: Number(id), name }));
 }
@@ -194,7 +213,7 @@ async function loadOpenLines(): Promise<OpenLine[]> {
   );
   return data
     .map((line) => ({ id: Number(line.ID), name: line.LINE_NAME }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 /** Uma chamada por chave e por carregamento da página; falha libera nova tentativa. */
@@ -322,7 +341,7 @@ export function spaFieldsFrom(raw: Record<string, RawSpaField>): SpaField[] {
         ? { options: field.items.map((item) => ({ id: String(item.ID), label: item.VALUE })) }
         : {}),
     }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 }
 
 /** Opção do template ⇒ item da lista de mesmo texto, sem diferenciar maiúsculas. */
@@ -352,7 +371,7 @@ async function loadSpaTypes(): Promise<SpaType[]> {
   );
   return data.types
     .map((type) => ({ entityTypeId: Number(type.entityTypeId), title: type.title }))
-    .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 }
 
 async function loadSpaCategories(entityTypeId: number): Promise<DealPipeline[]> {

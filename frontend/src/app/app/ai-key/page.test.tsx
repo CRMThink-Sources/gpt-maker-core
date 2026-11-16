@@ -1,6 +1,7 @@
 import type { AiKeyView } from '@gptmaker/contracts';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@/i18n';
 import { ApiRequestError } from '@/lib/platform-session';
 import AiKeyPage from './page';
 
@@ -20,6 +21,7 @@ const view = (patch: Partial<AiKeyView> = {}): AiKeyView => ({
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   api.mockReset();
 });
 
@@ -46,6 +48,25 @@ describe('tela da chave Vibecode (6.3)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Testar e salvar' }));
     await waitFor(() =>
       expect(screen.getByText('A chave precisa ter o escopo vibe:ai.')).toBeTruthy(),
+    );
+  });
+
+  it('em inglês: textos e erro traduzidos pelo código', async () => {
+    window.localStorage.setItem('gptthink.locale', 'en');
+    api.mockResolvedValueOnce(view());
+    api.mockRejectedValueOnce(
+      new ApiRequestError(422, 'AI_KEY_SCOPE', 'A chave precisa ter o escopo vibe:ai.'),
+    );
+    render(
+      <I18nProvider>
+        <AiKeyPage />
+      </I18nProvider>,
+    );
+    const input = await screen.findByPlaceholderText(/vibe_api_/);
+    fireEvent.change(input, { target: { value: 'vibe_api_abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Test and save' }));
+    await waitFor(() =>
+      expect(screen.getByText('The key must have the vibe:ai scope.')).toBeTruthy(),
     );
   });
 });

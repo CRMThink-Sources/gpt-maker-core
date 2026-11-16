@@ -1,0 +1,170 @@
+{
+  "title": "Créditos y plan",
+  "description": "Saldo, plan, consumo de los agentes y prueba gratuita de la aplicación.",
+  "loadFailed": "No fue posible cargar.",
+  "intervals": {
+    "monthly": "mes",
+    "quarterly": "trimestre",
+    "semiannual": "semestre",
+    "yearly": "año"
+  },
+  "cycleCredits": {
+    "monthly": "por mes",
+    "quarterly": "por trimestre",
+    "semiannual": "por semestre",
+    "yearly": "por año"
+  },
+  "trial": {
+    "fields": {
+      "name": "Nombre",
+      "email": "Correo electrónico",
+      "phone": "Teléfono o WhatsApp",
+      "company": "Empresa",
+      "role": "Cargo"
+    },
+    "validation": {
+      "required": "Complete este campo",
+      "invalidEmail": "Correo electrónico inválido",
+      "invalidField": "Campo inválido"
+    },
+    "checkFields": "Revise los campos resaltados.",
+    "activateFailed": "No fue posible activar la prueba. Inténtelo de nuevo.",
+    "activate": "Activar prueba gratuita",
+    "privacy": "Los datos quedan con CRMThink para dar seguimiento a su prueba.",
+    "offerTitle": "Prueba gratuita por 14 días",
+    "offerText": "Reciba 500 créditos para que sus agentes atiendan en Bitrix24, sin tarjeta de crédito.",
+    "adminOnly": "Solo el administrador de la aplicación puede activar la prueba gratuita.",
+    "activating": "Activando su prueba gratuita…",
+    "activatingHint": "Los créditos aparecerán en unos instantes. Puede seguir usando la aplicación.",
+    "used": "La prueba gratuita ya se utilizó en este portal. Elija un plan a continuación para que sus agentes sigan atendiendo."
+  },
+  "balance": {
+    "title": "Saldo",
+    "total": "Total disponible",
+    "trial": "Prueba gratuita",
+    "plan": "Plan",
+    "extra": "Adicional",
+    "until": "Hasta el {date}",
+    "validUntil": "Los créditos del plan y los adicionales son válidos hasta el {date}",
+    "renewsAt": "Se renueva el {date}",
+    "cancelsAt": "La suscripción termina el {date}",
+    "consumed": "{count, plural, one {# crédito consumido desde el {date}} other {# créditos consumidos desde el {date}}}",
+    "noCredits": "Sin créditos: los mensajes nuevos se transfieren a los agentes humanos hasta que haya saldo.",
+    "status": {
+      "trialing": "Prueba gratuita",
+      "active": "Plan activo",
+      "past_due": "Pago pendiente",
+      "cancelled": "Suscripción finalizada",
+      "trial_expired": "Prueba finalizada"
+    }
+  },
+  "usage": {
+    "title": "Consumo por día",
+    "description": "Créditos y respuestas por agente. Períodos de hasta {days} días.",
+    "from": "Desde",
+    "to": "Hasta",
+    "agent": "Agente",
+    "allAgents": "Todos",
+    "empty": "Sin consumo en el período.",
+    "day": "Día",
+    "responses": "Respuestas",
+    "credits": "Créditos",
+    "noAgent": "Sin agente",
+    "functionReview": "Revisión de la función",
+    "fields": "{count, plural, one {# campo} other {# campos}}",
+    "total": "Total",
+    "loadFailed": "No fue posible cargar el consumo."
+  },
+  "entries": {
+    "title": "Movimientos",
+    "description": "Créditos recibidos, vencimientos y ajustes. El consumo de las respuestas está arriba.",
+    "empty": "Aún no hay movimientos.",
+    "loadMore": "Cargar más",
+    "loadFailed": "No fue posible cargar los movimientos.",
+    "types": {
+      "GRANT": "Crédito otorgado",
+      "TOPUP": "Créditos adicionales",
+      "ADJUSTMENT": "Ajuste",
+      "EXPIRE": "Vencimiento",
+      "REFUND": "Reembolso"
+    },
+    "wallets": {
+      "TRIAL": "prueba gratuita",
+      "PLAN": "plan",
+      "EXTRA": "adicional"
+    }
+  },
+  "checkout": {
+    "openFailed": "No fue posible abrir el pago. Inténtelo de nuevo.",
+    "subscribeTitle": "Contratar {name}",
+    "buyTitle": "Comprar {name}",
+    "extraValidUntil": "Los créditos adicionales son válidos hasta el {date}, junto con los créditos del plan.",
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "opening": "Abriendo el pago…",
+    "confirmingPlan": "Pago recibido. Confirmando el plan…",
+    "confirmingCredits": "Pago recibido. Confirmando los créditos…",
+    "planActive": "{name} activo. Los créditos del plan ya están en el saldo.",
+    "creditsAdded": "{count, plural, one {# crédito agregado al saldo.} other {# créditos agregados al saldo.}}",
+    "slow": "El pago se completó y la confirmación está tardando. Los créditos aparecerán en el saldo en cuanto llegue; no es necesario pagar de nuevo."
+  },
+  "change": {
+    "doneImmediate": "Plan cambiado a {name}. Los créditos proporcionales aparecerán en el saldo en unos instantes.",
+    "scheduledAt": "Cambio a {name} programado para el {date}. Hasta entonces, el plan actual sigue vigente.",
+    "scheduledRenewal": "Cambio a {name} programado para la renovación. Hasta entonces, el plan actual sigue vigente.",
+    "failed": "No fue posible cambiar de plan. Inténtelo de nuevo.",
+    "title": "Cambiar a {name}",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar cambio",
+    "from": "De",
+    "to": "a",
+    "currentPlan": "plan actual",
+    "detail": "{credits} créditos por ciclo, {price}{interval}",
+    "upgradeBefore": "El cambio se aplica",
+    "now": "ahora",
+    "upgradeAfter": "A su tarjeta se le cobra solo la diferencia proporcional a lo que resta del ciclo, y usted recibe de inmediato la parte proporcional de los créditos adicionales.",
+    "downgradeBefore": "El cambio se aplica en la",
+    "nextRenewal": "próxima renovación",
+    "downgradeAfter": "Hasta entonces, el plan actual y sus créditos siguen vigentes. Si algún agente usa un modelo de IA que el nuevo plan no incluye, pasará a usar el modelo predeterminado."
+  },
+  "offer": {
+    "credits": "{count, plural, one {# crédito} other {# créditos}}",
+    "creditsPerCycle": "{count, plural, one {# crédito} other {# créditos}} {cycle}"
+  },
+  "section": {
+    "title": "Plan",
+    "current": "Plan actual: {name}.",
+    "choose": "Elija un plan para que sus agentes sigan atendiendo.",
+    "managePayment": "Gestionar pago",
+    "pastDue": "El último pago no fue aprobado. Actualice la tarjeta en “Gestionar pago” para no interrumpir la atención de los agentes.",
+    "pastDueUntil": "El último pago no fue aprobado. Actualice la tarjeta en “Gestionar pago” hasta el {date}; después de esa fecha, los agentes quedarán en pausa hasta que se regularice.",
+    "nextPlanAt": "Cambio a {name} programado para el {date}. Hasta entonces, el plan actual sigue vigente.",
+    "nextPlanRenewal": "Cambio a {name} programado para la renovación. Hasta entonces, el plan actual sigue vigente.",
+    "manual": "Su suscripción fue contratada con CRMThink: para cambiar de plan, comuníquese con el equipo comercial.",
+    "adminOnly": "Solo el administrador de la aplicación puede contratar planes.",
+    "checkoutUnavailable": "La contratación desde la aplicación no está disponible en este entorno. Comuníquese con CRMThink.",
+    "subscribe": "Contratar",
+    "noPlans": "No hay planes disponibles por el momento.",
+    "currentBadge": "Plan actual",
+    "changeToThis": "Cambiar a este plan",
+    "extraTitle": "Créditos adicionales",
+    "extraValidUntil": "Válidos hasta el {date}, junto con los créditos del plan.",
+    "extraValidCycle": "Válidos hasta el final del ciclo del plan.",
+    "extraRequiresPlan": "Disponibles para quienes tienen un plan activo.",
+    "buy": "Comprar",
+    "loadFailed": "No fue posible cargar los planes.",
+    "portalFailed": "No fue posible abrir el portal de pago."
+  },
+  "errors": {
+    "PLAN_NOT_AVAILABLE": "Plan no disponible.",
+    "SAME_PLAN": "Este ya es su plan.",
+    "PACKAGE_REQUIRES_PLAN": "Los paquetes de créditos requieren un plan activo.",
+    "MANUAL_SUBSCRIPTION": "Su suscripción fue contratada con CRMThink. Para cambiar de plan, comuníquese con el equipo comercial.",
+    "NO_GATEWAY_SUBSCRIPTION": "Esta suscripción no se paga con tarjeta desde la aplicación. Comuníquese con CRMThink para cambiar el pago.",
+    "SUBSCRIPTION_ALREADY_EXISTS": "Este portal ya tiene un plan activo. Para cambiarlo, use el cambio de plan.",
+    "PAYMENTS_UNAVAILABLE": "Los pagos no están disponibles por el momento. Inténtelo de nuevo en unos instantes.",
+    "TRIAL_ALREADY_USED": "El período de prueba de este portal ya fue utilizado.",
+    "TRIAL_UNAVAILABLE": "La prueba gratuita no está disponible por el momento.",
+    "VALIDATION_ERROR": "Revise los datos del registro."
+  }
+}

@@ -3,6 +3,7 @@
 import type { BitrixSpaValue, FunctionSpaValue } from '@gptmaker/contracts';
 import { useId, useState } from 'react';
 import { buttonClass } from '@/components/ui';
+import { type T, useT } from '@/i18n';
 import { bx24SelectUsers, insideBitrix } from '@/lib/bx24';
 import {
   type SpaField,
@@ -19,7 +20,12 @@ import { Field, inputClass } from './agent-fields';
 
 /** Seletores do Bitrix24 usados nos gatilhos, nas intenções e no formulário da função. */
 
-const STAGE_SUFFIX: Record<string, string> = { success: ' (ganho)', failure: ' (perdido)' };
+/** Nome da etapa com o desfecho (ganho/perdido) quando ela é final. */
+function stageName(t: T, stage: { name: string; semantics?: string | null }): string {
+  if (stage.semantics === 'success') return t('pickers.stageWon', { name: stage.name });
+  if (stage.semantics === 'failure') return t('pickers.stageLost', { name: stage.name });
+  return stage.name;
+}
 
 /**
  * Funil e etapa do negócio novo, escolhidos nas listas do portal; trocar o funil limpa a etapa
@@ -36,13 +42,14 @@ export function PipelineStageFields({
   disabled?: boolean;
   onChange: (next: { categoryId?: number; stageId?: string }) => void;
 }) {
+  const t = useT('agentForm');
   const pipelines = useDealPipelines();
   const stages = useDealStages(pipelines.data ? categoryId : null);
 
   if (!pipelines.data && pipelines.failed) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Funil (CATEGORY_ID)" hint="0 é o funil geral. Vale só para negócio novo.">
+        <Field label={t('pickers.pipelineTyped')} hint={t('pickers.pipelineTypedHint')}>
           <input
             type="number"
             min={0}
@@ -52,7 +59,7 @@ export function PipelineStageFields({
             onChange={(e) => onChange({ categoryId: Number(e.target.value) })}
           />
         </Field>
-        <Field label="Etapa (STAGE_ID)" hint="Ex.: NEW, ou C3:NEW em outro funil.">
+        <Field label={t('pickers.stageTyped')} hint={t('pickers.stageTypedHint')}>
           <input
             className={`${inputClass} font-mono text-xs`}
             value={stageId}
@@ -68,14 +75,14 @@ export function PipelineStageFields({
     stages.data && stageId !== '' && !stages.data.some((stage) => stage.id === stageId);
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Funil" hint="Para negócio novo. Um negócio existente fica no funil dele.">
+      <Field label={t('pickers.pipeline')} hint={t('pickers.pipelineHint')}>
         <select
           className={inputClass}
           value={pipelines.data ? String(categoryId) : ''}
           disabled={disabled || !pipelines.data}
           onChange={(e) => onChange({ categoryId: Number(e.target.value), stageId: '' })}
         >
-          {!pipelines.data && <option value="">Carregando funis…</option>}
+          {!pipelines.data && <option value="">{t('pickers.loadingPipelines')}</option>}
           {pipelines.data?.map((pipeline) => (
             <option key={pipeline.id} value={pipeline.id}>
               {pipeline.name}
@@ -84,12 +91,8 @@ export function PipelineStageFields({
         </select>
       </Field>
       <Field
-        label="Etapa"
-        hint={
-          stageMissing
-            ? `A etapa ${stageId} não existe neste funil; escolha outra.`
-            : 'Negócio existente também vai para esta etapa.'
-        }
+        label={t('pickers.stage')}
+        hint={stageMissing ? t('pickers.stageMissing', { stage: stageId }) : t('pickers.stageHint')}
       >
         {!pipelines.data || !stages.failed ? (
           <select
@@ -98,11 +101,12 @@ export function PipelineStageFields({
             disabled={disabled || !stages.data}
             onChange={(e) => onChange({ stageId: e.target.value })}
           >
-            <option value="">{stages.data ? 'Escolha a etapa…' : 'Carregando etapas…'}</option>
+            <option value="">
+              {stages.data ? t('pickers.chooseStage') : t('pickers.loadingStages')}
+            </option>
             {stages.data?.map((stage) => (
               <option key={stage.id} value={stage.id}>
-                {stage.name}
-                {stage.semantics ? (STAGE_SUFFIX[stage.semantics] ?? '') : ''}
+                {stageName(t, stage)}
               </option>
             ))}
           </select>
@@ -123,7 +127,7 @@ export function ResponsiblePicker({
   value,
   onChange,
   disabled,
-  label = 'Responsável',
+  label,
   knownName,
 }: {
   value: number;
@@ -133,15 +137,21 @@ export function ResponsiblePicker({
   /** Nome do usuário já salvo, para não mostrar só o número ao abrir a tela. */
   knownName?: string;
 }) {
+  const t = useT('agentForm');
   const [name, setName] = useState<string | null>(null);
   const canPick = insideBitrix();
   return (
-    <Field label={label} hint={canPick ? undefined : 'Informe o id do usuário no Bitrix24.'}>
+    <Field
+      label={label ?? t('pickers.responsible')}
+      hint={canPick ? undefined : t('pickers.userIdHint')}
+    >
       <div className="mt-1.5 flex items-center gap-2">
         {canPick ? (
           <>
             <span className="text-sm text-zinc-700">
-              {value > 0 ? (name ?? knownName ?? `Usuário #${value}`) : 'Nenhum escolhido'}
+              {value > 0
+                ? (name ?? knownName ?? t('pickers.user', { id: value }))
+                : t('pickers.noneChosen')}
             </span>
             <button
               type="button"
@@ -155,7 +165,7 @@ export function ResponsiblePicker({
                 }
               }}
             >
-              Escolher
+              {t('pickers.choose')}
             </button>
           </>
         ) : (
@@ -181,8 +191,8 @@ export function UsersPicker({
   value,
   onChange,
   disabled,
-  label = 'Usuários',
-  hint = 'Recebem um de cada vez, em rodízio.',
+  label,
+  hint,
   max = 20,
   knownNames = {},
 }: {
@@ -197,12 +207,15 @@ export function UsersPicker({
   /** Nomes dos usuários já salvos, para não mostrar só o número ao abrir a tela. */
   knownNames?: Record<number, string>;
 }) {
+  const t = useT('agentForm');
   const [pickedNames, setNames] = useState<Record<number, string>>({});
   const names = { ...knownNames, ...pickedNames };
   const [text, setText] = useState(value.join(', '));
+  const usersLabel = label ?? t('pickers.users');
+  const usersHint = hint ?? t('pickers.usersHint');
   if (!insideBitrix()) {
     return (
-      <Field label={label} hint={`Ids dos usuários no Bitrix24, separados por vírgula. ${hint}`}>
+      <Field label={usersLabel} hint={t('pickers.userIdsHint', { hint: usersHint })}>
         <input
           className={`${inputClass} mt-1.5`}
           value={text}
@@ -220,19 +233,21 @@ export function UsersPicker({
     );
   }
   return (
-    <Field label={label} hint={hint}>
+    <Field label={usersLabel} hint={usersHint}>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        {value.length === 0 && <span className="text-sm text-zinc-700">Nenhum escolhido</span>}
+        {value.length === 0 && (
+          <span className="text-sm text-zinc-700">{t('pickers.noneChosen')}</span>
+        )}
         {value.map((id) => (
           <span
             key={id}
             className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pr-1 pl-2.5 text-xs text-zinc-700"
           >
-            {names[id] ?? `Usuário #${id}`}
+            {names[id] ?? t('pickers.user', { id })}
             {!disabled && (
               <button
                 type="button"
-                aria-label={`Tirar ${names[id] ?? id}`}
+                aria-label={t('pickers.removeUser', { name: names[id] ?? id })}
                 className="rounded-full px-1 hover:bg-zinc-200"
                 onClick={() => onChange(value.filter((item) => item !== id))}
               >
@@ -257,7 +272,7 @@ export function UsersPicker({
             );
           }}
         >
-          Adicionar
+          {t('pickers.addUser')}
         </button>
       </div>
     </Field>
@@ -269,20 +284,19 @@ export function OpenLinePicker({
   value,
   onChange,
   disabled,
-  label = 'Canal aberto do Bitrix24',
+  label,
 }: {
   value: number;
   onChange: (id: number) => void;
   disabled?: boolean;
   label?: string;
 }) {
+  const t = useT('agentForm');
   const lines = useOpenLines();
+  const lineLabel = label ?? t('pickers.openLine');
   if (!lines.data) {
     return (
-      <Field
-        label={label}
-        hint={lines.failed ? 'Informe o id do canal aberto no Bitrix24.' : undefined}
-      >
+      <Field label={lineLabel} hint={lines.failed ? t('pickers.openLineIdHint') : undefined}>
         <input
           type="number"
           min={1}
@@ -295,14 +309,14 @@ export function OpenLinePicker({
     );
   }
   return (
-    <Field label={label}>
+    <Field label={lineLabel}>
       <select
         className={`${inputClass} mt-1.5`}
         value={value || ''}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
       >
-        <option value="">Escolha um canal</option>
+        <option value="">{t('pickers.chooseOpenLine')}</option>
         {lines.data.map((line) => (
           <option key={line.id} value={line.id}>
             {line.name}
@@ -319,7 +333,7 @@ export function AgentPicker({
   agents,
   onChange,
   disabled,
-  label = 'Agente',
+  label,
 }: {
   value: string;
   agents: Array<{ id: string; name: string }>;
@@ -327,10 +341,11 @@ export function AgentPicker({
   disabled?: boolean;
   label?: string;
 }) {
+  const t = useT('agentForm');
   return (
     <Field
-      label={label}
-      hint={agents.length === 0 ? 'Crie outro agente para poder transferir para ele.' : undefined}
+      label={label ?? t('pickers.agent')}
+      hint={agents.length === 0 ? t('pickers.noOtherAgent') : undefined}
     >
       <select
         className={`${inputClass} mt-1.5`}
@@ -338,10 +353,10 @@ export function AgentPicker({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       >
-        <option value="">Escolha um agente</option>
+        <option value="">{t('pickers.chooseAgent')}</option>
         {/* Escolhido antes e removido depois: aparece até o cliente trocar (D17). */}
         {value && !agents.some((item) => item.id === value) && (
-          <option value={value}>Agente removido: escolha outro</option>
+          <option value={value}>{t('pickers.agentRemoved')}</option>
         )}
         {agents.map((item) => (
           <option key={item.id} value={item.id}>
@@ -373,6 +388,7 @@ export function SpaFields({
   /** Mensagem de problema de um valor (`campo.valor`). */
   issueOf?: (valueId: string) => string | undefined;
 }) {
+  const t = useT('agentForm');
   const entityTypeId = value?.entityTypeId ?? null;
   const types = useSpaTypes();
   const categories = useSpaCategories(entityTypeId);
@@ -409,7 +425,7 @@ export function SpaFields({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Processo inteligente">
+        <Field label={t('spa.type')}>
           {typed ? (
             <input
               type="number"
@@ -434,7 +450,7 @@ export function SpaFields({
                 })) ?? null
               }
               value={entityTypeId ? String(entityTypeId) : ''}
-              placeholder={types.data ? 'Digite para buscar o SPA…' : 'Carregando…'}
+              placeholder={types.data ? t('spa.search') : t('spa.loading')}
               disabled={disabled}
               onChange={(next) =>
                 // O mesmo SPA de novo não limpa o mapeamento.
@@ -444,7 +460,7 @@ export function SpaFields({
             />
           )}
         </Field>
-        <Field label="Funil">
+        <Field label={t('spa.pipeline')}>
           {typed || (categories.failed && !categories.data) ? (
             <input
               type="number"
@@ -461,7 +477,9 @@ export function SpaFields({
               disabled={disabled || !categories.data}
               onChange={(e) => update({ categoryId: Number(e.target.value), stageId: undefined })}
             >
-              {!categories.data && <option value="">{entityTypeId ? 'Carregando…' : '—'}</option>}
+              {!categories.data && (
+                <option value="">{entityTypeId ? t('spa.loading') : '—'}</option>
+              )}
               {categories.data?.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -470,7 +488,7 @@ export function SpaFields({
             </select>
           )}
         </Field>
-        <Field label="Etapa inicial">
+        <Field label={t('spa.initialStage')}>
           {typed || (stages.failed && !stages.data) ? (
             <input
               className={`${inputClass} font-mono text-xs`}
@@ -491,11 +509,10 @@ export function SpaFields({
                 })
               }
             >
-              <option value="">{stages.data ? 'A primeira do funil' : '—'}</option>
+              <option value="">{stages.data ? t('spa.firstOfPipeline') : '—'}</option>
               {stages.data?.map((stage) => (
                 <option key={stage.id} value={stage.id}>
-                  {stage.name}
-                  {stage.semantics ? (STAGE_SUFFIX[stage.semantics] ?? '') : ''}
+                  {stageName(t, stage)}
                 </option>
               ))}
             </select>
@@ -506,7 +523,7 @@ export function SpaFields({
       {entityTypeId && (
         <div className="rounded-lg border border-zinc-200">
           <p className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600">
-            Em qual campo do SPA vai cada informação
+            {t('spa.mapping')}
           </p>
           <ul className="divide-y divide-zinc-100">
             {values.map((declared) => {
@@ -518,7 +535,7 @@ export function SpaFields({
                   <div className="text-sm">
                     <span className="font-medium text-zinc-800">{declared.label}</span>
                     {!declared.required && (
-                      <span className="ml-1.5 text-xs text-zinc-400">(opcional)</span>
+                      <span className="ml-1.5 text-xs text-zinc-400">{t('spa.optional')}</span>
                     )}
                     {declared.help && (
                       <span className="mt-0.5 block text-xs text-zinc-500">{declared.help}</span>
@@ -547,7 +564,7 @@ export function SpaFields({
                               disabled={disabled}
                               onChange={(e) => setLink(declared, option, Number(e.target.value))}
                             >
-                              <option value="">Pelo nome do item</option>
+                              <option value="">{t('spa.byItemName')}</option>
                               {field.options!.map((item) => (
                                 <option key={item.id} value={item.id}>
                                   {item.label}
@@ -586,6 +603,7 @@ function SpaFieldSelect({
   disabled?: boolean;
   onChange: (code: string) => void;
 }) {
+  const t = useT('agentForm');
   if (typed) {
     return (
       <input
@@ -607,16 +625,16 @@ function SpaFieldSelect({
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">
-        {!fields ? 'Carregando campos…' : required ? 'Escolha o campo…' : 'Não gravar'}
+        {!fields ? t('spa.loadingFields') : required ? t('spa.chooseField') : t('spa.dontSave')}
       </option>
       {/* Escolhido antes e apagado no portal depois: aparece até o cliente trocar. */}
       {code && fields && !fields.some((field) => field.code === code) && (
-        <option value={code}>Campo removido ({code}): escolha outro</option>
+        <option value={code}>{t('spa.fieldRemoved', { code })}</option>
       )}
       {fields?.map((field) => (
         <option key={field.code} value={field.code}>
           {field.label}
-          {field.options ? ' (lista)' : ''}
+          {field.options ? ` ${t('spa.listSuffix')}` : ''}
         </option>
       ))}
     </select>
@@ -645,6 +663,7 @@ export function SearchSelect({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const t = useT('agentForm');
   const listId = useId();
   // `null`: fechado, o campo mostra o escolhido.
   const [query, setQuery] = useState<string | null>(null);
@@ -707,7 +726,9 @@ export function SearchSelect({
           role="listbox"
           className="absolute z-20 mt-1 max-h-64 w-80 min-w-full max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg"
         >
-          {matches.length === 0 && <li className="px-3 py-2 text-zinc-500">Nenhum resultado</li>}
+          {matches.length === 0 && (
+            <li className="px-3 py-2 text-zinc-500">{t('spa.noResults')}</li>
+          )}
           {matches.map((option, index) => (
             <li
               key={option.value}

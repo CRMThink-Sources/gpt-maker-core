@@ -11,15 +11,18 @@ import {
 } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Badge, buttonClass, Card, Loading, Spinner, type Tone } from '@/components/ui';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { inputClass } from '../agents/agent-fields';
 import { useAppSession } from '../session-provider';
 
 const DAY_MS = 86_400_000;
 
-/** Número com separador de milhar (pt-BR). */
-function credits(value: number): string {
-  return value.toLocaleString('pt-BR');
+type Format = ReturnType<typeof useFormat>;
+
+/** Número com separador de milhar no idioma ativo. */
+function credits(format: Format, value: number): string {
+  return format.number(value);
 }
 
 /** AAAA-MM-DD do instante no fuso do extrato. */
@@ -27,22 +30,21 @@ function isoDay(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: CREDITS_TIMEZONE }).format(date);
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: CREDITS_TIMEZONE });
+function formatDate(format: Format, iso: string): string {
+  return format.dateTime(new Date(iso), { timeZone: CREDITS_TIMEZONE, dateStyle: 'short' });
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
+function formatDateTime(format: Format, iso: string): string {
+  return format.dateTime(new Date(iso), {
     timeZone: CREDITS_TIMEZONE,
     dateStyle: 'short',
     timeStyle: 'short',
   });
 }
 
-/** `2026-10-03` ⇒ `03/10/2026`, sem passar por fuso (já é o dia do extrato). */
-function formatDay(day: string): string {
-  const [y, m, d] = day.split('-');
-  return `${d}/${m}/${y}`;
+/** `2026-10-03` ⇒ `03/10/2026` (pt-BR), sem passar por fuso (já é o dia do extrato). */
+function formatDay(format: Format, day: string): string {
+  return format.dateTime(new Date(`${day}T12:00:00Z`), { timeZone: 'UTC', dateStyle: 'short' });
 }
 
 function SectionTitle({ title, description }: { title: string; description?: string }) {
@@ -65,61 +67,69 @@ function BalanceCard({
   hint?: string;
   highlight?: boolean;
 }) {
+  const format = useFormat();
   return (
     <Card className={`p-4 ${highlight ? 'border-brand-200 bg-brand-50/40' : ''}`}>
       <p className="text-xs font-medium text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">{credits(value)}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
+        {credits(format, value)}
+      </p>
       {hint && <p className="mt-0.5 text-xs text-zinc-500">{hint}</p>}
     </Card>
   );
 }
 
-const STATUS_LABELS: Record<NonNullable<CreditSummaryView['subscription']>['status'], string> = {
-  trialing: 'Teste grátis',
-  active: 'Plano ativo',
-  past_due: 'Pagamento pendente',
-  cancelled: 'Assinatura encerrada',
-  trial_expired: 'Teste encerrado',
-};
-
 /** Saldos por carteira, validade e consumo do ciclo (spec credit-billing, "Consulta de saldo"). */
 export function BalanceSection({ summary }: { summary: CreditSummaryView }) {
+  const t = useT('plan');
+  const format = useFormat();
   const showTrial = summary.trial.balance > 0 || summary.trial.endsAt !== null;
   const facts: string[] = [];
   if (summary.expiresAt) {
-    facts.push(`Créditos do plano e adicionais valem até ${formatDate(summary.expiresAt)}`);
+    facts.push(t('balance.validUntil', { date: formatDate(format, summary.expiresAt) }));
   }
-  if (summary.renewsAt) facts.push(`Renova em ${formatDate(summary.renewsAt)}`);
-  if (summary.cancelAt) facts.push(`Assinatura encerra em ${formatDate(summary.cancelAt)}`);
+  if (summary.renewsAt) {
+    facts.push(t('balance.renewsAt', { date: formatDate(format, summary.renewsAt) }));
+  }
+  if (summary.cancelAt) {
+    facts.push(t('balance.cancelsAt', { date: formatDate(format, summary.cancelAt) }));
+  }
   if (summary.cycleStart) {
     facts.push(
-      `${credits(summary.consumedInCycle)} créditos consumidos desde ${formatDate(summary.cycleStart)}`,
+      t('balance.consumed', {
+        count: summary.consumedInCycle,
+        date: formatDate(format, summary.cycleStart),
+      }),
     );
   }
 
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-semibold text-zinc-900">Saldo</h2>
+        <h2 className="text-base font-semibold text-zinc-900">{t('balance.title')}</h2>
         {summary.subscription && (
           <Badge tone={summary.subscription.status === 'past_due' ? 'amber' : 'zinc'}>
-            {STATUS_LABELS[summary.subscription.status]}
+            {t(`balance.status.${summary.subscription.status}`)}
           </Badge>
         )}
       </div>
       <div
         className={`grid gap-3 sm:grid-cols-2 ${showTrial ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
       >
-        <BalanceCard label="Total disponível" value={summary.total} highlight />
+        <BalanceCard label={t('balance.total')} value={summary.total} highlight />
         {showTrial && (
           <BalanceCard
-            label="Teste grátis"
+            label={t('balance.trial')}
             value={summary.trial.balance}
-            hint={summary.trial.endsAt ? `Até ${formatDate(summary.trial.endsAt)}` : undefined}
+            hint={
+              summary.trial.endsAt
+                ? t('balance.until', { date: formatDate(format, summary.trial.endsAt) })
+                : undefined
+            }
           />
         )}
-        <BalanceCard label="Plano" value={summary.plan.balance} />
-        <BalanceCard label="Adicional" value={summary.extra.balance} />
+        <BalanceCard label={t('balance.plan')} value={summary.plan.balance} />
+        <BalanceCard label={t('balance.extra')} value={summary.extra.balance} />
       </div>
       {facts.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-600">
@@ -130,7 +140,7 @@ export function BalanceSection({ summary }: { summary: CreditSummaryView }) {
       )}
       {summary.total <= 0 && (
         <Alert tone="warning" className="mt-3">
-          Sem créditos: as novas mensagens são transferidas para os atendentes até que haja saldo.
+          {t('balance.noCredits')}
         </Alert>
       )}
     </section>
@@ -143,6 +153,9 @@ export function BalanceSection({ summary }: { summary: CreditSummaryView }) {
  */
 export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
   const { api } = useAppSession();
+  const t = useT('plan');
+  const format = useFormat();
+  const errorText = useErrorMessage('plan');
   const today = isoDay(new Date());
   const [from, setFrom] = useState(() =>
     isoDay(
@@ -178,23 +191,25 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
       .catch(
         (e: unknown) =>
           !cancelled &&
-          setResult({ query, error: errorMessage(e, 'Não foi possível carregar o consumo.') }),
+          setResult({ query, error: errorMessage(e, t('usage.loadFailed'), errorText) }),
       );
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, query]);
 
   return (
     <section>
       <SectionTitle
-        title="Consumo por dia"
-        description={`Créditos e respostas por agente. Períodos de até ${USAGE_MAX_DAYS} dias.`}
+        title={t('usage.title')}
+        description={t('usage.description', { days: USAGE_MAX_DAYS })}
       />
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="font-medium text-zinc-800">De</span>
+            <span className="font-medium text-zinc-800">{t('usage.from')}</span>
             <input
               type="date"
               value={from}
@@ -204,7 +219,7 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
             />
           </label>
           <label className="text-sm">
-            <span className="font-medium text-zinc-800">Até</span>
+            <span className="font-medium text-zinc-800">{t('usage.to')}</span>
             <input
               type="date"
               value={to}
@@ -215,13 +230,13 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
             />
           </label>
           <label className="min-w-48 flex-1 text-sm sm:flex-none">
-            <span className="font-medium text-zinc-800">Agente</span>
+            <span className="font-medium text-zinc-800">{t('usage.agent')}</span>
             <select
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
               className={inputClass}
             >
-              <option value="">Todos</option>
+              <option value="">{t('usage.allAgents')}</option>
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name}
@@ -239,7 +254,7 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
         )}
 
         {usage && usage.rows.length === 0 && !error && (
-          <p className="mt-4 text-sm text-zinc-500">Nenhum consumo no período.</p>
+          <p className="mt-4 text-sm text-zinc-500">{t('usage.empty')}</p>
         )}
 
         {usage && usage.rows.length > 0 && (
@@ -247,10 +262,10 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
             <table className="w-full min-w-md text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
-                  <th className="py-2 pr-4 font-medium">Dia</th>
-                  <th className="py-2 pr-4 font-medium">Agente</th>
-                  <th className="py-2 pr-4 text-right font-medium">Respostas</th>
-                  <th className="py-2 text-right font-medium">Créditos</th>
+                  <th className="py-2 pr-4 font-medium">{t('usage.day')}</th>
+                  <th className="py-2 pr-4 font-medium">{t('usage.agent')}</th>
+                  <th className="py-2 pr-4 text-right font-medium">{t('usage.responses')}</th>
+                  <th className="py-2 text-right font-medium">{t('usage.credits')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -259,20 +274,22 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
                     key={`${row.day}:${row.agentId ?? '-'}:${row.kind}`}
                     className="border-b border-zinc-100 last:border-0"
                   >
-                    <td className="py-2 pr-4 text-zinc-700">{formatDay(row.day)}</td>
+                    <td className="py-2 pr-4 text-zinc-700">{formatDay(format, row.day)}</td>
                     <td className="py-2 pr-4 text-zinc-900">
-                      {row.agentName ?? 'Sem agente'}
+                      {row.agentName ?? t('usage.noAgent')}
                       {row.kind === 'FUNCTION_REVIEW' && (
-                        <span className="ml-2 text-xs text-zinc-500">Revisão da função</span>
+                        <span className="ml-2 text-xs text-zinc-500">
+                          {t('usage.functionReview')}
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-4 text-right tabular-nums text-zinc-700">
                       {row.kind === 'FUNCTION_REVIEW'
-                        ? `${credits(row.responses)} campos`
-                        : credits(row.responses)}
+                        ? t('usage.fields', { count: row.responses })
+                        : credits(format, row.responses)}
                     </td>
                     <td className="py-2 text-right tabular-nums text-zinc-900">
-                      {credits(row.credits)}
+                      {credits(format, row.credits)}
                     </td>
                   </tr>
                 ))}
@@ -280,12 +297,14 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
               <tfoot>
                 <tr className="border-t border-zinc-200 font-medium text-zinc-900">
                   <td className="py-2 pr-4" colSpan={2}>
-                    Total
+                    {t('usage.total')}
                   </td>
                   <td className="py-2 pr-4 text-right tabular-nums">
-                    {credits(usage.totals.responses)}
+                    {credits(format, usage.totals.responses)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{credits(usage.totals.credits)}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {credits(format, usage.totals.credits)}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -296,23 +315,20 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
   );
 }
 
-const ENTRY_LABELS: Record<CreditEntryView['type'], { label: string; tone: Tone }> = {
-  GRANT: { label: 'Crédito concedido', tone: 'green' },
-  TOPUP: { label: 'Créditos adicionais', tone: 'green' },
-  ADJUSTMENT: { label: 'Ajuste', tone: 'zinc' },
-  EXPIRE: { label: 'Expiração', tone: 'zinc' },
-  REFUND: { label: 'Estorno', tone: 'amber' },
-};
-
-const WALLET_LABELS: Record<CreditEntryView['wallet'], string> = {
-  TRIAL: 'teste grátis',
-  PLAN: 'plano',
-  EXTRA: 'adicional',
+const ENTRY_TONES: Record<CreditEntryView['type'], Tone> = {
+  GRANT: 'green',
+  TOPUP: 'green',
+  ADJUSTMENT: 'zinc',
+  EXPIRE: 'zinc',
+  REFUND: 'amber',
 };
 
 /** Movimentações do ledger, menos os débitos por resposta (que estão no consumo por dia). */
 export function EntriesSection() {
   const { api } = useAppSession();
+  const t = useT('plan');
+  const format = useFormat();
+  const errorText = useErrorMessage('plan');
   const [entries, setEntries] = useState<CreditEntryView[] | null>(null);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -335,12 +351,13 @@ export function EntriesSection() {
         setNextBefore(page.nextBefore);
       })
       .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar as movimentações.')),
+        (e: unknown) => !cancelled && setError(errorMessage(e, t('entries.loadFailed'), errorText)),
       );
     return () => {
       cancelled = true;
     };
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPage]);
 
   async function loadMore() {
@@ -351,7 +368,7 @@ export function EntriesSection() {
       setEntries((current) => [...(current ?? []), ...page.entries]);
       setNextBefore(page.nextBefore);
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar as movimentações.'));
+      setError(errorMessage(e, t('entries.loadFailed'), errorText));
     } finally {
       setLoadingMore(false);
     }
@@ -359,10 +376,7 @@ export function EntriesSection() {
 
   return (
     <section>
-      <SectionTitle
-        title="Movimentações"
-        description="Créditos recebidos, expirações e ajustes. O consumo das respostas está acima."
-      />
+      <SectionTitle title={t('entries.title')} description={t('entries.description')} />
       <Card>
         {error && (
           <Alert tone="error" className="m-4">
@@ -371,19 +385,21 @@ export function EntriesSection() {
         )}
         {!entries && !error && <Loading />}
         {entries && entries.length === 0 && (
-          <p className="p-4 text-sm text-zinc-500">Nenhuma movimentação ainda.</p>
+          <p className="p-4 text-sm text-zinc-500">{t('entries.empty')}</p>
         )}
         {entries && entries.length > 0 && (
           <ul className="divide-y divide-zinc-100">
             {entries.map((entry) => {
-              const meta = ENTRY_LABELS[entry.type];
               return (
                 <li key={entry.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={ENTRY_TONES[entry.type]}>
+                        {t(`entries.types.${entry.type}`)}
+                      </Badge>
                       <span className="text-xs text-zinc-500">
-                        {WALLET_LABELS[entry.wallet]} · {formatDateTime(entry.createdAt)}
+                        {t(`entries.wallets.${entry.wallet}`)} ·{' '}
+                        {formatDateTime(format, entry.createdAt)}
                       </span>
                     </div>
                     {entry.reason && (
@@ -396,7 +412,7 @@ export function EntriesSection() {
                     }`}
                   >
                     {entry.amount > 0 ? '+' : '−'}
-                    {credits(Math.abs(entry.amount))}
+                    {credits(format, Math.abs(entry.amount))}
                   </span>
                 </li>
               );
@@ -412,7 +428,7 @@ export function EntriesSection() {
               className={buttonClass('ghost', 'sm')}
             >
               {loadingMore && <Spinner className="size-4" />}
-              Carregar mais
+              {t('entries.loadMore')}
             </button>
           </div>
         )}

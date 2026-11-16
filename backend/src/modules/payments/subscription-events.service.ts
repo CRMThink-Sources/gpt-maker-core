@@ -121,10 +121,11 @@ export class SubscriptionEventsService {
             tenantId: tenant.id,
             type: 'PAYMENT_FAILED',
             dedupeKey: `${subscriptionId}:${state.graceUntil.toISOString()}`,
-            message: MESSAGES.paymentFailed({
-              graceUntil: state.graceUntil,
-              invoiceUrl: event.data.hostedInvoiceUrl ?? null,
-            }),
+            message: (locale) =>
+              MESSAGES.paymentFailed(locale, {
+                graceUntil: state.graceUntil,
+                invoiceUrl: event.data.hostedInvoiceUrl ?? null,
+              }),
           });
         }
         return;
@@ -144,10 +145,11 @@ export class SubscriptionEventsService {
           tenantId: tenant.id,
           type: 'PERIOD_ENDING',
           dedupeKey: `${subscriptionId}:${event.data.periodEnd}:${event.data.daysLeft}`,
-          message: MESSAGES.periodEnding({
-            daysLeft: event.data.daysLeft,
-            periodEnd: new Date(event.data.periodEnd),
-          }),
+          message: (locale) =>
+            MESSAGES.periodEnding(locale, {
+              daysLeft: event.data.daysLeft,
+              periodEnd: new Date(event.data.periodEnd),
+            }),
         });
         return;
       }

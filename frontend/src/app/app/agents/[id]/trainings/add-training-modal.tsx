@@ -9,8 +9,9 @@ import { useState, type ComponentType, type FormEvent, type SVGProps } from 'rea
 import { GlobeIcon, TextIcon, VideoIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass } from '@/components/ui';
+import { useErrorMessage, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
-import { TRAINING_INTERVALS } from '@/lib/trainings';
+import { TRAINING_INTERVAL_KEYS, trainingIntervalLabel } from '@/lib/trainings';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
 import { TrainingImageField } from '../../training-image-field';
@@ -19,13 +20,11 @@ type Kind = 'TEXT' | 'WEBSITE' | 'VIDEO';
 
 const KINDS: Array<{
   kind: Kind;
-  label: string;
-  hint: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 }> = [
-  { kind: 'TEXT', label: 'Texto', hint: 'Um texto, com imagem se quiser', icon: TextIcon },
-  { kind: 'WEBSITE', label: 'Site', hint: 'Páginas do seu site', icon: GlobeIcon },
-  { kind: 'VIDEO', label: 'Vídeo', hint: 'Link de um vídeo', icon: VideoIcon },
+  { kind: 'TEXT', icon: TextIcon },
+  { kind: 'WEBSITE', icon: GlobeIcon },
+  { kind: 'VIDEO', icon: VideoIcon },
 ];
 
 /**
@@ -45,6 +44,9 @@ export function AddTrainingModal({
   onCreated: () => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('trainings');
+  const tc = useT('common');
+  const translateError = useErrorMessage('trainings');
   const kinds = KINDS.filter((option) => option.kind === 'TEXT' || mediaAllowed);
   const [kind, setKind] = useState<Kind>('TEXT');
   const [url, setUrl] = useState('');
@@ -70,15 +72,15 @@ export function AddTrainingModal({
       await api(`/app/agents/${agentId}/trainings`, { method: 'POST', body: JSON.stringify(body) });
       onCreated();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível enviar o treinamento. Tente de novo.'));
+      setError(errorMessage(e, t('add.error'), translateError));
       setSaving(false);
     }
   }
 
   return (
     <Modal
-      title="Adicionar treinamento"
-      description="O agente aprende com o conteúdo e passa a usá-lo nas respostas."
+      title={t('add.title')}
+      description={t('add.description')}
       onRequestClose={() => !saving && onClose()}
       footer={
         <div className="flex justify-end gap-2">
@@ -88,7 +90,7 @@ export function AddTrainingModal({
             disabled={saving}
             className={buttonClass('secondary')}
           >
-            Cancelar
+            {tc('cancel')}
           </button>
           <button
             type="submit"
@@ -96,7 +98,7 @@ export function AddTrainingModal({
             disabled={(kind === 'TEXT' ? text.trim() === '' : url.trim() === '') || saving}
             className={buttonClass('primary')}
           >
-            {saving ? 'Enviando…' : 'Adicionar'}
+            {saving ? t('add.sending') : t('add.submit')}
           </button>
         </div>
       }
@@ -104,7 +106,7 @@ export function AddTrainingModal({
       <div
         className={`grid gap-2 ${kinds.length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}
         role="radiogroup"
-        aria-label="Tipo"
+        aria-label={t('add.typeLabel')}
       >
         {kinds.map((option) => {
           const Icon = option.icon;
@@ -127,8 +129,10 @@ export function AddTrainingModal({
               }`}
             >
               <Icon className={`size-5 ${selected ? 'text-brand-600' : 'text-zinc-400'}`} />
-              <span className="mt-2 font-medium text-zinc-900">{option.label}</span>
-              <span className="text-xs text-zinc-500">{option.hint}</span>
+              <span className="mt-2 font-medium text-zinc-900">
+                {t(`add.kinds.${option.kind}.label`)}
+              </span>
+              <span className="text-xs text-zinc-500">{t(`add.kinds.${option.kind}.hint`)}</span>
             </button>
           );
         })}
@@ -144,7 +148,10 @@ export function AddTrainingModal({
         <fieldset disabled={saving} className="space-y-5">
           {kind === 'TEXT' && (
             <>
-              <Field label="Texto" hint={`${text.length} de ${TRAINING_TEXT_MAX} caracteres`}>
+              <Field
+                label={t('add.textLabel')}
+                hint={t('add.textCount', { count: text.length, max: TRAINING_TEXT_MAX })}
+              >
                 <textarea
                   className={inputClass}
                   rows={6}
@@ -166,12 +173,8 @@ export function AddTrainingModal({
           )}
           {kind !== 'TEXT' && (
             <Field
-              label={kind === 'WEBSITE' ? 'Endereço do site' : 'Link do vídeo'}
-              hint={
-                kind === 'VIDEO'
-                  ? 'Ex.: um vídeo do YouTube com a explicação do produto.'
-                  : undefined
-              }
+              label={kind === 'WEBSITE' ? t('add.siteLabel') : t('add.videoLabel')}
+              hint={kind === 'VIDEO' ? t('add.videoHint') : undefined}
             >
               <input
                 className={inputClass}
@@ -196,24 +199,19 @@ export function AddTrainingModal({
                   onChange={(e) => setSubPages(e.target.checked)}
                 />
                 <span>
-                  <span className="font-medium text-zinc-800">Ler também as páginas ligadas</span>
-                  <span className="block text-xs text-zinc-500">
-                    O agente aprende com as páginas do site a partir deste endereço.
-                  </span>
+                  <span className="font-medium text-zinc-800">{t('add.subPagesLabel')}</span>
+                  <span className="block text-xs text-zinc-500">{t('add.subPagesHint')}</span>
                 </span>
               </label>
-              <Field
-                label="Atualizar o conteúdo"
-                hint="Para sites que mudam com frequência, como catálogo e preços."
-              >
+              <Field label={t('add.refreshLabel')} hint={t('add.refreshHint')}>
                 <select
                   className={inputClass}
                   value={refresh}
                   onChange={(e) => setRefresh(e.target.value as TrainingInterval)}
                 >
-                  {Object.entries(TRAINING_INTERVALS).map(([value, label]) => (
+                  {TRAINING_INTERVAL_KEYS.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {trainingIntervalLabel(value, t)}
                     </option>
                   ))}
                 </select>

@@ -1,0 +1,149 @@
+{
+  "title": "CRM para el agente",
+  "description": "Elija los campos de Bitrix24 que el agente puede leer y explique qué significa cada uno en su negocio.",
+  "refresh": "Actualizar desde Bitrix24",
+  "refreshing": "Actualizando…",
+  "off": "El acceso del agente al CRM aún no está disponible.",
+  "retry": "Intentar de nuevo",
+  "loading": "Leyendo los campos de su Bitrix24…",
+  "readOnly": "Usted puede consultar esta configuración. Para modificarla, solicite acceso a un administrador.",
+  "refreshed": "Campos actualizados desde Bitrix24.",
+  "refreshUnavailable": "Bitrix24 no respondió en este momento. Los campos de abajo son de la última lectura; inténtelo de nuevo en unos instantes.",
+  "tabsLabel": "Secciones del CRM",
+  "loadedAt": "Datos leídos de Bitrix24 el {date}.",
+  "entities": {
+    "lead": "Leads",
+    "deal": "Negocios",
+    "contact": "Contactos",
+    "company": "Empresas"
+  },
+  "steps": {
+    "choose": {
+      "title": "Elija los campos",
+      "text": "Solo los campos agregados aquí llegan al agente. El resto de Bitrix24 queda invisible para él."
+    },
+    "explain": {
+      "title": "Explique qué significan",
+      "text": "La descripción le indica al agente cómo interpretar el campo en su negocio."
+    }
+  },
+  "usage": {
+    "contact": "El agente usa estos campos para identificar al cliente de la conversación.",
+    "deal": "El agente lee estos campos en los negocios del cliente (hasta 10, del más reciente al más antiguo).",
+    "lead": "Se usan cuando la conversación está vinculada a un lead y aún no hay contacto.",
+    "company": "Se usan cuando la conversación está vinculada solo a una empresa."
+  },
+  "reads": "{count, plural, one {El agente lee # campo} other {El agente lee # campos}} de {entity}.",
+  "noFields": "El agente aún no lee ningún campo de {entity}.",
+  "noFieldsHint": "Use \"Agregar campos\" para elegir.",
+  "addFields": "Agregar campos",
+  "allAdded": "Todos los campos ya fueron agregados",
+  "preview": {
+    "title": "Lo que recibe el agente",
+    "note": "Ejemplo con valores ficticios, no es un cliente real.",
+    "none": "El agente no recibe datos de {entity}.",
+    "byField": {
+      "NAME": "María",
+      "SECOND_NAME": "Aparecida",
+      "LAST_NAME": "Souza",
+      "POST": "Gerente comercial",
+      "COMMENTS": "Prefiere contacto por WhatsApp",
+      "ADDRESS": "Av. Paulista, 1000 - São Paulo",
+      "deal_TITLE": "Implementación del CRM",
+      "lead_TITLE": "Contacto por el sitio web",
+      "company_TITLE": "ACME Ltda",
+      "lead_COMPANY_TITLE": "ACME Ltda"
+    },
+    "byType": {
+      "string": "Ejemplo",
+      "integer": "42",
+      "double": "42",
+      "money": "R$ 1.500,00",
+      "date": "15/03/2026",
+      "datetime": "15/03/2026 14:30",
+      "boolean": "Sí",
+      "char": "Sí",
+      "user": "Ana (responsable)",
+      "employee": "Ana (responsable)",
+      "crm_multifield": "(11) 91234-5678",
+      "crm_currency": "Real",
+      "crm_category": "Ventas",
+      "crm_stage": "Propuesta enviada",
+      "url": "https://ejemplo.com",
+      "address": "Av. Paulista, 1000 - São Paulo"
+    }
+  },
+  "fieldTypes": {
+    "string": "Texto",
+    "integer": "Número entero",
+    "double": "Número",
+    "money": "Valor",
+    "date": "Fecha",
+    "datetime": "Fecha y hora",
+    "enumeration": "Lista",
+    "crm_status": "Lista del CRM",
+    "boolean": "Sí/no",
+    "char": "Sí/no",
+    "user": "Usuario",
+    "employee": "Usuario",
+    "crm_multifield": "Teléfono, correo o contacto",
+    "crm_currency": "Moneda",
+    "crm_category": "Embudo",
+    "crm_stage": "Etapa del embudo",
+    "url": "Enlace",
+    "address": "Dirección"
+  },
+  "boolean": {
+    "yes": "Sí",
+    "no": "No"
+  },
+  "options": {
+    "more": "{list} y {count} más"
+  },
+  "accessStatus": {
+    "DISABLED": "Desactivado",
+    "CONNECTING": "Conectando",
+    "CONNECTED": "Conectado",
+    "ERROR": "Error al conectar"
+  },
+  "codeInBitrix": "Código en Bitrix24: {code}",
+  "badges": {
+    "custom": "Personalizado",
+    "personal": "Dato personal",
+    "missing": "Ya no existe en el portal"
+  },
+  "remove": "Quitar",
+  "removing": "Quitando…",
+  "cancel": "Cancelar",
+  "save": "Guardar",
+  "descriptionOf": "Descripción de {label} para el agente",
+  "descriptionPlaceholder": "Ej.: \"Plan contratado por el cliente; Oro da derecho a soporte 24h\"",
+  "editDescriptionOf": "Editar la descripción de {label}",
+  "editDescription": "Editar descripción",
+  "addDescription": "+ Agregar descripción",
+  "noDescription": "Sin descripción: explique qué significa este campo en su negocio.",
+  "writeDescription": "Escribir descripción",
+  "addFailed": "{count, plural, one {No fue posible agregar # campo. Sigue seleccionado; inténtelo de nuevo.} other {No fue posible agregar # campos. Siguen seleccionados; inténtelo de nuevo.}}",
+  "modal": {
+    "title": "Agregar campos de {entity}",
+    "description": "Marque los campos de su Bitrix24 que el agente puede leer.",
+    "searchLabel": "Buscar campo",
+    "searchPlaceholder": "Buscar por el nombre o código del campo",
+    "selected": "{count, plural, =0 {Ninguno seleccionado} one {# seleccionado} other {# seleccionados}}",
+    "adding": "Agregando…",
+    "addMany": "Agregar {count} campos",
+    "addOne": "Agregar campo",
+    "note": "Después de agregar, describa qué significa cada campo en su negocio. El teléfono y el correo son datos personales: agréguelos solo si el agente realmente los necesita.",
+    "allAdded": "Todos los campos ya fueron agregados.",
+    "noResults": "No se encontró ningún campo con esa búsqueda."
+  },
+  "errors": {
+    "load": "No fue posible cargar los campos del CRM.",
+    "refresh": "No fue posible actualizar desde Bitrix24. Inténtelo de nuevo.",
+    "saveField": "No fue posible guardar este campo. Inténtelo de nuevo.",
+    "invalidDescription": "Revise la descripción.",
+    "CRM_UNAVAILABLE": "Bitrix24 no respondió en este momento. Espere un poco e inténtelo de nuevo.",
+    "CRM_ACCESS_BUSY": "Hay otro cambio en curso en el acceso al CRM de este agente. Espere unos segundos e inténtelo de nuevo.",
+    "CRM_FIELD_NOT_FOUND": "Campo no encontrado en el CRM"
+  }
+}

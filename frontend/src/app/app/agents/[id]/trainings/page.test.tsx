@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@/i18n';
 import AgentTrainingsPage from './page';
 
 const api = vi.fn();
@@ -66,5 +67,22 @@ describe('lista de treinamentos longa', () => {
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
     expect(screen.queryByLabelText('Buscar treinamento')).toBeNull();
     expect(screen.queryByText('Mostrar mais')).toBeNull();
+  });
+});
+
+describe('idioma da interface', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('em espanhol, a lista e o contador saem traduzidos', async () => {
+    window.localStorage.setItem('gptthink.locale', 'es');
+    mockApi(25);
+    render(
+      <I18nProvider>
+        <AgentTrainingsPage />
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('Mostrando 20 de 25')).toBeTruthy());
+    expect(screen.getByText('Mostrar más')).toBeTruthy();
+    expect(screen.getByLabelText('Buscar entrenamiento')).toBeTruthy();
   });
 });

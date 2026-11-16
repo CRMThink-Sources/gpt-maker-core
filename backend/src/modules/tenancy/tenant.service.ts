@@ -1,5 +1,6 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
+import type { Locale } from '@gptmaker/contracts';
 import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 import { DB, type Database } from '../../shared/database/database.module';
 import { tenant } from '../../shared/database/schema/index';
@@ -32,6 +33,10 @@ export class TenantService {
   async findById(id: string): Promise<Tenant | undefined> {
     const [row] = await this.db.select().from(tenant).where(eq(tenant.id, id));
     return row;
+  }
+
+  async setLocale(tenantId: string, locale: Locale): Promise<void> {
+    await this.db.update(tenant).set({ locale }).where(eq(tenant.id, tenantId));
   }
 
   async findByInstallationId(installationId: number): Promise<Tenant | undefined> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ApiRequestError } from './platform-session';
+import { createT } from '@/i18n';
 import {
-  calendarErrorMessage,
+  calendarValidationMessage,
   describeCalendar,
   draftOf,
   getCalendarConfig,
@@ -140,20 +140,30 @@ describe('cliente de API', () => {
   });
 });
 
-describe('calendarErrorMessage', () => {
-  it.each([
-    ['CALENDAR_CRM_REQUIRED', /Ligue o acesso ao CRM/],
-    ['CALENDAR_USER_INVALID', /não existem no Bitrix24 ou estão inativos/],
-    ['CALENDAR_PORTAL_UNAVAILABLE', /O Bitrix24 não respondeu agora/],
-  ])('erro %s vira mensagem em português', (code, text) => {
-    expect(
-      calendarErrorMessage(new ApiRequestError(422, code, 'texto do servidor'), 'padrão'),
-    ).toMatch(text);
+describe('calendarValidationMessage', () => {
+  const input = { mode: 'USER_LIST' as const, userIds: [1, 1] };
+
+  it('traduz a falha do contrato conforme o idioma', () => {
+    const issue = { code: 'too_big', path: ['maxDaysAhead'], message: 'x' };
+    expect(calendarValidationMessage(issue, input)).toBe('A janela máxima é de 30 dias');
+    expect(calendarValidationMessage(issue, input, createT('en', 'calendar'))).toBe(
+      'The maximum window is 30 days',
+    );
   });
 
-  it('erro desconhecido usa o texto padrão', () => {
-    expect(calendarErrorMessage(new Error('x'), 'Não foi possível salvar.')).toBe(
-      'Não foi possível salvar.',
+  it.each([
+    [{ mode: 'USER_LIST' as const, userIds: [1, 1] }, /usuários repetidos/],
+    [{ mode: 'FIXED_USER' as const, userIds: [] }, /exatamente 1 usuário/],
+    [{ mode: 'USER_LIST' as const, userIds: [] }, /de 1 a 10 usuários/],
+    [{ mode: 'CLIENT_OWNER' as const, userIds: [3] }, /não há usuários para escolher/],
+  ])('lista de usuários inválida (%j)', (value, text) => {
+    const issue = { code: 'custom', path: ['userIds'], message: 'x' };
+    expect(calendarValidationMessage(issue, value)).toMatch(text);
+  });
+
+  it('falha sem tradução conhecida mantém a mensagem do contrato', () => {
+    expect(calendarValidationMessage({ code: 'custom', path: ['mode'], message: 'x' }, input)).toBe(
+      'x',
     );
   });
 });

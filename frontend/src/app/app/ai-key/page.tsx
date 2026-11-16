@@ -3,6 +3,7 @@
 import type { AiKeyView } from '@gptmaker/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, buttonClass, Card, Loading, PageHeader } from '@/components/ui';
+import { useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../session-provider';
 
@@ -13,6 +14,9 @@ import { useAppSession } from '../session-provider';
  */
 export default function AiKeyPage() {
   const { session, api } = useAppSession();
+  const t = useT('aiKey');
+  const format = useFormat();
+  const errorText = useErrorMessage('aiKey');
   const [view, setView] = useState<AiKeyView | null>(null);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +26,9 @@ export default function AiKeyPage() {
   const load = useCallback(() => api<AiKeyView>('/app/ai-key').then(setView), [api]);
 
   useEffect(() => {
-    load().catch(() => setError('Não foi possível carregar a chave.'));
+    load().catch(() => setError(t('errors.load')));
+    // Trocar o idioma não deve refazer a consulta; só o texto de erro usa `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   async function save() {
@@ -37,9 +43,9 @@ export default function AiKeyPage() {
         }),
       );
       setValue('');
-      setNotice('Chave testada e salva.');
+      setNotice(t('saved'));
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível salvar a chave.'));
+      setError(errorMessage(e, t('errors.save'), errorText));
     } finally {
       setBusy(false);
     }
@@ -52,46 +58,45 @@ export default function AiKeyPage() {
     try {
       await api('/app/ai-key', { method: 'DELETE' });
       await load();
-      setNotice('Chave removida. A revisão por IA passa a usar créditos.');
+      setNotice(t('removed'));
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível remover a chave.'));
+      setError(errorMessage(e, t('errors.remove'), errorText));
     } finally {
       setBusy(false);
     }
   }
 
   if (!session.user.isAdmin) {
-    return <Alert tone="warning">Só administradores do portal configuram a chave Vibecode.</Alert>;
+    return <Alert tone="warning">{t('adminOnly')}</Alert>;
   }
   if (!view) return error ? <Alert tone="error">{error}</Alert> : <Loading />;
 
   return (
     <div className="max-w-2xl space-y-6">
-      <PageHeader
-        title="Chave Vibecode"
-        description="Use a sua chave do Vibecode do Bitrix24 para a revisão por IA da função, sem gastar créditos."
-      />
+      <PageHeader title={t('title')} description={t('description')} />
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
       <Card className="space-y-4 p-5">
         {view.configured ? (
           <p className="text-sm text-zinc-700" data-testid="ai-key-status">
-            Chave configurada, final {view.last4}
-            {view.verifiedAt && `, testada em ${new Date(view.verifiedAt).toLocaleString('pt-BR')}`}
-            .
+            {view.verifiedAt
+              ? t('configuredVerified', {
+                  last4: view.last4 ?? '',
+                  date: format.dateTime(new Date(view.verifiedAt), {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }),
+                })
+              : t('configured', { last4: view.last4 ?? '' })}
           </p>
         ) : (
           <p className="text-sm text-zinc-700">
-            Nenhuma chave salva. A revisão por IA usa os créditos do app
-            {view.platformAvailable
-              ? ''
-              : ' e, no momento, está indisponível sem uma chave própria'}
-            .
+            {view.platformAvailable ? t('notConfigured') : t('notConfiguredUnavailable')}
           </p>
         )}
         <label className="block text-sm">
           <span className="font-medium text-zinc-800">
-            {view.configured ? 'Trocar a chave' : 'Chave do Vibecode'}
+            {view.configured ? t('replaceKey') : t('keyLabel')}
           </span>
           <input
             type="password"
@@ -104,11 +109,9 @@ export default function AiKeyPage() {
           />
         </label>
         <ul className="list-disc space-y-1 pl-5 text-xs text-zinc-500">
-          <li>
-            Crie a chave só com o escopo vibe:ai: ela não precisa de acesso aos dados do portal.
-          </li>
-          <li>O texto da função e da base é enviado ao Vibecode na revisão por IA.</li>
-          <li>A chave é guardada cifrada e não aparece de novo depois de salva.</li>
+          <li>{t('hints.scope')}</li>
+          <li>{t('hints.sent')}</li>
+          <li>{t('hints.stored')}</li>
         </ul>
         <div className="flex gap-2">
           <button
@@ -117,7 +120,7 @@ export default function AiKeyPage() {
             disabled={busy || !value.trim()}
             onClick={save}
           >
-            {busy ? 'Testando…' : 'Testar e salvar'}
+            {busy ? t('testing') : t('testAndSave')}
           </button>
           {view.configured && (
             <button
@@ -126,7 +129,7 @@ export default function AiKeyPage() {
               disabled={busy}
               onClick={remove}
             >
-              Remover chave
+              {t('removeKey')}
             </button>
           )}
         </div>

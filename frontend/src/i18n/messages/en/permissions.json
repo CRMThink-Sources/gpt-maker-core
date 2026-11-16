@@ -1,0 +1,18 @@
+{
+  "title": "Permissions",
+  "description": "Portal administrators can always create, edit, train, and configure triggers. Authorize other users here; everyone else can only view.",
+  "authorize": "Authorize users",
+  "adminOnly": "Only portal administrators manage permissions.",
+  "empty": {
+    "title": "Only administrators manage agents",
+    "description": "Authorize other portal users so they can also create and edit agents."
+  },
+  "userFallback": "User #{id}",
+  "grantedBy": "Authorized by {name} on {date}",
+  "revoke": "Remove access",
+  "errors": {
+    "load": "Could not load the permissions.",
+    "save": "Could not save.",
+    "INVALID_USER": "Invalid Bitrix user id"
+  }
+}

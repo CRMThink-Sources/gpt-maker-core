@@ -1,0 +1,41 @@
+{
+  "title": "Agents",
+  "description": "AI agents that serve your customers on Bitrix24 open channels.",
+  "newAgent": "New agent",
+  "trial": {
+    "title": "14-day free trial.",
+    "text": "Get 500 credits so your agents can start serving customers.",
+    "action": "Start trial"
+  },
+  "readOnly": "You can view the agents. To change them, ask a portal administrator for access.",
+  "stats": {
+    "agents": "Agents",
+    "active": "Active",
+    "activeHint": "responding now",
+    "inactive": "Inactive"
+  },
+  "empty": {
+    "title": "No agents yet",
+    "descriptionManage": "Create your first agent to start serving customers on open channels.",
+    "descriptionReadOnly": "When an agent is created, it will appear here."
+  },
+  "outOfSync": "The agent was not found in GPTMaker. Contact support.",
+  "removeConfirm": "Remove this agent?",
+  "cancel": "Cancel",
+  "remove": "Remove",
+  "removing": "Removing…",
+  "wait": "Please wait…",
+  "deactivate": "Deactivate",
+  "reactivate": "Reactivate",
+  "edit": "Edit",
+  "errors": {
+    "load": "Could not load the agents.",
+    "action": "Could not complete the action. Please try again.",
+    "AGENT_INACTIVE_BY_SYSTEM": "The agent was deactivated by the system and will come back on its own once the cause is resolved",
+    "TENANT_SUSPENDED": "The account is suspended; contact support to reactivate agents",
+    "SUBSCRIPTION_INACTIVE": "The subscription is not active; settle the payment to reactivate agents",
+    "AGENT_BUSY": "The agent is being changed; wait and try again",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support",
+    "GPTMAKER_UNAVAILABLE": "Could not complete the action in GPTMaker right now; nothing was changed. Try again in a moment"
+  }
+}

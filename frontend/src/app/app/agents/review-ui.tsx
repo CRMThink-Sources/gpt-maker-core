@@ -11,21 +11,16 @@ import type {
   ReviewGap,
   ReviewProblem,
 } from '@gptmaker/contracts';
-import {
-  EXPECTATION_MAX,
-  EXPECTATION_MIN,
-  flattenFields,
-  REVIEW_CATEGORY_LABELS,
-} from '@gptmaker/contracts';
+import { EXPECTATION_MAX, EXPECTATION_MIN, flattenFields } from '@gptmaker/contracts';
 import Link from 'next/link';
 import { createContext, useContext, useState } from 'react';
 import { Alert, buttonClass, Card } from '@/components/ui';
+import { useT } from '@/i18n';
 import {
   answerKey,
   canAddGap,
   canApply,
   expectationValid,
-  GAP_REASONS,
   impactMessage,
   reviewableIds,
   reviewCost,
@@ -58,20 +53,21 @@ const anchor = (id: string) => `pergunta-${id}`;
 
 /** Avisos de um campo: até 3, `attention` primeiro, e "ver mais N". */
 function Warnings({ warnings }: { warnings: FunctionReviewWarning[] }) {
+  const t = useT('assist');
   const [all, setAll] = useState(false);
   if (warnings.length === 0) return null;
   const sorted = sortedWarnings(warnings);
   const shown = all ? sorted : sorted.slice(0, WARNINGS_PER_FIELD);
   const hidden = sorted.length - shown.length;
   return (
-    <ul className="mt-2 space-y-1" aria-label="Avisos">
+    <ul className="mt-2 space-y-1" aria-label={t('review.warningsLabel')}>
       {shown.map((warning, index) => (
         <li
           key={`${warning.code}:${warning.item ?? '-'}:${warning.subfield ?? '-'}:${index}`}
           className={`text-xs ${warning.severity === 'attention' ? 'text-amber-700' : 'text-zinc-500'}`}
         >
           {warning.severity === 'attention' ? '⚠ ' : '• '}
-          {warning.item !== undefined && `Item ${warning.item + 1}: `}
+          {warning.item !== undefined && t('review.warningItem', { n: warning.item + 1 })}
           {warning.message}
         </li>
       ))}
@@ -82,7 +78,7 @@ function Warnings({ warnings }: { warnings: FunctionReviewWarning[] }) {
             className="text-xs font-medium text-brand-700 hover:underline"
             onClick={() => setAll(true)}
           >
-            ver mais {hidden}
+            {t('review.showMore', { count: hidden })}
           </button>
         </li>
       )}
@@ -105,14 +101,17 @@ function Suggestion({
   item: ReviewFieldResult['items'][number];
   onApply: (next: FunctionAnswerValue) => void;
 }) {
+  const t = useT('assist');
   const suggestion = item.suggestion;
   if (!suggestion) return null;
   if (applied)
-    return <p className="mt-2 text-xs font-medium text-emerald-700">Sugestão aplicada.</p>;
+    return (
+      <p className="mt-2 text-xs font-medium text-emerald-700">{t('review.suggestionApplied')}</p>
+    );
   const apply = canApply(review.form, answers, field, item.index, suggestion);
   return (
     <div className="mt-2 rounded-lg bg-white p-2.5 ring-1 ring-zinc-200">
-      <p className="text-xs font-medium text-zinc-700">Texto sugerido</p>
+      <p className="text-xs font-medium text-zinc-700">{t('review.suggestedText')}</p>
       {Object.entries(suggestion.values).map(([key, text]) => (
         <p key={key} className="mt-1 text-xs whitespace-pre-line text-zinc-700">
           {text}
@@ -127,7 +126,7 @@ function Suggestion({
             if (next !== null) onApply(next);
           }}
         >
-          Aplicar
+          {t('review.apply')}
         </button>
       )}
     </div>
@@ -145,10 +144,11 @@ function AiResult({
   answers: FunctionAnswers;
   onApply: (next: FunctionAnswerValue, index: number) => void;
 }) {
+  const t = useT('assist');
   const state = review.ai?.fields[field.id];
   if (!review.ai || !state) return null;
   if (state.status === 'running') {
-    return <p className="mt-2 text-xs text-zinc-500">revisando…</p>;
+    return <p className="mt-2 text-xs text-zinc-500">{t('review.reviewing')}</p>;
   }
   if (state.status === 'error') {
     return (
@@ -158,7 +158,7 @@ function AiResult({
           <>
             {' '}
             <Link href="/app/plan" className="font-medium underline">
-              Adicionar créditos
+              {t('review.addCredits')}
             </Link>
           </>
         )}
@@ -171,7 +171,7 @@ function AiResult({
               disabled={review.ai.busy}
               onClick={() => review.ai!.onRerun(field.id)}
             >
-              tentar de novo
+              {t('review.retry')}
             </button>
           </>
         )}
@@ -182,28 +182,28 @@ function AiResult({
   return (
     <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-brand-800">Revisão por IA</p>
+        <p className="text-xs font-semibold text-brand-800">{t('review.aiReview')}</p>
         {outdated && (
           <span className="flex items-center gap-2 text-xs text-amber-700">
-            desatualizado
+            {t('review.outdated')}
             <button
               type="button"
               className="font-medium underline disabled:opacity-50"
               disabled={review.ai.busy}
               onClick={() => review.ai!.onRerun(field.id)}
             >
-              revisar este campo
+              {t('review.reviewField')}
             </button>
           </span>
         )}
       </div>
       {state.result.items.every((item) => item.problems.length === 0 && !item.suggestion) ? (
-        <p className="mt-1 text-xs text-zinc-600">Nada a apontar neste campo.</p>
+        <p className="mt-1 text-xs text-zinc-600">{t('review.nothingToPoint')}</p>
       ) : (
         <ul className="mt-1 space-y-2">
           {state.result.items.map((item) => (
             <li key={item.index} className="text-xs text-zinc-700">
-              <span className="font-medium">Item {item.index + 1}</span>
+              <span className="font-medium">{t('form.item', { n: item.index + 1 })}</span>
               {!state.applied?.includes(item.index) && <Problems problems={item.problems} />}
               <Suggestion
                 applied={state.applied?.includes(item.index) ?? false}
@@ -223,11 +223,12 @@ function AiResult({
 
 /** Problemas de um item: os que atrapalham primeiro; com muitos, as melhorias ficam recolhidas. */
 function Problems({ problems }: { problems: ReviewProblem[] }) {
+  const t = useT('assist');
   const [open, setOpen] = useState(false);
   const { shown, hidden } = visibleProblems(problems);
   const line = (problem: ReviewProblem, i: number) => (
     <p key={i} className="mt-0.5">
-      • <span className="text-zinc-500">{REVIEW_CATEGORY_LABELS[problem.category]}:</span>{' '}
+      • <span className="text-zinc-500">{t(`review.categories.${problem.category}`)}:</span>{' '}
       {problem.text}
     </p>
   );
@@ -243,8 +244,7 @@ function Problems({ problems }: { problems: ReviewProblem[] }) {
             className="mt-0.5 font-medium underline"
             onClick={() => setOpen(true)}
           >
-            ver mais {hidden.length}{' '}
-            {hidden.length === 1 ? 'sugestão de melhoria' : 'sugestões de melhoria'}
+            {t('review.showMoreImprovements', { count: hidden.length })}
           </button>
         ))}
     </>
@@ -282,6 +282,7 @@ export function FieldNotes({
 
 /** Resumo no topo do formulário: "N pontos de atenção", com link para cada campo. */
 export function ReviewSummary({ answers }: { answers: FunctionAnswers }) {
+  const t = useT('assist');
   const review = useContext(FormReviewContext);
   if (!review) return null;
   const attention = review.warnings.filter((warning) => warning.severity === 'attention');
@@ -295,9 +296,7 @@ export function ReviewSummary({ answers }: { answers: FunctionAnswers }) {
   }
   return (
     <Alert tone="warning">
-      <p className="font-medium">
-        {attention.length} {attention.length === 1 ? 'ponto de atenção' : 'pontos de atenção'}
-      </p>
+      <p className="font-medium">{t('review.attentionPoints', { count: attention.length })}</p>
       <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {[...perField].map(([id, count]) => (
           <li key={id}>
@@ -342,12 +341,18 @@ export function ReviewPanel({
   /** Revisa só os campos que falharam (sem expectativa, sem cobrar de novo os que deram certo). */
   onRetryFailed: (fieldIds: string[]) => void;
 }) {
+  const t = useT('assist');
   const ids = reviewableIds(form, answers);
   if (!aiKey) return null;
   const unavailable = !aiKey.configured && !aiKey.platformAvailable;
   // Com a expectativa válida, a cobertura entra na conta como mais um campo.
   const gapsOn = expectationValid(expectation);
-  const cost = reviewCost(aiKey.creditsPerField, ids.length + (gapsOn ? 1 : 0), aiKey.configured);
+  const cost = reviewCost(
+    aiKey.creditsPerField,
+    ids.length + (gapsOn ? 1 : 0),
+    aiKey.configured,
+    t,
+  );
   const allFields = flattenFields(form.fields);
   const labels = new Map(allFields.map((field) => [field.id, field.label]));
   const fieldOf = new Map(allFields.map((field) => [field.id, field]));
@@ -356,23 +361,21 @@ export function ReviewPanel({
   const failed = Object.entries(state.fields)
     .filter(([, entry]) => entry.status === 'error')
     .map(([id]) => id);
-  const retryCost = reviewCost(aiKey.creditsPerField, failed.length, aiKey.configured);
+  const retryCost = reviewCost(aiKey.creditsPerField, failed.length, aiKey.configured, t);
   const impact = impactMessage(
     reviewImpact(
       Object.values(state.fields).flatMap((entry) =>
         entry.status === 'done' ? [entry.result] : [],
       ),
     ),
+    t,
   );
   return (
     <Card className="space-y-3 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-zinc-900">Revisão por IA</p>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            A IA lê o que você escreveu e aponta problemas, contradições e textos melhores. O texto
-            da função e da base é enviado ao Vibecode do Bitrix24.
-          </p>
+          <p className="text-sm font-semibold text-zinc-900">{t('review.aiReview')}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">{t('review.panelIntro')}</p>
         </div>
         <button
           type="button"
@@ -380,17 +383,15 @@ export function ReviewPanel({
           disabled={disabled || running || unavailable || ids.length === 0}
           onClick={() => onReview(ids)}
         >
-          {running ? 'Revisando…' : `Revisar com IA · ${cost.label}`}
+          {running ? t('review.reviewingButton') : t('review.reviewButton', { cost: cost.label })}
         </button>
       </div>
       <label className="block text-sm">
         <span className="font-medium text-zinc-800">
-          O que você espera do agente? <span className="font-normal text-zinc-400">(opcional)</span>
+          {t('review.expectationLabel')}{' '}
+          <span className="font-normal text-zinc-400">{t('review.optional')}</span>
         </span>
-        <span className="mt-0.5 block text-xs text-zinc-500">
-          Conte situações reais que o agente deve resolver. A IA confere se a base cobre e sugere os
-          itens que faltam.
-        </span>
+        <span className="mt-0.5 block text-xs text-zinc-500">{t('review.expectationHelp')}</span>
         <textarea
           className="mt-1 min-h-20 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
           value={expectation}
@@ -400,7 +401,7 @@ export function ReviewPanel({
         />
         <span className="mt-1 flex justify-between text-xs">
           <span className={tooShort ? 'text-amber-700' : 'text-transparent'}>
-            Descreva situações reais, com pelo menos {EXPECTATION_MIN} caracteres.
+            {t('review.expectationTooShort', { min: EXPECTATION_MIN })}
           </span>
           <span className="text-zinc-400 tabular-nums">
             {expectation.length}/{EXPECTATION_MAX}
@@ -409,59 +410,50 @@ export function ReviewPanel({
       </label>
       {unavailable && (
         <p className="text-xs text-amber-700">
-          A revisão por IA precisa de uma chave do Vibecode.{' '}
+          {t('review.keyRequired')}{' '}
           {canConfigureKey ? (
             <Link href="/app/ai-key" className="font-medium underline">
-              Configurar a chave
+              {t('review.configureKey')}
             </Link>
           ) : (
-            'Peça a um administrador do portal para configurar a chave.'
+            t('review.askAdmin')
           )}
         </p>
       )}
       {!unavailable && ids.length === 0 && (
-        <p className="text-xs text-zinc-500">
-          Preencha algum campo de texto ou da base para revisar.
-        </p>
+        <p className="text-xs text-zinc-500">{t('review.fillSomething')}</p>
       )}
       {impact && !running && <p className="text-sm text-zinc-700">{impact}.</p>}
       {failed.length > 0 && !running && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
-          <span>
-            {failed.length === 1
-              ? '1 campo não foi revisado'
-              : `${failed.length} campos não foram revisados`}{' '}
-            e não {failed.length === 1 ? 'foi cobrado' : 'foram cobrados'}.
-          </span>
+          <span>{t('review.failedNotCharged', { count: failed.length })}</span>
           <button
             type="button"
             className={buttonClass('secondary', 'sm')}
             disabled={disabled}
             onClick={() => onRetryFailed(failed)}
           >
-            Revisar só {failed.length === 1 ? 'este' : 'esses'} · {retryCost.label}
+            {t('review.retryFailed', { count: failed.length, cost: retryCost.label })}
           </button>
         </div>
       )}
       {state.error && <Alert tone="error">{state.error}</Alert>}
       {state.cross === 'running' && (
-        <p className="text-xs text-zinc-500">conferindo contradições entre os campos…</p>
+        <p className="text-xs text-zinc-500">{t('review.crossRunning')}</p>
       )}
-      {state.cross === 'error' && (
-        <p className="text-xs text-zinc-500">Não foi possível conferir as contradições agora.</p>
-      )}
+      {state.cross === 'error' && <p className="text-xs text-zinc-500">{t('review.crossError')}</p>}
       {state.cross === 'done' && state.contradictions.length === 0 && (
-        <p className="text-xs text-zinc-500">Nenhuma contradição encontrada entre os campos.</p>
+        <p className="text-xs text-zinc-500">{t('review.crossNone')}</p>
       )}
       {state.contradictions.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-zinc-800">Contradições</p>
+          <p className="text-xs font-semibold text-zinc-800">{t('review.contradictions')}</p>
           <ul className="mt-1 space-y-1">
             {state.contradictions.map((entry, index) => (
               <li key={index} className="text-xs text-zinc-700">
                 • {entry.text}{' '}
                 <span className="text-zinc-500">
-                  ({entry.fields.map((id) => labels.get(id) ?? id).join(' e ')})
+                  ({entry.fields.map((id) => labels.get(id) ?? id).join(t('review.and'))})
                 </span>
               </li>
             ))}
@@ -496,22 +488,21 @@ function GapsSection({
   fieldOf: Map<string, FunctionField>;
   onAddGap: (gap: ReviewGap, index: number) => void;
 }) {
+  const t = useT('assist');
   const gaps = state.gaps;
   if (gaps.status === 'idle') return null;
   if (gaps.status === 'running') {
-    return <p className="text-xs text-zinc-500">conferindo a cobertura da base…</p>;
+    return <p className="text-xs text-zinc-500">{t('review.gapsRunning')}</p>;
   }
   if (gaps.status === 'error') {
     return (
       <p className="text-xs text-red-600" role="alert">
-        {gaps.code === 'NO_CREDIT'
-          ? gaps.message
-          : 'A cobertura da base não pôde ser conferida agora.'}
+        {gaps.code === 'NO_CREDIT' ? gaps.message : t('review.gapsError')}
         {gaps.code === 'NO_CREDIT' && (
           <>
             {' '}
             <Link href="/app/plan" className="font-medium underline">
-              Adicionar créditos
+              {t('review.addCredits')}
             </Link>
           </>
         )}
@@ -520,10 +511,10 @@ function GapsSection({
   }
   const { result, added } = gaps;
   return (
-    <div className="space-y-2" aria-label="Cobertura da base">
-      <p className="text-xs font-semibold text-zinc-800">Lacunas da base</p>
+    <div className="space-y-2" aria-label={t('review.gapsLabel')}>
+      <p className="text-xs font-semibold text-zinc-800">{t('review.gapsTitle')}</p>
       {result.gaps.length === 0 ? (
-        <p className="text-xs text-zinc-600">Nenhuma lacuna encontrada.</p>
+        <p className="text-xs text-zinc-600">{t('review.gapsNone')}</p>
       ) : (
         <ul className="space-y-2">
           {result.gaps.map((gap, index) => {
@@ -535,7 +526,7 @@ function GapsSection({
                 <p className="font-medium text-zinc-800">
                   {gap.title}{' '}
                   <span className="font-normal text-zinc-500">
-                    em {labels.get(gap.fieldId) ?? gap.fieldId}
+                    {t('review.gapIn', { field: labels.get(gap.fieldId) ?? gap.fieldId })}
                   </span>
                 </p>
                 <p className="mt-0.5 text-zinc-600">{gap.why}</p>
@@ -545,18 +536,18 @@ function GapsSection({
                   </p>
                 ))}
                 {done ? (
-                  <p className="mt-2 font-medium text-emerald-700">Adicionado.</p>
+                  <p className="mt-2 font-medium text-emerald-700">{t('review.gapAdded')}</p>
                 ) : addable ? (
                   <button
                     type="button"
                     className={`${buttonClass('secondary', 'sm')} mt-2`}
                     onClick={() => onAddGap(gap, index)}
                   >
-                    Adicionar
+                    {t('review.gapAdd')}
                   </button>
                 ) : (
                   <p className="mt-2 text-amber-700">
-                    {gap.reason ? GAP_REASONS[gap.reason] : 'Este item não pode ser adicionado.'}
+                    {gap.reason ? t(`review.gapReasons.${gap.reason}`) : t('review.gapCannotAdd')}
                   </p>
                 )}
               </li>
@@ -566,15 +557,10 @@ function GapsSection({
       )}
       {result.gaps.some((gap) =>
         Object.values(gap.item).some((text) => /\[preencher:/i.test(text)),
-      ) && (
-        <p className="text-xs text-zinc-500">
-          Os trechos [preencher: …] dependem de dados do seu negócio: complete antes de publicar.
-          Confira cada item adicionado: a IA não conhece a sua empresa.
-        </p>
-      )}
+      ) && <p className="text-xs text-zinc-500">{t('review.gapPlaceholders')}</p>}
       {result.covered.length > 0 && (
         <details className="text-xs text-zinc-600">
-          <summary className="cursor-pointer">O que a base já cobre</summary>
+          <summary className="cursor-pointer">{t('review.covered')}</summary>
           <ul className="mt-1 list-disc pl-5">
             {result.covered.map((entry, index) => (
               <li key={index}>{entry.text}</li>

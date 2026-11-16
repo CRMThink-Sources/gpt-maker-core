@@ -28,6 +28,7 @@ import {
   TrashIcon,
 } from '@/components/icons';
 import { buttonClass } from '@/components/ui';
+import { useT } from '@/i18n';
 import { inputClass } from './agent-fields';
 import {
   AgentPicker,
@@ -127,11 +128,12 @@ function counter(text: string, max: number): string {
 
 /** Título de uma pergunta (dentro do `<label>`, para o campo ser encontrado pelo rótulo). */
 function Title({ field, help }: { field: FunctionField; help?: ReactNode }) {
+  const t = useT('assist');
   return (
     <>
       <span className="text-sm font-semibold text-zinc-900">{field.label}</span>
       {!field.required && (
-        <span className="ml-1.5 text-xs font-normal text-zinc-400">(opcional)</span>
+        <span className="ml-1.5 text-xs font-normal text-zinc-400">{t('form.optionalSuffix')}</span>
       )}
       {(help ?? field.help) && (
         <span className="mt-0.5 block text-xs text-zinc-500">{help ?? field.help}</span>
@@ -168,6 +170,7 @@ function Group({
   answers: FunctionAnswers;
   children: ReactNode;
 }) {
+  const t = useT('assist');
   const done = fields.filter((field) => isAnswered(field, answers)).length;
   return (
     <section className="space-y-3">
@@ -182,7 +185,7 @@ function Group({
           </div>
         </div>
         <span className="text-xs text-zinc-500 tabular-nums">
-          {done} de {fields.length} respondidas
+          {t('form.answeredCount', { done, total: fields.length })}
         </span>
       </header>
       <div className="space-y-3">{children}</div>
@@ -207,6 +210,7 @@ export function FunctionForm({
   assist,
   agentId,
 }: Props) {
+  const t = useT('assist');
   const set = (id: string, value: FunctionAnswerValue | undefined) => {
     const next = { ...answers };
     if (value === undefined) delete next[id];
@@ -248,8 +252,8 @@ export function FunctionForm({
             )}
             <Group
               icon={TextIcon}
-              title="Como o agente atende"
-              description="Responda sobre o seu negócio. O texto que o agente segue é montado a partir das respostas."
+              title={t('form.configTitle')}
+              description={t('form.configDescription')}
               fields={config}
               answers={answers}
             >
@@ -258,8 +262,8 @@ export function FunctionForm({
             {knowledge.length > 0 && (
               <Group
                 icon={BookIcon}
-                title="Base de conhecimento"
-                description="Um assunto por item. Cada item vira um treinamento do agente."
+                title={t('form.knowledgeTitle')}
+                description={t('form.knowledgeDescription')}
                 fields={knowledge}
                 answers={answers}
               >
@@ -347,9 +351,11 @@ function FieldControl({
   issues?: AnswerIssue[];
   disabled?: boolean;
 }) {
+  const t = useT('assist');
   const value = answers[field.id];
   const own = issuesOf(issues, field.id);
   const agents = useContext(FormAgents);
+  const optional = (label: string) => (field.required ? label : t('form.optionalLabel', { label }));
 
   switch (field.kind) {
     case 'TEXT': {
@@ -393,7 +399,10 @@ function FieldControl({
     case 'INTEGER':
       return (
         <label className="block">
-          <Title field={field} help={field.help ?? `De ${field.min} a ${field.max}.`} />
+          <Title
+            field={field}
+            help={field.help ?? t('form.integerRange', { min: field.min, max: field.max })}
+          />
           <input
             type="number"
             min={field.min}
@@ -413,7 +422,7 @@ function FieldControl({
         return (
           <div>
             <UsersPicker
-              label={field.required ? field.label : `${field.label} (opcional)`}
+              label={optional(field.label)}
               value={Array.isArray(value) ? (value as number[]) : []}
               disabled={disabled}
               onChange={(ids) => set(field.id, ids.length ? ids : undefined)}
@@ -425,7 +434,7 @@ function FieldControl({
       return (
         <div>
           <ResponsiblePicker
-            label={field.required ? field.label : `${field.label} (opcional)`}
+            label={optional(field.label)}
             value={typeof value === 'number' ? value : 0}
             disabled={disabled}
             onChange={(id) => set(field.id, id > 0 ? id : undefined)}
@@ -437,7 +446,7 @@ function FieldControl({
       return (
         <div>
           <OpenLinePicker
-            label={field.required ? field.label : `${field.label} (opcional)`}
+            label={optional(field.label)}
             value={typeof value === 'number' ? value : 0}
             disabled={disabled}
             onChange={(id) => set(field.id, id > 0 ? id : undefined)}
@@ -449,7 +458,7 @@ function FieldControl({
       return (
         <div>
           <AgentPicker
-            label={field.required ? field.label : `${field.label} (opcional)`}
+            label={optional(field.label)}
             value={typeof value === 'string' ? value : ''}
             agents={agents ?? []}
             disabled={disabled}
@@ -533,6 +542,7 @@ function ListInput({
   issues: AnswerIssue[];
   disabled?: boolean;
 }) {
+  const t = useT('assist');
   const items = Array.isArray(value) ? (value as string[]) : [];
   const shown = items.length ? items : [''];
   const update = (next: string[]) => set(field.id, next);
@@ -563,7 +573,7 @@ function ListInput({
                 type="button"
                 className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
                 disabled={disabled}
-                aria-label="Remover"
+                aria-label={t('form.remove')}
                 onClick={() => update(shown.filter((_, i) => i !== index))}
               >
                 <CloseIcon className="size-4" />
@@ -580,13 +590,13 @@ function ListInput({
             disabled={disabled}
             onClick={() => update([...shown, ''])}
           >
-            <PlusIcon className="size-4" /> Adicionar
+            <PlusIcon className="size-4" /> {t('form.add')}
           </button>
         ) : (
           <span />
         )}
         <span className="text-xs text-zinc-400">
-          Até {field.maxItems} itens, {field.itemMaxLength} caracteres cada.
+          {t('form.listLimits', { max: field.maxItems, chars: field.itemMaxLength })}
         </span>
       </div>
       <IssueText issues={issues} />
@@ -607,6 +617,7 @@ function ChoiceInput({
   issues?: AnswerIssue[];
   disabled?: boolean;
 }) {
+  const t = useT('assist');
   const chosen = selectedValues(answers[field.id]);
   const multi = field.kind === 'MULTI_CHOICE';
   const toggle = (option: string) => {
@@ -624,7 +635,7 @@ function ChoiceInput({
   return (
     <fieldset className="text-sm">
       <legend className="w-full">
-        <Title field={field} help={field.help ?? (multi ? 'Marque quantas quiser.' : undefined)} />
+        <Title field={field} help={field.help ?? (multi ? t('form.multiHelp') : undefined)} />
       </legend>
       <div className={`mt-3 grid gap-2 ${compact ? 'sm:grid-cols-2' : ''}`}>
         {field.options.map((option) => {
@@ -703,6 +714,7 @@ function KnowledgeInput({
   issues: AnswerIssue[];
   disabled?: boolean;
 }) {
+  const t = useT('assist');
   const items = (Array.isArray(value) ? value : []) as KnowledgeItem[];
   const update = (next: KnowledgeItem[]) => set(field.id, next);
   const imageAgent = useContext(FormImageAgent);
@@ -730,10 +742,10 @@ function KnowledgeInput({
       {collapsible && (
         <div className="mt-2 flex justify-end gap-3 text-xs font-medium text-zinc-500">
           <button type="button" className="hover:text-brand-700" onClick={() => setAll(true)}>
-            Expandir todos
+            {t('form.expandAll')}
           </button>
           <button type="button" className="hover:text-brand-700" onClick={() => setAll(false)}>
-            Recolher todos
+            {t('form.collapseAll')}
           </button>
         </div>
       )}
@@ -751,7 +763,7 @@ function KnowledgeInput({
                   type="button"
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   aria-expanded={open}
-                  aria-label={`${open ? 'Recolher' : 'Expandir'} item ${index + 1}`}
+                  aria-label={t(open ? 'form.collapseItem' : 'form.expandItem', { n: index + 1 })}
                   disabled={!collapsible || hasIssue(index)}
                   onClick={() => toggle(item, index)}
                 >
@@ -759,7 +771,7 @@ function KnowledgeInput({
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-700">
-                    {title || `Item ${index + 1}`}
+                    {title || t('form.item', { n: index + 1 })}
                   </span>
                   {collapsible && (
                     <ChevronDownIcon
@@ -769,7 +781,7 @@ function KnowledgeInput({
                 </button>
                 <span
                   className={`text-xs tabular-nums ${length > TRAINING_TEXT_MAX ? 'text-red-600' : 'text-zinc-400'}`}
-                  title={`Treinamento com ${length} de ${TRAINING_TEXT_MAX} caracteres`}
+                  title={t('form.trainingLength', { length, max: TRAINING_TEXT_MAX })}
                 >
                   {length}/{TRAINING_TEXT_MAX}
                 </span>
@@ -777,7 +789,7 @@ function KnowledgeInput({
                   type="button"
                   className="rounded-md p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                   disabled={disabled}
-                  aria-label={`Remover item ${index + 1}`}
+                  aria-label={t('form.removeItem', { n: index + 1 })}
                   onClick={() => update(items.filter((other) => other.itemKey !== item.itemKey))}
                 >
                   <TrashIcon className="size-4" />
@@ -790,7 +802,9 @@ function KnowledgeInput({
                   return (
                     <label key={subfield.id} className="block">
                       <span className="text-xs font-medium text-zinc-700">
-                        {subfield.required ? subfield.label : `${subfield.label} (opcional)`}
+                        {subfield.required
+                          ? subfield.label
+                          : t('form.optionalLabel', { label: subfield.label })}
                       </span>
                       <Input
                         className={`${inputClass} mt-1`}
@@ -852,9 +866,9 @@ function KnowledgeInput({
             update([...items, created]);
           }}
         >
-          <PlusIcon className="size-4" /> Adicionar item
+          <PlusIcon className="size-4" /> {t('form.addItem')}
           <span className="font-normal text-zinc-400">
-            ({items.length} de {field.maxItems})
+            {t('form.addItemCount', { count: items.length, max: field.maxItems })}
           </span>
         </button>
       )}
@@ -876,16 +890,17 @@ export function FunctionFormOutline({
   answers: FunctionAnswers;
   issues?: AnswerIssue[];
 }) {
+  const t = useT('assist');
   const required = form.fields.filter((field) => field.required);
   const done = required.filter((field) => isAnswered(field, answers)).length;
   const ratio = required.length ? done / required.length : 1;
   return (
-    <nav aria-label="Perguntas do formulário" className="space-y-4">
+    <nav aria-label={t('form.outlineLabel')} className="space-y-4">
       <div>
         <div className="flex items-baseline justify-between text-xs">
-          <span className="font-medium text-zinc-700">Obrigatórias</span>
+          <span className="font-medium text-zinc-700">{t('form.requiredLabel')}</span>
           <span className="text-zinc-500 tabular-nums">
-            {done} de {required.length}
+            {t('form.requiredProgress', { done, total: required.length })}
           </span>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-100">
@@ -952,6 +967,7 @@ export function BehaviorMeter({
   mode?: FunctionMode;
   additionalInstructions?: string | null;
 }) {
+  const t = useT('assist');
   const length = useMemo(() => {
     const valid = validateFunctionAnswers(form, answers, { partial: true }).answers;
     return compileAgent({
@@ -967,9 +983,9 @@ export function BehaviorMeter({
   return (
     <div className="@container rounded-xl border border-zinc-200/80 bg-white px-4 py-3 text-xs text-zinc-600 shadow-xs">
       <div className="flex flex-col gap-0.5 @[16rem]:flex-row @[16rem]:justify-between @[16rem]:gap-3">
-        <span className="font-medium text-zinc-700">Texto do agente</span>
+        <span className="font-medium text-zinc-700">{t('form.agentText')}</span>
         <span className={`tabular-nums ${over ? 'font-medium text-red-600' : ''}`}>
-          {length} de {FUNCTION_BEHAVIOR_MAX} caracteres
+          {t('form.behaviorLength', { length, max: FUNCTION_BEHAVIOR_MAX })}
         </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">

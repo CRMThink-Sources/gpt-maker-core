@@ -1,0 +1,170 @@
+{
+  "title": "Créditos e plano",
+  "description": "Saldo, plano, consumo dos agentes e teste grátis do app.",
+  "loadFailed": "Não foi possível carregar.",
+  "intervals": {
+    "monthly": "mês",
+    "quarterly": "trimestre",
+    "semiannual": "semestre",
+    "yearly": "ano"
+  },
+  "cycleCredits": {
+    "monthly": "por mês",
+    "quarterly": "por trimestre",
+    "semiannual": "por semestre",
+    "yearly": "por ano"
+  },
+  "trial": {
+    "fields": {
+      "name": "Nome",
+      "email": "E-mail",
+      "phone": "Telefone ou WhatsApp",
+      "company": "Empresa",
+      "role": "Cargo"
+    },
+    "validation": {
+      "required": "Preencha este campo",
+      "invalidEmail": "E-mail inválido",
+      "invalidField": "Campo inválido"
+    },
+    "checkFields": "Confira os campos destacados.",
+    "activateFailed": "Não foi possível ativar o teste. Tente de novo.",
+    "activate": "Ativar teste grátis",
+    "privacy": "Os dados ficam com a CRMThink para acompanhar o seu teste.",
+    "offerTitle": "Teste grátis por 14 dias",
+    "offerText": "Ganhe 500 créditos para seus agentes atenderem no Bitrix24, sem cartão de crédito.",
+    "adminOnly": "Somente o administrador do app pode ativar o teste grátis.",
+    "activating": "Ativando seu teste grátis…",
+    "activatingHint": "Os créditos aparecem em instantes. Você pode continuar usando o app.",
+    "used": "O teste grátis já foi utilizado neste portal. Escolha um plano abaixo para seus agentes continuarem atendendo."
+  },
+  "balance": {
+    "title": "Saldo",
+    "total": "Total disponível",
+    "trial": "Teste grátis",
+    "plan": "Plano",
+    "extra": "Adicional",
+    "until": "Até {date}",
+    "validUntil": "Créditos do plano e adicionais valem até {date}",
+    "renewsAt": "Renova em {date}",
+    "cancelsAt": "Assinatura encerra em {date}",
+    "consumed": "{count, plural, one {# crédito consumido desde {date}} other {# créditos consumidos desde {date}}}",
+    "noCredits": "Sem créditos: as novas mensagens são transferidas para os atendentes até que haja saldo.",
+    "status": {
+      "trialing": "Teste grátis",
+      "active": "Plano ativo",
+      "past_due": "Pagamento pendente",
+      "cancelled": "Assinatura encerrada",
+      "trial_expired": "Teste encerrado"
+    }
+  },
+  "usage": {
+    "title": "Consumo por dia",
+    "description": "Créditos e respostas por agente. Períodos de até {days} dias.",
+    "from": "De",
+    "to": "Até",
+    "agent": "Agente",
+    "allAgents": "Todos",
+    "empty": "Nenhum consumo no período.",
+    "day": "Dia",
+    "responses": "Respostas",
+    "credits": "Créditos",
+    "noAgent": "Sem agente",
+    "functionReview": "Revisão da função",
+    "fields": "{count, plural, one {# campo} other {# campos}}",
+    "total": "Total",
+    "loadFailed": "Não foi possível carregar o consumo."
+  },
+  "entries": {
+    "title": "Movimentações",
+    "description": "Créditos recebidos, expirações e ajustes. O consumo das respostas está acima.",
+    "empty": "Nenhuma movimentação ainda.",
+    "loadMore": "Carregar mais",
+    "loadFailed": "Não foi possível carregar as movimentações.",
+    "types": {
+      "GRANT": "Crédito concedido",
+      "TOPUP": "Créditos adicionais",
+      "ADJUSTMENT": "Ajuste",
+      "EXPIRE": "Expiração",
+      "REFUND": "Estorno"
+    },
+    "wallets": {
+      "TRIAL": "teste grátis",
+      "PLAN": "plano",
+      "EXTRA": "adicional"
+    }
+  },
+  "checkout": {
+    "openFailed": "Não foi possível abrir o pagamento. Tente de novo.",
+    "subscribeTitle": "Contratar {name}",
+    "buyTitle": "Comprar {name}",
+    "extraValidUntil": "Os créditos adicionais valem até {date}, junto com os créditos do plano.",
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "opening": "Abrindo o pagamento…",
+    "confirmingPlan": "Pagamento recebido. Confirmando o plano…",
+    "confirmingCredits": "Pagamento recebido. Confirmando os créditos…",
+    "planActive": "{name} ativo. Os créditos do plano já estão no saldo.",
+    "creditsAdded": "{count, plural, one {# crédito adicionado ao saldo.} other {# créditos adicionados ao saldo.}}",
+    "slow": "O pagamento foi concluído e a confirmação está demorando. Os créditos aparecem no saldo assim que ela chegar; não é preciso pagar de novo."
+  },
+  "change": {
+    "doneImmediate": "Plano alterado para {name}. Os créditos proporcionais aparecem no saldo em instantes.",
+    "scheduledAt": "Troca para {name} agendada para {date}. Até lá, o plano atual continua valendo.",
+    "scheduledRenewal": "Troca para {name} agendada para a renovação. Até lá, o plano atual continua valendo.",
+    "failed": "Não foi possível trocar de plano. Tente de novo.",
+    "title": "Mudar para {name}",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar troca",
+    "from": "De",
+    "to": "para",
+    "currentPlan": "plano atual",
+    "detail": "{credits} créditos por ciclo, {price}{interval}",
+    "upgradeBefore": "A troca vale",
+    "now": "agora",
+    "upgradeAfter": "O cartão é cobrado só pela diferença proporcional ao que resta do ciclo, e você recebe na hora a parte proporcional dos créditos a mais.",
+    "downgradeBefore": "A troca vale na",
+    "nextRenewal": "próxima renovação",
+    "downgradeAfter": "Até lá, o plano atual e os créditos dele continuam valendo. Se algum agente usar um modelo de IA que o novo plano não inclui, ele passa a usar o modelo padrão."
+  },
+  "offer": {
+    "credits": "{count, plural, one {# crédito} other {# créditos}}",
+    "creditsPerCycle": "{count, plural, one {# crédito} other {# créditos}} {cycle}"
+  },
+  "section": {
+    "title": "Plano",
+    "current": "Plano atual: {name}.",
+    "choose": "Escolha um plano para seus agentes continuarem atendendo.",
+    "managePayment": "Gerenciar pagamento",
+    "pastDue": "O último pagamento não foi aprovado. Atualize o cartão em “Gerenciar pagamento” para não interromper o atendimento dos agentes.",
+    "pastDueUntil": "O último pagamento não foi aprovado. Atualize o cartão em “Gerenciar pagamento” até {date}; depois disso, os agentes ficam pausados até a regularização.",
+    "nextPlanAt": "Troca para {name} agendada para {date}. Até lá, o plano atual continua valendo.",
+    "nextPlanRenewal": "Troca para {name} agendada para a renovação. Até lá, o plano atual continua valendo.",
+    "manual": "Sua assinatura foi contratada com a CRMThink: para trocar de plano, fale com o time comercial.",
+    "adminOnly": "Somente o administrador do app pode contratar planos.",
+    "checkoutUnavailable": "A contratação pelo app não está disponível neste ambiente. Fale com a CRMThink.",
+    "subscribe": "Contratar",
+    "noPlans": "Nenhum plano disponível no momento.",
+    "currentBadge": "Plano atual",
+    "changeToThis": "Mudar para este plano",
+    "extraTitle": "Créditos adicionais",
+    "extraValidUntil": "Valem até {date}, junto com os créditos do plano.",
+    "extraValidCycle": "Valem até o fim do ciclo do plano.",
+    "extraRequiresPlan": "Disponíveis para quem tem um plano ativo.",
+    "buy": "Comprar",
+    "loadFailed": "Não foi possível carregar os planos.",
+    "portalFailed": "Não foi possível abrir o portal de pagamento."
+  },
+  "errors": {
+    "PLAN_NOT_AVAILABLE": "Plano indisponível.",
+    "SAME_PLAN": "Este já é o seu plano.",
+    "PACKAGE_REQUIRES_PLAN": "Pacotes de créditos exigem um plano ativo.",
+    "MANUAL_SUBSCRIPTION": "Sua assinatura foi contratada com a CRMThink. Para trocar de plano, fale com o time comercial.",
+    "NO_GATEWAY_SUBSCRIPTION": "Esta assinatura não é paga com cartão pelo app. Fale com a CRMThink para alterar o pagamento.",
+    "SUBSCRIPTION_ALREADY_EXISTS": "Este portal já tem um plano ativo. Para mudar, use a troca de plano.",
+    "PAYMENTS_UNAVAILABLE": "Os pagamentos estão indisponíveis no momento. Tente de novo em instantes.",
+    "TRIAL_ALREADY_USED": "O período de teste deste portal já foi utilizado.",
+    "TRIAL_UNAVAILABLE": "O teste grátis não está disponível no momento.",
+    "VALIDATION_ERROR": "Confira os dados do cadastro."
+  }
+}

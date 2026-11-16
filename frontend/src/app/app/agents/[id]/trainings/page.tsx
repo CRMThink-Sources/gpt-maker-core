@@ -5,15 +5,16 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { BookIcon, FileIcon, GlobeIcon, PlusIcon, TextIcon, VideoIcon } from '@/components/icons';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading, Spinner } from '@/components/ui';
+import { type createFormat, type T, useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { inputClass } from '../../agent-fields';
 import { ApiRequestError } from '@/lib/platform-session';
 import {
   formatBytes,
-  TRAINING_INTERVALS,
-  TRAINING_TYPES,
+  trainingIntervalLabel,
   trainingStatus,
   trainingTitle,
+  trainingTypeLabel,
 } from '@/lib/trainings';
 import { useAppSession } from '../../../session-provider';
 import { useAgent } from '../agent-context';
@@ -40,11 +41,13 @@ interface Listing {
 
 function UsageMeter({
   label,
+  t,
   used,
   limit,
   format = String,
 }: {
   label: string;
+  t: T;
   used: number;
   limit: number | null;
   format?: (value: number) => string;
@@ -57,7 +60,7 @@ function UsageMeter({
         <p className="text-xs font-medium text-zinc-500">{label}</p>
         <p className="text-xs text-zinc-500">
           <span className="text-sm font-semibold text-zinc-900">{format(used)}</span>
-          {limit === null ? ' · sem limite' : ` de ${format(limit)}`}
+          {limit === null ? t('page.noLimit') : t('page.ofLimit', { limit: format(limit) })}
         </p>
       </div>
       {limit !== null && (
@@ -69,16 +72,16 @@ function UsageMeter({
   );
 }
 
-function details(training: TrainingView): string {
-  const parts = [TRAINING_TYPES[training.type]];
-  if (training.document) parts.push(formatBytes(training.document.sizeBytes));
+function details(training: TrainingView, t: T, format: ReturnType<typeof createFormat>): string {
+  const parts = [trainingTypeLabel(training.type, t)];
+  if (training.document) parts.push(formatBytes(training.document.sizeBytes, format));
   if (training.type === 'WEBSITE') {
-    if (training.trainingSubPages) parts.push('com páginas ligadas');
+    if (training.trainingSubPages) parts.push(t('page.withSubPages'));
     if (training.trainingInterval && training.trainingInterval !== 'NEVER') {
-      parts.push(TRAINING_INTERVALS[training.trainingInterval].toLowerCase());
+      parts.push(trainingIntervalLabel(training.trainingInterval, t).toLowerCase());
     }
   }
-  parts.push(new Date(training.createdAt).toLocaleDateString('pt-BR'));
+  parts.push(format.dateTime(new Date(training.createdAt), { dateStyle: 'short' }));
   return parts.join(' · ');
 }
 
@@ -86,6 +89,10 @@ function details(training: TrainingView): string {
 export default function AgentTrainingsPage() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('trainings');
+  const tc = useT('common');
+  const format = useFormat();
+  const translateError = useErrorMessage('trainings');
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -108,9 +115,9 @@ export default function AgentTrainingsPage() {
     try {
       setListing(await fetchListing());
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar os treinamentos.'));
+      setError(errorMessage(e, t('page.loadError'), translateError));
     }
-  }, [fetchListing]);
+  }, [fetchListing, t, translateError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,11 +144,12 @@ export default function AgentTrainingsPage() {
       .then((data) => !cancelled && setListing(data))
       .catch(
         (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os treinamentos.')),
+          !cancelled && setError(errorMessage(e, t('page.loadError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [fetchListing]);
 
   const processing = listing?.trainings.some((training) => training.status === 'PROCESSING');
@@ -165,7 +173,7 @@ export default function AgentTrainingsPage() {
       await action();
       await reload();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível concluir. Tente de novo.'));
+      setError(errorMessage(e, t('page.actionError'), translateError));
     } finally {
       setBusyId(null);
       setConfirmingId(null);
@@ -176,33 +184,35 @@ export default function AgentTrainingsPage() {
   const add = canManage && (
     <button type="button" onClick={() => setAdding(true)} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Adicionar treinamento
+      {t('page.add')}
     </button>
   );
 
   const term = query.trim().toLowerCase();
   const filtered = (listing?.trainings ?? []).filter(
-    (training) => !term || trainingTitle(training).toLowerCase().includes(term),
+    (training) => !term || trainingTitle(training, t).toLowerCase().includes(term),
   );
   const shown = filtered.slice(0, visible);
+  // O link da aba Função fica no meio da frase: a tradução marca o lugar com {link}.
+  const [introBefore, introAfter = ''] = t('page.intro', { link: '' }).split('');
 
   return (
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">O que o agente sabe</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">{t('page.heading')}</h2>
           <p className="mt-0.5 text-sm text-zinc-500">
-            Os itens da base vêm do formulário, na aba{' '}
+            {introBefore}
             <Link href={`/app/agents/${agent.id}/function`} className="text-brand-700 underline">
-              Função
+              {t('page.functionTab')}
             </Link>
-            . Você também pode acrescentar textos (com imagem) por aqui.{' '}
+            {introAfter}{' '}
             {mediaAllowed === false
               ? takenOver
-                ? 'Para treinar com sites e vídeos, volte ao formulário no modo avançado lá.'
-                : 'Para treinar com sites e vídeos, ligue o modo avançado lá.'
-              : 'No modo avançado, sites e vídeos entram por aqui.'}{' '}
-            Treinar não consome créditos.
+                ? t('page.mediaTakenOver')
+                : t('page.mediaTurnOn')
+              : t('page.mediaAdvanced')}{' '}
+            {t('page.noCredits')}
           </p>
         </div>
         {add}
@@ -220,7 +230,8 @@ export default function AgentTrainingsPage() {
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <UsageMeter
-              label="Treinamentos (todos os agentes)"
+              label={t('page.usageLabel')}
+              t={t}
               used={listing.usage.trainings.used}
               limit={listing.usage.trainings.limit}
             />
@@ -234,8 +245,8 @@ export default function AgentTrainingsPage() {
                 setQuery(e.target.value);
                 setVisible(PAGE_SIZE);
               }}
-              placeholder="Buscar treinamento pelo título"
-              aria-label="Buscar treinamento"
+              placeholder={t('page.searchPlaceholder')}
+              aria-label={t('page.searchLabel')}
               className={`${inputClass} mb-4`}
             />
           )}
@@ -243,20 +254,20 @@ export default function AgentTrainingsPage() {
           <Card>
             {listing.trainings.length > 0 && filtered.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-zinc-500">
-                Nenhum treinamento encontrado para “{query.trim()}”.
+                {t('page.noMatch', { query: query.trim() })}
               </p>
             ) : listing.trainings.length === 0 ? (
               <EmptyState
                 icon={<BookIcon className="size-6" />}
-                title="Nenhum treinamento ainda"
-                description="Preencha a base de conhecimento no formulário da aba Função e publique, ou adicione um texto por aqui."
+                title={t('page.emptyTitle')}
+                description={t('page.emptyDescription')}
                 action={add}
               />
             ) : (
               <ul className="divide-y divide-zinc-100">
                 {shown.map((training) => {
                   const Icon = ICONS[training.type];
-                  const status = trainingStatus(training.status);
+                  const status = trainingStatus(training.status, t);
                   const busy = busyId === training.id;
                   return (
                     <li key={training.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
@@ -264,7 +275,7 @@ export default function AgentTrainingsPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={training.image.url}
-                          alt="Imagem do treinamento"
+                          alt={t('page.imageAlt')}
                           className="size-9 shrink-0 rounded-lg border border-zinc-200 object-cover"
                         />
                       ) : (
@@ -276,13 +287,13 @@ export default function AgentTrainingsPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <p
                             className="truncate text-sm font-medium text-zinc-900"
-                            title={trainingTitle(training)}
+                            title={trainingTitle(training, t)}
                           >
-                            {trainingTitle(training)}
+                            {trainingTitle(training, t)}
                           </p>
-                          {training.managed && <Badge tone="brand">da função</Badge>}
+                          {training.managed && <Badge tone="brand">{t('page.fromFunction')}</Badge>}
                           {training.type === 'TEXT' && !training.managed && (
-                            <Badge tone="zinc">manual</Badge>
+                            <Badge tone="zinc">{t('page.manual')}</Badge>
                           )}
                           <Badge tone={status.tone}>
                             {training.status === 'PROCESSING' && (
@@ -291,7 +302,9 @@ export default function AgentTrainingsPage() {
                             {status.label}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-xs text-zinc-500">{details(training)}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          {details(training, t, format)}
+                        </p>
                         {training.status === 'FAILED' && training.error && (
                           <p className="mt-1 text-xs text-amber-800">{training.error}</p>
                         )}
@@ -310,19 +323,19 @@ export default function AgentTrainingsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              {busy ? 'Reenviando…' : 'Reenviar'}
+                              {busy ? t('page.retrying') : t('page.retry')}
                             </button>
                           )
                         ) : confirmingId === training.id ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-600">Remover?</span>
+                            <span className="text-sm text-zinc-600">{t('page.confirmRemove')}</span>
                             <button
                               type="button"
                               onClick={() => setConfirmingId(null)}
                               disabled={busy}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              Cancelar
+                              {tc('cancel')}
                             </button>
                             <button
                               type="button"
@@ -334,7 +347,7 @@ export default function AgentTrainingsPage() {
                               disabled={busy}
                               className={buttonClass('danger', 'sm')}
                             >
-                              {busy ? 'Removendo…' : 'Remover'}
+                              {busy ? t('page.removing') : t('page.remove')}
                             </button>
                           </div>
                         ) : (
@@ -350,7 +363,7 @@ export default function AgentTrainingsPage() {
                                 disabled={busyId !== null}
                                 className={buttonClass('secondary', 'sm')}
                               >
-                                {busy ? 'Reenviando…' : 'Reenviar'}
+                                {busy ? t('page.retrying') : t('page.retry')}
                               </button>
                             )}
                             {training.type === 'TEXT' && (
@@ -360,7 +373,7 @@ export default function AgentTrainingsPage() {
                                 disabled={busyId !== null}
                                 className={buttonClass('secondary', 'sm')}
                               >
-                                Editar
+                                {t('page.edit')}
                               </button>
                             )}
                             <button
@@ -369,7 +382,7 @@ export default function AgentTrainingsPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost-danger', 'sm')}
                             >
-                              Remover
+                              {t('page.remove')}
                             </button>
                           </div>
                         ))}
@@ -381,15 +394,13 @@ export default function AgentTrainingsPage() {
           </Card>
           {filtered.length > shown.length && (
             <div className="mt-4 flex items-center justify-center gap-3 text-sm text-zinc-500">
-              <span>
-                Mostrando {shown.length} de {filtered.length}
-              </span>
+              <span>{t('page.showing', { shown: shown.length, total: filtered.length })}</span>
               <button
                 type="button"
                 onClick={() => setVisible((current) => current + PAGE_SIZE)}
                 className={buttonClass('secondary', 'sm')}
               >
-                Mostrar mais
+                {t('page.showMore')}
               </button>
             </div>
           )}

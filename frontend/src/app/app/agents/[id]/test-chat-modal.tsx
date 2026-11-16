@@ -5,7 +5,6 @@ import {
   AGENT_TEST_MESSAGE_MAX,
   type CrmAccessView,
   type CrmClientOption,
-  TEST_CLIENT_TYPE_LABELS,
   type TestClient,
   type TestConversationSummary,
   type TestConversationView,
@@ -16,7 +15,6 @@ import { ArrowLeftIcon, ChatIcon, PlusIcon, SendIcon, TrashIcon } from '@/compon
 import { Modal } from '@/components/modal';
 import { Alert, buttonClass, Spinner } from '@/components/ui';
 import {
-  agentTestErrorMessage,
   createTestConversation,
   CRM_CLIENT_SEARCH_MIN,
   deleteTestConversation,
@@ -27,6 +25,8 @@ import {
   searchCrmClients,
   sendTestMessage,
 } from '@/lib/agent-tests';
+import { useErrorMessage, useFormat, useT, type createFormat, type T } from '@/i18n';
+import { errorMessage } from '@/lib/agents';
 import { getCrmAccess } from '@/lib/crm';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../../session-provider';
@@ -38,8 +38,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 type AccessState = 'loading' | 'connected' | 'off' | 'unavailable';
 
-function clientLabel(client: TestClient): string {
-  return `${client.name} (${TEST_CLIENT_TYPE_LABELS[client.type]})`;
+function clientLabel(client: TestClient, t: T): string {
+  return `${client.name} (${t(`clientTypes.${client.type}`)})`;
 }
 
 function accessState(view: CrmAccessView): AccessState {
@@ -51,6 +51,10 @@ function accessState(view: CrmAccessView): AccessState {
 export function TestChatModal({ onClose }: { onClose: () => void }) {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('testChat');
+  const tc = useT('common');
+  const format = useFormat();
+  const translateError = useErrorMessage('testChat');
   const featureOn = session.features?.crmTools === true;
 
   const [conversations, setConversations] = useState<TestConversationSummary[] | null>(null);
@@ -89,9 +93,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
         setConversations(rows);
         setListError(null);
       })
-      .catch((e: unknown) =>
-        setListError(agentTestErrorMessage(e, 'Não foi possível carregar as conversas de teste.')),
-      );
+      .catch((e: unknown) => setListError(errorMessage(e, t('listError'), translateError)));
   }
 
   useEffect(() => {
@@ -99,15 +101,12 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
     listTestConversations(api, agent.id)
       .then((rows) => !cancelled && setConversations(rows))
       .catch(
-        (e: unknown) =>
-          !cancelled &&
-          setListError(
-            agentTestErrorMessage(e, 'Não foi possível carregar as conversas de teste.'),
-          ),
+        (e: unknown) => !cancelled && setListError(errorMessage(e, t('listError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, agent.id]);
 
   useEffect(() => {
@@ -151,7 +150,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
       .catch(
         (e: unknown) =>
           requested.current === id &&
-          setConversationError(agentTestErrorMessage(e, 'Não foi possível abrir a conversa.')),
+          setConversationError(errorMessage(e, t('openError'), translateError)),
       );
   }
 
@@ -185,9 +184,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
       setPane('chat');
       void refreshList();
     } catch (e) {
-      setCreateError(
-        agentTestErrorMessage(e, 'Não foi possível começar a conversa. Tente de novo.'),
-      );
+      setCreateError(errorMessage(e, t('createError'), translateError));
     } finally {
       setCreating(false);
     }
@@ -210,7 +207,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
       setConversations((rows) => rows?.filter((row) => row.id !== id) ?? rows);
       void refreshList();
     } catch (e) {
-      setDeleteError(agentTestErrorMessage(e, 'Não foi possível excluir a conversa.'));
+      setDeleteError(errorMessage(e, t('deleteError'), translateError));
     } finally {
       setDeleting(false);
     }
@@ -245,10 +242,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
           failed
             ? null
             : {
-                message: agentTestErrorMessage(
-                  e,
-                  'Não foi possível enviar a mensagem. Tente de novo.',
-                ),
+                message: errorMessage(e, t('sendError'), translateError),
                 noCredit: noCredit(e),
               },
         );
@@ -275,20 +269,15 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       size="lg"
-      title={`Testar agente — ${agent.name}`}
+      title={t('title', { name: agent.name })}
       onRequestClose={onClose}
       bodyClassName="flex overflow-hidden"
-      header={
-        <p className="mt-2 text-xs text-zinc-500">
-          Cada resposta de teste consome créditos como uma conversa real. Gatilhos não são
-          disparados e ações no CRM são apenas simuladas.
-        </p>
-      }
+      header={<p className="mt-2 text-xs text-zinc-500">{t('notice')}</p>}
     >
       {/* Coluna da esquerda: conversas */}
       <aside
         className={`${pane === 'chat' ? 'hidden' : 'flex'} w-full min-w-0 flex-col border-zinc-200 md:flex md:w-72 md:shrink-0 md:border-r`}
-        aria-label="Conversas de teste"
+        aria-label={t('conversationsLabel')}
       >
         <div className="space-y-2 border-b border-zinc-200 p-3">
           <button
@@ -298,13 +287,9 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
             className={`${buttonClass('primary')} w-full`}
           >
             <PlusIcon className="size-4" />
-            {creating && !choosingClient ? 'Criando…' : 'Nova conversa'}
+            {creating && !choosingClient ? t('creating') : t('newConversation')}
           </button>
-          {access === 'off' && (
-            <p className="text-xs text-zinc-500">
-              Para simular um cliente do CRM, ligue o &quot;Acesso ao CRM&quot; do agente.
-            </p>
-          )}
+          {access === 'off' && <p className="text-xs text-zinc-500">{t('simulateHint')}</p>}
           {createError && !choosingClient && <Alert tone="error">{createError}</Alert>}
         </div>
 
@@ -322,14 +307,13 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
           {!conversations && !listError && (
             <div className="flex items-center gap-2 p-4 text-sm text-zinc-500" role="status">
               <Spinner className="size-4" />
-              Carregando conversas…
+              {t('loadingConversations')}
             </div>
           )}
           {conversations?.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-zinc-500">
               <ChatIcon className="mx-auto mb-2 size-6 text-zinc-400" />
-              Nenhuma conversa de teste ainda. Clique em &quot;Nova conversa&quot; e fale com o
-              agente como se fosse um cliente.
+              {t('emptyList')}
             </div>
           )}
           {conversations && conversations.length > 0 && (
@@ -340,14 +324,14 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                   <li key={item.id} className={selected ? 'bg-brand-50' : 'hover:bg-zinc-50'}>
                     {confirmingDelete === item.id ? (
                       <div className="flex flex-wrap items-center gap-2 px-3 py-3">
-                        <span className="flex-1 text-sm text-zinc-700">Excluir esta conversa?</span>
+                        <span className="flex-1 text-sm text-zinc-700">{t('confirmDelete')}</span>
                         <button
                           type="button"
                           onClick={() => setConfirmingDelete(null)}
                           disabled={deleting}
                           className={buttonClass('secondary', 'sm')}
                         >
-                          Cancelar
+                          {tc('cancel')}
                         </button>
                         <button
                           type="button"
@@ -355,7 +339,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                           disabled={deleting}
                           className={buttonClass('danger', 'sm')}
                         >
-                          {deleting ? 'Excluindo…' : 'Excluir'}
+                          {deleting ? t('deleting') : t('delete')}
                         </button>
                       </div>
                     ) : (
@@ -370,18 +354,18 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                         >
                           <span className="flex items-baseline justify-between gap-2">
                             <span className="truncate text-sm font-medium text-zinc-900">
-                              {item.client ? item.client.name : 'Sem cliente do CRM'}
+                              {item.client ? item.client.name : t('noClient')}
                             </span>
                             <span className="shrink-0 text-xs text-zinc-400">
-                              {formatWhen(item.lastMessageAt)}
+                              {formatWhen(item.lastMessageAt, t, format)}
                             </span>
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-zinc-500">
-                            {item.lastMessage ?? 'Sem mensagens'}
+                            {item.lastMessage ?? t('noMessages')}
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-zinc-400">
-                            {item.client ? `${TEST_CLIENT_TYPE_LABELS[item.client.type]} · ` : ''}
-                            por {item.createdByName}
+                            {item.client ? `${t(`clientTypes.${item.client.type}`)} · ` : ''}
+                            {t('by', { name: item.createdByName })}
                           </span>
                         </button>
                         <button
@@ -391,8 +375,8 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                             setConfirmingDelete(item.id);
                           }}
                           className="mt-2.5 rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600"
-                          aria-label="Excluir conversa"
-                          title="Excluir conversa"
+                          aria-label={t('deleteConversation')}
+                          title={t('deleteConversation')}
                         >
                           <TrashIcon className="size-4" />
                         </button>
@@ -405,7 +389,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
           )}
           {conversations && conversations.length > 0 && (
             <p className="px-4 py-3 text-xs text-zinc-400">
-              Guardamos as {AGENT_TEST_CONVERSATIONS_MAX} conversas mais recentes.
+              {t('keepNotice', { max: AGENT_TEST_CONVERSATIONS_MAX })}
             </p>
           )}
         </div>
@@ -414,12 +398,12 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
       {/* Coluna da direita: conversa selecionada ou escolha do cliente */}
       <section
         className={`${pane === 'list' ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col md:flex`}
-        aria-label="Conversa de teste"
+        aria-label={t('conversationLabel')}
       >
         {!showChat && (
           <div className="flex flex-1 flex-col items-center justify-center p-6 text-center text-sm text-zinc-500">
             <ChatIcon className="mb-2 size-8 text-zinc-300" />
-            Selecione uma conversa ou comece uma nova.
+            {t('selectOrStart')}
           </div>
         )}
 
@@ -442,7 +426,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                 type="button"
                 onClick={() => setPane('list')}
                 className="-ml-1 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 md:hidden"
-                aria-label="Voltar para a lista de conversas"
+                aria-label={t('backToList')}
               >
                 <ArrowLeftIcon className="size-5" />
               </button>
@@ -450,14 +434,14 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                 {conversation ? (
                   conversation.client ? (
                     <>
-                      <span className="text-zinc-500">Simulando:</span>{' '}
-                      <span className="font-medium">{clientLabel(conversation.client)}</span>
+                      <span className="text-zinc-500">{t('simulating')}</span>{' '}
+                      <span className="font-medium">{clientLabel(conversation.client, t)}</span>
                     </>
                   ) : (
-                    <span className="text-zinc-500">Sem cliente do CRM</span>
+                    <span className="text-zinc-500">{t('noClient')}</span>
                   )
                 ) : (
-                  <span className="text-zinc-400">Conversa de teste</span>
+                  <span className="text-zinc-400">{t('conversationLabel')}</span>
                 )}
               </p>
             </div>
@@ -467,21 +451,21 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
               {!conversation && !conversationError && (
                 <div className="flex items-center gap-2 text-sm text-zinc-500" role="status">
                   <Spinner className="size-4" />
-                  Carregando conversa…
+                  {t('loadingConversation')}
                 </div>
               )}
               {conversation && (
                 <ol className="space-y-3">
                   {conversation.messages.length === 0 && !waitingHere && (
-                    <li className="py-8 text-center text-sm text-zinc-500">
-                      Escreva uma mensagem como se você fosse o cliente.
-                    </li>
+                    <li className="py-8 text-center text-sm text-zinc-500">{t('writeAsClient')}</li>
                   )}
                   {conversation.messages.map((message) => (
                     <Bubble
                       key={message.id}
                       message={message}
                       retryDisabled={sending !== null}
+                      t={t}
+                      format={format}
                       onRetry={() => send(message.text)}
                     />
                   ))}
@@ -499,7 +483,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                           role="status"
                         >
                           <Spinner className="size-4" />
-                          {agent.name} está digitando…
+                          {t('typing', { name: agent.name })}
                         </div>
                       </li>
                     </>
@@ -520,7 +504,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                   <Alert tone={sendError.noCredit ? 'warning' : 'error'}>
                     {sendError.noCredit ? (
                       <>
-                        <p className="font-semibold">Sem créditos</p>
+                        <p className="font-semibold">{t('noCreditTitle')}</p>
                         <p>{sendError.message}</p>
                       </>
                     ) : (
@@ -530,7 +514,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                 )}
                 <div className="flex items-end gap-2">
                   <label htmlFor="test-chat-input" className="sr-only">
-                    Mensagem para o agente
+                    {t('messageLabel')}
                   </label>
                   <textarea
                     id="test-chat-input"
@@ -540,7 +524,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={onKeyDown}
                     disabled={sending !== null}
                     rows={2}
-                    placeholder="Escreva como se fosse o cliente… (Enter envia, Shift+Enter quebra linha)"
+                    placeholder={t('messagePlaceholder')}
                     aria-describedby={text.length >= COUNTER_FROM ? 'test-chat-counter' : undefined}
                     className="max-h-40 min-h-[2.75rem] flex-1 resize-y rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none disabled:bg-zinc-50 disabled:text-zinc-500"
                   />
@@ -548,10 +532,10 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                     type="submit"
                     disabled={sending !== null || !text.trim() || tooLong}
                     className={buttonClass('primary')}
-                    aria-label="Enviar mensagem"
+                    aria-label={t('sendLabel')}
                   >
                     <SendIcon className="size-4" />
-                    <span className="hidden sm:inline">Enviar</span>
+                    <span className="hidden sm:inline">{t('send')}</span>
                   </button>
                 </div>
                 {text.length >= COUNTER_FROM && (
@@ -559,7 +543,7 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
                     id="test-chat-counter"
                     className={`text-right text-xs ${tooLong ? 'text-red-600' : 'text-zinc-500'}`}
                   >
-                    {text.length}/{AGENT_TEST_MESSAGE_MAX} caracteres
+                    {t('counter', { count: text.length, max: AGENT_TEST_MESSAGE_MAX })}
                   </p>
                 )}
               </form>
@@ -574,16 +558,17 @@ export function TestChatModal({ onClose }: { onClose: () => void }) {
 function Bubble({
   message,
   retryDisabled,
+  t,
+  format,
   onRetry,
 }: {
   message: TestMessageView;
   retryDisabled: boolean;
+  t: T;
+  format: ReturnType<typeof createFormat>;
   onRetry: () => void;
 }) {
-  const time = new Date(message.createdAt).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const time = format.dateTime(new Date(message.createdAt), { hour: '2-digit', minute: '2-digit' });
   if (message.role === 'AGENT') {
     return (
       <li className="flex flex-col items-start">
@@ -601,19 +586,19 @@ function Bubble({
       </div>
       {message.status === 'FAILED' ? (
         <span className="mt-1 flex items-center gap-2 text-xs text-red-700">
-          O agente não respondeu
+          {t('noReply')}
           <button
             type="button"
             onClick={onRetry}
             disabled={retryDisabled}
             className={buttonClass('secondary', 'sm')}
           >
-            Tentar de novo
+            {t('retry')}
           </button>
         </span>
       ) : (
         <span className="mt-1 text-[11px] text-zinc-400">
-          {message.status === 'PENDING' ? `${time} · aguardando resposta` : time}
+          {message.status === 'PENDING' ? t('awaitingReply', { time }) : time}
         </span>
       )}
     </li>
@@ -633,6 +618,8 @@ function ClientStep({
   onPick: (client: TestClient | null) => void;
 }) {
   const { api } = useAppSession();
+  const t = useT('testChat');
+  const translateError = useErrorMessage('testChat');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{
     query: string;
@@ -661,7 +648,7 @@ function ClientStep({
             setResults({
               query: term,
               items: [],
-              error: agentTestErrorMessage(e, 'Não foi possível buscar clientes no CRM.'),
+              error: errorMessage(e, t('searchError'), translateError),
             }),
         );
     }, SEARCH_DEBOUNCE_MS);
@@ -669,6 +656,7 @@ function ClientStep({
       cancelled = true;
       clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, term]);
 
   return (
@@ -678,24 +666,21 @@ function ClientStep({
           type="button"
           onClick={onBack}
           className="-ml-1 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 md:hidden"
-          aria-label="Voltar para a lista de conversas"
+          aria-label={t('backToList')}
         >
           <ArrowLeftIcon className="size-5" />
         </button>
-        <h3 className="text-sm font-semibold text-zinc-900">Simular cliente do CRM</h3>
-        <span className="text-xs text-zinc-400">(opcional)</span>
+        <h3 className="text-sm font-semibold text-zinc-900">{t('clientStep.title')}</h3>
+        <span className="text-xs text-zinc-400">{t('clientStep.optional')}</span>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        <p className="text-sm text-zinc-600">
-          Escolha um contato, lead ou empresa do Bitrix24 para o agente tratar como o cliente da
-          conversa, ou comece sem cliente.
-        </p>
+        <p className="text-sm text-zinc-600">{t('clientStep.description')}</p>
         <div>
           <label
             htmlFor="test-chat-client"
             className="mb-1 block text-sm font-medium text-zinc-700"
           >
-            Buscar cliente
+            {t('clientStep.searchLabel')}
           </label>
           <input
             id="test-chat-client"
@@ -703,14 +688,14 @@ function ClientStep({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Nome, telefone ou e-mail"
+            placeholder={t('clientStep.searchPlaceholder')}
             autoComplete="off"
             disabled={creating}
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
           />
           {!ready && term.length > 0 && (
             <p className="mt-1 text-xs text-zinc-500">
-              Digite pelo menos {CRM_CLIENT_SEARCH_MIN} caracteres.
+              {t('clientStep.minChars', { count: CRM_CLIENT_SEARCH_MIN })}
             </p>
           )}
         </div>
@@ -719,12 +704,12 @@ function ClientStep({
           {searching && (
             <p className="flex items-center gap-2 text-sm text-zinc-500" role="status">
               <Spinner className="size-4" />
-              Buscando…
+              {t('clientStep.searching')}
             </p>
           )}
           {current?.error && <Alert tone="error">{current.error}</Alert>}
           {current && !current.error && current.items.length === 0 && (
-            <p className="text-sm text-zinc-500">Nenhum cliente encontrado.</p>
+            <p className="text-sm text-zinc-500">{t('clientStep.noResults')}</p>
           )}
           {current && current.items.length > 0 && (
             <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
@@ -747,7 +732,7 @@ function ClientStep({
                       )}
                     </span>
                     <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-                      {TEST_CLIENT_TYPE_LABELS[option.type]}
+                      {t(`clientTypes.${option.type}`)}
                     </span>
                   </button>
                 </li>
@@ -765,7 +750,7 @@ function ClientStep({
           disabled={creating}
           className={buttonClass('secondary')}
         >
-          Começar sem cliente
+          {t('clientStep.startWithout')}
         </button>
       </div>
     </div>

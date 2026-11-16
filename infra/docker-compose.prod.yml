@@ -25,6 +25,7 @@ services:
       PUBLIC_APP_CODE: ${APP_CODE}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
       PUBLIC_STRIPE_PUBLISHABLE_KEY: ${PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      PUBLIC_SUPPORT_URL: ${PUBLIC_SUPPORT_URL:-}
       # Repasse do backoffice (/admin/api) para a API pela rede interna
       API_INTERNAL_URL: http://${STACK_NAME}-api:3001
     healthcheck:

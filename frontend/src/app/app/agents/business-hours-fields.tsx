@@ -9,16 +9,16 @@ import {
   type WeekDay,
   businessHoursSchema,
 } from '@gptmaker/contracts';
+import { createT, type T, useT } from '@/i18n';
 import { Field, inputClass, type FieldsProps } from './agent-fields';
 
-const DAY_LABELS: Record<WeekDay, string> = {
-  mon: 'Segunda',
-  tue: 'Terça',
-  wed: 'Quarta',
-  thu: 'Quinta',
-  fri: 'Sexta',
-  sat: 'Sábado',
-  sun: 'Domingo',
+const PT_BR = createT('pt-BR', 'agentForm');
+
+/** Mensagens da validação do contrato (`business-hours`) que têm tradução. */
+const ISSUE_KEYS: Record<string, string> = {
+  'use HH:mm': 'timeFormat',
+  'o início deve ser anterior ao fim': 'startBeforeEnd',
+  'fuso horário inválido': 'invalidTimezone',
 };
 
 /** Expediente comercial usado ao ligar o horário: seg–sex, 09:00–18:00. */
@@ -39,13 +39,18 @@ export function defaultBusinessHours(): BusinessHours {
 }
 
 /** Primeiro problema do horário (texto para o usuário) ou `null` se estiver válido. */
-export function businessHoursProblem(hours: BusinessHours | null): string | null {
+export function businessHoursProblem(hours: BusinessHours | null, t: T = PT_BR): string | null {
   if (!hours) return null;
   const result = businessHoursSchema.safeParse(hours);
   if (result.success) return null;
   const issue = result.error.issues[0]!;
-  const day = issue.path[0] === 'days' ? DAY_LABELS[issue.path[1] as WeekDay] : null;
-  return day ? `${day}: ${issue.message}` : issue.message;
+  const key = issue.message.startsWith('intervalos sobrepostos')
+    ? 'overlap'
+    : ISSUE_KEYS[issue.message];
+  const message = key ? t(`hours.problems.${key}`) : issue.message;
+  return issue.path[0] === 'days'
+    ? t('hours.problems.withDay', { day: t(`hours.days.${issue.path[1] as WeekDay}`), message })
+    : message;
 }
 
 /** Selo "dentro/fora do horário agora", no fuso do agente. */
@@ -56,8 +61,11 @@ export function BusinessHoursStatus({
   hours: BusinessHours | null;
   now?: Date;
 }) {
-  if (!hours) return <span className="text-sm font-medium text-zinc-700">24 horas</span>;
-  if (businessHoursProblem(hours)) return null;
+  const t = useT('agentForm');
+  if (!hours) {
+    return <span className="text-sm font-medium text-zinc-700">{t('hours.always')}</span>;
+  }
+  if (businessHoursProblem(hours, t)) return null;
   const open = isWithinBusinessHours(hours, now);
   return (
     <span
@@ -66,14 +74,15 @@ export function BusinessHoursStatus({
       }`}
     >
       <span className={`size-1.5 rounded-full ${open ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-      {open ? 'Dentro do horário agora' : 'Fora do horário agora'}
+      {open ? t('hours.inside') : t('hours.outside')}
     </span>
   );
 }
 
 export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: Date }) {
+  const t = useT('agentForm');
   const hours = values.businessHours;
-  const problem = businessHoursProblem(hours);
+  const problem = businessHoursProblem(hours, t);
 
   function update(next: BusinessHours) {
     set('businessHours', next);
@@ -103,22 +112,15 @@ export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: 
             checked={hours !== null}
             onChange={(e) => set('businessHours', e.target.checked ? defaultBusinessHours() : null)}
           />
-          Definir horário de funcionamento
+          {t('hours.enable')}
         </label>
         <BusinessHoursStatus hours={hours} now={now} />
       </div>
-      {!hours && (
-        <p className="text-sm text-zinc-500">
-          Sem horário definido, o agente responde 24 horas por dia, todos os dias.
-        </p>
-      )}
+      {!hours && <p className="text-sm text-zinc-500">{t('hours.disabledHint')}</p>}
 
       {hours && (
         <>
-          <Field
-            label="Fuso horário"
-            hint="O horário abaixo vale neste fuso (ex.: America/Sao_Paulo, America/Manaus)."
-          >
+          <Field label={t('hours.timezone')} hint={t('hours.timezoneHint')}>
             <input
               className={inputClass}
               maxLength={64}
@@ -131,36 +133,36 @@ export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: 
             {WEEK_DAYS.map((day) => (
               <div key={day} className="flex flex-wrap items-start gap-3 px-4 py-3">
                 <span className="w-20 pt-2 text-sm font-medium text-zinc-800">
-                  {DAY_LABELS[day]}
+                  {t(`hours.days.${day}`)}
                 </span>
                 <div className="min-w-0 flex-1 space-y-2">
                   {hours.days[day].length === 0 && (
-                    <p className="pt-2 text-sm text-zinc-500">Sem atendimento</p>
+                    <p className="pt-2 text-sm text-zinc-500">{t('hours.closed')}</p>
                   )}
                   {hours.days[day].map((interval, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="time"
-                        aria-label={`${DAY_LABELS[day]}: início`}
+                        aria-label={t('hours.startLabel', { day: t(`hours.days.${day}`) })}
                         className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
                         value={interval.start}
                         onChange={(e) => setInterval(day, index, 'start', e.target.value)}
                       />
-                      <span className="text-sm text-zinc-500">às</span>
+                      <span className="text-sm text-zinc-500">{t('hours.to')}</span>
                       <input
                         type="time"
-                        aria-label={`${DAY_LABELS[day]}: fim`}
+                        aria-label={t('hours.endLabel', { day: t(`hours.days.${day}`) })}
                         className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
                         value={interval.end === '24:00' ? '23:59' : interval.end}
                         onChange={(e) => setInterval(day, index, 'end', e.target.value)}
                       />
                       <button
                         type="button"
-                        aria-label={`${DAY_LABELS[day]}: remover intervalo`}
+                        aria-label={t('hours.removeLabel', { day: t(`hours.days.${day}`) })}
                         onClick={() => removeInterval(day, index)}
                         className="text-sm text-zinc-500 hover:text-red-600"
                       >
-                        Remover
+                        {t('hours.remove')}
                       </button>
                     </div>
                   ))}
@@ -170,7 +172,7 @@ export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: 
                   onClick={() => addInterval(day)}
                   className="pt-2 text-sm font-medium text-brand-700 hover:underline"
                 >
-                  Adicionar intervalo
+                  {t('hours.add')}
                 </button>
               </div>
             ))}
@@ -192,23 +194,18 @@ export function BusinessHoursFields({ values, set, now }: FieldsProps & { now?: 
               checked={values.outOfHoursTransfer}
               onChange={(e) => set('outOfHoursTransfer', e.target.checked)}
             />
-            Transferir para um atendente
+            {t('hours.transfer')}
           </label>
-          <p className="text-sm text-zinc-500">
-            Fora do horário, a conversa vai para o operador livre da Linha Aberta e o agente deixa
-            de responder nela. Para o atendimento acontecer, o expediente da Linha Aberta precisa
-            estar configurado no Bitrix24. A conversa só volta para o agente quando o atendente a
-            encerra.
-          </p>
+          <p className="text-sm text-zinc-500">{t('hours.transferHint')}</p>
         </div>
       )}
 
       <Field
-        label="Mensagem fora do horário (opcional)"
+        label={t('hours.messageLabel')}
         hint={
           values.outOfHoursTransfer && hours
-            ? 'Enviada ao cliente antes de a conversa ir para o atendente, sem consumir créditos. Em branco, a conversa é transferida sem aviso.'
-            : 'Enviada uma vez a cada 12 horas para quem escrever fora do horário, sem consumir créditos. Em branco, o agente fica em silêncio. Mensagens fora do horário não são respondidas depois.'
+            ? t('hours.messageHintTransfer')
+            : t('hours.messageHintSilent')
         }
       >
         <textarea

@@ -15,7 +15,12 @@ import { ReviewSessionStore } from './review-session.store';
 /** Revisão do preenchimento da função (spec agent-knowledge-review). */
 @Module({
   imports: [AgentFunctionsModule, AgentsModule, BillingModule, TenancyModule, VibecodeModule],
-  controllers: [AiKeyController, FunctionReviewController, AssistController, AssistByCodeController],
+  controllers: [
+    AiKeyController,
+    FunctionReviewController,
+    AssistController,
+    AssistByCodeController,
+  ],
   providers: [AiKeyService, FunctionReviewService, ReviewSessionStore],
   exports: [AiKeyService],
 })

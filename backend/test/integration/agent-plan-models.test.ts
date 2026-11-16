@@ -92,7 +92,11 @@ describe('modelos dos agentes conforme o plano', () => {
       },
     } as unknown as GptMakerClient;
     const notifications = {
-      notify: async (n: { type: string; message: string }) => notified.push(n) > 0,
+      notify: async (n: { type: string; message: string | ((locale: 'pt-BR') => string) }) =>
+        notified.push({
+          type: n.type,
+          message: typeof n.message === 'function' ? n.message('pt-BR') : n.message,
+        }) > 0,
     } as unknown as NotificationService;
     enforcer = new AgentPlanModels(
       new TenantLifecycle(),

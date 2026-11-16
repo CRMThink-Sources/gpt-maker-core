@@ -1,0 +1,18 @@
+{
+  "title": "Permisos",
+  "description": "Los administradores del portal siempre pueden crear, editar, entrenar y configurar disparadores. Autorice aquí a otros usuarios; los demás solo consultan.",
+  "authorize": "Autorizar usuarios",
+  "adminOnly": "Solo los administradores del portal gestionan los permisos.",
+  "empty": {
+    "title": "Solo los administradores gestionan agentes",
+    "description": "Autorice a otros usuarios del portal para que también puedan crear y editar agentes."
+  },
+  "userFallback": "Usuario #{id}",
+  "grantedBy": "Autorizado por {name} el {date}",
+  "revoke": "Quitar acceso",
+  "errors": {
+    "load": "No fue posible cargar los permisos.",
+    "save": "No fue posible guardar.",
+    "INVALID_USER": "Id de usuario de Bitrix inválido"
+  }
+}

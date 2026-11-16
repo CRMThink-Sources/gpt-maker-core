@@ -1,0 +1,41 @@
+{
+  "title": "Agentes",
+  "description": "Agentes de IA que atendem seus clientes nos canais abertos do Bitrix24.",
+  "newAgent": "Novo agente",
+  "trial": {
+    "title": "Teste grátis por 14 dias.",
+    "text": "Ganhe 500 créditos para seus agentes começarem a atender.",
+    "action": "Ativar teste"
+  },
+  "readOnly": "Você pode consultar os agentes. Para alterá-los, peça acesso a um administrador do portal.",
+  "stats": {
+    "agents": "Agentes",
+    "active": "Ativos",
+    "activeHint": "respondendo agora",
+    "inactive": "Inativos"
+  },
+  "empty": {
+    "title": "Nenhum agente ainda",
+    "descriptionManage": "Crie o primeiro agente para começar a atender pelos canais abertos.",
+    "descriptionReadOnly": "Quando um agente for criado, ele aparece aqui."
+  },
+  "outOfSync": "O agente não foi encontrado no GPTMaker. Fale com o suporte.",
+  "removeConfirm": "Remover este agente?",
+  "cancel": "Cancelar",
+  "remove": "Remover",
+  "removing": "Removendo…",
+  "wait": "Aguarde…",
+  "deactivate": "Inativar",
+  "reactivate": "Reativar",
+  "edit": "Editar",
+  "errors": {
+    "load": "Não foi possível carregar os agentes.",
+    "action": "Não foi possível concluir. Tente de novo.",
+    "AGENT_INACTIVE_BY_SYSTEM": "O agente foi inativado pelo sistema e volta sozinho quando a causa for resolvida",
+    "TENANT_SUSPENDED": "A conta está suspensa; fale com o suporte para reativar agentes",
+    "SUBSCRIPTION_INACTIVE": "A assinatura não está ativa; regularize o pagamento para reativar agentes",
+    "AGENT_BUSY": "O agente está sendo alterado; aguarde e tente de novo",
+    "AGENT_OUT_OF_SYNC": "O agente não foi encontrado no GPTMaker; fale com o suporte",
+    "GPTMAKER_UNAVAILABLE": "Não foi possível concluir no GPTMaker agora; nada foi alterado. Tente de novo em instantes"
+  }
+}

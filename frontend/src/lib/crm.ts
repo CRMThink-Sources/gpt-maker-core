@@ -8,8 +8,12 @@ import type {
   CrmFieldView,
 } from '@gptmaker/contracts';
 import type { Tone } from '@/components/ui';
+import { createT, type T } from '@/i18n';
 import { errorMessage } from './agents';
 import { ApiRequestError, type PlatformSessionClient } from './platform-session';
+
+/** Sem `t` (testes e quem ainda não traduz) vale o pt-BR do namespace `crm`. */
+const fallbackT = createT('pt-BR', 'crm');
 
 /** `api` da sessão do iframe (`useAppSession().api`). */
 type Api = PlatformSessionClient['api'];
@@ -69,91 +73,47 @@ export function crmUnavailable(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === 'CRM_UNAVAILABLE';
 }
 
-const MESSAGES: Record<string, string> = {
-  CRM_UNAVAILABLE: 'O Bitrix24 não respondeu agora. Aguarde um pouco e tente de novo.',
-  CRM_ACCESS_BUSY:
-    'Outra alteração do acesso ao CRM deste agente está em andamento. Aguarde alguns segundos e tente de novo.',
-};
+const MESSAGE_CODES = ['CRM_UNAVAILABLE', 'CRM_ACCESS_BUSY'];
 
-/** Mensagem para o usuário nas telas do CRM. */
-export function crmErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiRequestError && MESSAGES[error.code]) return MESSAGES[error.code]!;
-  return errorMessage(error, fallback);
+/**
+ * Mensagem para o usuário nas telas do CRM. `translate` vem de `useErrorMessage('crm')`; sem ele,
+ * os códigos conhecidos saem em pt-BR.
+ */
+export function crmErrorMessage(
+  error: unknown,
+  fallback: string,
+  translate?: (error: unknown) => string,
+): string {
+  if (error instanceof ApiRequestError && MESSAGE_CODES.includes(error.code)) {
+    return translate ? translate(error) : fallbackT(`errors.${error.code}`);
+  }
+  return errorMessage(error, fallback, translate);
 }
 
 /** Ordem das abas na tela "CRM para o agente". */
 export const CRM_ENTITY_TABS: CrmEntity[] = ['contact', 'deal', 'lead', 'company'];
 
-const FIELD_TYPES: Record<string, string> = {
-  string: 'Texto',
-  integer: 'Número inteiro',
-  double: 'Número',
-  money: 'Valor',
-  date: 'Data',
-  datetime: 'Data e hora',
-  enumeration: 'Lista',
-  crm_status: 'Lista do CRM',
-  boolean: 'Sim/não',
-  char: 'Sim/não',
-  user: 'Usuário',
-  employee: 'Usuário',
-  crm_multifield: 'Telefone, e-mail ou contato',
-  crm_currency: 'Moeda',
-  crm_category: 'Funil',
-  crm_stage: 'Etapa do funil',
-  url: 'Link',
-  address: 'Endereço',
-};
-
-/** Tipo do campo do Bitrix24 na linguagem do usuário. */
-export function fieldTypeLabel(type: string): string {
-  return FIELD_TYPES[type] ?? type;
+/** Tipo do campo do Bitrix24 na linguagem do usuário (`t` do namespace `crm`). */
+export function fieldTypeLabel(type: string, t: T = fallbackT): string {
+  return t.has(`fieldTypes.${type}`) ? t(`fieldTypes.${type}`) : type;
 }
 
 /** Quando o agente usa os campos de cada entidade (spec agent-crm-tools, "Identificar o cliente"). */
-export const CRM_ENTITY_USAGE: Record<CrmEntity, string> = {
-  contact: 'O agente usa estes campos ao identificar o cliente da conversa.',
-  deal: 'O agente lê estes campos nos negócios do cliente (até 10, do mais recente para o mais antigo).',
-  lead: 'Usados quando a conversa está ligada a um lead e ainda não há contato.',
-  company: 'Usados quando a conversa está ligada só a uma empresa.',
-};
-
-/** Valor fictício por tipo, para a prévia do que o agente recebe. */
-const EXAMPLE_VALUES: Record<string, string> = {
-  string: 'Exemplo',
-  integer: '42',
-  double: '42',
-  money: 'R$ 1.500,00',
-  date: '15/03/2026',
-  datetime: '15/03/2026 14:30',
-  boolean: 'Sim',
-  char: 'Sim',
-  user: 'Ana (responsável)',
-  employee: 'Ana (responsável)',
-  crm_multifield: '(11) 91234-5678',
-  crm_currency: 'Real',
-  crm_category: 'Vendas',
-  crm_stage: 'Proposta enviada',
-  url: 'https://exemplo.com.br',
-  address: 'Av. Paulista, 1000 - São Paulo',
-};
+export function crmEntityUsage(entity: CrmEntity, t: T = fallbackT): string {
+  return t(`usage.${entity}`);
+}
 
 /**
- * Valor fictício de campos padrão conhecidos, antes do valor por tipo: "Exemplo" em todo campo de
- * texto não mostrava nada. Chave `entidade:código` vence a só pelo código (TITLE muda por entidade).
+ * Valor fictício de campos padrão conhecidos (`preview.byField.*`), antes do valor por tipo
+ * (`preview.byType.*`): "Exemplo" em todo campo de texto não mostrava nada. A chave
+ * `entidade_CÓDIGO` vence a só pelo código (TITLE muda por entidade).
  */
-const EXAMPLE_BY_FIELD: Record<string, string> = {
-  NAME: 'Maria',
-  SECOND_NAME: 'Aparecida',
-  LAST_NAME: 'Souza',
-  POST: 'Gerente comercial',
-  COMMENTS: 'Prefere contato por WhatsApp',
-  ADDRESS: 'Av. Paulista, 1000 - São Paulo',
-  'deal:TITLE': 'Implantação do CRM',
-  'lead:TITLE': 'Contato pelo site',
-  'company:TITLE': 'ACME Ltda',
-  'lead:COMPANY_TITLE': 'ACME Ltda',
-};
+function exampleFor(field: CrmFieldView, t: T): string | undefined {
+  for (const key of [`byField.${field.entity}_${field.code}`, `byField.${field.code}`]) {
+    if (t.has(`preview.${key}`)) return t(`preview.${key}`);
+  }
+  return undefined;
+}
 
 export interface AgentPreviewLine {
   label: string;
@@ -165,32 +125,35 @@ export interface AgentPreviewLine {
  * Prévia do que o agente recebe: só os campos expostos, com um valor fictício coerente com o tipo
  * (o primeiro valor aceito, quando for lista). Não lê dados reais do portal.
  */
-export function buildAgentPreview(fields: CrmFieldView[]): AgentPreviewLine[] {
+export function buildAgentPreview(fields: CrmFieldView[], t: T = fallbackT): AgentPreviewLine[] {
   return fields
     .filter((field) => field.exposed && field.available)
     .map((field) => ({
       label: field.label,
       example:
         field.options[0] ??
-        (field.custom
-          ? undefined
-          : (EXAMPLE_BY_FIELD[`${field.entity}:${field.code}`] ?? EXAMPLE_BY_FIELD[field.code])) ??
-        EXAMPLE_VALUES[field.type] ??
-        '…',
+        (field.custom ? undefined : exampleFor(field, t)) ??
+        (t.has(`preview.byType.${field.type}`) ? t(`preview.byType.${field.type}`) : '…'),
       description: field.description.trim(),
     }));
 }
 
 /** Valores aceitos resumidos: os primeiros e quantos faltam. */
-export function summarizeOptions(options: string[], max = 6): string {
+export function summarizeOptions(options: string[], max = 6, t: T = fallbackT): string {
   if (options.length <= max) return options.join(', ');
   const shown = options.slice(0, max - 1);
-  return `${shown.join(', ')} e mais ${options.length - shown.length}`;
+  return t('options.more', { list: shown.join(', '), count: options.length - shown.length });
 }
 
+/** Selo do acesso do agente ao CRM; `label` em pt-BR, outro idioma via `crmAccessStatusLabel`. */
 export const CRM_ACCESS_STATUS: Record<CrmAccessStatus, { label: string; tone: Tone }> = {
-  DISABLED: { label: 'Desligado', tone: 'zinc' },
-  CONNECTING: { label: 'Conectando', tone: 'brand' },
-  CONNECTED: { label: 'Conectado', tone: 'green' },
-  ERROR: { label: 'Erro ao conectar', tone: 'amber' },
+  DISABLED: { label: fallbackT('accessStatus.DISABLED'), tone: 'zinc' },
+  CONNECTING: { label: fallbackT('accessStatus.CONNECTING'), tone: 'brand' },
+  CONNECTED: { label: fallbackT('accessStatus.CONNECTED'), tone: 'green' },
+  ERROR: { label: fallbackT('accessStatus.ERROR'), tone: 'amber' },
 };
+
+/** Rótulo do status do acesso ao CRM no idioma de `t` (namespace `crm`). */
+export function crmAccessStatusLabel(status: CrmAccessStatus, t: T): string {
+  return t(`accessStatus.${status}`);
+}

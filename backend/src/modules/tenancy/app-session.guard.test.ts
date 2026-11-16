@@ -70,6 +70,7 @@ describe('AppSessionGuard', () => {
       tenantId: 't-1',
       tenantCode: 'abc123',
       tenantStatus: 'ACTIVE',
+      locale: 'pt-BR',
       installationId: 1001,
       userId: '7',
       userName: 'Ana',

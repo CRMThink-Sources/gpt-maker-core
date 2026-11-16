@@ -10,12 +10,13 @@ import type {
   ReviewFieldResult,
 } from '@gptmaker/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useErrorMessage, useT } from '@/i18n';
 import { ApiRequestError } from '@/lib/platform-session';
 import { answerKey, expectationValid } from './review-logic';
 
 export type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
 
-/** Resultado de um campo: andamento, sucesso ou a falha em pt-BR. */
+/** Resultado de um campo: andamento, sucesso ou a falha já traduzida. */
 export type FieldReview =
   | { status: 'running'; answerKey: string }
   | { status: 'done'; answerKey: string; result: ReviewFieldResult; applied?: number[] }
@@ -67,9 +68,14 @@ export async function retryWhenBusy<T>(call: () => Promise<T>, delayMs: number):
   }
 }
 
-export function failure(error: unknown): { message: string; code: string | null } {
-  if (error instanceof ApiRequestError) return { message: error.message, code: error.code };
-  return { message: 'Não foi possível revisar agora. Tente de novo.', code: null };
+/** `errorMessage` traduz o erro da API por código; `fallback` vale quando não veio da API. */
+export function failure(
+  error: unknown,
+  errorMessage: (error: unknown) => string,
+  fallback: string,
+): { message: string; code: string | null } {
+  if (error instanceof ApiRequestError) return { message: errorMessage(error), code: error.code };
+  return { message: fallback, code: null };
 }
 
 /** Estado da chave de IA do cliente (`GET /app/ai-key`); `null` enquanto carrega ou se falhar. */
@@ -94,6 +100,8 @@ export function useAiKey(api: Api): AiKeyView | null {
  */
 export function useFunctionReview(api: Api, base: string, options: { busyDelayMs?: number } = {}) {
   const busyDelay = options.busyDelayMs ?? BUSY_DELAY_MS;
+  const t = useT('assist');
+  const errorMessage = useErrorMessage('assist');
   const [state, setState] = useState<ReviewState>(EMPTY);
   const [running, setRunning] = useState(false);
   const runs = useRef(0);
@@ -158,7 +166,7 @@ export function useFunctionReview(api: Api, base: string, options: { busyDelayMs
               if (result.summary) summaries.push({ fieldId: id, summary: result.summary });
               patch(id, { status: 'done', answerKey: keys[id]!, result });
             } catch (error) {
-              const { message, code } = failure(error);
+              const { message, code } = failure(error, errorMessage, t('review.failed'));
               if (code === 'NO_CREDIT') noCredit = message;
               patch(id, { status: 'error', answerKey: keys[id]!, message, code });
             }
@@ -198,12 +206,12 @@ export function useFunctionReview(api: Api, base: string, options: { busyDelayMs
             );
             setState((prev) => ({ ...prev, gaps: { status: 'done', result, added: [] } }));
           } catch (error) {
-            const { message, code } = failure(error);
+            const { message, code } = failure(error, errorMessage, t('review.failed'));
             setState((prev) => ({ ...prev, gaps: { status: 'error', message, code } }));
           }
         }
       } catch (error) {
-        const { message } = failure(error);
+        const { message } = failure(error, errorMessage, t('review.failed'));
         setState((prev) => ({
           ...prev,
           gaps: withGaps ? { status: 'idle' } : prev.gaps,
@@ -216,7 +224,7 @@ export function useFunctionReview(api: Api, base: string, options: { busyDelayMs
         if (runs.current === token) setRunning(false);
       }
     },
-    [api, base, patch, busyDelay],
+    [api, base, patch, busyDelay, t, errorMessage],
   );
 
   /**

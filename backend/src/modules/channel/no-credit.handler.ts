@@ -1,15 +1,25 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import { type Locale, toLocale } from '@gptmaker/contracts';
 import { DB, type Database } from '../../shared/database/database.module';
-import { messageLog } from '../../shared/database/schema/index';
+import { messageLog, tenant } from '../../shared/database/schema/index';
 import { REDIS } from '../../shared/redis/redis.module';
 import { BitrixClient, BitrixError } from '../bitrix';
 import type { InboundMessage } from './inbound-message';
 
-/** Aviso no diálogo quando o tenant está sem créditos (mensagem de sistema do bot). */
-export const NO_CREDIT_NOTICE =
-  'Esta mensagem não será respondida pelo assistente virtual porque os créditos de IA ' +
-  'acabaram. Um atendente vai continuar o seu atendimento.';
+/** Aviso no diálogo quando o tenant está sem créditos (mensagem de sistema do bot), por idioma do tenant. */
+export const NO_CREDIT_NOTICES: Record<Locale, string> = {
+  'pt-BR':
+    'Esta mensagem não será respondida pelo assistente virtual porque os créditos de IA ' +
+    'acabaram. Um atendente vai continuar o seu atendimento.',
+  en:
+    'This message will not be answered by the virtual assistant because the AI credits have ' +
+    'run out. A human agent will continue your conversation.',
+  es:
+    'Este mensaje no será respondido por el asistente virtual porque se acabaron los ' +
+    'créditos de IA. Un agente humano continuará con su atención.',
+};
 
 /**
  * Janela em que o aviso e a transferência não se repetem no mesmo diálogo: o cliente costuma
@@ -68,7 +78,7 @@ export class NoCreditHandler {
       await this.bitrix.call(installationId, 'imbot.v2.Chat.Message.send', {
         botId: message.botId,
         dialogId: message.dialogId,
-        fields: { message: NO_CREDIT_NOTICE, system: true },
+        fields: { message: await this.notice(message.tenantId), system: true },
       });
       await this.redis.set(key, 'notified', 'EX', NOTICE_WINDOW_SECONDS);
     }
@@ -79,6 +89,15 @@ export class NoCreditHandler {
       'sem saldo: aviso enviado e diálogo transferido ao operador',
     );
     return 'notified';
+  }
+
+  /** Aviso no idioma do tenant (spec notification-i18n); sem tenant ou valor inválido, pt-BR. */
+  private async notice(tenantId: string): Promise<string> {
+    const [row] = await this.db
+      .select({ locale: tenant.locale })
+      .from(tenant)
+      .where(eq(tenant.id, tenantId));
+    return NO_CREDIT_NOTICES[toLocale(row?.locale)];
   }
 
   /** Recusa do Bitrix (ex.: o diálogo já está com um operador) não impede o resto: só o log. */

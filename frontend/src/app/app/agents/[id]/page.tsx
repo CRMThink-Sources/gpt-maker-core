@@ -8,6 +8,7 @@ import {
 } from '@gptmaker/contracts';
 import { useEffect, useState } from 'react';
 import { Alert, Loading } from '@/components/ui';
+import { useErrorMessage, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { useAppSession } from '../../session-provider';
 import { type AgentFormValues, initialValues } from '../agent-fields';
@@ -53,6 +54,8 @@ function updateBody(values: AgentFormValues, agent: AgentView): UpdateAgentInput
 export default function AgentSettingsPage() {
   const { session, api } = useAppSession();
   const { agent, setAgent } = useAgent();
+  const t = useT('agentDetail');
+  const translateError = useErrorMessage('agentDetail');
   const [models, setModels] = useState<AvailableModel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -66,11 +69,12 @@ export default function AgentSettingsPage() {
       .then(({ models: list }) => !cancelled && setModels(list))
       .catch(
         (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os modelos.')),
+          !cancelled && setError(errorMessage(e, t('settings.modelsError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api]);
 
   async function save(values: AgentFormValues) {
@@ -78,7 +82,7 @@ export default function AgentSettingsPage() {
     setSaved(null);
     const body = updateBody(values, agent);
     if (Object.keys(body).length === 0) {
-      setSaved('Nada para salvar: nenhum campo foi alterado.');
+      setSaved(t('settings.nothingToSave'));
       return;
     }
     try {
@@ -88,9 +92,9 @@ export default function AgentSettingsPage() {
       });
       setAgent(updated);
       setVersion((v) => v + 1);
-      setSaved('Alterações salvas.');
+      setSaved(t('settings.saved'));
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível salvar. Tente de novo.'));
+      setError(errorMessage(e, t('settings.saveError'), translateError));
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -99,7 +103,7 @@ export default function AgentSettingsPage() {
     <>
       {!session.canManage && (
         <Alert tone="warning" className="mb-6">
-          Você pode consultar este agente. Para alterá-lo, peça acesso a um administrador.
+          {t('settings.readOnly')}
         </Alert>
       )}
       {error && (

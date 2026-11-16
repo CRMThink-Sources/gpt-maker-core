@@ -207,7 +207,7 @@ describe('ajuda da IA no formulário', () => {
     render(<Harness form={makeForm(true)} api={api} />);
     generate();
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'A IA devolveu algo inválido.',
+      'Não foi possível revisar este campo.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Gerar' }));
     await screen.findByText('Loja de bicicletas.');

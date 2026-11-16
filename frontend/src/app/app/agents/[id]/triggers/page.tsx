@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { BoltIcon, PlusIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading } from '@/components/ui';
-import { errorMessage } from '@/lib/agents';
-import { ACTION_TYPES, AGENT_EVENTS } from '@/lib/triggers';
+import { useErrorMessage, useT } from '@/i18n';
+import { actionType, agentEvent, apiFailure } from '@/lib/triggers';
 import { useAppSession } from '../../../session-provider';
 import { useAgent } from '../agent-context';
 import { HistoryModal } from './history-modal';
@@ -16,6 +16,8 @@ import { TriggerEditor } from './trigger-editor';
 export default function AgentTriggersPage() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('triggers');
+  const errorMessage = useErrorMessage('triggers');
   const [triggers, setTriggers] = useState<TriggerView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TriggerView | 'new' | null>(null);
@@ -31,22 +33,21 @@ export default function AgentTriggersPage() {
     try {
       setTriggers((await api<{ triggers: TriggerView[] }>(base)).triggers);
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar os gatilhos.'));
+      setError(apiFailure(e, errorMessage, t('page.loadFailed')));
     }
-  }, [api, base]);
+  }, [api, base, t, errorMessage]);
 
   useEffect(() => {
     let cancelled = false;
     api<{ triggers: TriggerView[] }>(base)
       .then((data) => !cancelled && setTriggers(data.triggers))
       .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar os gatilhos.')),
+        (e: unknown) => !cancelled && setError(apiFailure(e, errorMessage, t('page.loadFailed'))),
       );
     return () => {
       cancelled = true;
     };
-  }, [api, base]);
+  }, [api, base, t, errorMessage]);
 
   async function run(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
@@ -55,7 +56,7 @@ export default function AgentTriggersPage() {
       await action();
       await reload();
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível concluir. Tente de novo.'));
+      setError(apiFailure(e, errorMessage, t('page.actionFailed')));
     } finally {
       setBusyId(null);
       setConfirmingId(null);
@@ -71,7 +72,7 @@ export default function AgentTriggersPage() {
   const add = canManage && (
     <button type="button" onClick={() => setEditing('new')} className={buttonClass('primary')}>
       <PlusIcon className="size-4" />
-      Novo gatilho
+      {t('page.new')}
     </button>
   );
 
@@ -79,11 +80,8 @@ export default function AgentTriggersPage() {
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Gatilhos</h2>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Ações automáticas no Bitrix24 quando algo acontece no atendimento do agente: criar lead,
-            mover negócio, registrar comentário, abrir tarefa.
-          </p>
+          <h2 className="text-lg font-semibold text-zinc-900">{t('page.title')}</h2>
+          <p className="mt-0.5 text-sm text-zinc-500">{t('page.description')}</p>
         </div>
         {add}
       </div>
@@ -101,8 +99,8 @@ export default function AgentTriggersPage() {
           {triggers.length === 0 ? (
             <EmptyState
               icon={<BoltIcon className="size-6" />}
-              title="Nenhum gatilho ainda"
-              description="Exemplo: ao fim de cada atendimento, criar um lead com o nome do cliente e um comentário com o resumo."
+              title={t('page.emptyTitle')}
+              description={t('page.emptyDescription')}
               action={add}
             />
           ) : (
@@ -118,27 +116,27 @@ export default function AgentTriggersPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium text-zinc-900">{trigger.name}</p>
                         <Badge tone={trigger.active ? 'green' : 'zinc'}>
-                          {trigger.active ? 'Ativo' : 'Desativado'}
+                          {trigger.active ? t('page.active') : t('page.inactive')}
                         </Badge>
                       </div>
                       <p className="mt-0.5 text-xs text-zinc-500">
-                        {AGENT_EVENTS[trigger.event].label} →{' '}
+                        {agentEvent(t, trigger.event).label} →{' '}
                         {trigger.actions
-                          .map((action) => ACTION_TYPES[action.type].label)
+                          .map((action) => actionType(t, action.type).label)
                           .join(', ')}
                       </p>
                     </div>
 
                     {confirmingId === trigger.id ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-zinc-600">Remover?</span>
+                        <span className="text-sm text-zinc-600">{t('page.confirmRemove')}</span>
                         <button
                           type="button"
                           onClick={() => setConfirmingId(null)}
                           disabled={busy}
                           className={buttonClass('secondary', 'sm')}
                         >
-                          Cancelar
+                          {t('page.cancel')}
                         </button>
                         <button
                           type="button"
@@ -150,7 +148,7 @@ export default function AgentTriggersPage() {
                           disabled={busy}
                           className={buttonClass('danger', 'sm')}
                         >
-                          {busy ? 'Removendo…' : 'Remover'}
+                          {busy ? t('page.removing') : t('page.remove')}
                         </button>
                       </div>
                     ) : (
@@ -160,7 +158,7 @@ export default function AgentTriggersPage() {
                           onClick={() => setHistory(trigger)}
                           className={buttonClass('ghost', 'sm')}
                         >
-                          Histórico
+                          {t('page.history')}
                         </button>
                         {canManage && (
                           <>
@@ -177,7 +175,11 @@ export default function AgentTriggersPage() {
                               disabled={busyId !== null}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              {busy ? 'Salvando…' : trigger.active ? 'Desativar' : 'Ativar'}
+                              {busy
+                                ? t('page.saving')
+                                : trigger.active
+                                  ? t('page.deactivate')
+                                  : t('page.activate')}
                             </button>
                             <button
                               type="button"
@@ -185,7 +187,7 @@ export default function AgentTriggersPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost', 'sm')}
                             >
-                              Editar
+                              {t('page.edit')}
                             </button>
                             <button
                               type="button"
@@ -193,7 +195,7 @@ export default function AgentTriggersPage() {
                               disabled={busyId !== null}
                               className={buttonClass('ghost-danger', 'sm')}
                             >
-                              Remover
+                              {t('page.remove')}
                             </button>
                           </>
                         )}
@@ -231,26 +233,27 @@ function SecretsModal({
   secrets: Record<string, string>;
   onClose: () => void;
 }) {
+  const t = useT('triggers');
   const [copied, setCopied] = useState<string | null>(null);
   return (
     <Modal
-      title="Segredo do webhook de saída"
-      description="Guarde agora: ele não aparece de novo."
+      title={t('secrets.title')}
+      description={t('secrets.description')}
       onRequestClose={onClose}
       footer={
         <div className="flex justify-end">
           <button type="button" onClick={onClose} className={buttonClass('primary')}>
-            Já guardei
+            {t('secrets.saved')}
           </button>
         </div>
       }
     >
       <p className="mb-4 text-sm text-zinc-600">
-        Use o segredo no sistema que recebe as chamadas para conferir a assinatura do cabeçalho{' '}
+        {t('secrets.usageStart')}{' '}
         <code className="rounded bg-zinc-100 px-1 text-xs">X-GPTMaker-Signature</code>:{' '}
-        <code className="rounded bg-zinc-100 px-1 text-xs">t=&lt;unix&gt;,v1=&lt;hex&gt;</code>,
-        onde <code className="text-xs">v1</code> é o HMAC-SHA256 de{' '}
-        <code className="text-xs">&quot;t.corpo&quot;</code>.
+        <code className="rounded bg-zinc-100 px-1 text-xs">t=&lt;unix&gt;,v1=&lt;hex&gt;</code>,{' '}
+        {t('secrets.usageWhere')} <code className="text-xs">v1</code> {t('secrets.usageIs')}{' '}
+        <code className="text-xs">&quot;{t('secrets.signedBody')}&quot;</code>.
       </p>
       {Object.entries(secrets).map(([id, secret]) => (
         <div key={id} className="mb-2 flex items-center gap-2">
@@ -265,7 +268,7 @@ function SecretsModal({
               setCopied(id);
             }}
           >
-            {copied === id ? 'Copiado' : 'Copiar'}
+            {copied === id ? t('secrets.copied') : t('secrets.copy')}
           </button>
         </div>
       ))}

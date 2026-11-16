@@ -1,0 +1,32 @@
+{
+  "title": "Clave Vibecode",
+  "description": "Use su clave de Vibecode de Bitrix24 para la revisión por IA de la función, sin gastar créditos.",
+  "adminOnly": "Solo los administradores del portal configuran la clave Vibecode.",
+  "configured": "Clave configurada, terminada en {last4}.",
+  "configuredVerified": "Clave configurada, terminada en {last4}, probada el {date}.",
+  "notConfigured": "No hay ninguna clave guardada. La revisión por IA usa los créditos de la aplicación.",
+  "notConfiguredUnavailable": "No hay ninguna clave guardada. La revisión por IA usa los créditos de la aplicación y, por ahora, no está disponible sin una clave propia.",
+  "replaceKey": "Cambiar la clave",
+  "keyLabel": "Clave de Vibecode",
+  "hints": {
+    "scope": "Cree la clave solo con el alcance vibe:ai: no necesita acceso a los datos del portal.",
+    "sent": "El texto de la función y de la base se envía a Vibecode durante la revisión por IA.",
+    "stored": "La clave se guarda cifrada y no vuelve a mostrarse después de guardada."
+  },
+  "testing": "Probando…",
+  "testAndSave": "Probar y guardar",
+  "removeKey": "Eliminar clave",
+  "saved": "Clave probada y guardada.",
+  "removed": "Clave eliminada. La revisión por IA vuelve a usar créditos.",
+  "errors": {
+    "load": "No fue posible cargar la clave.",
+    "save": "No fue posible guardar la clave.",
+    "remove": "No fue posible eliminar la clave.",
+    "AI_KEY_REQUIRED": "Para revisar con IA, ingrese la clave de Vibecode.",
+    "AI_KEY_INVALID": "Vibecode no aceptó la clave. Verifique que se haya copiado completa y que siga activa.",
+    "AI_KEY_SCOPE": "La clave debe tener el alcance vibe:ai.",
+    "AI_NO_BALANCE": "La cuenta de Vibecode se quedó sin saldo o cuota.",
+    "AI_MODEL_UNAVAILABLE": "La clave no tiene acceso al modelo usado en la revisión, o el modelo no está disponible.",
+    "AI_UNAVAILABLE": "La revisión por IA no está disponible ahora. Inténtelo de nuevo en unos instantes."
+  }
+}

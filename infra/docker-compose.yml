@@ -143,6 +143,7 @@ services:
       PUBLIC_APP_CODE: ${APP_CODE:-crmthink.homolog-thinkflow}
       PUBLIC_API_BASE_URL: http://localhost:3001
       PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      PUBLIC_SUPPORT_URL: ${SUPPORT_URL:-}
       API_INTERNAL_URL: http://backend-api:3001
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/app']

@@ -1,0 +1,86 @@
+{
+  "types": {
+    "SUPPORT": "Suporte",
+    "SALE": "Vendas",
+    "PERSONAL": "Assistente pessoal"
+  },
+  "communication": {
+    "FORMAL": "Formal",
+    "NORMAL": "Normal",
+    "RELAXED": "Descontraído"
+  },
+  "status": {
+    "active": "Ativo",
+    "outOfSync": "Fora de sincronia",
+    "inactive": "Inativo",
+    "inactiveWithReason": "Inativo · {reason}"
+  },
+  "inactiveReasons": {
+    "MANUAL": "inativado manualmente",
+    "SUBSCRIPTION_EXPIRED": "assinatura inativa",
+    "TENANT_SUSPENDED": "conta suspensa",
+    "UNINSTALLED": "app desinstalado"
+  },
+  "creditsPerResponse": "{count, plural, one {# crédito} other {# créditos}} por resposta",
+  "layout": {
+    "agent": "Agente",
+    "agents": "Agentes",
+    "loadError": "Não foi possível carregar o agente.",
+    "tabs": {
+      "function": "Função",
+      "settings": "Configurações",
+      "trainings": "Treinamentos",
+      "intentions": "Intenções",
+      "triggers": "Gatilhos"
+    },
+    "test": "Testar",
+    "description": "{type} · criado em {date}",
+    "sections": "Seções do agente",
+    "outOfSync": "O agente não foi encontrado no GPTMaker e não pode ser alterado. Fale com o suporte."
+  },
+  "settings": {
+    "modelsError": "Não foi possível carregar os modelos.",
+    "nothingToSave": "Nada para salvar: nenhum campo foi alterado.",
+    "saved": "Alterações salvas.",
+    "saveError": "Não foi possível salvar. Tente de novo.",
+    "readOnly": "Você pode consultar este agente. Para alterá-lo, peça acesso a um administrador."
+  },
+  "crm": {
+    "title": "Acesso ao CRM",
+    "intro": "Com o acesso ligado, o agente consulta no Bitrix24 o cliente da conversa e os negócios dele para responder com mais contexto. Ele só lê os campos liberados em {link}.",
+    "linkLabel": "CRM para o agente",
+    "status": {
+      "DISABLED": "Desligado",
+      "CONNECTING": "Conectando",
+      "CONNECTED": "Conectado",
+      "ERROR": "Erro ao conectar"
+    },
+    "loadError": "Não foi possível carregar o acesso ao CRM.",
+    "turnOnError": "Não foi possível ligar o acesso ao CRM. Tente de novo.",
+    "turnOffError": "Não foi possível desligar o acesso ao CRM. Tente de novo.",
+    "turningOff": "Desligando o acesso ao CRM…",
+    "connectingSlow": "Conectando o agente ao CRM. Isso pode levar até 30 segundos.",
+    "connecting": "Conectando o agente ao CRM…",
+    "connectError": "Não foi possível conectar o agente ao CRM.",
+    "connectErrorWithReason": "Não foi possível conectar o agente ao CRM: {reason}",
+    "retry": "Tentar de novo",
+    "lastCall": "Última consulta ao CRM: {date}.",
+    "neverCalled": "O agente ainda não consultou o CRM.",
+    "confirmTitle": "Desligar o acesso ao CRM?",
+    "turnOff": "Desligar",
+    "confirmBody": "O agente deixa de consultar o cliente da conversa e os negócios dele no Bitrix24. As escolhas de campos em \"CRM para o agente\" continuam salvas e você pode ligar o acesso de novo quando quiser."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Alguns campos estão inválidos. Revise e tente de novo.",
+    "TENANT_AGENT_LIMIT": "Você atingiu o limite de agentes. Remova um agente para criar outro.",
+    "AGENT_NOT_FOUND": "Agente não encontrado.",
+    "AGENT_BUSY": "O agente está sendo alterado; aguarde e tente de novo.",
+    "AGENT_OUT_OF_SYNC": "O agente não foi encontrado no GPTMaker; fale com o suporte.",
+    "AGENT_INACTIVE_BY_SYSTEM": "O agente foi inativado pelo sistema e volta sozinho quando a causa for resolvida.",
+    "MODEL_NOT_ALLOWED": "Modelo inativo ou não permitido pelo plano.",
+    "GPTMAKER_REJECTED": "O GPTMaker recusou os dados do agente; nada foi alterado. Revise os campos.",
+    "GPTMAKER_UNAVAILABLE": "Não foi possível concluir no GPTMaker agora; nada foi alterado. Tente de novo em instantes.",
+    "CRM_UNAVAILABLE": "O Bitrix24 não respondeu agora. Aguarde um pouco e tente de novo.",
+    "CRM_ACCESS_BUSY": "Outra alteração do acesso ao CRM deste agente está em andamento. Aguarde alguns segundos e tente de novo."
+  }
+}

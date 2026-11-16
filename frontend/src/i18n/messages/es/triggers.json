@@ -1,0 +1,243 @@
+{
+  "events": {
+    "onFirstInteraction": {
+      "label": "Primera atención del cliente",
+      "description": "El cliente habla con el agente por primera vez."
+    },
+    "onStartInteraction": {
+      "label": "Inicio de atención",
+      "description": "Comienza una atención (incluso de quien ya conversó antes)."
+    },
+    "onNewMessage": {
+      "label": "Nuevo mensaje",
+      "description": "Cada mensaje del cliente o del agente."
+    },
+    "onFinishInteraction": {
+      "label": "Fin de atención",
+      "description": "La atención se cierra."
+    },
+    "onTransfer": {
+      "label": "Transferencia a una persona",
+      "description": "El agente pasa la atención a un asistente."
+    },
+    "onLackKnowLedge": {
+      "label": "Agente sin respuesta",
+      "description": "El agente no supo responder una pregunta."
+    },
+    "onCreateEvent": {
+      "label": "Cita creada",
+      "description": "El agente agendó un compromiso."
+    },
+    "onCancelEvent": {
+      "label": "Cita cancelada",
+      "description": "Se canceló un compromiso agendado por el agente."
+    }
+  },
+  "actions": {
+    "CREATE_LEAD": {
+      "label": "Crear lead",
+      "description": "Nuevo lead en el CRM."
+    },
+    "UPSERT_DEAL": {
+      "label": "Crear o actualizar negocio",
+      "description": "Actualiza el negocio del diálogo o crea uno en el embudo elegido."
+    },
+    "TIMELINE_COMMENT": {
+      "label": "Comentario en la línea de tiempo",
+      "description": "Comentario en el negocio, lead, contacto o empresa del diálogo."
+    },
+    "CREATE_TASK": {
+      "label": "Crear tarea",
+      "description": "Tarea para un usuario del portal."
+    },
+    "START_BIZPROC": {
+      "label": "Iniciar proceso de negocio",
+      "description": "Ejecuta un proceso de negocio en la entidad del diálogo."
+    },
+    "OUTBOUND_WEBHOOK": {
+      "label": "Llamar a una URL externa",
+      "description": "Envía el evento a otro sistema (POST firmado)."
+    },
+    "CREATE_SPA_ITEM": {
+      "label": "Crear elemento de SPA",
+      "description": "Nuevo elemento en un proceso inteligente, con los campos elegidos por el cliente."
+    },
+    "TRANSFER_TO_HUMAN": {
+      "label": "Transferir a un asistente",
+      "description": "Después de la respuesta del agente, la conversación pasa a una persona del equipo."
+    }
+  },
+  "defaults": {
+    "leadTitle": "Lead de '{{contact.name | \"cliente\"}}'",
+    "dealTitle": "Negocio de '{{contact.name | \"cliente\"}}'",
+    "timelineText": "Atención del agente '{{agent.name}}': '{{event.name}}'",
+    "taskTitle": "Volver a contactar a '{{contact.name | \"cliente\"}}'",
+    "spaTitle": "Solicitud de '{{contact.name}}'"
+  },
+  "sample": {
+    "contactName": "Maria Souza",
+    "messageText": "Quiero un presupuesto para 10 unidades",
+    "agentName": "Su agente"
+  },
+  "variables": {
+    "contact_name": "Nombre del cliente",
+    "contact_phone": "Teléfono del cliente",
+    "message_text": "Texto del mensaje (eventos de mensaje)",
+    "message_role": "Autor del mensaje: user (cliente) o assistant (agente)",
+    "agent_name": "Nombre del agente",
+    "agent_id": "Id del agente en la app",
+    "event_name": "Evento que activó el disparador",
+    "event_date": "Fecha y hora del evento (ISO 8601)",
+    "dialog_id": "Diálogo del Canal Abierto en Bitrix24 (chat9498)",
+    "dialog_chatId": "Número del chat del Canal Abierto, sin \"chat\" (9498)",
+    "dialog_sessionId": "Sesión actual del Canal Abierto en Bitrix24",
+    "interaction_id": "Atención en GPTMaker",
+    "interaction_protocol": "Protocolo de la atención en GPTMaker"
+  },
+  "templateErrors": {
+    "unpaired": "llaves '{{ }}' sin pareja",
+    "invalid": "variable inválida: {token}",
+    "unknown": "variable desconocida: {token}"
+  },
+  "status": {
+    "SUCCESS": "Ejecutada",
+    "FAILED": "Falló",
+    "PENDING": "Reintentando"
+  },
+  "result": {
+    "lead": "Lead #{id}",
+    "deal": "Negocio #{id}",
+    "dealNew": "Negocio #{id} (nuevo)",
+    "comment": "Comentario en {entityType} #{entityId}",
+    "task": "Tarea #{id}",
+    "spaItem": "Elemento de SPA #{id}",
+    "workflow": "Proceso {id}",
+    "http": "HTTP {status}"
+  },
+  "template": {
+    "insertIn": "Insertar variable en {label}",
+    "addVariable": "+ variable",
+    "example": "Ejemplo:",
+    "empty": "(vacío)"
+  },
+  "options": {
+    "legend": "Valores posibles (use el código):",
+    "fill": "Completar con {id}"
+  },
+  "fieldMap": {
+    "required": "(obligatorio)",
+    "crmField": "Campo del CRM",
+    "typeNameOrCode": "Escriba el nombre o el código del campo",
+    "codePlaceholder": "CÓDIGO DEL CAMPO",
+    "removeField": "Quitar el campo {name}",
+    "notFound": "Campo no encontrado en el CRM de este portal. Revise el código.",
+    "value": "Valor",
+    "add": "Campo",
+    "loading": "Cargando los campos del CRM…",
+    "loadFailed": "No fue posible leer los campos del CRM; indique los códigos (p. ej.: TITLE, NAME, PHONE, UF_CRM_...).",
+    "paramNames": "Indique los nombres de los parámetros tal como están en el modelo del proceso."
+  },
+  "config": {
+    "comment": "Comentario",
+    "commentHint": "Va al negocio, lead, contacto o empresa vinculado al diálogo.",
+    "title": "Título",
+    "description": "Descripción",
+    "responsible": "Responsable",
+    "rotation": "{count, plural, one {# usuario} other {# usuarios}}, en rotación",
+    "deadline": "Plazo (días)",
+    "deadlineHint": "En blanco: sin plazo.",
+    "templateId": "Modelo del proceso (id)",
+    "runOn": "Ejecutar en",
+    "docDeal": "Negocio del diálogo",
+    "docLead": "Lead del diálogo",
+    "docContact": "Contacto del diálogo",
+    "docCompany": "Empresa del diálogo",
+    "parameters": "Parámetros (opcional)",
+    "targetOperator": "Operador libre del Canal Abierto",
+    "targetOperatorHint": "Sigue la cola configurada en la línea.",
+    "targetUser": "Un usuario específico",
+    "targetUserHint": "Ej.: el vendedor responsable de este asunto.",
+    "openChannel": "Canal abierto {id}",
+    "agentUser": "Asistente",
+    "webhookHint": "Recibe un POST JSON con el evento, firmado en el encabezado X-GPTMaker-Signature.",
+    "url": "URL"
+  },
+  "issue": {
+    "name": "Nombre",
+    "action": "Acción {number}",
+    "actions": "Acciones",
+    "trigger": "Disparador",
+    "review": "revise este campo"
+  },
+  "editor": {
+    "saveFailed": "No fue posible guardar el disparador. Inténtelo de nuevo.",
+    "editTitle": "Editar disparador",
+    "newTitle": "Nuevo disparador",
+    "description": "Cuando ocurra el evento, las acciones se ejecutan en Bitrix24 en este orden.",
+    "active": "Activo",
+    "cancel": "Cancelar",
+    "saving": "Guardando…",
+    "save": "Guardar",
+    "name": "Nombre",
+    "namePlaceholder": "Ej.: Lead al final de la atención",
+    "when": "Cuándo",
+    "actions": "Acciones"
+  },
+  "actionsEditor": {
+    "moveUp": "Mover hacia arriba",
+    "moveDown": "Mover hacia abajo",
+    "remove": "Quitar",
+    "add": "Agregar acción",
+    "addOption": "+ Agregar acción"
+  },
+  "page": {
+    "loadFailed": "No fue posible cargar los disparadores.",
+    "actionFailed": "No fue posible completar la operación. Inténtelo de nuevo.",
+    "new": "Nuevo disparador",
+    "title": "Disparadores",
+    "description": "Acciones automáticas en Bitrix24 cuando algo ocurre en la atención del agente: crear un lead, mover un negocio, registrar un comentario, abrir una tarea.",
+    "emptyTitle": "Aún no hay disparadores",
+    "emptyDescription": "Ejemplo: al final de cada atención, crear un lead con el nombre del cliente y un comentario con el resumen.",
+    "active": "Activo",
+    "inactive": "Desactivado",
+    "confirmRemove": "¿Quitar?",
+    "cancel": "Cancelar",
+    "removing": "Quitando…",
+    "remove": "Quitar",
+    "history": "Historial",
+    "saving": "Guardando…",
+    "deactivate": "Desactivar",
+    "activate": "Activar",
+    "edit": "Editar"
+  },
+  "secrets": {
+    "title": "Secreto del webhook de salida",
+    "description": "Guárdelo ahora: no se mostrará de nuevo.",
+    "saved": "Ya lo guardé",
+    "usageStart": "Use el secreto en el sistema que recibe las llamadas para verificar la firma del encabezado",
+    "usageWhere": "donde",
+    "usageIs": "es el HMAC-SHA256 de",
+    "signedBody": "t.cuerpo",
+    "copied": "Copiado",
+    "copy": "Copiar"
+  },
+  "history": {
+    "loadFailed": "No fue posible cargar el historial.",
+    "title": "Historial · {name}",
+    "description": "Últimas 100 acciones ejecutadas por este disparador.",
+    "refresh": "Actualizar",
+    "close": "Cerrar",
+    "empty": "Aún no hay ejecuciones. El disparador se ejecuta cuando ocurra el evento “{event}”.",
+    "dialog": "diálogo {id}",
+    "attempts": "{count, plural, one {# intento} other {# intentos}}",
+    "nextAttempt": "próximo intento {date}"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Algunos campos no son válidos. Revíselos e inténtelo de nuevo.",
+    "TRIGGER_NOT_FOUND": "Disparador no encontrado",
+    "TRIGGER_ACTION_NOT_FOUND": "Esta acción no existe en el disparador",
+    "TRIGGER_LIMIT": "El agente ya tiene 50 disparadores",
+    "TRIGGER_ACTION_TYPE_CHANGED": "Para cambiar el tipo, quite la acción y cree otra",
+    "AGENT_OUT_OF_SYNC": "No se encontró el agente en GPTMaker; comuníquese con soporte"
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "identity": {
+    "nameLabel": "Nome",
+    "nameHint": "É o nome que o cliente vê no chat.",
+    "namePlaceholder": "Ex.: Ana, da Loja Exemplo",
+    "photoLabel": "Foto",
+    "photoHint": "Opcional. Link https de uma imagem quadrada."
+  },
+  "model": {
+    "ariaLabel": "Modelo",
+    "none": "Nenhum modelo disponível no momento.",
+    "credits": "{count, plural, =1 {# crédito por resposta} other {# créditos por resposta}}",
+    "outOfPlan": "Modelo atual, não está mais no seu plano."
+  },
+  "sections": {
+    "navLabel": "Seções das configurações",
+    "unsaved": "Alterações não salvas",
+    "identity": {
+      "title": "Identidade",
+      "description": "Como o agente se apresenta aos clientes no chat."
+    },
+    "model": {
+      "title": "Modelo de IA",
+      "description": "Cada resposta do agente consome créditos conforme o modelo."
+    },
+    "service": {
+      "title": "Atendimento",
+      "description": "Ajustes da conversa. Transferência, emojis e assuntos vêm da função do agente (aba Função)."
+    },
+    "hours": {
+      "title": "Horário de funcionamento",
+      "description": "Dias e horários em que o agente responde. Fora deles, ele não atende."
+    }
+  },
+  "grouping": {
+    "NO_GROUP": "Não agrupar",
+    "FIVE_SEC": "5 segundos",
+    "TEN_SEC": "10 segundos",
+    "THIRD_SEC": "30 segundos",
+    "ONE_MINUTE": "1 minuto"
+  },
+  "limitActions": {
+    "TEMP_BLOCK_30S": "Pausar por 30 segundos",
+    "TEMP_BLOCK_5M": "Pausar por 5 minutos",
+    "TEMP_BLOCK_10M": "Pausar por 10 minutos",
+    "TEMP_BLOCK_30M": "Pausar por 30 minutos",
+    "TEMP_BLOCK_1H": "Pausar por 1 hora",
+    "BLOCK": "Parar de responder no dia",
+    "TRANSFER": "Transferir para um atendente"
+  },
+  "toggles": {
+    "enabledReminder": {
+      "label": "Lembrar o cliente",
+      "hint": "Manda um lembrete quando o cliente para de responder no meio da conversa."
+    },
+    "splitMessages": {
+      "label": "Dividir respostas longas",
+      "hint": "Respostas grandes chegam em várias mensagens curtas, como uma pessoa escreveria."
+    },
+    "signMessages": {
+      "label": "Assinar as mensagens",
+      "hint": "Inclui o nome do agente em cada resposta."
+    }
+  },
+  "service": {
+    "groupMessages": "Juntar mensagens seguidas do cliente",
+    "default": "Padrão",
+    "timezone": "Fuso horário",
+    "dailyLimit": "Limite de mensagens por contato no dia",
+    "noLimit": "Sem limite",
+    "messages": "{count} mensagens",
+    "onLimit": "Ao atingir o limite"
+  },
+  "bar": {
+    "discard": "Descartar",
+    "saving": "Salvando…",
+    "save": "Salvar alterações"
+  },
+  "hours": {
+    "days": {
+      "mon": "Segunda",
+      "tue": "Terça",
+      "wed": "Quarta",
+      "thu": "Quinta",
+      "fri": "Sexta",
+      "sat": "Sábado",
+      "sun": "Domingo"
+    },
+    "problems": {
+      "withDay": "{day}: {message}",
+      "timeFormat": "use HH:mm",
+      "startBeforeEnd": "o início deve ser anterior ao fim",
+      "invalidTimezone": "fuso horário inválido",
+      "overlap": "intervalos sobrepostos"
+    },
+    "always": "24 horas",
+    "inside": "Dentro do horário agora",
+    "outside": "Fora do horário agora",
+    "enable": "Definir horário de funcionamento",
+    "disabledHint": "Sem horário definido, o agente responde 24 horas por dia, todos os dias.",
+    "timezone": "Fuso horário",
+    "timezoneHint": "O horário abaixo vale neste fuso (ex.: America/Sao_Paulo, America/Manaus).",
+    "closed": "Sem atendimento",
+    "startLabel": "{day}: início",
+    "endLabel": "{day}: fim",
+    "removeLabel": "{day}: remover intervalo",
+    "remove": "Remover",
+    "to": "às",
+    "add": "Adicionar intervalo",
+    "transfer": "Transferir para um atendente",
+    "transferHint": "Fora do horário, a conversa vai para o operador livre da Linha Aberta e o agente deixa de responder nela. Para o atendimento acontecer, o expediente da Linha Aberta precisa estar configurado no Bitrix24. A conversa só volta para o agente quando o atendente a encerra.",
+    "messageLabel": "Mensagem fora do horário (opcional)",
+    "messageHintTransfer": "Enviada ao cliente antes de a conversa ir para o atendente, sem consumir créditos. Em branco, a conversa é transferida sem aviso.",
+    "messageHintSilent": "Enviada uma vez a cada 12 horas para quem escrever fora do horário, sem consumir créditos. Em branco, o agente fica em silêncio. Mensagens fora do horário não são respondidas depois."
+  },
+  "image": {
+    "label": "Imagem (opcional)",
+    "alt": "Imagem anexada ao treinamento",
+    "attached": "Imagem anexada",
+    "choose": "Escolher imagem",
+    "uploading": "Enviando…",
+    "replace": "Trocar imagem",
+    "add": "Adicionar imagem",
+    "remove": "Remover imagem",
+    "hint": "PNG, JPEG ou WebP, até {max} MB. O agente usa a imagem junto com o texto.",
+    "invalidType": "Só imagens PNG, JPEG e WebP são aceitas.",
+    "tooLarge": "A imagem passa do limite de {max} MB."
+  },
+  "pickers": {
+    "stageWon": "{name} (ganho)",
+    "stageLost": "{name} (perdido)",
+    "pipelineTyped": "Funil (CATEGORY_ID)",
+    "pipelineTypedHint": "0 é o funil geral. Vale só para negócio novo.",
+    "stageTyped": "Etapa (STAGE_ID)",
+    "stageTypedHint": "Ex.: NEW, ou C3:NEW em outro funil.",
+    "pipeline": "Funil",
+    "pipelineHint": "Para negócio novo. Um negócio existente fica no funil dele.",
+    "loadingPipelines": "Carregando funis…",
+    "stage": "Etapa",
+    "stageMissing": "A etapa {stage} não existe neste funil; escolha outra.",
+    "stageHint": "Negócio existente também vai para esta etapa.",
+    "chooseStage": "Escolha a etapa…",
+    "loadingStages": "Carregando etapas…",
+    "responsible": "Responsável",
+    "userIdHint": "Informe o id do usuário no Bitrix24.",
+    "user": "Usuário #{id}",
+    "noneChosen": "Nenhum escolhido",
+    "choose": "Escolher",
+    "users": "Usuários",
+    "usersHint": "Recebem um de cada vez, em rodízio.",
+    "userIdsHint": "Ids dos usuários no Bitrix24, separados por vírgula. {hint}",
+    "removeUser": "Tirar {name}",
+    "addUser": "Adicionar",
+    "openLine": "Canal aberto do Bitrix24",
+    "openLineIdHint": "Informe o id do canal aberto no Bitrix24.",
+    "chooseOpenLine": "Escolha um canal",
+    "agent": "Agente",
+    "noOtherAgent": "Crie outro agente para poder transferir para ele.",
+    "chooseAgent": "Escolha um agente",
+    "agentRemoved": "Agente removido: escolha outro"
+  },
+  "spa": {
+    "type": "Processo inteligente",
+    "search": "Digite para buscar o SPA…",
+    "loading": "Carregando…",
+    "pipeline": "Funil",
+    "initialStage": "Etapa inicial",
+    "firstOfPipeline": "A primeira do funil",
+    "mapping": "Em qual campo do SPA vai cada informação",
+    "optional": "(opcional)",
+    "byItemName": "Pelo nome do item",
+    "loadingFields": "Carregando campos…",
+    "chooseField": "Escolha o campo…",
+    "dontSave": "Não gravar",
+    "fieldRemoved": "Campo removido ({code}): escolha outro",
+    "listSuffix": "(lista)",
+    "noResults": "Nenhum resultado"
+  },
+  "wizard": {
+    "title": "Novo agente",
+    "steps": {
+      "function": {
+        "title": "Função",
+        "description": "O que o agente vai fazer. Cada agente tem uma função."
+      },
+      "identity": {
+        "title": "Identidade",
+        "description": "Como o agente se apresenta e qual modelo de IA usa."
+      },
+      "form": {
+        "title": "Formulário",
+        "description": "Conte sobre o seu negócio; o texto do agente é nosso."
+      },
+      "preview": {
+        "title": "Prévia",
+        "description": "Confira o que será criado antes de confirmar."
+      }
+    },
+    "stepCounter": "Passo {step} de {total}",
+    "confirmDiscard": "Descartar o que foi preenchido?",
+    "keepEditing": "Continuar editando",
+    "discard": "Descartar",
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "busy": "Aguarde…",
+    "create": "Criar agente",
+    "viewPreview": "Ver prévia",
+    "next": "Avançar",
+    "noFunctions": "Nenhuma função disponível no momento.",
+    "singleModel": "Seu plano libera só este modelo ({credits}).",
+    "pickFunction": "Escolha a função do agente.",
+    "reviewFields": "Revise os campos destacados no formulário."
+  },
+  "failures": {
+    "loadFunctions": "Não foi possível carregar as funções.",
+    "loadForm": "Não foi possível carregar o formulário da função.",
+    "preview": "Não foi possível montar a prévia.",
+    "create": "Não foi possível criar o agente. Tente de novo.",
+    "uploadImage": "Não foi possível enviar a imagem. Tente de novo."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Alguns campos estão inválidos. Revise e tente de novo.",
+    "TENANT_AGENT_LIMIT": "Você atingiu o limite de agentes. Remova um agente para criar outro.",
+    "AGENT_NOT_FOUND": "Agente não encontrado",
+    "FUNCTION_NOT_FOUND": "Função não encontrada",
+    "FUNCTION_ANSWERS_INVALID": "Revise as respostas do formulário",
+    "MODEL_NOT_ALLOWED": "Modelo inativo ou não permitido pelo plano",
+    "AGENT_CREATION_IN_PROGRESS": "Outro agente está sendo criado; aguarde e tente de novo"
+  }
+}

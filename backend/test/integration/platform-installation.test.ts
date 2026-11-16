@@ -238,7 +238,7 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       .expect(200);
     expect(res.body).toEqual({
       user: { id: '1', name: 'Usuário 1', isAdmin: true },
-      tenant: { code: tenantCode, status: 'ACTIVE' },
+      tenant: { code: tenantCode, status: 'ACTIVE', locale: 'pt-BR' },
       canManage: true,
       features: { crmTools: false },
     });
@@ -250,6 +250,38 @@ describe('instalação, eventos e sessão via crmthink-platform', () => {
       )
       .expect(401);
     await http().get('/app/session').expect(401);
+  });
+
+  it('idioma do tenant: só admin altera, valor inválido é recusado e a sessão reflete', async () => {
+    const admin = `Bearer ${await jwt({ sub: '1', isAdmin: true })}`;
+    const user = `Bearer ${await jwt({ sub: '8', isAdmin: false })}`;
+    await http().put('/app/locale').set('Authorization', user).send({ locale: 'en' }).expect(403);
+    await http().put('/app/locale').set('Authorization', admin).send({ locale: 'fr' }).expect(400);
+    expect((await currentTenant())?.locale).toBe('pt-BR');
+
+    // Outro tenant no mesmo banco: a troca do primeiro não pode alcançá-lo.
+    const [other] = await db
+      .insert(tenant)
+      .values({
+        installationId: '9999',
+        memberId: 'outro',
+        domain: 'outro.b24.com',
+        tenantCode: 'zzzzzz',
+      })
+      .returning();
+    await http().put('/app/locale').set('Authorization', admin).send({ locale: 'es' }).expect(204);
+    expect((await currentTenant())?.locale).toBe('es');
+    const [untouched] = await db.select().from(tenant).where(eq(tenant.id, other!.id));
+    expect(untouched?.locale).toBe('pt-BR');
+    await db.delete(tenant).where(eq(tenant.id, other!.id));
+    const res = await http().get('/app/session').set('Authorization', user).expect(200);
+    expect(res.body.tenant.locale).toBe('es');
+
+    await http()
+      .put('/app/locale')
+      .set('Authorization', admin)
+      .send({ locale: 'pt-BR' })
+      .expect(204);
   });
 
   it('permissões: só admin concede; usuário autorizado passa a poder gerenciar', async () => {

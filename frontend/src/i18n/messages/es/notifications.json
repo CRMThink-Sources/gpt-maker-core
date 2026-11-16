@@ -1,0 +1,32 @@
+{
+  "title": "Avisos",
+  "description": "Quién recibe en Bitrix24 las notificaciones de créditos y de pago de la aplicación.",
+  "sendTest": "Enviar aviso de prueba",
+  "addPeople": "Agregar personas",
+  "adminOnly": "Solo los administradores del portal eligen quién recibe los avisos.",
+  "empty": {
+    "title": "Los avisos van a los administradores del portal",
+    "description": "Agregue personas para que reciban los avisos en lugar de los administradores."
+  },
+  "userFallback": "Usuario #{id}",
+  "remove": "Quitar",
+  "whenTitle": "Cuándo se envían los avisos",
+  "when": {
+    "credits80": "80% de los créditos del ciclo consumidos",
+    "creditsOut": "Créditos agotados (los mensajes van a los agentes humanos)",
+    "paymentFailed": "Pago de la suscripción rechazado, con el plazo antes de pausar los agentes",
+    "periodEnd": "Fin del período de las suscripciones contratadas con CRMThink"
+  },
+  "whenNote": "Cada aviso se envía una vez por ciclo o por ocurrencia. Las personas desactivadas en el portal se ignoran; si no queda ninguna, lo reciben los administradores.",
+  "test": {
+    "sent": "{count, plural, one {Aviso de prueba enviado a # persona. Revise las notificaciones de Bitrix24.} other {Aviso de prueba enviado a # personas. Revise las notificaciones de Bitrix24.}}",
+    "pending": "Bitrix24 no respondió en este momento; el aviso de prueba se reenviará en unos instantes.",
+    "noRecipient": "No fue posible enviar el aviso de prueba: no hay ningún destinatario activo."
+  },
+  "errors": {
+    "load": "No fue posible cargar los destinatarios.",
+    "save": "No fue posible guardar.",
+    "test": "No fue posible enviar la prueba.",
+    "INVALID_USER": "Id de usuario de Bitrix inválido"
+  }
+}

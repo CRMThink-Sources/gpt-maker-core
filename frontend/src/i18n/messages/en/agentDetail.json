@@ -1,0 +1,86 @@
+{
+  "types": {
+    "SUPPORT": "Support",
+    "SALE": "Sales",
+    "PERSONAL": "Personal assistant"
+  },
+  "communication": {
+    "FORMAL": "Formal",
+    "NORMAL": "Normal",
+    "RELAXED": "Casual"
+  },
+  "status": {
+    "active": "Active",
+    "outOfSync": "Out of sync",
+    "inactive": "Inactive",
+    "inactiveWithReason": "Inactive · {reason}"
+  },
+  "inactiveReasons": {
+    "MANUAL": "deactivated manually",
+    "SUBSCRIPTION_EXPIRED": "inactive subscription",
+    "TENANT_SUSPENDED": "account suspended",
+    "UNINSTALLED": "app uninstalled"
+  },
+  "creditsPerResponse": "{count, plural, one {# credit} other {# credits}} per response",
+  "layout": {
+    "agent": "Agent",
+    "agents": "Agents",
+    "loadError": "Could not load the agent.",
+    "tabs": {
+      "function": "Function",
+      "settings": "Settings",
+      "trainings": "Trainings",
+      "intentions": "Intents",
+      "triggers": "Triggers"
+    },
+    "test": "Test",
+    "description": "{type} · created on {date}",
+    "sections": "Agent sections",
+    "outOfSync": "The agent was not found in GPTMaker and cannot be changed. Contact support."
+  },
+  "settings": {
+    "modelsError": "Could not load the models.",
+    "nothingToSave": "Nothing to save: no field was changed.",
+    "saved": "Changes saved.",
+    "saveError": "Could not save. Try again.",
+    "readOnly": "You can view this agent. To change it, ask an administrator for access."
+  },
+  "crm": {
+    "title": "CRM access",
+    "intro": "With access turned on, the agent looks up the conversation's customer and their deals in Bitrix24 to answer with more context. It only reads the fields enabled in {link}.",
+    "linkLabel": "CRM for the agent",
+    "status": {
+      "DISABLED": "Off",
+      "CONNECTING": "Connecting",
+      "CONNECTED": "Connected",
+      "ERROR": "Connection error"
+    },
+    "loadError": "Could not load the CRM access.",
+    "turnOnError": "Could not turn on CRM access. Try again.",
+    "turnOffError": "Could not turn off CRM access. Try again.",
+    "turningOff": "Turning off CRM access…",
+    "connectingSlow": "Connecting the agent to the CRM. This can take up to 30 seconds.",
+    "connecting": "Connecting the agent to the CRM…",
+    "connectError": "Could not connect the agent to the CRM.",
+    "connectErrorWithReason": "Could not connect the agent to the CRM: {reason}",
+    "retry": "Try again",
+    "lastCall": "Last CRM lookup: {date}.",
+    "neverCalled": "The agent has not looked up the CRM yet.",
+    "confirmTitle": "Turn off CRM access?",
+    "turnOff": "Turn off",
+    "confirmBody": "The agent stops looking up the conversation's customer and their deals in Bitrix24. Your field choices in \"CRM for the agent\" stay saved and you can turn access back on whenever you want."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "TENANT_AGENT_LIMIT": "You have reached the agent limit. Remove an agent to create another.",
+    "AGENT_NOT_FOUND": "Agent not found.",
+    "AGENT_BUSY": "The agent is being changed; wait and try again.",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support.",
+    "AGENT_INACTIVE_BY_SYSTEM": "The agent was deactivated by the system and will come back on its own once the cause is resolved.",
+    "MODEL_NOT_ALLOWED": "Model inactive or not allowed by the plan.",
+    "GPTMAKER_REJECTED": "GPTMaker rejected the agent data; nothing was changed. Review the fields.",
+    "GPTMAKER_UNAVAILABLE": "Could not complete the change in GPTMaker right now; nothing was changed. Try again shortly.",
+    "CRM_UNAVAILABLE": "Bitrix24 did not respond. Wait a moment and try again.",
+    "CRM_ACCESS_BUSY": "Another change to this agent's CRM access is in progress. Wait a few seconds and try again."
+  }
+}

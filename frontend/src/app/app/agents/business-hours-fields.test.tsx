@@ -1,11 +1,15 @@
 import type { BusinessHours } from '@gptmaker/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentFormValues } from './agent-fields';
+import { I18nProvider } from '@/i18n';
 import { BusinessHoursFields } from './business-hours-fields';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 function Harness({
   initial,
@@ -95,6 +99,24 @@ describe('BusinessHoursFields', () => {
     it('sem horário a opção não aparece', () => {
       render(<Harness initial={null} />);
       expect(screen.queryByLabelText('Transferir para um atendente')).toBeNull();
+    });
+  });
+});
+
+describe('BusinessHoursFields em outros idiomas', () => {
+  it.each([
+    ['en', '24 hours', 'Monday: start'],
+    ['es', '24 horas', 'Lunes: inicio'],
+  ])('mostra os textos em %s', (locale, always, startLabel) => {
+    window.localStorage.setItem('gptthink.locale', locale);
+    render(
+      <I18nProvider>
+        <Harness initial={null} />
+      </I18nProvider>,
+    );
+    return waitFor(() => expect(screen.getByText(always)).toBeTruthy()).then(() => {
+      fireEvent.click(screen.getByRole('checkbox'));
+      expect(screen.getByLabelText(startLabel)).toBeTruthy();
     });
   });
 });

@@ -1,6 +1,7 @@
 import type { CrmFieldView } from '@gptmaker/contracts';
 import { describe, expect, it } from 'vitest';
-import { buildAgentPreview } from './crm';
+import { createT } from '@/i18n';
+import { buildAgentPreview, summarizeOptions } from './crm';
 
 function field(overrides: Partial<CrmFieldView>): CrmFieldView {
   return {
@@ -69,5 +70,12 @@ describe('buildAgentPreview', () => {
       field({ label: 'Sumiu', available: false }),
     ]);
     expect(preview.map((line) => line.label)).toEqual(['Exposto']);
+  });
+
+  it('traduz exemplos e resumo de opções no idioma do t', () => {
+    const t = createT('es', 'crm');
+    const preview = buildAgentPreview([field({ label: 'Ativo', type: 'boolean' })], t);
+    expect(preview[0]?.example).toBe('Sí');
+    expect(summarizeOptions(['a', 'b', 'c'], 2, t)).toBe('a y 2 más');
   });
 });

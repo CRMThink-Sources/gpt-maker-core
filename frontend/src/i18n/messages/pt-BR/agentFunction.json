@@ -1,0 +1,98 @@
+{
+  "modes": {
+    "SIMPLE": "Simples",
+    "ADVANCED": "Avançado",
+    "TAKEN_OVER": "Controle assumido"
+  },
+  "modeBadge": "Modo {mode}",
+  "createdNotice": "Agente criado e já ativo. A base de conhecimento e as ações estão sendo aplicadas; o status aparece abaixo.",
+  "loadError": "Não foi possível carregar a função do agente.",
+  "publishDone": "Publicação concluída: o agente já está com a nova configuração.",
+  "draftSaved": "Rascunho salvo. O agente só muda quando você publicar.",
+  "draftError": "Não foi possível salvar o rascunho.",
+  "reviewFields": "Revise os campos destacados antes de publicar.",
+  "previewError": "Não foi possível montar a prévia.",
+  "nothingChanged": "Nada mudou: o agente já está assim.",
+  "publishing": "Publicando… Os treinamentos e as ações são aplicados em segundo plano.",
+  "publishError": "Não foi possível publicar.",
+  "retryError": "Não foi possível repetir a publicação.",
+  "compareError": "Não foi possível comparar com a versão nova.",
+  "modeChanged": "Modo alterado. Publique para aplicar no agente.",
+  "pending": "Publicação em andamento. Os treinamentos e as ações estão sendo aplicados no agente.",
+  "lastFailed": "A última publicação não terminou: {error}",
+  "retry": "Tentar de novo",
+  "retrying": "Repetindo…",
+  "updateAvailable": "Há uma versão nova da função {name} (versão {latest}; o agente está na {current}). Confira o que muda e publique quando quiser.",
+  "updateNoTextChange": "O texto do agente não muda; a versão nova altera outras partes da função.",
+  "updateNeedsAnswers": "A versão nova pede respostas novas: preencha os campos destacados abaixo.",
+  "showUpdate": "Ver o que muda no texto",
+  "continue": "Continuar",
+  "advancedMode": "Modo avançado",
+  "backToSimple": "Voltar ao modo simples",
+  "takeOver": "Assumir controle",
+  "backToForm": "Voltar ao formulário",
+  "requests": {
+    "toAdvanced": {
+      "title": "Ligar o modo avançado?",
+      "text": "O modo avançado libera instruções adicionais e treinamento por site e vídeo. Instruções mal escritas podem piorar o atendimento: prefira o formulário sempre que possível."
+    },
+    "toSimple": {
+      "title": "Voltar ao modo simples?",
+      "text": "Ao publicar, as instruções adicionais e os treinamentos por site e vídeo serão removidos."
+    },
+    "toTakeOver": {
+      "title": "Assumir o controle do texto?",
+      "text": "Você passa a editar o texto do agente livremente. O agente deixa de receber as melhorias da função até voltar ao formulário.",
+      "textAdvanced": "Você passa a editar o texto do agente livremente. O agente deixa de receber as melhorias da função até voltar ao formulário. Os treinamentos por site e vídeo são do modo avançado e saem ao publicar."
+    },
+    "toForm": {
+      "title": "Voltar ao formulário?",
+      "text": "As edições feitas no texto do agente serão perdidas. O texto volta a ser montado pelo formulário, na versão mais recente da função. No modo avançado você pode acrescentar instruções e treinar por site e vídeo.",
+      "advanced": "Voltar no modo avançado",
+      "simple": "Voltar no modo simples"
+    }
+  },
+  "additional": {
+    "label": "Instruções adicionais",
+    "hint": "Entram no fim do texto do agente. {count}/{max} caracteres."
+  },
+  "takenOverText": {
+    "label": "Texto do agente",
+    "hint": "Edição livre. {count}/{max} caracteres."
+  },
+  "saveDraft": "Salvar rascunho",
+  "previewAndPublish": "Ver prévia e publicar",
+  "attention": {
+    "title": "{count, plural, one {# ponto de atenção} other {# pontos de atenção}}",
+    "description": "Os avisos não impedem a publicação, mas o agente atende melhor com eles resolvidos.",
+    "review": "Revisar",
+    "publishAnyway": "Publicar mesmo assim",
+    "body": "Os campos com aviso estão destacados no formulário. Você pode corrigir antes ou seguir para a prévia."
+  },
+  "preview": {
+    "title": "Prévia da publicação",
+    "versionChange": "A função passa da versão {from} para a {to}.",
+    "default": "Confira o que muda no agente.",
+    "back": "Voltar",
+    "publish": "Publicar",
+    "publishing": "Publicando…"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Alguns campos estão inválidos. Revise e tente de novo.",
+    "AGENT_NOT_FOUND": "Agente não encontrado.",
+    "AGENT_OUT_OF_SYNC": "O agente não foi encontrado no GPTMaker; fale com o suporte.",
+    "AGENT_BUSY": "O agente está sendo alterado; aguarde e tente de novo.",
+    "FUNCTION_NOT_CONFIGURED": "Este agente não tem função configurada.",
+    "FUNCTION_ANSWERS_INVALID": "Revise as respostas do formulário.",
+    "FUNCTION_COMPILE_FAILED": "Não foi possível montar o agente com essas respostas.",
+    "FUNCTION_PUBLICATION_PENDING": "Há uma publicação em andamento; aguarde ela terminar.",
+    "FUNCTION_NOTHING_TO_RETRY": "Não há publicação com falha para repetir.",
+    "FUNCTION_TAKE_OVER_NOT_ALLOWED": "Só parceiros podem assumir o controle do comportamento.",
+    "FUNCTION_NOT_AVAILABLE": "Esta função não está disponível.",
+    "FUNCTION_NOT_FOUND": "Função não encontrada.",
+    "FUNCTION_TRANSFER_AGENT_INVALID": "Escolha outro agente para a transferência.",
+    "PLAN_TRAINING_LIMIT": "Você atingiu o limite do seu plano para treinamentos. Remova itens da base ou mude de plano.",
+    "GPTMAKER_REJECTED": "O GPTMaker recusou os dados do agente; nada foi alterado. Revise os campos.",
+    "GPTMAKER_UNAVAILABLE": "Não foi possível concluir no GPTMaker agora; nada foi alterado. Tente de novo em instantes."
+  }
+}

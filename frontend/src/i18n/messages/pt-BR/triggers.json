@@ -1,0 +1,243 @@
+{
+  "events": {
+    "onFirstInteraction": {
+      "label": "Primeiro atendimento do cliente",
+      "description": "O cliente fala com o agente pela primeira vez."
+    },
+    "onStartInteraction": {
+      "label": "Início de atendimento",
+      "description": "Começa um atendimento (inclusive de quem já conversou antes)."
+    },
+    "onNewMessage": {
+      "label": "Nova mensagem",
+      "description": "Cada mensagem do cliente ou do agente."
+    },
+    "onFinishInteraction": {
+      "label": "Fim de atendimento",
+      "description": "O atendimento é encerrado."
+    },
+    "onTransfer": {
+      "label": "Transferência para humano",
+      "description": "O agente passa o atendimento para um atendente."
+    },
+    "onLackKnowLedge": {
+      "label": "Agente sem resposta",
+      "description": "O agente não soube responder a uma pergunta."
+    },
+    "onCreateEvent": {
+      "label": "Agendamento criado",
+      "description": "O agente marcou um compromisso."
+    },
+    "onCancelEvent": {
+      "label": "Agendamento cancelado",
+      "description": "Um compromisso marcado pelo agente foi cancelado."
+    }
+  },
+  "actions": {
+    "CREATE_LEAD": {
+      "label": "Criar lead",
+      "description": "Novo lead no CRM."
+    },
+    "UPSERT_DEAL": {
+      "label": "Criar ou atualizar negócio",
+      "description": "Atualiza o negócio do diálogo ou cria um no funil escolhido."
+    },
+    "TIMELINE_COMMENT": {
+      "label": "Comentário na timeline",
+      "description": "Comentário no negócio, lead, contato ou empresa do diálogo."
+    },
+    "CREATE_TASK": {
+      "label": "Criar tarefa",
+      "description": "Tarefa para um usuário do portal."
+    },
+    "START_BIZPROC": {
+      "label": "Iniciar processo de negócio",
+      "description": "Roda um business process na entidade do diálogo."
+    },
+    "OUTBOUND_WEBHOOK": {
+      "label": "Chamar URL externa",
+      "description": "Envia o evento para outro sistema (POST assinado)."
+    },
+    "CREATE_SPA_ITEM": {
+      "label": "Criar item de SPA",
+      "description": "Novo item num processo inteligente, com os campos escolhidos pelo cliente."
+    },
+    "TRANSFER_TO_HUMAN": {
+      "label": "Transferir para atendente",
+      "description": "Depois da resposta do agente, a conversa passa para uma pessoa da equipe."
+    }
+  },
+  "defaults": {
+    "leadTitle": "Lead de '{{contact.name | \"cliente\"}}'",
+    "dealTitle": "Negócio de '{{contact.name | \"cliente\"}}'",
+    "timelineText": "Atendimento do agente '{{agent.name}}': '{{event.name}}'",
+    "taskTitle": "Retornar para '{{contact.name | \"cliente\"}}'",
+    "spaTitle": "Chamado de '{{contact.name}}'"
+  },
+  "sample": {
+    "contactName": "Maria Souza",
+    "messageText": "Quero um orçamento para 10 unidades",
+    "agentName": "Seu agente"
+  },
+  "variables": {
+    "contact_name": "Nome do cliente",
+    "contact_phone": "Telefone do cliente",
+    "message_text": "Texto da mensagem (eventos de mensagem)",
+    "message_role": "Autor da mensagem: user (cliente) ou assistant (agente)",
+    "agent_name": "Nome do agente",
+    "agent_id": "Id do agente no app",
+    "event_name": "Evento que disparou o gatilho",
+    "event_date": "Data e hora do evento (ISO 8601)",
+    "dialog_id": "Diálogo da Linha Aberta no Bitrix24 (chat9498)",
+    "dialog_chatId": "Número do chat da Linha Aberta, sem \"chat\" (9498)",
+    "dialog_sessionId": "Sessão atual da Linha Aberta no Bitrix24",
+    "interaction_id": "Atendimento no GPTMaker",
+    "interaction_protocol": "Protocolo do atendimento no GPTMaker"
+  },
+  "templateErrors": {
+    "unpaired": "chaves '{{ }}' sem par",
+    "invalid": "variável inválida: {token}",
+    "unknown": "variável desconhecida: {token}"
+  },
+  "status": {
+    "SUCCESS": "Executada",
+    "FAILED": "Falhou",
+    "PENDING": "Tentando de novo"
+  },
+  "result": {
+    "lead": "Lead #{id}",
+    "deal": "Negócio #{id}",
+    "dealNew": "Negócio #{id} (novo)",
+    "comment": "Comentário em {entityType} #{entityId}",
+    "task": "Tarefa #{id}",
+    "spaItem": "Item de SPA #{id}",
+    "workflow": "Processo {id}",
+    "http": "HTTP {status}"
+  },
+  "template": {
+    "insertIn": "Inserir variável em {label}",
+    "addVariable": "+ variável",
+    "example": "Exemplo:",
+    "empty": "(vazio)"
+  },
+  "options": {
+    "legend": "Valores possíveis (use o código):",
+    "fill": "Preencher com {id}"
+  },
+  "fieldMap": {
+    "required": "(obrigatório)",
+    "crmField": "Campo do CRM",
+    "typeNameOrCode": "Digite o nome ou o código do campo",
+    "codePlaceholder": "CÓDIGO DO CAMPO",
+    "removeField": "Remover o campo {name}",
+    "notFound": "Campo não encontrado no CRM deste portal. Confira o código.",
+    "value": "Valor",
+    "add": "Campo",
+    "loading": "Carregando os campos do CRM…",
+    "loadFailed": "Não foi possível ler os campos do CRM; informe os códigos (ex.: TITLE, NAME, PHONE, UF_CRM_...).",
+    "paramNames": "Informe os nomes dos parâmetros como estão no modelo do processo."
+  },
+  "config": {
+    "comment": "Comentário",
+    "commentHint": "Vai para o negócio, lead, contato ou empresa vinculado ao diálogo.",
+    "title": "Título",
+    "description": "Descrição",
+    "responsible": "Responsável",
+    "rotation": "{count, plural, one {# usuário} other {# usuários}}, em rodízio",
+    "deadline": "Prazo (dias)",
+    "deadlineHint": "Em branco: sem prazo.",
+    "templateId": "Modelo do processo (id)",
+    "runOn": "Rodar em",
+    "docDeal": "Negócio do diálogo",
+    "docLead": "Lead do diálogo",
+    "docContact": "Contato do diálogo",
+    "docCompany": "Empresa do diálogo",
+    "parameters": "Parâmetros (opcional)",
+    "targetOperator": "Operador livre da Linha Aberta",
+    "targetOperatorHint": "Segue a fila configurada na linha.",
+    "targetUser": "Um usuário específico",
+    "targetUserHint": "Ex.: o vendedor responsável por esse assunto.",
+    "openChannel": "Canal aberto {id}",
+    "agentUser": "Atendente",
+    "webhookHint": "Recebe um POST JSON com o evento, assinado no cabeçalho X-GPTMaker-Signature.",
+    "url": "URL"
+  },
+  "issue": {
+    "name": "Nome",
+    "action": "Ação {number}",
+    "actions": "Ações",
+    "trigger": "Gatilho",
+    "review": "revise este campo"
+  },
+  "editor": {
+    "saveFailed": "Não foi possível salvar o gatilho. Tente de novo.",
+    "editTitle": "Editar gatilho",
+    "newTitle": "Novo gatilho",
+    "description": "Quando o evento acontecer, as ações rodam no Bitrix24 nesta ordem.",
+    "active": "Ativo",
+    "cancel": "Cancelar",
+    "saving": "Salvando…",
+    "save": "Salvar",
+    "name": "Nome",
+    "namePlaceholder": "Ex.: Lead ao fim do atendimento",
+    "when": "Quando",
+    "actions": "Ações"
+  },
+  "actionsEditor": {
+    "moveUp": "Mover para cima",
+    "moveDown": "Mover para baixo",
+    "remove": "Remover",
+    "add": "Adicionar ação",
+    "addOption": "+ Adicionar ação"
+  },
+  "page": {
+    "loadFailed": "Não foi possível carregar os gatilhos.",
+    "actionFailed": "Não foi possível concluir. Tente de novo.",
+    "new": "Novo gatilho",
+    "title": "Gatilhos",
+    "description": "Ações automáticas no Bitrix24 quando algo acontece no atendimento do agente: criar lead, mover negócio, registrar comentário, abrir tarefa.",
+    "emptyTitle": "Nenhum gatilho ainda",
+    "emptyDescription": "Exemplo: ao fim de cada atendimento, criar um lead com o nome do cliente e um comentário com o resumo.",
+    "active": "Ativo",
+    "inactive": "Desativado",
+    "confirmRemove": "Remover?",
+    "cancel": "Cancelar",
+    "removing": "Removendo…",
+    "remove": "Remover",
+    "history": "Histórico",
+    "saving": "Salvando…",
+    "deactivate": "Desativar",
+    "activate": "Ativar",
+    "edit": "Editar"
+  },
+  "secrets": {
+    "title": "Segredo do webhook de saída",
+    "description": "Guarde agora: ele não aparece de novo.",
+    "saved": "Já guardei",
+    "usageStart": "Use o segredo no sistema que recebe as chamadas para conferir a assinatura do cabeçalho",
+    "usageWhere": "onde",
+    "usageIs": "é o HMAC-SHA256 de",
+    "signedBody": "t.corpo",
+    "copied": "Copiado",
+    "copy": "Copiar"
+  },
+  "history": {
+    "loadFailed": "Não foi possível carregar o histórico.",
+    "title": "Histórico · {name}",
+    "description": "Últimas 100 ações executadas por este gatilho.",
+    "refresh": "Atualizar",
+    "close": "Fechar",
+    "empty": "Nenhuma execução ainda. O gatilho roda quando o evento “{event}” acontecer.",
+    "dialog": "diálogo {id}",
+    "attempts": "{count, plural, one {# tentativa} other {# tentativas}}",
+    "nextAttempt": "próxima tentativa {date}"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Alguns campos estão inválidos. Revise e tente de novo.",
+    "TRIGGER_NOT_FOUND": "Gatilho não encontrado",
+    "TRIGGER_ACTION_NOT_FOUND": "Ação inexistente neste gatilho",
+    "TRIGGER_LIMIT": "O agente já tem 50 gatilhos",
+    "TRIGGER_ACTION_TYPE_CHANGED": "Para trocar o tipo, remova a ação e crie outra",
+    "AGENT_OUT_OF_SYNC": "O agente não foi encontrado no GPTMaker; fale com o suporte"
+  }
+}

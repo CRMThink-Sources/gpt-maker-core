@@ -102,7 +102,15 @@ describe('carência de pagamento', () => {
       lifecycle,
       new CreditCycleService(ledger, db, redis),
       new PaymentsOutbox(db),
-      { notify: async (n: Notified) => notified.push(n) > 0 } as never,
+      {
+        notify: async (
+          n: Omit<Notified, 'message'> & { message: string | ((l: 'pt-BR') => string) },
+        ) =>
+          notified.push({
+            ...n,
+            message: typeof n.message === 'function' ? n.message('pt-BR') : n.message,
+          }) > 0,
+      } as never,
       db,
     );
     job = new GraceExpiryJob(tenants, lifecycle, db, redis);

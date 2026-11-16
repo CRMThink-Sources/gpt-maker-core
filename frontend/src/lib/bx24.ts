@@ -28,6 +28,8 @@ interface Bx24 {
   ): void;
   selectUsers(callback: (users: Bx24SelectedUser[]) => void): void;
   fitWindow(): void;
+  /** Idioma do portal (`br`, `la`, `en`, ...); ausente em versões antigas do SDK. */
+  getLang?(): string;
 }
 
 declare global {

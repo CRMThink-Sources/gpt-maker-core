@@ -16,21 +16,22 @@ import { BotIcon, CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
 import { Alert, buttonClass, Loading } from '@/components/ui';
-import { credits, errorMessage } from '@/lib/agents';
+import { useT } from '@/i18n';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
 import { useTransferAgents } from './use-transfer-agents';
 import { useAiKey } from './use-function-review';
-import { type AgentFormValues, IdentityFields, initialValues, ModelFields } from './agent-fields';
+import {
+  type AgentFormValues,
+  IdentityFields,
+  initialValues,
+  ModelFields,
+  useApiFailure,
+} from './agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from './function-form';
 import { FunctionPreviewView } from './function-preview';
 
-const STEPS = [
-  { title: 'Função', description: 'O que o agente vai fazer. Cada agente tem uma função.' },
-  { title: 'Identidade', description: 'Como o agente se apresenta e qual modelo de IA usa.' },
-  { title: 'Formulário', description: 'Conte sobre o seu negócio; o texto do agente é nosso.' },
-  { title: 'Prévia', description: 'Confira o que será criado antes de confirmar.' },
-] as const;
+const STEP_KEYS = ['function', 'identity', 'form', 'preview'] as const;
 
 /** Problemas das respostas devolvidos pela API (`FUNCTION_ANSWERS_INVALID`). */
 function issuesOf(error: unknown): AnswerIssue[] | null {
@@ -46,6 +47,16 @@ export function CreateAgentWizard({
   onClose: () => void;
   onCreated: (agent: AgentView) => void;
 }) {
+  const t = useT('agentForm');
+  const failure = useApiFailure();
+  const steps = useMemo(
+    () =>
+      STEP_KEYS.map((key) => ({
+        title: t(`wizard.steps.${key}.title`),
+        description: t(`wizard.steps.${key}.description`),
+      })),
+    [t],
+  );
   const { api } = useAppSession();
   const transferAgents = useTransferAgents();
   const aiKey = useAiKey(api);
@@ -74,13 +85,12 @@ export function CreateAgentWizard({
         setModels(md.models);
         setValues(initialValues(undefined, md.models));
       })
-      .catch(
-        (e: unknown) =>
-          !cancelled && setError(errorMessage(e, 'Não foi possível carregar as funções.')),
-      );
+      .catch((e: unknown) => !cancelled && setError(failure(e, t('failures.loadFunctions'))));
     return () => {
       cancelled = true;
     };
+    // `failure` e `t` mudam só com o idioma: não refazem a carga.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
   const set = <K extends keyof AgentFormValues>(key: K, value: AgentFormValues[K]) =>
@@ -99,7 +109,7 @@ export function CreateAgentWizard({
       setAnswers({});
       setIssues([]);
     } catch (e) {
-      setError(errorMessage(e, 'Não foi possível carregar o formulário da função.'));
+      setError(failure(e, t('failures.loadForm')));
     } finally {
       setBusy(false);
     }
@@ -133,7 +143,7 @@ export function CreateAgentWizard({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!values || !form || !chosen) {
-      if (step === 0 && !chosen) setError('Escolha a função do agente.');
+      if (step === 0 && !chosen) setError(t('wizard.pickFunction'));
       return;
     }
     setError(null);
@@ -142,7 +152,7 @@ export function CreateAgentWizard({
       const result = validateFunctionAnswers(form, answers);
       setIssues(result.issues);
       if (result.issues.length) {
-        setError('Revise os campos destacados no formulário.');
+        setError(t('wizard.reviewFields'));
         return;
       }
       setBusy(true);
@@ -155,13 +165,13 @@ export function CreateAgentWizard({
         );
         setStep(3);
       } catch (e) {
-        setError(errorMessage(e, 'Não foi possível montar a prévia.'));
+        setError(failure(e, t('failures.preview')));
       } finally {
         setBusy(false);
       }
       return;
     }
-    if (step < STEPS.length - 1) {
+    if (step < steps.length - 1) {
       setStep(step + 1);
       return;
     }
@@ -176,32 +186,32 @@ export function CreateAgentWizard({
         setIssues(found);
         setStep(2);
       }
-      setError(errorMessage(e, 'Não foi possível criar o agente. Tente de novo.'));
+      setError(failure(e, t('failures.create')));
       setBusy(false);
     }
   }
 
-  const last = step === STEPS.length - 1;
+  const last = step === steps.length - 1;
   const footer = confirmingClose ? (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <span className="text-sm text-zinc-700">Descartar o que foi preenchido?</span>
+      <span className="text-sm text-zinc-700">{t('wizard.confirmDiscard')}</span>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => setConfirmingClose(false)}
           className={buttonClass('secondary')}
         >
-          Continuar editando
+          {t('wizard.keepEditing')}
         </button>
         <button type="button" onClick={onClose} className={buttonClass('danger')}>
-          Descartar
+          {t('wizard.discard')}
         </button>
       </div>
     </div>
   ) : (
     <div className="flex items-center justify-between gap-3">
       <span className="text-xs text-zinc-500">
-        Passo {step + 1} de {STEPS.length}
+        {t('wizard.stepCounter', { step: step + 1, total: steps.length })}
       </span>
       <div className="flex gap-2">
         {step > 0 ? (
@@ -211,11 +221,11 @@ export function CreateAgentWizard({
             disabled={busy}
             className={buttonClass('secondary')}
           >
-            Voltar
+            {t('wizard.back')}
           </button>
         ) : (
           <button type="button" onClick={requestClose} className={buttonClass('secondary')}>
-            Cancelar
+            {t('wizard.cancel')}
           </button>
         )}
         <button
@@ -229,7 +239,13 @@ export function CreateAgentWizard({
           }
           className={buttonClass('primary')}
         >
-          {busy ? 'Aguarde…' : last ? 'Criar agente' : step === 2 ? 'Ver prévia' : 'Avançar'}
+          {busy
+            ? t('wizard.busy')
+            : last
+              ? t('wizard.create')
+              : step === 2
+                ? t('wizard.viewPreview')
+                : t('wizard.next')}
         </button>
       </div>
     </div>
@@ -241,9 +257,9 @@ export function CreateAgentWizard({
 
   return (
     <Modal
-      title="Novo agente"
-      description={STEPS[step]!.description}
-      header={<Stepper steps={STEPS} current={step} />}
+      title={t('wizard.title')}
+      description={steps[step]!.description}
+      header={<Stepper steps={steps} current={step} />}
       footer={footer}
       onRequestClose={requestClose}
       size={wide ? 'lg' : 'md'}
@@ -300,9 +316,7 @@ export function CreateAgentWizard({
                     </button>
                   );
                 })}
-                {functions.length === 0 && (
-                  <Alert tone="warning">Nenhuma função disponível no momento.</Alert>
-                )}
+                {functions.length === 0 && <Alert tone="warning">{t('wizard.noFunctions')}</Alert>}
               </div>
             )}
             {step === 1 && (
@@ -311,7 +325,9 @@ export function CreateAgentWizard({
                 <ModelFields values={values} set={set} models={models} />
                 {models.length === 1 && (
                   <p className="text-xs text-zinc-500">
-                    Seu plano libera só este modelo ({credits(models[0]!.creditsPerResponse)}).
+                    {t('wizard.singleModel', {
+                      credits: t('model.credits', { count: models[0]!.creditsPerResponse }),
+                    })}
                   </p>
                 )}
               </div>

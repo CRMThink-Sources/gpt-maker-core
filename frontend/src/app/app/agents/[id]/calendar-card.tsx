@@ -12,10 +12,11 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, Spinner } from '@/components/ui';
+import { useErrorMessage, useT } from '@/i18n';
+import { errorMessage } from '@/lib/agents';
 import {
-  CALENDAR_MODE_LABELS,
   type CalendarDraft,
-  calendarErrorMessage,
+  calendarValidationMessage,
   describeCalendar,
   draftOf,
   getCalendarConfig,
@@ -31,18 +32,13 @@ import { Field, inputClass } from '../agent-fields';
 import { ResponsiblePicker, UsersPicker } from '../bitrix-pickers';
 import { useAgent } from './agent-context';
 
-const MODE_HINT: Record<(typeof CALENDAR_MODES)[number], string> = {
-  FIXED_USER: 'Os compromissos entram na agenda de um usuário do Bitrix24.',
-  CLIENT_OWNER:
-    'Os compromissos entram na agenda de quem é responsável pelo cliente da conversa no CRM.',
-  USER_LIST:
-    'O agente oferece os horários livres de qualquer um dos usuários e marca com o primeiro da lista que estiver livre.',
-};
-
 /** Bloco "Agenda" do agente (spec agent-calendar-scheduling); some com o recurso desligado. */
 export function CalendarCard() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
+  const t = useT('calendar');
+  const tc = useT('common');
+  const translateError = useErrorMessage('calendar');
   const [view, setView] = useState<CalendarConfigView | null>(null);
   const [names, setNames] = useState<Record<number, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,13 +71,12 @@ export function CalendarCard() {
         }
       })
       .catch(
-        (e: unknown) =>
-          !stale() &&
-          setLoadError(calendarErrorMessage(e, 'Não foi possível carregar a agenda do agente.')),
+        (e: unknown) => !stale() && setLoadError(errorMessage(e, t('loadError'), translateError)),
       );
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, agent.id, featureOn, reload]);
 
   // O acesso ao CRM foi ligado ou desligado no bloco ao lado: a agenda depende dele.
@@ -102,12 +97,13 @@ export function CalendarCard() {
     setError(null);
     const input = inputOf(draft);
     if (!input) {
-      setError('Preencha a duração, a antecedência e a janela com números.');
+      setError(t('fillNumbers'));
       return;
     }
     const parsed = calendarConfigInputSchema.safeParse(input);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Confira os campos da agenda.');
+      const issue = parsed.error.issues[0];
+      setError(issue ? calendarValidationMessage(issue, input, t) : t('checkFields'));
       return;
     }
     setBusy('save');
@@ -119,7 +115,7 @@ export function CalendarCard() {
       setDraft(null);
       void userNames(parsed.data.userIds.map(String)).then((found) => setNames(toNameMap(found)));
     } catch (e) {
-      setError(calendarErrorMessage(e, 'Não foi possível salvar a agenda. Tente de novo.'));
+      setError(errorMessage(e, t('saveError'), translateError));
     } finally {
       writes.current += 1;
       setBusy(null);
@@ -136,7 +132,7 @@ export function CalendarCard() {
       setLoadError(null);
       setDraft(null);
     } catch (e) {
-      setError(calendarErrorMessage(e, 'Não foi possível remover a agenda. Tente de novo.'));
+      setError(errorMessage(e, t('removeError'), translateError));
     } finally {
       writes.current += 1;
       setBusy(null);
@@ -157,61 +153,45 @@ export function CalendarCard() {
           }}
           className={`${buttonClass('secondary', 'sm')} mt-2`}
         >
-          Tentar de novo
+          {t('retry')}
         </button>
       </Alert>
     ) : (
       <p className="mt-6 flex items-center gap-2 text-sm text-zinc-500" role="status">
         <Spinner className="size-4" />
-        Carregando a agenda…
+        {t('loading')}
       </p>
     );
   }
 
   const config = view.config;
-  const summary = config ? describeCalendar(config, names) : null;
+  const summary = config ? describeCalendar(config, names, t) : null;
 
   return (
     <Card className="mt-6 max-w-5xl">
       <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-zinc-900">Agenda</h2>
+            <h2 className="text-base font-semibold text-zinc-900">{t('title')}</h2>
             <Badge tone={config ? 'green' : 'zinc'}>
-              {config ? 'Configurada' : 'Não configurada'}
+              {config ? t('configured') : t('notConfigured')}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-zinc-500">
-            Com a agenda configurada, o agente consulta horários livres no Calendário do Bitrix24,
-            marca compromissos para o cliente e informa o que ele já tem marcado. Os horários seguem
-            o horário de funcionamento do agente; sem ele, valem segunda a sexta, das 09:00 às 18:00
-            (horário de Brasília).
-          </p>
+          <p className="mt-1 text-sm text-zinc-500">{t('intro')}</p>
         </div>
         {canManage && !draft && view.crmConnected && (
           <button type="button" onClick={edit} className={buttonClass('secondary')}>
-            {config ? 'Editar agenda' : 'Configurar agenda'}
+            {config ? t('edit') : t('configure')}
           </button>
         )}
       </div>
 
       <div className="space-y-3 border-t border-zinc-100 px-5 py-3.5 text-sm">
-        {view.scopeMissing && (
-          <Alert tone="warning">
-            O Bitrix24 recusou o acesso ao Calendário. Um administrador do portal precisa
-            reautorizar o aplicativo com a permissão de Calendário (reinstalar o aplicativo) para o
-            agente poder usar a agenda.
-          </Alert>
-        )}
-        {!view.crmConnected && (
-          <Alert tone="warning">
-            A agenda só funciona com o acesso ao CRM deste agente ligado. Ligue em &quot;Acesso ao
-            CRM&quot; abaixo.
-          </Alert>
-        )}
+        {view.scopeMissing && <Alert tone="warning">{t('scopeMissing')}</Alert>}
+        {!view.crmConnected && <Alert tone="warning">{t('crmRequired')}</Alert>}
         {loadError && (
           <Alert tone="error">
-            <p>{loadError} O que aparece abaixo pode estar desatualizado.</p>
+            <p>{t('staleLoadError', { error: loadError })}</p>
             <button
               type="button"
               onClick={() => {
@@ -220,44 +200,39 @@ export function CalendarCard() {
               }}
               className={`${buttonClass('secondary', 'sm')} mt-2`}
             >
-              Tentar de novo
+              {t('retry')}
             </button>
           </Alert>
         )}
         {error && !draft && <Alert tone="error">{error}</Alert>}
         {session.canManage && agent.status === 'OUT_OF_SYNC' && (
-          <Alert tone="warning">
-            O agente não foi encontrado no GPTMaker. Enquanto isso não for resolvido, não é possível
-            alterar a agenda.
-          </Alert>
+          <Alert tone="warning">{t('outOfSync')}</Alert>
         )}
         {busy === 'remove' && (
           <p className="flex items-center gap-2 text-zinc-600" role="status">
             <Spinner className="size-4" />
-            Removendo a agenda…
+            {t('removing')}
           </p>
         )}
 
         {summary && !draft && (
           <dl className="space-y-1 text-zinc-700">
             <div>
-              <dt className="inline font-medium">Agenda de: </dt>
+              <dt className="inline font-medium">{t('ownerLabel')} </dt>
               <dd className="inline">
-                {CALENDAR_MODE_LABELS[config!.mode]} — {summary.owner}
+                {t(`modes.${config!.mode}`)} — {summary.owner}
               </dd>
             </div>
             <p className="text-xs text-zinc-500">{summary.rules}</p>
           </dl>
         )}
-        {!config && !draft && (
-          <p className="text-zinc-500">O agente ainda não oferece nem marca horários.</p>
-        )}
+        {!config && !draft && <p className="text-zinc-500">{t('empty')}</p>}
 
         {draft && (
           <form
             key={formKey}
-            // Quem valida é o contrato, com mensagens em português; sem isto o navegador bloqueia o
-            // envio e mostra a própria mensagem de `min`/`max`/`step`, no idioma dele.
+            // Quem valida é o contrato (mensagens traduzidas por `calendarValidationMessage`); sem isto
+            // o navegador bloqueia o envio e mostra a própria mensagem de `min`/`max`/`step`.
             noValidate
             className="space-y-4"
             onSubmit={(event) => {
@@ -266,7 +241,7 @@ export function CalendarCard() {
             }}
           >
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium text-zinc-800">De quem é a agenda</legend>
+              <legend className="text-sm font-medium text-zinc-800">{t('modeLegend')}</legend>
               {CALENDAR_MODES.map((mode) => (
                 <label key={mode} className="flex items-start gap-2">
                   <input
@@ -290,8 +265,8 @@ export function CalendarCard() {
                     }
                   />
                   <span>
-                    <span className="font-medium text-zinc-800">{CALENDAR_MODE_LABELS[mode]}</span>
-                    <span className="block text-xs text-zinc-500">{MODE_HINT[mode]}</span>
+                    <span className="font-medium text-zinc-800">{t(`modes.${mode}`)}</span>
+                    <span className="block text-xs text-zinc-500">{t(`modeHints.${mode}`)}</span>
                   </span>
                 </label>
               ))}
@@ -300,7 +275,7 @@ export function CalendarCard() {
             {draft.mode === 'FIXED_USER' && (
               <ResponsiblePicker
                 key={`fixed-${formKey}`}
-                label="Quem atende"
+                label={t('attendant')}
                 value={draft.userIds[0] ?? 0}
                 knownName={names[draft.userIds[0] ?? 0]}
                 disabled={busy !== null}
@@ -310,8 +285,8 @@ export function CalendarCard() {
             {draft.mode === 'USER_LIST' && (
               <UsersPicker
                 key={`list-${formKey}`}
-                label="Quem atende"
-                hint={`Se um usuário estiver ocupado no horário, o compromisso vai para o próximo da lista. Até ${CALENDAR_USERS_MAX} usuários.`}
+                label={t('attendant')}
+                hint={t('attendantListHint', { max: CALENDAR_USERS_MAX })}
                 max={CALENDAR_USERS_MAX}
                 value={draft.userIds}
                 knownNames={names}
@@ -321,10 +296,7 @@ export function CalendarCard() {
             )}
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field
-                label="Duração do compromisso (minutos)"
-                hint={`De ${CALENDAR_SLOT_MINUTES.min} a ${CALENDAR_SLOT_MINUTES.max}, de ${CALENDAR_SLOT_MINUTES.step} em ${CALENDAR_SLOT_MINUTES.step}.`}
-              >
+              <Field label={t('slotLabel')} hint={t('slotHint', CALENDAR_SLOT_MINUTES)}>
                 <input
                   type="number"
                   className={inputClass}
@@ -336,10 +308,7 @@ export function CalendarCard() {
                   onChange={(e) => setDraft({ ...draft, slotMinutes: e.target.value })}
                 />
               </Field>
-              <Field
-                label="Antecedência mínima (minutos)"
-                hint={`De ${CALENDAR_MIN_NOTICE_MINUTES.min} a ${CALENDAR_MIN_NOTICE_MINUTES.max}. O agente não oferece horário mais próximo que isso.`}
-              >
+              <Field label={t('noticeLabel')} hint={t('noticeHint', CALENDAR_MIN_NOTICE_MINUTES)}>
                 <input
                   type="number"
                   className={inputClass}
@@ -350,10 +319,7 @@ export function CalendarCard() {
                   onChange={(e) => setDraft({ ...draft, minNoticeMinutes: e.target.value })}
                 />
               </Field>
-              <Field
-                label="Procurar horários até (dias à frente)"
-                hint={`De ${CALENDAR_MAX_DAYS_AHEAD.min} a ${CALENDAR_MAX_DAYS_AHEAD.max} dias.`}
-              >
+              <Field label={t('daysLabel')} hint={t('daysHint', CALENDAR_MAX_DAYS_AHEAD)}>
                 <input
                   type="number"
                   className={inputClass}
@@ -370,7 +336,7 @@ export function CalendarCard() {
 
             <div className="flex flex-wrap items-center gap-2">
               <button type="submit" disabled={busy !== null} className={buttonClass('primary')}>
-                {busy === 'save' ? 'Salvando…' : 'Salvar agenda'}
+                {busy === 'save' ? t('saving') : t('save')}
               </button>
               <button
                 type="button"
@@ -381,7 +347,7 @@ export function CalendarCard() {
                 }}
                 className={buttonClass('secondary')}
               >
-                Cancelar
+                {tc('cancel')}
               </button>
               {config && (
                 <button
@@ -390,7 +356,7 @@ export function CalendarCard() {
                   onClick={() => setConfirming(true)}
                   className={`${buttonClass('danger')} ml-auto`}
                 >
-                  Remover agenda
+                  {t('remove')}
                 </button>
               )}
             </div>
@@ -400,7 +366,7 @@ export function CalendarCard() {
 
       {confirming && (
         <Modal
-          title="Remover a agenda?"
+          title={t('confirmTitle')}
           description={agent.name}
           onRequestClose={() => setConfirming(false)}
           footer={
@@ -410,18 +376,15 @@ export function CalendarCard() {
                 onClick={() => setConfirming(false)}
                 className={buttonClass('secondary')}
               >
-                Cancelar
+                {tc('cancel')}
               </button>
               <button type="button" onClick={() => void remove()} className={buttonClass('danger')}>
-                Remover
+                {t('confirmRemove')}
               </button>
             </div>
           }
         >
-          <p className="text-sm text-zinc-600">
-            O agente deixa de oferecer e de marcar horários. Os compromissos que já foram marcados
-            no Bitrix24 continuam na agenda. Você pode configurar a agenda de novo quando quiser.
-          </p>
+          <p className="text-sm text-zinc-600">{t('confirmBody')}</p>
         </Modal>
       )}
     </Card>

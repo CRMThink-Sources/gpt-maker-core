@@ -1,0 +1,32 @@
+{
+  "title": "Notices",
+  "description": "Who receives the app credit and payment notifications in Bitrix24.",
+  "sendTest": "Send test notice",
+  "addPeople": "Add people",
+  "adminOnly": "Only portal administrators choose who receives the notices.",
+  "empty": {
+    "title": "Notices go to the portal administrators",
+    "description": "Add people so they receive the notices instead of the administrators."
+  },
+  "userFallback": "User #{id}",
+  "remove": "Remove",
+  "whenTitle": "When notices are sent",
+  "when": {
+    "credits80": "80% of the cycle credits used",
+    "creditsOut": "Credits exhausted (messages go to human agents)",
+    "paymentFailed": "Subscription payment declined, with the deadline before agents are paused",
+    "periodEnd": "End of the period for subscriptions contracted through CRMThink"
+  },
+  "whenNote": "Each notice is sent once per cycle or per occurrence. People deactivated in the portal are ignored; if none remain, the administrators receive it.",
+  "test": {
+    "sent": "{count, plural, one {Test notice sent to # person. Check your Bitrix24 notifications.} other {Test notice sent to # people. Check your Bitrix24 notifications.}}",
+    "pending": "Bitrix24 did not respond right now; the test notice will be resent shortly.",
+    "noRecipient": "Could not send the test notice: no active recipient."
+  },
+  "errors": {
+    "load": "Could not load the recipients.",
+    "save": "Could not save.",
+    "test": "Could not send the test.",
+    "INVALID_USER": "Invalid Bitrix user id"
+  }
+}

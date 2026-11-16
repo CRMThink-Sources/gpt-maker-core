@@ -1,0 +1,176 @@
+{
+  "page": {
+    "loadFailed": "Could not load the intents.",
+    "actionFailed": "Could not complete the operation. Please try again.",
+    "new": "New intent",
+    "title": "Intents",
+    "description": "Let the agent act during the conversation: register a lead, deal or task in Bitrix24, or query your systems (order status, duplicate invoice, scheduling).",
+    "emptyTitle": "No intents yet",
+    "emptyDescription": "Example: when the customer asks about an order, the agent asks for the number, queries your API and replies with the status and the delivery estimate.",
+    "active": "Active",
+    "inactive": "Inactive",
+    "fromFunction": "from function",
+    "syncing": "Syncing",
+    "collects": "Collects:",
+    "confirmRemove": "Remove?",
+    "cancel": "Cancel",
+    "removing": "Removing…",
+    "remove": "Remove",
+    "history": "History",
+    "saving": "Saving…",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "edit": "Edit"
+  },
+  "executions": {
+    "loadFailed": "Could not load the history.",
+    "title": "History: {name}",
+    "description": "Latest times the agent used this intent.",
+    "close": "Close",
+    "empty": "The agent has not used this intent yet.",
+    "status": {
+      "SUCCESS": "Completed",
+      "FAILED": "Failed",
+      "REJECTED": "Rejected"
+    },
+    "dialog": "dialog {id}",
+    "ok": "ok",
+    "toAgent": "To the agent: {message}"
+  },
+  "fieldTypes": {
+    "STRING": "Text",
+    "NUMBER": "Number",
+    "BOOLEAN": "Yes/No",
+    "DATE": "Date",
+    "DATE_TIME": "Date and time",
+    "URL": "Link"
+  },
+  "sections": {
+    "actions": "Action",
+    "name": "Name",
+    "whenToUse": "When to use",
+    "fields": "Field",
+    "url": "URL",
+    "headers": "Header",
+    "params": "Parameter",
+    "body": "Body",
+    "instructions": "Instruction"
+  },
+  "withFields": {
+    "insertIn": "Insert field in {label}",
+    "addField": "+ field"
+  },
+  "pairs": {
+    "paramName": "name",
+    "name": "Name",
+    "storedValue": "Stored value (hidden)",
+    "replace": "Replace",
+    "value": "Value",
+    "valuePlaceholder": "value",
+    "remove": "Remove",
+    "addHeader": "Add header",
+    "addParam": "Add parameter",
+    "headerNote": "Header values (such as API keys) are stored encrypted and are not shown again."
+  },
+  "steps": {
+    "intent": {
+      "title": "Intent",
+      "description": "When the agent should use this intent."
+    },
+    "info": {
+      "title": "Information",
+      "description": "What the agent asks the customer before acting (optional)."
+    },
+    "action": {
+      "title": "Action",
+      "description": "What happens with the collected information."
+    },
+    "response": {
+      "title": "Response",
+      "description": "How the agent replies to the customer after the action."
+    }
+  },
+  "intent": {
+    "name": "Name",
+    "nameHint": "Short and unique within this agent. E.g. Register interest.",
+    "namePlaceholder": "Register interest",
+    "whenToUse": "When to use",
+    "whenToUseHint": "This is what the agent reads to decide whether to use the intent. Describe the customer's situation, not the action. {count}/{max} characters.",
+    "whenToUsePlaceholder": "When the customer wants to talk to a salesperson or asks for a quote"
+  },
+  "fields": {
+    "empty": "No information: the agent acts without asking the customer anything.",
+    "namePlaceholder": "E.g. Product of interest",
+    "nameLabel": "Name of information {number}",
+    "typeLabel": "Type of information {number}",
+    "required": "Required",
+    "removeLabel": "Remove information {number}",
+    "descriptionPlaceholder": "Optional: how to ask the customer. E.g. which plan or product they want to know about",
+    "descriptionLabel": "Description of information {number}",
+    "usedAs": "Used as",
+    "add": "Add information"
+  },
+  "action": {
+    "tabParams": "Parameters ({count})",
+    "tabHeaders": "Headers ({count})",
+    "tabBody": "Body",
+    "bitrixTitle": "Action in Bitrix24",
+    "bitrixDescription": "Lead, deal, task, comment or transfer to an agent.",
+    "webhookTitle": "Call an API",
+    "webhookDescription": "Queries or sends data to one of your systems.",
+    "runNote": "They run right away, in this order, in your portal. Comment, deal and transfer use the conversation in progress.",
+    "method": "Method",
+    "url": "URL",
+    "urlPlaceholder": "https://your-api.com/orders/'{{'order_number'}}'",
+    "autoParams": "The agent builds the parameters on its own",
+    "autoBody": "The agent builds the body on its own",
+    "bodyJson": "JSON body",
+    "bodyPlaceholder": "'{'\n  \"order\": \"'{{'order_number'}}'\"\n'}'"
+  },
+  "scope": {
+    "field": "Information: {name}"
+  },
+  "response": {
+    "noUrl": "(no URL)",
+    "byActions": "By the result of the actions",
+    "byApi": "By the API response",
+    "byActionsDescription": "The agent confirms what was done, e.g. \"I registered your interest\".",
+    "byApiDescription": "The agent interprets the response and replies with the information.",
+    "byInstruction": "By your instruction",
+    "byInstructionDescription": "You write how the agent should reply.",
+    "instruction": "Response instruction",
+    "instructionPlaceholder": "Say thanks, say that a salesperson will continue the conversation and do not promise deadlines",
+    "summary": "Summary",
+    "whenPlaceholder": "When…",
+    "summaryAsksBitrix": "The agent asks for {fields} and then does in Bitrix24: {what}.",
+    "summaryAsksApi": "The agent asks for {fields} and then calls {what}.",
+    "summaryNoAskBitrix": "Without asking anything, the agent does in Bitrix24: {what}.",
+    "summaryNoAskApi": "Without asking anything, the agent calls {what}.",
+    "noAction": "no action",
+    "active": "Intent active"
+  },
+  "editor": {
+    "saveFailed": "Could not save the intent.",
+    "editTitle": "Edit intent",
+    "newTitle": "New intent",
+    "step": "Step {current} of {total}",
+    "back": "Back",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save intent",
+    "next": "Next"
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Some fields are invalid. Review them and try again.",
+    "INTENTION_NOT_FOUND": "Intent not found",
+    "INTENTION_MANAGED_BY_FUNCTION": "This intent comes from the agent's function; change it in the function form",
+    "INTENTION_NAME_RESERVED": "This name is reserved for the customer's CRM lookup. Choose another name",
+    "INTENTION_NAME_TAKEN": "This agent already has an intent with this name",
+    "AGENT_OUT_OF_SYNC": "The agent was not found in GPTMaker; contact support",
+    "INTENTION_NOT_SYNCED": "The intent has not been located in GPTMaker yet. Try again in a moment",
+    "INTENTION_BUSY": "Another intent of this agent is being saved; try again in a moment",
+    "GPTMAKER_TRAIN_FAILED": "GPTMaker could not train the agent with this intent. Review the texts: each field description up to 255 characters and \"when to use\" up to 512",
+    "GPTMAKER_REJECTED": "GPTMaker rejected the intent. Review the data and try again",
+    "GPTMAKER_UNAVAILABLE": "Could not save the intent in GPTMaker right now. Try again in a moment"
+  }
+}

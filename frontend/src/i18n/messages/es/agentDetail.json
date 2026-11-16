@@ -1,0 +1,86 @@
+{
+  "types": {
+    "SUPPORT": "Soporte",
+    "SALE": "Ventas",
+    "PERSONAL": "Asistente personal"
+  },
+  "communication": {
+    "FORMAL": "Formal",
+    "NORMAL": "Normal",
+    "RELAXED": "Informal"
+  },
+  "status": {
+    "active": "Activo",
+    "outOfSync": "Desincronizado",
+    "inactive": "Inactivo",
+    "inactiveWithReason": "Inactivo · {reason}"
+  },
+  "inactiveReasons": {
+    "MANUAL": "desactivado manualmente",
+    "SUBSCRIPTION_EXPIRED": "suscripción inactiva",
+    "TENANT_SUSPENDED": "cuenta suspendida",
+    "UNINSTALLED": "app desinstalada"
+  },
+  "creditsPerResponse": "{count, plural, one {# crédito} other {# créditos}} por respuesta",
+  "layout": {
+    "agent": "Agente",
+    "agents": "Agentes",
+    "loadError": "No se pudo cargar el agente.",
+    "tabs": {
+      "function": "Función",
+      "settings": "Configuración",
+      "trainings": "Entrenamientos",
+      "intentions": "Intenciones",
+      "triggers": "Disparadores"
+    },
+    "test": "Probar",
+    "description": "{type} · creado el {date}",
+    "sections": "Secciones del agente",
+    "outOfSync": "No se encontró el agente en GPTMaker y no se puede modificar. Comuníquese con soporte."
+  },
+  "settings": {
+    "modelsError": "No se pudieron cargar los modelos.",
+    "nothingToSave": "Nada que guardar: no se modificó ningún campo.",
+    "saved": "Cambios guardados.",
+    "saveError": "No se pudo guardar. Inténtelo de nuevo.",
+    "readOnly": "Usted puede consultar este agente. Para modificarlo, solicite acceso a un administrador."
+  },
+  "crm": {
+    "title": "Acceso al CRM",
+    "intro": "Con el acceso activado, el agente consulta en Bitrix24 al cliente de la conversación y sus negocios para responder con más contexto. Solo lee los campos habilitados en {link}.",
+    "linkLabel": "CRM para el agente",
+    "status": {
+      "DISABLED": "Desactivado",
+      "CONNECTING": "Conectando",
+      "CONNECTED": "Conectado",
+      "ERROR": "Error al conectar"
+    },
+    "loadError": "No se pudo cargar el acceso al CRM.",
+    "turnOnError": "No se pudo activar el acceso al CRM. Inténtelo de nuevo.",
+    "turnOffError": "No se pudo desactivar el acceso al CRM. Inténtelo de nuevo.",
+    "turningOff": "Desactivando el acceso al CRM…",
+    "connectingSlow": "Conectando el agente al CRM. Esto puede tardar hasta 30 segundos.",
+    "connecting": "Conectando el agente al CRM…",
+    "connectError": "No se pudo conectar el agente al CRM.",
+    "connectErrorWithReason": "No se pudo conectar el agente al CRM: {reason}",
+    "retry": "Intentar de nuevo",
+    "lastCall": "Última consulta al CRM: {date}.",
+    "neverCalled": "El agente aún no ha consultado el CRM.",
+    "confirmTitle": "¿Desactivar el acceso al CRM?",
+    "turnOff": "Desactivar",
+    "confirmBody": "El agente deja de consultar al cliente de la conversación y sus negocios en Bitrix24. Las opciones de campos en \"CRM para el agente\" siguen guardadas y puede volver a activar el acceso cuando quiera."
+  },
+  "errors": {
+    "VALIDATION_ERROR": "Algunos campos no son válidos. Revíselos e inténtelo de nuevo.",
+    "TENANT_AGENT_LIMIT": "Alcanzó el límite de agentes. Elimine un agente para crear otro.",
+    "AGENT_NOT_FOUND": "Agente no encontrado.",
+    "AGENT_BUSY": "El agente se está modificando; espere e inténtelo de nuevo.",
+    "AGENT_OUT_OF_SYNC": "No se encontró el agente en GPTMaker; comuníquese con soporte.",
+    "AGENT_INACTIVE_BY_SYSTEM": "El sistema desactivó el agente y volverá a activarse solo cuando se resuelva la causa.",
+    "MODEL_NOT_ALLOWED": "Modelo inactivo o no permitido por el plan.",
+    "GPTMAKER_REJECTED": "GPTMaker rechazó los datos del agente; no se modificó nada. Revise los campos.",
+    "GPTMAKER_UNAVAILABLE": "No se pudo completar en GPTMaker en este momento; no se modificó nada. Inténtelo de nuevo en unos instantes.",
+    "CRM_UNAVAILABLE": "Bitrix24 no respondió. Espere un momento e inténtelo de nuevo.",
+    "CRM_ACCESS_BUSY": "Hay otro cambio en curso en el acceso al CRM de este agente. Espere unos segundos e inténtelo de nuevo."
+  }
+}

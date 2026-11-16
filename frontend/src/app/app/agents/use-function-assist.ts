@@ -2,6 +2,7 @@
 
 import type { AssistInput, AssistResult } from '@gptmaker/contracts';
 import { useCallback, useState } from 'react';
+import { useErrorMessage, useT } from '@/i18n';
 import { type Api, BUSY_DELAY_MS, failure, retryWhenBusy } from './use-function-review';
 
 /**
@@ -14,6 +15,8 @@ export function useFunctionAssist(
   options: { busyDelayMs?: number } = {},
 ) {
   const busyDelay = options.busyDelayMs ?? BUSY_DELAY_MS;
+  const t = useT('assist');
+  const errorMessage = useErrorMessage('assist');
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -33,13 +36,13 @@ export function useFunctionAssist(
         setState('done');
         return result;
       } catch (caught) {
-        const { message, code } = failure(caught);
+        const { message } = failure(caught, errorMessage, t('assist.failed'));
         setState('error');
-        setError(code === null ? 'Não foi possível gerar agora. Tente de novo.' : message);
+        setError(message);
         throw caught;
       }
     },
-    [api, endpoint, busyDelay],
+    [api, endpoint, busyDelay, t, errorMessage],
   );
 
   return { run, state, error };

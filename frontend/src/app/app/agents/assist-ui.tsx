@@ -15,6 +15,7 @@ import {
 } from '@gptmaker/contracts';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Alert, buttonClass, Card } from '@/components/ui';
+import { useT } from '@/i18n';
 import { inputClass } from './agent-fields';
 import { useFunctionAssist } from './use-function-assist';
 import type { Api } from './use-function-review';
@@ -112,6 +113,7 @@ export function AssistPanel({
   answers: FunctionAnswers;
   onApply: (fieldId: string, value: FunctionAnswerValue) => void;
 } & FormAssist & { disabled?: boolean }) {
+  const t = useT('assist');
   const eligible = assistFields(form, answers);
   const { run, state, error } = useFunctionAssist(api, endpoint);
   const [open, setOpen] = useState(false);
@@ -185,27 +187,20 @@ export function AssistPanel({
         disabled={disabled || nothingToHelp}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        Ajuda da IA
+        {t('assist.open')}
       </button>
-      {nothingToHelp && (
-        <p className="text-xs text-zinc-500">Todos os campos com ajuda já estão preenchidos</p>
-      )}
+      {nothingToHelp && <p className="text-xs text-zinc-500">{t('assist.allFilled')}</p>}
       {open && (
         <Card className="space-y-4 p-4">
           <section
             onKeyDown={(event) => event.key === 'Escape' && close()}
             id={id}
-            aria-label="Ajuda da IA"
+            aria-label={t('assist.open')}
             className="space-y-4"
           >
-            <p className="text-sm text-zinc-600">
-              A IA escreve um rascunho dos campos vazios com base no que você contar. Nada é gravado
-              até você aplicar.
-            </p>
+            <p className="text-sm text-zinc-600">{t('assist.intro')}</p>
             <label className="block">
-              <span className="text-sm font-semibold text-zinc-900">
-                Fale da empresa e do que o agente deve fazer
-              </span>
+              <span className="text-sm font-semibold text-zinc-900">{t('assist.aboutLabel')}</span>
               <textarea
                 ref={aboutRef}
                 className={inputClass}
@@ -217,7 +212,11 @@ export function AssistPanel({
               <span
                 className={`mt-1 block text-xs ${aboutOk ? 'text-zinc-400' : 'text-amber-600'}`}
               >
-                {about.trim().length}/{EXPECTATION_MAX} (mínimo {EXPECTATION_MIN} caracteres)
+                {t('assist.aboutCounter', {
+                  length: about.trim().length,
+                  max: EXPECTATION_MAX,
+                  min: EXPECTATION_MIN,
+                })}
               </span>
             </label>
             {eligible.map((field) => (
@@ -244,11 +243,7 @@ export function AssistPanel({
                 ))}
               </fieldset>
             ))}
-            {platformKey && (
-              <p className="text-xs text-zinc-500">
-                A geração usa créditos da CRMThink; o valor gasto aparece depois de gerar.
-              </p>
-            )}
+            {platformKey && <p className="text-xs text-zinc-500">{t('assist.platformCredits')}</p>}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -256,19 +251,17 @@ export function AssistPanel({
                 disabled={!aboutOk || loading || eligible.length === 0 || disabled}
                 onClick={() => void generate()}
               >
-                {loading ? 'Gerando…' : 'Gerar'}
+                {loading ? t('assist.generating') : t('assist.generate')}
               </button>
               <button type="button" className={buttonClass('ghost', 'sm')} onClick={close}>
-                Fechar
+                {t('assist.close')}
               </button>
             </div>
             <div aria-live="polite" className="space-y-3">
-              {loading && <p className="text-sm text-zinc-500">Escrevendo o rascunho…</p>}
+              {loading && <p className="text-sm text-zinc-500">{t('assist.writing')}</p>}
               {state === 'error' && error && <Alert tone="error">{error}</Alert>}
               {state === 'done' && credits > 0 && (
-                <p className="text-xs text-zinc-500">
-                  Esta geração custou {credits} {credits === 1 ? 'crédito' : 'créditos'}.
-                </p>
+                <p className="text-xs text-zinc-500">{t('assist.cost', { count: credits })}</p>
               )}
               {drafts.map((draft) => {
                 const stillEmpty = eligible.some((field) => field.id === draft.fieldId);
@@ -280,9 +273,9 @@ export function AssistPanel({
                 const reason = done
                   ? null
                   : !stillEmpty
-                    ? 'O campo foi preenchido enquanto isso; não vou sobrescrever o que já está lá.'
+                    ? t('assist.filledMeanwhile')
                     : !draft.applicable
-                      ? 'Este texto passa dos limites do campo e não pode ser aplicado.'
+                      ? t('assist.notApplicable')
                       : null;
                 return (
                   <div
@@ -293,20 +286,13 @@ export function AssistPanel({
                     <Preview value={draft.value} field={draft.field} />
                     {draft.markers > 0 && (
                       <p className="text-xs text-amber-700">
-                        {draft.markers} {draft.markers === 1 ? 'trecho' : 'trechos'} [preencher: …]
-                        para completar antes de publicar.
+                        {t('assist.markers', { count: draft.markers })}
                       </p>
                     )}
-                    {skeleton && (
-                      <Alert tone="warning">
-                        A IA não tinha informação suficiente: este texto é apenas um esqueleto.
-                        Complete os trechos [preencher: …] antes de publicar, porque a publicação
-                        fica bloqueada enquanto houver algum.
-                      </Alert>
-                    )}
+                    {skeleton && <Alert tone="warning">{t('assist.skeleton')}</Alert>}
                     {reason && <p className="text-xs text-zinc-500">{reason}</p>}
                     {done ? (
-                      <p className="text-xs font-medium text-emerald-700">Aplicado</p>
+                      <p className="text-xs font-medium text-emerald-700">{t('assist.applied')}</p>
                     ) : (
                       <div className="flex gap-2">
                         <button
@@ -319,7 +305,7 @@ export function AssistPanel({
                             setApplied((prev) => [...prev, draft.fieldId]);
                           }}
                         >
-                          Aplicar
+                          {t('assist.apply')}
                         </button>
                         <button
                           type="button"
@@ -328,7 +314,7 @@ export function AssistPanel({
                             setDrafts((prev) => prev.filter((d) => d.fieldId !== draft.fieldId))
                           }
                         >
-                          Descartar
+                          {t('assist.discard')}
                         </button>
                       </div>
                     )}
