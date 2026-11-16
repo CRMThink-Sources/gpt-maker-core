@@ -26,16 +26,13 @@ export function Hotspot({ label, children, className = '' }: HotspotProps) {
       data-tutorial-hotspot=""
       aria-label={label}
       onClick={advance}
-      className={`relative cursor-pointer rounded-md text-left outline-2 outline-offset-2 outline-orange-500 ${className}`}
+      className={`relative cursor-pointer rounded-md text-left outline-2 outline-offset-2 outline-lp-accent ${className}`}
     >
       {children}
       <span
         aria-hidden="true"
-        className="absolute -top-1.5 -right-1.5 flex h-3 w-3 items-center justify-center"
-      >
-        <span className="absolute h-3 w-3 animate-ping rounded-full bg-orange-400 opacity-75 motion-reduce:animate-none" />
-        <span className="relative h-2.5 w-2.5 rounded-full bg-orange-500" />
-      </span>
+        className="absolute -top-1.5 -right-1.5 size-2.5 rounded-full bg-lp-accent ring-2 ring-white"
+      />
     </button>
   );
 }

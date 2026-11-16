@@ -18,6 +18,26 @@
   --font-mono: ui-monospace, monospace;
 }
 
+/*
+ * Identidade da LP pública (/lp): cores do logo do GPTThink (violeta profundo, tinta, laranja do
+ * raio do robô) e as fontes dos outros apps da CRMThink (Montserrat nos títulos, Inter no texto).
+ * `inline` porque as variáveis `--font-*` do next/font existem só no wrapper de `app/lp/layout.tsx`.
+ */
+@theme {
+  --color-lp-ink: #1c1640;
+  --color-lp-muted: #5b5775;
+  --color-lp-primary: #5a1fe0;
+  --color-lp-primary-dark: #4410cc;
+  --color-lp-wash: #f5f2ff;
+  --color-lp-line: #e6e2f3;
+  --color-lp-accent: #ff8a4c;
+}
+
+@theme inline {
+  --font-lp-heading: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-lp-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
 :root {
   color-scheme: light;
 }

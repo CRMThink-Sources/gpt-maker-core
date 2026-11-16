@@ -11,19 +11,22 @@
     "language": "Language"
   },
   "hero": {
-    "title": "AI agents inside Bitrix24",
+    "title": "Serve your customers with AI agents, without leaving Bitrix24",
     "subtitle": "Create and train agents that serve your customers on open channels, read and write CRM data, and hand the conversation to a person when needed.",
     "ctaInstall": "Install on Bitrix24",
-    "ctaStart": "See getting started"
+    "ctaStart": "See getting started",
+    "eyebrow": "AI agents inside Bitrix24"
   },
   "mock": {
     "contact": "Open channel · Deal #1042",
     "customer": "Hi! Do you do installations on weekends?",
     "agent": "We do! I can book it for Saturday at 9 AM. Does that time work for you?",
-    "note": "The agent updated the deal in the CRM"
+    "note": "The agent updated the deal in the CRM",
+    "name": "Carlos Mendes",
+    "agentLabel": "Ana · AI agent"
   },
   "features": {
-    "title": "Everything your agent needs to serve well",
+    "title": "Everything your agent needs to serve customers",
     "items": {
       "agents": {
         "title": "AI agents",
@@ -61,7 +64,8 @@
         "title": "Usage-based credits",
         "description": "Track credit consumption and get warnings before they run out."
       }
-    }
+    },
+    "subtitle": "From training to the open channel, with data in your CRM."
   },
   "start": {
     "title": "Getting started",
@@ -222,7 +226,7 @@
     "button": "Install on Bitrix24"
   },
   "footer": {
-    "text": "GPTThink · AI agents for Bitrix24 · © 2026"
+    "text": "AI agents for Bitrix24 · © 2026"
   },
   "screens": {
     "market": {

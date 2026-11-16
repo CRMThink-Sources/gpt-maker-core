@@ -27,7 +27,7 @@ export function MockWindow({
     <div
       role="group"
       aria-label={label}
-      className="overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-zinc-200"
+      className="overflow-hidden rounded-xl bg-white shadow-[0_12px_40px_-16px_rgba(28,22,64,0.25)] ring-1 ring-lp-line"
     >
       <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-100 px-3 py-2">
         <span className="flex gap-1.5" aria-hidden="true">

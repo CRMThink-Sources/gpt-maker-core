@@ -30,6 +30,26 @@ describe('GptthinkLanding', () => {
     }
   });
 
+  it.each(LOCALES)(
+    'mostra a chamada do hero, a marca e o subtítulo das funcionalidades (%s)',
+    (locale) => {
+      const { container } = render(<GptthinkLanding locale={locale} />);
+      const landing = MESSAGES[locale].landing;
+      expect(screen.getByText(landing.hero.eyebrow)).toBeTruthy();
+      expect(screen.getByText(landing.features.subtitle)).toBeTruthy();
+      expect(screen.getByText(landing.mock.agentLabel)).toBeTruthy();
+      // O logo oficial (robô) aparece no cabeçalho e no rodapé.
+      expect(container.querySelectorAll('header svg, footer svg').length).toBeGreaterThanOrEqual(2);
+    },
+  );
+
+  it('cada funcionalidade tem o seu próprio ícone (não é o mesmo desenho repetido)', () => {
+    const { container } = render(<GptthinkLanding locale="pt-BR" />);
+    const icons = [...container.querySelectorAll('#funcionalidades svg')].map((s) => s.innerHTML);
+    expect(icons).toHaveLength(9);
+    expect(new Set(icons).size).toBe(9);
+  });
+
   it('tem as seções na estrutura da LP: 9 funcionalidades, 6 abas e 6 perguntas', () => {
     const { container } = render(<GptthinkLanding locale="pt-BR" />);
     expect(container.querySelectorAll('#funcionalidades h3')).toHaveLength(9);

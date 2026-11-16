@@ -11,19 +11,22 @@
     "language": "Idioma"
   },
   "hero": {
-    "title": "Agentes de IA dentro de Bitrix24",
+    "title": "Atiende a tus clientes con agentes de IA, sin salir de Bitrix24",
     "subtitle": "Crea y entrena agentes que atienden a tus clientes en los canales abiertos, consultan y registran datos en el CRM y pasan la conversación a una persona cuando hace falta.",
     "ctaInstall": "Instalar en Bitrix24",
-    "ctaStart": "Ver primeros pasos"
+    "ctaStart": "Ver primeros pasos",
+    "eyebrow": "Agentes de IA dentro de Bitrix24"
   },
   "mock": {
     "contact": "Canal abierto · Negocio #1042",
     "customer": "¡Hola! ¿Hacen la instalación los fines de semana?",
     "agent": "¡Sí! Puedo agendarla para el sábado a las 9:00. ¿Te sirve ese horario?",
-    "note": "El agente actualizó el negocio en el CRM"
+    "note": "El agente actualizó el negocio en el CRM",
+    "name": "Carlos Mendes",
+    "agentLabel": "Ana · Agente de IA"
   },
   "features": {
-    "title": "Todo para que tu agente atienda bien",
+    "title": "Todo lo que tu agente necesita para atender",
     "items": {
       "agents": {
         "title": "Agentes de IA",
@@ -61,7 +64,8 @@
         "title": "Créditos por uso",
         "description": "Sigue el consumo de créditos y recibe avisos antes de que se acaben."
       }
-    }
+    },
+    "subtitle": "Del entrenamiento al canal abierto, con los datos en tu CRM."
   },
   "start": {
     "title": "Primeros pasos",
@@ -222,7 +226,7 @@
     "button": "Instalar en Bitrix24"
   },
   "footer": {
-    "text": "GPTThink · Agentes de IA para Bitrix24 · © 2026"
+    "text": "Agentes de IA para Bitrix24 · © 2026"
   },
   "screens": {
     "market": {

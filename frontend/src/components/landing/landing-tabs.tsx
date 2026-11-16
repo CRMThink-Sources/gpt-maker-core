@@ -87,8 +87,8 @@ export function LandingTabs({ tabs, labels }: Props) {
               onKeyDown={(event) => onKeyDown(event, index)}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 selected
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-brand-50'
+                  ? 'bg-lp-primary text-white'
+                  : 'bg-white text-lp-ink ring-1 ring-lp-line hover:bg-lp-wash'
               }`}
             >
               {t.label}
@@ -96,7 +96,7 @@ export function LandingTabs({ tabs, labels }: Props) {
           );
         })}
       </div>
-      <p className="mt-5 text-center text-sm text-zinc-600">{tab.intro}</p>
+      <p className="mt-5 text-center text-sm text-lp-muted">{tab.intro}</p>
 
       <div
         id="lp-tabpanel"
@@ -107,17 +107,19 @@ export function LandingTabs({ tabs, labels }: Props) {
         <div>
           {/* Altura mínima: os botões abaixo não pulam quando o texto do passo muda de tamanho. */}
           <div aria-live="polite" className="md:min-h-52">
-            <p className="text-sm font-semibold text-brand-700">{step.counter}</p>
-            <h3 className="mt-2 text-xl font-semibold text-zinc-900">{step.title}</h3>
-            <p className="mt-3 text-zinc-600">{step.text}</p>
-            <p className="mt-3 text-xs text-zinc-500">
-              {labels.hint} <strong className="text-zinc-800">{step.target}</strong>
+            <p className="text-sm font-semibold text-lp-primary">{step.counter}</p>
+            <h3 className="font-lp-heading mt-2 text-xl font-bold tracking-[-0.02em] text-lp-ink">
+              {step.title}
+            </h3>
+            <p className="mt-3 text-lp-muted">{step.text}</p>
+            <p className="mt-3 text-xs text-lp-muted">
+              {labels.hint} <strong className="text-lp-ink">{step.target}</strong>
             </p>
           </div>
 
-          <div aria-hidden="true" className="mt-6 h-1.5 w-28 rounded-full bg-zinc-200">
+          <div aria-hidden="true" className="mt-6 h-1.5 w-28 rounded-full bg-lp-line">
             <div
-              className="h-full rounded-full bg-brand-600 transition-all"
+              className="h-full rounded-full bg-lp-primary transition-all"
               style={{ width: `${((stepIndex + 1) / tab.steps.length) * 100}%` }}
             />
           </div>
@@ -131,8 +133,8 @@ export function LandingTabs({ tabs, labels }: Props) {
                 onClick={() => setStepIndex(i)}
                 className={`h-7 w-7 rounded-full text-xs font-semibold ${
                   i === stepIndex
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
+                    ? 'bg-lp-primary text-white'
+                    : 'bg-white text-lp-primary ring-1 ring-lp-line hover:bg-lp-wash'
                 }`}
               >
                 {i + 1}
@@ -144,14 +146,14 @@ export function LandingTabs({ tabs, labels }: Props) {
               type="button"
               disabled={stepIndex === 0}
               onClick={() => setStepIndex((s) => Math.max(0, s - 1))}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 ring-1 ring-zinc-200 enabled:hover:bg-zinc-50 disabled:opacity-40"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-lp-ink ring-1 ring-lp-line enabled:hover:bg-lp-wash disabled:opacity-40"
             >
               {labels.back}
             </button>
             <button
               type="button"
               onClick={advance}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              className="rounded-lg bg-lp-primary px-4 py-2 text-sm font-medium text-white hover:bg-lp-primary-dark"
             >
               {isLast ? labels.finish : labels.next}
             </button>
