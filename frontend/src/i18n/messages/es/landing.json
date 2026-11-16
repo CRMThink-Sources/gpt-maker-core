@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "title": "GPTThink — Agentes de IA dentro de Bitrix24",
+    "description": "Crea, entrena y pon en marcha agentes de IA que atienden en los canales abiertos de Bitrix24, consultando y registrando datos en tu CRM."
+  },
+  "nav": {
+    "features": "Funcionalidades",
+    "start": "Primeros pasos",
+    "faq": "Preguntas",
+    "install": "Instalar",
+    "language": "Idioma"
+  },
+  "hero": {
+    "title": "Agentes de IA dentro de Bitrix24",
+    "subtitle": "Crea y entrena agentes que atienden a tus clientes en los canales abiertos, consultan y registran datos en el CRM y pasan la conversación a una persona cuando hace falta.",
+    "ctaInstall": "Instalar en Bitrix24",
+    "ctaStart": "Ver primeros pasos"
+  },
+  "mock": {
+    "contact": "Canal abierto · Negocio #1042",
+    "customer": "¡Hola! ¿Hacen la instalación los fines de semana?",
+    "agent": "¡Sí! Puedo agendarla para el sábado a las 9:00. ¿Te sirve ese horario?",
+    "note": "El agente actualizó el negocio en el CRM"
+  },
+  "features": {
+    "title": "Todo para que tu agente atienda bien",
+    "items": {
+      "agents": {
+        "title": "Agentes de IA",
+        "description": "Crea agentes con nombre, comportamiento y modelo de IA, y actívalos cuando estén listos."
+      },
+      "training": {
+        "title": "Entrenamiento",
+        "description": "Enseña al agente con textos, preguntas y respuestas y contenido de tu negocio."
+      },
+      "intentions": {
+        "title": "Intenciones",
+        "description": "Define qué debe hacer el agente en cada situación de la conversación."
+      },
+      "functions": {
+        "title": "Funciones listas",
+        "description": "Empieza con modelos como SDR, Soporte y Agendamiento y ajústalos a tu forma de trabajar."
+      },
+      "crm": {
+        "title": "Acciones en el CRM",
+        "description": "El agente consulta y registra datos en Bitrix24 durante la atención."
+      },
+      "handoff": {
+        "title": "Traspaso a una persona",
+        "description": "Pasa la conversación a tu equipo cuando el cliente lo pida o el caso lo requiera."
+      },
+      "offHours": {
+        "title": "Fuera de horario",
+        "description": "Define cómo se comporta la atención cuando tu equipo no está en línea."
+      },
+      "testChat": {
+        "title": "Chat de prueba",
+        "description": "Conversa con el agente antes de ponerlo a atender clientes reales."
+      },
+      "credits": {
+        "title": "Créditos por uso",
+        "description": "Sigue el consumo de créditos y recibe avisos antes de que se acaben."
+      }
+    }
+  },
+  "start": {
+    "title": "Primeros pasos",
+    "subtitle": "¿Ya instalaste la app? Sigue estos pasos para poner a trabajar a tu primer agente.",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "stepOf": "Paso {current} de {total}",
+    "tabs": {
+      "activate": {
+        "label": "Activar la app",
+        "title": "Activa GPTThink en tu portal",
+        "step1": "Abre GPTThink desde el menú de aplicaciones de tu Bitrix24.",
+        "step2": "Sigue las instrucciones de la primera pantalla para terminar la activación del portal.",
+        "step3": "Con la activación lista, la lista de agentes queda disponible para ti."
+      },
+      "create": {
+        "label": "Crear el agente",
+        "title": "Crea tu primer agente",
+        "step1": "En la lista de agentes, haz clic en \"Nuevo agente\".",
+        "step2": "Ponle un nombre al agente y describe cómo debe comportarse.",
+        "step3": "Guarda. El agente aparece en la lista y ya se puede entrenar y probar."
+      },
+      "train": {
+        "label": "Entrenar",
+        "title": "Enseña al agente sobre tu negocio",
+        "step1": "Abre el agente y entra en el área de entrenamientos.",
+        "step2": "Agrega los textos y las respuestas que el agente debe conocer.",
+        "step3": "Conversa con él en el chat de prueba y ajusta lo que no salió bien."
+      },
+      "intentions": {
+        "label": "Intenciones y funciones",
+        "title": "Define qué hace el agente",
+        "step1": "Elige una función lista, como SDR, Soporte o Agendamiento.",
+        "step2": "Ajusta las intenciones a tu proceso de atención.",
+        "step3": "Prueba la conversación otra vez para comprobar que el agente sigue lo acordado."
+      },
+      "channel": {
+        "label": "Activar en el canal abierto",
+        "title": "Pon al agente a atender",
+        "step1": "Conecta el agente a un canal abierto de Bitrix24.",
+        "step2": "Define cuándo la atención pasa a una persona y qué hacer fuera de horario.",
+        "step3": "Activa el agente. Las próximas conversaciones del canal las atenderá él."
+      },
+      "credits": {
+        "label": "Créditos y plan",
+        "title": "Sigue el consumo",
+        "step1": "Abre el área del plan para ver tu saldo de créditos.",
+        "step2": "Cada respuesta del agente consume créditos, según el modelo de IA elegido.",
+        "step3": "Recibes avisos cuando el saldo esté por acabarse."
+      }
+    }
+  },
+  "faq": {
+    "title": "Preguntas frecuentes",
+    "q1": "¿Necesito saber programar para crear un agente?",
+    "a1": "No. Creas el agente, describes su comportamiento y lo entrenas desde la propia aplicación, dentro de Bitrix24.",
+    "q2": "¿En qué canales atiende el agente?",
+    "a2": "En los canales abiertos de Bitrix24 que conectes al agente.",
+    "q3": "¿El agente puede usar los datos de mi CRM?",
+    "a3": "Sí. Puede consultar y registrar información en Bitrix24 durante la atención, según las acciones que habilites.",
+    "q4": "¿Puedo probar el agente antes de ponerlo a atender?",
+    "a4": "Sí. El chat de prueba permite conversar con el agente antes de activarlo en el canal.",
+    "q5": "¿Qué pasa cuando se acaban los créditos?",
+    "a5": "El consumo se sigue dentro de la app y recibes avisos antes de que el saldo se acabe. Consulta tu saldo en el área del plan.",
+    "q6": "¿Mi equipo puede tomar una conversación?",
+    "a6": "Sí. Tú defines cuándo la conversación pasa a una persona de tu equipo, y el historial sigue en el canal."
+  },
+  "cta": {
+    "title": "Lleva agentes de IA a tu Bitrix24",
+    "text": "Instala desde el Market de Bitrix24 y sigue los primeros pasos para poner a tu agente a atender.",
+    "button": "Instalar en Bitrix24"
+  },
+  "footer": {
+    "text": "GPTThink · Agentes de IA para Bitrix24 · © 2026"
+  }
+}
