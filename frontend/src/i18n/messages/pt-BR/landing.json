@@ -11,19 +11,22 @@
     "language": "Idioma"
   },
   "hero": {
-    "title": "Agentes de IA dentro do Bitrix24",
+    "title": "Atenda seus clientes com agentes de IA, sem sair do Bitrix24",
     "subtitle": "Crie e treine agentes que atendem seus clientes nos canais abertos, consultam e registram dados no CRM e passam a conversa para uma pessoa quando precisa.",
     "ctaInstall": "Instalar no Bitrix24",
-    "ctaStart": "Ver primeiros passos"
+    "ctaStart": "Ver primeiros passos",
+    "eyebrow": "Agentes de IA dentro do Bitrix24"
   },
   "mock": {
     "contact": "Canal aberto · Negócio #1042",
     "customer": "Oi! Vocês fazem a instalação no fim de semana?",
     "agent": "Fazemos, sim! Posso agendar para sábado às 9h. Prefere esse horário?",
-    "note": "O agente atualizou o negócio no CRM"
+    "note": "O agente atualizou o negócio no CRM",
+    "name": "Carlos Mendes",
+    "agentLabel": "Ana · Agente de IA"
   },
   "features": {
-    "title": "Tudo para o seu agente atender bem",
+    "title": "Tudo o que o seu agente precisa para atender",
     "items": {
       "agents": {
         "title": "Agentes de IA",
@@ -61,56 +64,144 @@
         "title": "Créditos por uso",
         "description": "Acompanhe o consumo de créditos e receba avisos antes de acabarem."
       }
-    }
+    },
+    "subtitle": "Do treinamento ao canal aberto, com os dados no seu CRM."
   },
   "start": {
     "title": "Primeiros passos",
-    "subtitle": "Instalou o app? Siga estes passos para colocar o primeiro agente para atender.",
+    "subtitle": "Simulações do caminho real, dentro do Bitrix24. Escolha um tema e clique no destaque laranja para avançar.",
     "back": "Voltar",
     "next": "Próximo",
+    "finish": "Concluir",
     "stepOf": "Passo {current} de {total}",
+    "hint": "Clique no destaque laranja da tela:",
+    "screenLabel": "Simulação da tela do Bitrix24",
     "tabs": {
-      "activate": {
-        "label": "Ativar o app",
-        "title": "Ative o GPTThink no seu portal",
-        "step1": "Abra o GPTThink no menu de aplicativos do seu Bitrix24.",
-        "step2": "Siga as instruções da primeira tela para concluir a ativação do portal.",
-        "step3": "Com a ativação concluída, a lista de agentes fica disponível para você."
+      "install": {
+        "label": "Instalação",
+        "intro": "Do Bitrix24 Market ao app instalado no seu portal.",
+        "steps": {
+          "1": {
+            "title": "Encontre o GPTThink no Market",
+            "text": "No seu Bitrix24, abra o Market, busque por GPTThink e clique no card do app.",
+            "target": "GPTThink"
+          },
+          "2": {
+            "title": "Instale pela página do app",
+            "text": "A página do GPTThink abre por cima do catálogo, com o desenvolvedor (CRMThink). Clique em Instalar.",
+            "target": "INSTALAR"
+          },
+          "3": {
+            "title": "Aceite os termos e conclua",
+            "text": "Na tela de instalação, aceite os termos do Bitrix24 Market e conclua.",
+            "target": "Concluir instalação"
+          }
+        }
       },
       "create": {
         "label": "Criar o agente",
-        "title": "Crie o seu primeiro agente",
-        "step1": "Na lista de agentes, clique em \"Novo agente\".",
-        "step2": "Dê um nome ao agente e descreva como ele deve se comportar.",
-        "step3": "Salve. O agente aparece na lista e já pode ser treinado e testado."
+        "intro": "Da lista de agentes ao primeiro agente criado.",
+        "steps": {
+          "1": {
+            "title": "Comece um novo agente",
+            "text": "Abra o GPTThink no menu de aplicativos. Na lista de agentes, clique em Novo agente.",
+            "target": "Novo agente"
+          },
+          "2": {
+            "title": "Escolha a função",
+            "text": "Cada agente tem uma função (Suporte, SDR, Agendamento…). Escolha a que combina com o seu atendimento e avance.",
+            "target": "Avançar"
+          },
+          "3": {
+            "title": "Confira e crie",
+            "text": "Na prévia, veja o que será criado e confirme. Depois você ainda pode ajustar tudo.",
+            "target": "Criar agente"
+          }
+        }
       },
       "train": {
         "label": "Treinar",
-        "title": "Ensine o agente sobre o seu negócio",
-        "step1": "Abra o agente e entre na área de treinamentos.",
-        "step2": "Adicione os textos e as respostas que o agente deve conhecer.",
-        "step3": "Converse com ele no chat de teste e ajuste o que não ficou bom."
+        "intro": "O que o agente sabe sobre o seu negócio.",
+        "steps": {
+          "1": {
+            "title": "Abra os Treinamentos",
+            "text": "Dentro do agente, entre na aba Treinamentos.",
+            "target": "Treinamentos"
+          },
+          "2": {
+            "title": "Adicione o que o agente deve saber",
+            "text": "Os itens da base vêm do formulário da função, e você também pode adicionar os seus. Treinar não consome créditos.",
+            "target": "Adicionar treinamento"
+          },
+          "3": {
+            "title": "Teste a conversa",
+            "text": "Com a base pronta, clique em Testar e converse com o agente antes de colocá-lo para atender.",
+            "target": "Testar"
+          }
+        }
       },
       "intentions": {
         "label": "Intenções e funções",
-        "title": "Defina o que o agente faz",
-        "step1": "Escolha uma função pronta, como SDR, Suporte ou Agendamento.",
-        "step2": "Ajuste as intenções para o seu processo de atendimento.",
-        "step3": "Teste a conversa de novo para conferir se o agente segue o combinado."
+        "intro": "Ações que o agente executa durante a conversa.",
+        "steps": {
+          "1": {
+            "title": "Abra as Intenções",
+            "text": "As funções prontas já trazem intenções. Para ver e ajustar, entre na aba Intenções do agente.",
+            "target": "Intenções"
+          },
+          "2": {
+            "title": "Crie uma intenção",
+            "text": "Defina o nome, quando usar e o que o agente deve coletar do cliente. Clique em Nova intenção.",
+            "target": "Nova intenção"
+          },
+          "3": {
+            "title": "Ative e acompanhe",
+            "text": "Mantenha a intenção ativa para o agente usá-la e consulte o Histórico para ver quando ela foi usada.",
+            "target": "Ativar"
+          }
+        }
       },
       "channel": {
-        "label": "Ativar no canal aberto",
-        "title": "Coloque o agente para atender",
-        "step1": "Conecte o agente a um canal aberto do Bitrix24.",
-        "step2": "Defina quando o atendimento passa para uma pessoa e o que fazer fora do horário.",
-        "step3": "Ative o agente. As próximas conversas do canal passam a ser atendidas por ele."
+        "label": "Canal aberto",
+        "intro": "Coloque o agente para atender no Bitrix24.",
+        "steps": {
+          "1": {
+            "title": "Abra os Canais abertos",
+            "text": "No Contact Center do Bitrix24, entre em Canais abertos e abra o canal que vai usar.",
+            "target": "Canais abertos"
+          },
+          "2": {
+            "title": "Escolha o agente",
+            "text": "Nas configurações do canal, em Chatbot, selecione o agente do GPTThink.",
+            "target": "Chatbot"
+          },
+          "3": {
+            "title": "Salve e pronto",
+            "text": "Salve o canal. As próximas conversas dele passam a ser atendidas pelo agente.",
+            "target": "Salvar"
+          }
+        }
       },
       "credits": {
         "label": "Créditos e plano",
-        "title": "Acompanhe o consumo",
-        "step1": "Abra a área de plano para ver o seu saldo de créditos.",
-        "step2": "Cada resposta do agente consome créditos, conforme o modelo de IA escolhido.",
-        "step3": "Você recebe avisos quando o saldo estiver acabando."
+        "intro": "Saldo, consumo e teste grátis.",
+        "steps": {
+          "1": {
+            "title": "Abra Créditos e plano",
+            "text": "No menu do GPTThink, entre em Créditos e plano.",
+            "target": "Créditos e plano"
+          },
+          "2": {
+            "title": "Ative o teste grátis",
+            "text": "Quando houver teste grátis disponível, ative por aqui para o agente começar a atender.",
+            "target": "Ativar teste grátis"
+          },
+          "3": {
+            "title": "Acompanhe o saldo",
+            "text": "Veja o total disponível e o consumo dos seus agentes. Você recebe avisos antes de os créditos acabarem.",
+            "target": "Total disponível"
+          }
+        }
       }
     }
   },
@@ -135,6 +226,44 @@
     "button": "Instalar no Bitrix24"
   },
   "footer": {
-    "text": "GPTThink · Agentes de IA para Bitrix24 · © 2026"
+    "text": "Agentes de IA para Bitrix24 · © 2026"
+  },
+  "screens": {
+    "market": {
+      "brand": "Bitrix24 Market",
+      "catalog": "Catálogo",
+      "results": "Resultados da busca",
+      "free": "Grátis",
+      "install": "INSTALAR",
+      "developer": "Desenvolvedor"
+    },
+    "install": {
+      "title": "Instalação do aplicativo",
+      "subtitle": "Aceite os termos para concluir.",
+      "termsMarket": "Li e aceito os Termos de uso do Bitrix24 Market",
+      "termsLicense": "Li e aceito o Contrato de licença",
+      "termsPrivacy": "Li e aceito a Política de privacidade",
+      "conclude": "Concluir instalação"
+    },
+    "sample": {
+      "agentName": "Ana",
+      "fnSupport": "Suporte",
+      "fnSdr": "SDR",
+      "fnScheduling": "Agendamento",
+      "intentionName": "Registrar lead",
+      "intentionFields": "nome e telefone"
+    },
+    "contact": {
+      "title": "Contact Center",
+      "openChannels": "Canais abertos",
+      "lineTitle": "Canal aberto",
+      "chatbot": "Chatbot",
+      "chatbotPlaceholder": "Selecione o chatbot",
+      "save": "Salvar"
+    },
+    "plan": {
+      "trialTitle": "Teste grátis",
+      "trialText": "Ative o teste para o agente começar a atender."
+    }
   }
 }

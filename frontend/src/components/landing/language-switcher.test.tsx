@@ -18,6 +18,12 @@ describe('LanguageSwitcher', () => {
     expect(screen.getByRole('link', { name: 'Español' }).getAttribute('aria-current')).toBeNull();
   });
 
+  it('mostra a sigla de cada idioma e nomeia o link por extenso', () => {
+    render(<LanguageSwitcher current="pt-BR" label="Idioma" />);
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['PT', 'EN', 'ES']);
+    expect(screen.getByRole('link', { name: 'Español' }).textContent).toBe('ES');
+  });
+
   it('nomeia a navegação com o rótulo recebido', () => {
     render(<LanguageSwitcher current="pt-BR" label="Idioma" />);
     expect(screen.getByRole('navigation', { name: 'Idioma' })).toBeTruthy();

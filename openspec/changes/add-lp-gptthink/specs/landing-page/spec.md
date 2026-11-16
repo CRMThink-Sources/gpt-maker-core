@@ -38,20 +38,36 @@ A página SHALL conter, nesta ordem: cabeçalho (âncoras Funcionalidades, Prime
 - **WHEN** o visitante percorre a página
 - **THEN** nenhuma seção mostra preço, plano ou valor de créditos
 
-### Requirement: Primeiros passos em abas
-A seção Primeiros passos SHALL apresentar abas (Ativar o app, Criar o agente, Treinar, Intenções e funções, Ativar no canal aberto, Créditos e plano), cada uma com três passos navegáveis por Voltar e Próximo e com o indicador "Passo X de N". Voltar SHALL ficar indisponível no primeiro passo e Próximo no último. Ao trocar de aba, a navegação SHALL voltar ao primeiro passo.
+### Requirement: Primeiros passos como tutorial simulado
+A seção Primeiros passos SHALL apresentar abas (Instalação, Criar o agente, Treinar, Intenções e funções, Canal aberto, Créditos e plano), cada uma com três passos. Cada passo SHALL mostrar o indicador "Passo X de N", um título, um texto, a dica com o nome do elemento em destaque e uma **tela simulada** do Bitrix24 ou do app, dentro de uma janela de navegador, em que exatamente um elemento tem o destaque laranja. Acionar o destaque, Próximo ou uma das bolinhas numeradas SHALL levar ao passo correspondente. Voltar SHALL ficar indisponível no primeiro passo, e no último passo Próximo SHALL virar Concluir, que recomeça a aba pelo primeiro passo. Ao trocar de aba, a navegação SHALL voltar ao primeiro passo. As telas simuladas SHALL usar os nomes reais da interface do app no idioma da página e SHALL NOT exibir preços, planos nem valores de créditos.
+
+#### Scenario: Clicar no destaque
+- **WHEN** o visitante aciona o elemento em destaque laranja da tela simulada
+- **THEN** o passo seguinte aparece e o indicador mostra "Passo 2 de 3"
 
 #### Scenario: Navegar pelos passos
 - **WHEN** o visitante aciona Próximo no primeiro passo de uma aba
-- **THEN** o segundo passo aparece e o indicador mostra "Passo 2 de 3"
+- **THEN** o segundo passo aparece, com a tela simulada correspondente
+
+#### Scenario: Ir direto a um passo
+- **WHEN** o visitante aciona a bolinha do passo 3
+- **THEN** o terceiro passo aparece e a bolinha fica marcada como a atual
 
 #### Scenario: Limites
 - **WHEN** o visitante está no primeiro passo
-- **THEN** Voltar está indisponível; no último passo, Próximo está indisponível
+- **THEN** Voltar está indisponível; no último passo, o botão de avançar mostra Concluir
+
+#### Scenario: Concluir
+- **WHEN** o visitante aciona Concluir no último passo
+- **THEN** a aba recomeça pelo primeiro passo
 
 #### Scenario: Troca de aba
 - **WHEN** o visitante está no terceiro passo de uma aba e escolhe outra aba
 - **THEN** a nova aba abre no primeiro passo
+
+#### Scenario: Teclado
+- **WHEN** o visitante usa as setas, Home ou End com uma aba em foco
+- **THEN** a seleção e o foco vão para a aba correspondente, que abre no primeiro passo
 
 ### Requirement: Chamadas para instalar
 Todo botão de instalar da página SHALL levar ao Market do Bitrix24, em nova aba, sem repassar ao destino a página de origem. O endereço SHALL ser sempre um link `https`.

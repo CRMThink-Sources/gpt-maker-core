@@ -18,7 +18,7 @@ export function landingLocaleFromParam(param: string): Locale | null {
 }
 
 export const LANDING_TAB_IDS = [
-  'activate',
+  'install',
   'create',
   'train',
   'intentions',

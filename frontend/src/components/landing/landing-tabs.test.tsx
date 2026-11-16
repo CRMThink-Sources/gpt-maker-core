@@ -1,20 +1,33 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LandingTabs, type LandingTab } from './landing-tabs';
+import { Hotspot } from './tutorial/tutorial-context';
 
 function makeTab(id: string, label: string): LandingTab {
   return {
     id,
     label,
-    title: `Título ${label}`,
-    steps: [1, 2, 3].map((n) => ({ text: `${label} texto ${n}`, counter: `Passo ${n} de 3` })),
+    intro: `Intro ${label}`,
+    steps: [1, 2, 3].map((n) => ({
+      title: `${label} título ${n}`,
+      text: `${label} texto ${n}`,
+      target: `Alvo ${label} ${n}`,
+      counter: `Passo ${n} de 3`,
+      screen: (
+        <div data-testid="tela">
+          Tela {label} {n}
+          <Hotspot label={`Alvo ${label} ${n}`}>Alvo</Hotspot>
+        </div>
+      ),
+    })),
   };
 }
 
 const TABS = [makeTab('a', 'Ativar'), makeTab('b', 'Criar')];
+const LABELS = { back: 'Voltar', next: 'Próximo', finish: 'Concluir', hint: 'Clique no destaque:' };
 
 function setup() {
-  render(<LandingTabs tabs={TABS} backLabel="Voltar" nextLabel="Próximo" />);
+  render(<LandingTabs tabs={TABS} labels={LABELS} />);
 }
 
 const back = () => screen.getByRole('button', { name: 'Voltar' }) as HTMLButtonElement;
@@ -23,11 +36,19 @@ const next = () => screen.getByRole('button', { name: 'Próximo' }) as HTMLButto
 afterEach(cleanup);
 
 describe('LandingTabs', () => {
-  it('abre na primeira aba, no primeiro passo', () => {
+  it('abre na primeira aba, no primeiro passo, com a tela simulada', () => {
     setup();
-    expect(screen.getByText('Título Ativar')).toBeTruthy();
+    expect(screen.getByText('Intro Ativar')).toBeTruthy();
+    expect(screen.getByText('Ativar título 1')).toBeTruthy();
     expect(screen.getByText('Ativar texto 1')).toBeTruthy();
     expect(screen.getByText('Passo 1 de 3')).toBeTruthy();
+    expect(screen.getByText('Tela Ativar 1', { exact: false })).toBeTruthy();
+  });
+
+  it('mostra a dica com o alvo do destaque', () => {
+    setup();
+    expect(screen.getByText('Clique no destaque:')).toBeTruthy();
+    expect(screen.getByText('Alvo Ativar 1', { selector: 'strong' })).toBeTruthy();
   });
 
   it('avança com Próximo e volta com Voltar', () => {
@@ -35,19 +56,47 @@ describe('LandingTabs', () => {
     fireEvent.click(next());
     expect(screen.getByText('Ativar texto 2')).toBeTruthy();
     expect(screen.getByText('Passo 2 de 3')).toBeTruthy();
+    expect(screen.getByText('Tela Ativar 2', { exact: false })).toBeTruthy();
     fireEvent.click(back());
     expect(screen.getByText('Ativar texto 1')).toBeTruthy();
   });
 
-  it('desabilita Voltar no primeiro passo e Próximo no último', () => {
+  it('clicar no destaque da tela avança o passo', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Alvo Ativar 1' }));
+    expect(screen.getByText('Ativar texto 2')).toBeTruthy();
+    expect(screen.getByText('Passo 2 de 3')).toBeTruthy();
+  });
+
+  it('desabilita Voltar no primeiro passo e troca Próximo por Concluir no último', () => {
     setup();
     expect(back().disabled).toBe(true);
-    expect(next().disabled).toBe(false);
     fireEvent.click(next());
     fireEvent.click(next());
     expect(screen.getByText('Passo 3 de 3')).toBeTruthy();
-    expect(next().disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Próximo' })).toBeNull();
     expect(back().disabled).toBe(false);
+  });
+
+  it('Concluir no último passo recomeça a aba pelo primeiro passo', () => {
+    setup();
+    fireEvent.click(next());
+    fireEvent.click(next());
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+    expect(screen.getByText('Passo 1 de 3')).toBeTruthy();
+    expect(screen.getByText('Ativar texto 1')).toBeTruthy();
+  });
+
+  it('as bolinhas levam direto ao passo e marcam o atual', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Passo 3 de 3' }));
+    expect(screen.getByText('Ativar texto 3')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Passo 3 de 3' }).getAttribute('aria-current')).toBe(
+      'step',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Passo 1 de 3' }).getAttribute('aria-current'),
+    ).toBeNull();
   });
 
   it('ao trocar de aba volta ao primeiro passo', () => {
@@ -55,7 +104,7 @@ describe('LandingTabs', () => {
     fireEvent.click(next());
     fireEvent.click(next());
     fireEvent.click(screen.getByRole('tab', { name: 'Criar' }));
-    expect(screen.getByText('Título Criar')).toBeTruthy();
+    expect(screen.getByText('Intro Criar')).toBeTruthy();
     expect(screen.getByText('Criar texto 1')).toBeTruthy();
     expect(screen.getByText('Passo 1 de 3')).toBeTruthy();
   });
@@ -87,10 +136,13 @@ describe('LandingTabs', () => {
     expect(screen.getByRole('tab', { name: 'Criar' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('anuncia a troca de passo e liga a aba ao painel', () => {
+  it('anuncia a troca de passo (só o texto) e liga a aba ao painel', () => {
     setup();
     const panel = screen.getByRole('tabpanel');
-    expect(panel.getAttribute('aria-live')).toBe('polite');
+    expect(screen.getByText('Passo 1 de 3').closest('[aria-live]')?.getAttribute('aria-live')).toBe(
+      'polite',
+    );
+    expect(panel.querySelector('[data-testid="tela"]')?.closest('[aria-live]')).toBeNull();
     const tab = screen.getByRole('tab', { name: 'Ativar' });
     expect(tab.getAttribute('aria-controls')).toBe(panel.id);
     expect(panel.getAttribute('aria-labelledby')).toBe(tab.id);
