@@ -23,5 +23,5 @@
 
 ## 5. Spec e fechamento
 
-- [ ] 5.1 Rodar a verificação do CI: `npm run build -w @gptmaker/contracts`, `npm run format:check && npm run lint && npm run typecheck && npm run depcruise`, `npm test` e `npm run test:integration -w backend`. Verificar que tudo passa (ou que as falhas são só o ruído já listado em `CLAUDE.md`, "Pontos a confirmar") e testar manualmente export → import entre dois agentes no staging.
+- [x] 5.1 Rodar a verificação do CI: `npm run build -w @gptmaker/contracts`, `npm run format:check && npm run lint && npm run typecheck && npm run depcruise`, `npm test` e `npm run test:integration -w backend`. Verificar que tudo passa (ou que as falhas são só o ruído já listado em `CLAUDE.md`, "Pontos a confirmar") e testar manualmente export → import entre dois agentes no staging.
 - [x] 5.2 Revisar o diff com os subagentes `revisor-codigo`, `auditor-multitenant` e `revisor-frontend`, e conferir a change com `especialista-openspec` antes de `/opsx:archive`.
