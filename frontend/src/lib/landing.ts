@@ -1,10 +1,9 @@
 import type { Locale } from '@gptmaker/contracts';
 
 /**
- * Link do GPTThink no Market do Bitrix24 (CTA "Instalar"). PROVISÓRIO: aponta para a raiz do
- * Market até a CRMThink informar o link real do app (spec/design da LP, "Deixado para quem constrói").
+ * Link do GPTThink no Market do Bitrix24: destino de todo CTA "Instalar" da LP (spec landing-page).
  */
-export const GPTTHINK_MARKET_URL = 'https://www.bitrix24.com.br/apps/';
+export const GPTTHINK_MARKET_URL = 'https://www.bitrix24.com.br/apps/app/crmthink.gptthink2/';
 
 const BASE_PATH = '/lp/gptthink';
 
