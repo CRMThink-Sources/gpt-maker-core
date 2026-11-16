@@ -35,12 +35,14 @@
 ### Task 1: Branch, OpenSpec, textos e helpers
 
 **Files:**
+
 - Create: `frontend/src/lib/landing.ts`, `frontend/src/lib/landing.test.ts`
 - Create: `frontend/src/i18n/messages/{pt-BR,en,es}/landing.json`
 - Modify: `frontend/src/i18n/config.ts` (importar e registrar `landing` nos três idiomas)
 - Create: change OpenSpec `add-lp-gptthink` (via `/opsx:propose`, usando o design como entrada)
 
 **Interfaces:**
+
 - Produces (`@/lib/landing`):
   - `GPTTHINK_MARKET_URL: string` (https; valor provisório = raiz do Market do Bitrix24 até o usuário informar o link real; deixar comentário em português apontando isso)
   - `landingPath(locale: Locale): string` → `'/lp/gptthink'` | `'/lp/gptthink/en'` | `'/lp/gptthink/es'`
@@ -64,10 +66,12 @@
 ### Task 2: Abas "Primeiros passos" (cliente)
 
 **Files:**
+
 - Create: `frontend/src/components/landing/landing-tabs.tsx`
 - Test: `frontend/src/components/landing/landing-tabs.test.tsx`
 
 **Interfaces:**
+
 - Produces: `LandingTabs(props: { tabs: LandingTab[]; backLabel: string; nextLabel: string })` com `LandingTab = { id: string; label: string; title: string; steps: { text: string; counter: string }[] }` (o `counter` já vem formatado, ex. "Passo 1 de 3", montado no servidor). Exportar o tipo `LandingTab`.
 
 - [ ] **Step 1: Escrever o teste (falha).** Com 2 abas de 3 passos: (a) mostra a 1ª aba e o passo 1 e seu `counter`; (b) "Próximo" avança e "Voltar" retorna; (c) "Voltar" desabilitado no passo 1 e "Próximo" desabilitado no último; (d) clicar noutra aba mostra o título dela **no passo 1**, mesmo se a anterior estava no passo 3; (e) abas usam `role="tablist"/"tab"` com `aria-selected` na ativa.
@@ -81,10 +85,12 @@
 ### Task 3: Seletor de idioma (servidor)
 
 **Files:**
+
 - Create: `frontend/src/components/landing/language-switcher.tsx`
 - Test: `frontend/src/components/landing/language-switcher.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `landingPath`, `LOCALE_LABELS` de `@/i18n/config`, `LOCALES` de `@gptmaker/contracts`.
 - Produces: `LanguageSwitcher(props: { current: Locale; label: string })` — três links `<a>` (rótulos de `LOCALE_LABELS`), o atual com `aria-current="page"`, dentro de `<nav aria-label={label}>`. Sem estado nem JS de cliente (desvio do design: menu simplificado para links inline).
 
@@ -97,12 +103,14 @@
 ### Task 4: Página, rotas e metadados
 
 **Files:**
+
 - Create: `frontend/src/components/landing/gptthink-landing.tsx`, `frontend/src/components/landing/gptthink-landing.test.tsx`
 - Create: `frontend/src/components/landing/landing-metadata.ts`
 - Create: `frontend/src/app/lp/gptthink/page.tsx`, `frontend/src/app/lp/gptthink/[locale]/page.tsx`
 - Test: `frontend/src/app/lp/gptthink/routes.test.ts`
 
 **Interfaces:**
+
 - Consumes: `landingT` (`components/landing/landing-t.ts`, criado nesta tarefa), `LandingTabs`/`LandingTab`, `LanguageSwitcher`, helpers de `@/lib/landing`.
 - Produces:
   - `GptthinkLanding(props: { locale: Locale }): JSX.Element` — componente síncrono (sem `async`/hooks) que monta `<div lang={locale}>` com: cabeçalho (âncoras `#funcionalidades`, `#primeiros-passos`, `#duvidas` — ids fixos nos três idiomas; seletor; botão Instalar), hero com mockup de conversa em JSX, grade de 9 cards, `LandingTabs` (6 abas, 3 passos cada, `counter` via `t('start.stepOf', { current, total: 3 })`), FAQ em `<details>`, CTA final, rodapé. Todo CTA de instalar = `<a href={GPTTHINK_MARKET_URL} target="_blank" rel="noopener noreferrer">`.

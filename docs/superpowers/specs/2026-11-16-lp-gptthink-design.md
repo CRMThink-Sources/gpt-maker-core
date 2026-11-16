@@ -43,20 +43,24 @@ Quem chega: (1) quem acabou de instalar o app e precisa saber o que fazer agora;
 ## Desenho
 
 **Rotas**
+
 - `frontend/src/app/lp/gptthink/page.tsx` → renderiza a LP em `pt-BR`.
 - `frontend/src/app/lp/gptthink/[locale]/page.tsx` → `generateStaticParams` devolve `en` e `es`; `dynamicParams = false`, então qualquer outro valor (inclusive `pt-BR`) responde 404. Meu critério: `pt-BR` só vive na URL sem sufixo, para não haver duas URLs do mesmo conteúdo.
 - Ambas usam o mesmo componente `GptthinkLanding({ locale })` e `generateMetadata` próprio (título, descrição, `alternates.languages` com as três URLs).
 - Layout raiz fixa `lang="pt-BR"`; a LP envolve o conteúdo em `<div lang={locale}>` (meu critério, para não mexer no layout raiz).
 
 **Componentes** (`frontend/src/components/landing/`)
+
 - Servidor: cabeçalho, hero (com mockup de conversa), grade de funcionalidades, FAQ (`<details>` nativo), CTA final, rodapé.
 - Cliente (únicos): abas de "Primeiros passos" (aba ativa + Voltar/Próximo, "Passo X de N") e menu do seletor de idioma (links `<a>` para as três URLs, aba ativa marcada com `aria-current`). Recebem os textos por props.
 
 **Textos**
+
 - Namespace novo `landing` em `frontend/src/i18n/messages/{pt-BR,en,es}/landing.json`, registrado em `config.ts`.
 - Rascunho escrito por mim a partir do código e da skill do GPTMaker Conector; o usuário revisa.
 
 **Conteúdo**
+
 1. Cabeçalho: Funcionalidades · Primeiros passos · Dúvidas · seletor · "Instalar".
 2. Hero: "Agentes de IA dentro do Bitrix24"; CTA "Instalar no Bitrix24" e "Ver primeiros passos".
 3. Funcionalidades (cards): agentes, treinamento, intenções, funções prontas (SDR, Suporte, Agendamento…), ações no CRM, transferência para humano, fora do horário, chat de teste, créditos por uso.
