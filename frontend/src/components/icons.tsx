@@ -91,6 +91,9 @@ export const FileIcon = (p: P) => (
 export const UploadIcon = (p: P) => (
   <Icon {...p} d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
 );
+export const DownloadIcon = (p: P) => (
+  <Icon {...p} d="M12 4v12m0 0-4-4m4 4 4-4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+);
 export const UserIcon = (p: P) => (
   <Icon {...p} d="M16 7.5a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4.5 20a7.5 7.5 0 0 1 15 0" />
 );
