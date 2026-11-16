@@ -47,6 +47,15 @@ describe('GptthinkLanding', () => {
     for (const h of hashes) expect(container.querySelector(h as string)).toBeTruthy();
   });
 
+  it.each(LOCALES)('não mostra chave de tradução sem texto nem ícone legível (%s)', (locale) => {
+    const { container } = render(<GptthinkLanding locale={locale} />);
+    // `landingT` engole chave ausente e mostra `landing.<chave>`: isto pega o esquecimento.
+    expect(container.textContent).not.toContain('landing.');
+    for (const svg of container.querySelectorAll('svg')) {
+      expect(svg.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+
   it('mostra o primeiro passo da primeira aba já formatado', () => {
     render(<GptthinkLanding locale="en" />);
     expect(screen.getByText('Step 1 of 3')).toBeTruthy();

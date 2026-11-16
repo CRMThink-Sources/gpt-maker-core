@@ -22,7 +22,14 @@ function InstallLink({ children, className }: { children: string; className: str
 
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="m5 12 4.5 4.5L19 7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

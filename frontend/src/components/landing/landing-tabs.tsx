@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 
 export interface LandingTab {
   id: string;
@@ -26,10 +26,35 @@ export function LandingTabs({ tabs, backLabel, nextLabel }: Props) {
   const current = tab.steps[step];
   const last = tab.steps.length - 1;
 
+  function select(id: string) {
+    setTabId(id);
+    setStep(0);
+  }
+
+  /** Padrão WAI-ARIA de abas: setas (com volta), Home e End movem a seleção e o foco. */
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const count = tabs.length;
+    const target =
+      event.key === 'ArrowRight'
+        ? (index + 1) % count
+        : event.key === 'ArrowLeft'
+          ? (index - 1 + count) % count
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? count - 1
+              : null;
+    const next = target === null ? undefined : tabs[target];
+    if (!next) return;
+    event.preventDefault();
+    select(next.id);
+    document.getElementById(`lp-tab-${next.id}`)?.focus();
+  }
+
   return (
     <div>
       <div role="tablist" className="flex flex-wrap gap-2">
-        {tabs.map((t) => {
+        {tabs.map((t, index) => {
           const selected = t.id === tab.id;
           return (
             <button
@@ -39,10 +64,9 @@ export function LandingTabs({ tabs, backLabel, nextLabel }: Props) {
               role="tab"
               aria-selected={selected}
               aria-controls="lp-tabpanel"
-              onClick={() => {
-                setTabId(t.id);
-                setStep(0);
-              }}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => select(t.id)}
+              onKeyDown={(event) => onKeyDown(event, index)}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 selected
                   ? 'bg-brand-600 text-white'
@@ -59,6 +83,7 @@ export function LandingTabs({ tabs, backLabel, nextLabel }: Props) {
         id="lp-tabpanel"
         role="tabpanel"
         aria-labelledby={`lp-tab-${tab.id}`}
+        aria-live="polite"
         className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-zinc-200 sm:p-8"
       >
         <p className="text-sm font-semibold text-brand-700">{current?.counter}</p>

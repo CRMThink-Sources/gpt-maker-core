@@ -4,7 +4,7 @@
 
 **Goal:** Publicar a landing page do GPTThink em `/lp/gptthink` (pt-BR) e `/lp/gptthink/{en,es}`, no padrão da `/lp/thinkzap`.
 
-**Architecture:** Duas rotas do App Router (`page.tsx` para pt-BR, `[locale]/page.tsx` para en/es, estática) renderizam o mesmo componente `GptthinkLanding({ locale })`. Os textos vêm de um namespace novo `landing` do sistema de mensagens existente, lido com `createT(locale, 'landing')` (sem `I18nProvider`, sem `BX24`). Só as abas de "Primeiros passos" são componente de cliente.
+**Architecture:** Duas rotas do App Router (`page.tsx` para pt-BR, `[locale]/page.tsx` para en/es, estática) renderizam o mesmo componente `GptthinkLanding({ locale })`. Os textos vêm de um namespace novo `landing` do sistema de mensagens existente, lido com `landingT(locale)` (`createTranslator` direto; o `createT` de `@/i18n` é `'use client'`), sem `I18nProvider` e sem `BX24`. Só as abas de "Primeiros passos" são componente de cliente.
 
 **Tech Stack:** Next.js 16 (App Router), React 19, Tailwind 4, next-intl (`createTranslator`), Vitest + Testing Library (jsdom).
 
@@ -103,7 +103,7 @@
 - Test: `frontend/src/app/lp/gptthink/routes.test.ts`
 
 **Interfaces:**
-- Consumes: `createT`, `LandingTabs`/`LandingTab`, `LanguageSwitcher`, helpers de `@/lib/landing`.
+- Consumes: `landingT` (`components/landing/landing-t.ts`, criado nesta tarefa), `LandingTabs`/`LandingTab`, `LanguageSwitcher`, helpers de `@/lib/landing`.
 - Produces:
   - `GptthinkLanding(props: { locale: Locale }): JSX.Element` — componente síncrono (sem `async`/hooks) que monta `<div lang={locale}>` com: cabeçalho (âncoras `#funcionalidades`, `#primeiros-passos`, `#duvidas` — ids fixos nos três idiomas; seletor; botão Instalar), hero com mockup de conversa em JSX, grade de 9 cards, `LandingTabs` (6 abas, 3 passos cada, `counter` via `t('start.stepOf', { current, total: 3 })`), FAQ em `<details>`, CTA final, rodapé. Todo CTA de instalar = `<a href={GPTTHINK_MARKET_URL} target="_blank" rel="noopener noreferrer">`.
   - `landingMetadata(locale: Locale): Metadata` — `title`/`description` de `landing.meta`, `alternates: { canonical: landingPath(locale), languages: { 'pt-BR': …, en: …, es: … } }`.

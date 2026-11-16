@@ -125,7 +125,7 @@
     "q4": "Can I test the agent before putting it to work?",
     "a4": "Yes. The test chat lets you talk to the agent before activating it on the channel.",
     "q5": "What happens when credits run out?",
-    "a5": "Consumption is tracked inside the app, and you get warnings before the balance runs out. Check the plan area to top up or change plans.",
+    "a5": "Consumption is tracked inside the app, and you get warnings before the balance runs out. Check your balance in the plan area.",
     "q6": "Can my team take over a conversation?",
     "a6": "Yes. You define when the conversation goes to a person on your team, and the history stays on the channel."
   },

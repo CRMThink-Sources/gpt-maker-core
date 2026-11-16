@@ -31,7 +31,7 @@ Quem chega: (1) quem acabou de instalar o app e precisa saber o que fazer agora;
 ## Restrições
 
 - Next.js 16: conferido em `node_modules/next/dist/docs/` (segmentos dinâmicos, `params` assíncrono, `generateStaticParams`).
-- `/app` usa `I18nProvider` com `BX24`; a LP não pode usá-lo. Ela usa `createT(locale, 'landing')` em componentes de servidor.
+- `/app` usa `I18nProvider` com `BX24`; a LP não pode usá-lo. Ela usa `landingT(locale)` (`createTranslator` sobre `MESSAGES`, sem `'use client'`) em componentes de servidor; o `createT` de `@/i18n` não serve porque aquele módulo é `'use client'`.
 - Testes de frontend obrigatórios para comportamento novo; textos em pt-BR como fonte, com o teste de paridade garantindo `en` e `es`.
 - Comentários e commits em português. Branch nova a partir de `develop` (ver "Entrega").
 
