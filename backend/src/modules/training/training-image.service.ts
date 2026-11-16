@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import type { TrainingImageView } from '@gptmaker/contracts';
+import { TRAINING_IMAGE_MAX_BYTES, type TrainingImageView } from '@gptmaker/contracts';
 import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
@@ -16,6 +16,20 @@ import { REDIS } from '../../shared/redis/redis.module';
 import { ObjectStorage } from '../../shared/storage/object-storage';
 
 export type TrainingImage = typeof trainingImage.$inferSelect;
+
+/** Por que a imagem de um arquivo importado não pôde ser copiada (spec agent-training-transfer). */
+export type ImageCopyCode = 'IMAGE_URL_NOT_SUPPORTED' | 'IMAGE_NOT_FOUND' | 'IMAGE_INVALID';
+
+export class ImageCopyError extends Error {
+  constructor(
+    readonly code: ImageCopyCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const PUBLIC_IMAGE_PATH = /^\/public\/training-images\/([^/]+)$/;
 
 /** Imagem enviada e não ligada a um treinamento (nem a uma resposta do formulário) é apagada. */
 const ORPHAN_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -125,6 +139,59 @@ export class TrainingImageService {
   async imageUrlFor(image: Pick<TrainingImage, 'publicToken'>): Promise<string> {
     const base = this.env.API_PUBLIC_URL.replace(/\/+$/, '');
     return `${base}/public/training-images/${encodeURIComponent(image.publicToken)}`;
+  }
+
+  /**
+   * Bytes da imagem citada por uma URL pública do próprio serviço, para copiá-la a outro agente
+   * (design D5b). Sem `fetch`: só o host de `API_PUBLIC_URL` e o caminho das imagens de
+   * treinamento valem, e o token é resolvido no banco e no storage; qualquer outra URL é recusada
+   * sem acesso algum (nada de SSRF). O tipo e a cota são conferidos por quem grava a cópia.
+   */
+  async readFromPublicUrl(rawUrl: string): Promise<{ fileName: string; body: Buffer }> {
+    const token = this.publicTokenOf(rawUrl);
+    if (!token) {
+      throw new ImageCopyError(
+        'IMAGE_URL_NOT_SUPPORTED',
+        'O endereço da imagem não é deste serviço; a imagem não foi importada',
+      );
+    }
+    const notFound = () =>
+      new ImageCopyError('IMAGE_NOT_FOUND', 'A imagem não existe mais; ela não foi importada');
+    const tooBig = () => new ImageCopyError('IMAGE_INVALID', 'A imagem passa do limite de 5 MB');
+    const [row] = await this.db
+      .select()
+      .from(trainingImage)
+      .where(and(eq(trainingImage.publicToken, token), isNull(trainingImage.deletedAt)));
+    if (!row) throw notFound();
+    if (row.sizeBytes > TRAINING_IMAGE_MAX_BYTES) throw tooBig();
+    try {
+      const { body } = await this.storage.getObject(row.objectKey);
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of body) {
+        const piece = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+        size += piece.length;
+        if (size > TRAINING_IMAGE_MAX_BYTES) throw tooBig();
+        chunks.push(piece);
+      }
+      return { fileName: row.fileName, body: Buffer.concat(chunks) };
+    } catch (error) {
+      if (error instanceof ImageCopyError) throw error;
+      this.logger.warn({ imageId: row.id, err: error }, 'imagem a copiar não está no storage');
+      throw notFound();
+    }
+  }
+
+  /** Token da URL pública das imagens deste serviço, ou `null` para qualquer outra URL. */
+  private publicTokenOf(rawUrl: string): string | null {
+    try {
+      const url = new URL(rawUrl);
+      if (url.origin !== new URL(this.env.API_PUBLIC_URL).origin) return null;
+      const match = PUBLIC_IMAGE_PATH.exec(url.pathname);
+      return match?.[1] ? decodeURIComponent(match[1]) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Arquivo da URL pública (`null` se o token não existe ou a imagem foi removida). */

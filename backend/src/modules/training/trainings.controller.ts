@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -15,6 +16,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import {
   type CreateTrainingInput,
   createTrainingSchema,
+  type TrainingExport,
+  type TrainingImportResult,
   type TrainingUsage,
   TRAINING_IMAGE_MAX_BYTES,
   type TrainingView,
@@ -22,15 +25,48 @@ import {
   updateTrainingSchema,
 } from '@gptmaker/contracts';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
+import type { Response } from 'express';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { TrainingService } from './training.service';
+import { TrainingTransferService } from './training-transfer.service';
 
 class UpdateTrainingDto extends createZodDto(updateTrainingSchema) {}
 
 /** Treinamentos de um agente do tenant da sessão (spec agent-training). */
 @Controller('app/agents/:agentId/trainings')
 export class TrainingsController {
-  constructor(private readonly trainings: TrainingService) {}
+  constructor(
+    private readonly trainings: TrainingService,
+    private readonly transfer: TrainingTransferService,
+  ) {}
+
+  /** Treinamentos manuais do agente num JSON para baixar (spec agent-training-transfer). */
+  @Get('export')
+  @AppAuth()
+  async export(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<TrainingExport> {
+    const { file, fileName } = await this.transfer.export(session.tenantId, agentId);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return file;
+  }
+
+  /**
+   * Cria os treinamentos de um arquivo exportado. O envelope e cada item são validados no serviço
+   * (um item inválido não derruba os demais); a resposta traz o resultado item a item.
+   */
+  @Post('import')
+  @AppAuth('manage')
+  @HttpCode(HttpStatus.OK)
+  import(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Body() body: unknown,
+  ): Promise<TrainingImportResult> {
+    return this.transfer.import(session.tenantId, agentId, body);
+  }
 
   @Get()
   @AppAuth()

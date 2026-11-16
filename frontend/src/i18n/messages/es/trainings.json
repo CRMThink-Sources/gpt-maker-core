@@ -50,7 +50,13 @@
     "showing": "Mostrando {shown} de {total}",
     "showMore": "Mostrar más",
     "loadError": "No se pudieron cargar los entrenamientos.",
-    "actionError": "No se pudo completar la acción. Inténtelo de nuevo."
+    "actionError": "No se pudo completar la acción. Inténtelo de nuevo.",
+    "export": "Exportar",
+    "exporting": "Exportando…",
+    "import": "Importar",
+    "exportEmpty": "No hay entrenamientos manuales para exportar.",
+    "exportImages": "El archivo guarda el enlace de las imágenes, no las imágenes. Quien tenga el archivo puede abrirlas mientras existan en este agente.",
+    "exportError": "No se pudo exportar. Inténtelo de nuevo."
   },
   "add": {
     "title": "Agregar entrenamiento",
@@ -107,6 +113,42 @@
     "TRAINING_IMAGE_IN_USE": "Esta imagen ya está en otro entrenamiento; suba la imagen de nuevo.",
     "PLAN_TRAINING_LIMIT": "Alcanzó el límite de entrenamientos de su plan. Elimine alguno o cambie de plan.",
     "GPTMAKER_REJECTED": "GPTMaker rechazó el entrenamiento. Revise el contenido e inténtelo de nuevo.",
-    "GPTMAKER_UNAVAILABLE": "No se pudo enviar el entrenamiento a GPTMaker en este momento. Inténtelo de nuevo en unos instantes."
+    "GPTMAKER_UNAVAILABLE": "No se pudo enviar el entrenamiento a GPTMaker en este momento. Inténtelo de nuevo en unos instantes.",
+    "TRAINING_IMPORT_UNSUPPORTED_VERSION": "La versión de este archivo no es compatible. Exporte los entrenamientos de nuevo.",
+    "TRAINING_IMPORT_TOO_MANY": "El archivo supera el límite de entrenamientos por importación.",
+    "TRAINING_IMPORT_INVALID_FILE": "El archivo no es una exportación de entrenamientos válida.",
+    "TRAINING_IMPORT_BUSY": "Hay otra importación en curso; inténtelo de nuevo en unos instantes."
+  },
+  "import": {
+    "title": "Importar entrenamientos",
+    "description": "Suba un archivo exportado por la app. Los entrenamientos se suman a los que el agente ya tiene; nada existente se cambia ni se elimina.",
+    "fileLabel": "Archivo de entrenamientos (.json)",
+    "chosen": "Elementos en el archivo: {count}",
+    "notJson": "El archivo no es una exportación de entrenamientos válida.",
+    "invalid": "El archivo no es una exportación de entrenamientos válida.",
+    "version": "La versión de este archivo no es compatible. Exporte los entrenamientos de nuevo.",
+    "tooMany": "El archivo supera el límite de {max} entrenamientos por importación.",
+    "imagesNotice": "{count} texto(s) con imagen: la imagen se copia si aún existe; si no, el texto entra sin ella.",
+    "duplicatesNotice": "Importar el mismo archivo otra vez crea los entrenamientos de nuevo.",
+    "submit": "Importar",
+    "sending": "Importando…",
+    "close": "Cerrar",
+    "error": "No se pudo importar. Inténtelo de nuevo.",
+    "summary": "Creados: {created} · No creados: {notCreated}",
+    "withWarnings": "Creados con aviso",
+    "notCreated": "No creados",
+    "item": "Elemento {position} ({type})",
+    "reasons": {
+      "PLAN_TRAINING_LIMIT": "Límite de entrenamientos del plan alcanzado.",
+      "TRAINING_ADVANCED_ONLY": "Sitios y videos solo en el modo avanzado del agente.",
+      "GPTMAKER_REJECTED": "GPTMaker rechazó este entrenamiento.",
+      "GPTMAKER_UNAVAILABLE": "GPTMaker no respondió para este entrenamiento.",
+      "IMPORT_ITEM_FAILED": "No se pudo crear este entrenamiento ahora.",
+      "IMAGE_URL_NOT_SUPPORTED": "Imagen no importada: la dirección no es de este servicio.",
+      "IMAGE_NOT_FOUND": "Imagen no importada: ya no existe.",
+      "IMAGE_INVALID": "Imagen no importada: formato o tamaño no válido.",
+      "IMAGE_QUOTA": "Imagen no importada: falta espacio en el plan.",
+      "IMAGE_FAILED": "Imagen no importada."
+    }
   }
 }
