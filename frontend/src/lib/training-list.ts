@@ -111,3 +111,21 @@ export function isoToLocalInput(iso: string | null): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+
+const TAG_TONES = [
+  'bg-sky-100 text-sky-800 hover:bg-sky-200',
+  'bg-emerald-100 text-emerald-800 hover:bg-emerald-200',
+  'bg-amber-100 text-amber-800 hover:bg-amber-200',
+  'bg-violet-100 text-violet-800 hover:bg-violet-200',
+  'bg-rose-100 text-rose-800 hover:bg-rose-200',
+  'bg-teal-100 text-teal-800 hover:bg-teal-200',
+  'bg-indigo-100 text-indigo-800 hover:bg-indigo-200',
+  'bg-orange-100 text-orange-800 hover:bg-orange-200',
+] as const;
+
+/** Cor estável da tag (mesma tag, mesma cor em toda a tela), calculada pelo texto. */
+export function tagTone(tag: string): string {
+  let hash = 0;
+  for (const char of tag) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  return TAG_TONES[hash % TAG_TONES.length]!;
+}

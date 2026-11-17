@@ -115,6 +115,15 @@ describe('modal de tags e prazo', () => {
     expect((screen.getByText('Salvar') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('treinamento da função só edita tags, sem o campo de expiração', async () => {
+    const { onSaved } = open({ ...site, managed: true });
+    expect(screen.queryByLabelText('Expira em')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Remover a tag preços'));
+    fireEvent.click(screen.getByText('Salvar'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(lastBody()).toEqual({ tags: [] });
+  });
+
   it('mostra o erro da API sem fechar', async () => {
     api.mockRejectedValue(new Error('x'));
     open();

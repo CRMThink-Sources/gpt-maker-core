@@ -7,6 +7,7 @@ import {
   isoToLocalInput,
   localInputToIso,
   parseTrainingFilters,
+  tagTone,
   toggleItem,
   trainingFiltersQuery,
 } from './training-list';
@@ -98,5 +99,16 @@ describe('expiração na tela', () => {
     expect(isoToLocalInput(iso)).toBe('2026-12-01T09:30');
     expect(localInputToIso('')).toBeNull();
     expect(isoToLocalInput(null)).toBe('');
+  });
+});
+
+describe('tagTone', () => {
+  it('a mesma tag sempre recebe a mesma cor', () => {
+    expect(tagTone('promo')).toBe(tagTone('promo'));
+  });
+
+  it('tags diferentes se distribuem em mais de uma cor', () => {
+    const tones = new Set(['promo', 'frete', 'preços', 'garantia', 'suporte'].map(tagTone));
+    expect(tones.size).toBeGreaterThan(1);
   });
 });

@@ -44,4 +44,4 @@
 
 - [x] 7.1 Replicar o CI: `npm run build -w @gptmaker/contracts`, `npm run format:check && npm run lint && npm run typecheck && npm run depcruise`, `npm test`, `npm run test:integration -w backend`, `npm run build`; tudo verde (ou falhas pré-existentes listadas em `CLAUDE.md` > Pontos a confirmar)
 - [x] 7.2 Revisões por subagente antes do PR: `revisor-codigo`, `guardiao-migracoes`, `auditor-multitenant` (job cross-tenant, filtros, tags), `revisor-frontend` e `especialista-openspec`; achados corrigidos ou justificados
-- [ ] 7.3 Validação manual no staging: criar treinamento com expiração curta, ver o job expirá-lo e a lista mostrar o selo; conferir paginação/filtros com 25+ itens (runbook do job e do novo formato da listagem já em `docs/runbook.md`, seção 10)
+- [x] 7.3 Validação manual no staging: criar treinamento com expiração curta, ver o job expirá-lo e a lista mostrar o selo; conferir paginação/filtros com 25+ itens (runbook do job e do novo formato da listagem já em `docs/runbook.md`, seção 10)
