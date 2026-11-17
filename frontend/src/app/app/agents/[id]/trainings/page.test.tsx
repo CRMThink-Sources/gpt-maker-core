@@ -218,6 +218,15 @@ describe('interações extras da lista', () => {
     );
   });
 
+  it('treinamento da função oferece só "Tags"', async () => {
+    mockApi(listing([training(1, { managed: true, tags: ['promo'] })]));
+    render(<AgentTrainingsPage />);
+    const item = (await screen.findAllByRole('listitem'))[0]!;
+    expect(within(item).queryByText('Tags e prazo')).toBeNull();
+    fireEvent.click(within(item).getByText('Tags'));
+    expect(await screen.findByRole('button', { name: 'Remover a tag promo' })).toBeTruthy();
+  });
+
   it('"Tags e prazo" abre o modal do item', async () => {
     mockApi(listing([training(1, { tags: ['promo'] })]));
     render(<AgentTrainingsPage />);

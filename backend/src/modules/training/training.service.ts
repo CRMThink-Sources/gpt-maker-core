@@ -370,7 +370,15 @@ export class TrainingService {
     const owner = await this.agents.getById(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
-      assertAccess(row, {});
+      // Tags valem também para o treinamento da função (só organização, não mexe no conteúdo);
+      // a expiração não, porque a publicação da função é quem o mantém.
+      if (row.managed && input.expiresAt !== undefined) {
+        throw new DomainError(
+          'TRAINING_MANAGED_NO_EXPIRY',
+          'Treinamento gerado pela função não aceita expiração',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       assertNotExpired(row);
       const patch: Partial<typeof training.$inferInsert> = {};
       if (input.tags !== undefined) patch.tags = input.tags;

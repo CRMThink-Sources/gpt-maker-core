@@ -8,7 +8,7 @@ import {
 import { useId, useState, type KeyboardEvent } from 'react';
 import { CloseIcon } from '@/components/icons';
 import { useT } from '@/i18n';
-import { isoToLocalInput, localInputToIso } from '@/lib/training-list';
+import { isoToLocalInput, localInputToIso, tagTone } from '@/lib/training-list';
 import { inputClass } from '../../agent-fields';
 
 const SUGGESTIONS_SHOWN = 12;
@@ -65,7 +65,7 @@ export function TagsField({
         {value.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700"
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tagTone(tag)}`}
           >
             {tag}
             <button

@@ -99,7 +99,7 @@ export function TrainingSettingsModal({
       <form id="training-settings" onSubmit={submit}>
         <fieldset disabled={saving} className="space-y-5">
           <TagsField value={tags} onChange={setTags} suggestions={availableTags} />
-          <ExpiresAtField value={expires} onChange={setExpires} />
+          {!training.managed && <ExpiresAtField value={expires} onChange={setExpires} />}
         </fieldset>
       </form>
     </Modal>

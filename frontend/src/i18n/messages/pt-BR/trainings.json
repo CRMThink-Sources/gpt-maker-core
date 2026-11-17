@@ -67,6 +67,7 @@
     "previous": "Anterior",
     "next": "Próxima",
     "tagsAction": "Tags e prazo",
+    "tagsOnlyAction": "Tags",
     "expiresOn": "expira em {date}",
     "expiredOn": "expirou em {date}",
     "expiredHint": "Retirado do agente; só o registro continua aqui."
@@ -132,7 +133,8 @@
     "TRAINING_IMPORT_INVALID_FILE": "O arquivo não é uma exportação de treinamentos válida.",
     "TRAINING_IMPORT_BUSY": "Outra importação está em andamento; tente de novo em instantes.",
     "TRAINING_EXPIRED": "Este treinamento expirou e foi retirado do agente.",
-    "TRAINING_MANAGED_NO_SETTINGS": "Treinamento gerado pela função não aceita tags nem prazo."
+    "TRAINING_MANAGED_NO_SETTINGS": "Treinamento gerado pela função não aceita tags nem prazo.",
+    "TRAINING_MANAGED_NO_EXPIRY": "Treinamento gerado pela função não aceita prazo, só tags."
   },
   "import": {
     "title": "Importar treinamentos",

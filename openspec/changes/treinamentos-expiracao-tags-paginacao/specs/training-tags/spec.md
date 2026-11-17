@@ -5,7 +5,7 @@ Permite agrupar os treinamentos do agente por assunto com tags livres, para o cl
 ## ADDED Requirements
 
 ### Requirement: Atribuir tags a um treinamento
-O sistema MUST permitir a quem gerencia agentes definir as tags de um treinamento, na criação e depois dela, em qualquer tipo de treinamento manual, mesmo nos que não têm o conteúdo editável (site, vídeo, documento). Alterar só as tags MUST NOT reenviar o treinamento ao GPTMaker nem alterar o estado dele. Cada treinamento MUST aceitar no máximo 10 tags. Quem apenas consulta MUST NOT poder alterar tags. Treinamentos gerados pela função do agente MUST NOT aceitar tags.
+O sistema MUST permitir a quem gerencia agentes definir as tags de um treinamento, na criação e depois dela, em qualquer tipo de treinamento manual, mesmo nos que não têm o conteúdo editável (site, vídeo, documento). Alterar só as tags MUST NOT reenviar o treinamento ao GPTMaker nem alterar o estado dele. Cada treinamento MUST aceitar no máximo 10 tags. Quem apenas consulta MUST NOT poder alterar tags. Treinamentos gerados pela função do agente MUST aceitar tags depois de criados (só organização, sem mexer no conteúdo), mas MUST NOT recebê-las na criação, que é feita pela publicação da função.
 
 #### Scenario: Marcar um site com tags
 - **WHEN** o administrador adiciona as tags "preços" e "2026" a um treinamento de site já concluído

@@ -37,6 +37,7 @@ import {
   EMPTY_TRAINING_FILTERS,
   hasActiveTrainingFilters,
   parseTrainingFilters,
+  tagTone,
   trainingFiltersQuery,
   type TrainingListFilters,
 } from '@/lib/training-list';
@@ -467,7 +468,7 @@ function AgentTrainings() {
                                       : [...filters.tags, tag],
                                   })
                                 }
-                                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-200"
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${tagTone(tag)}`}
                               >
                                 {tag}
                               </button>
@@ -484,20 +485,30 @@ function AgentTrainings() {
 
                       {canManage &&
                         (training.managed ? (
-                          training.status === 'FAILED' && (
+                          <div className="flex items-center gap-1">
+                            {training.status === 'FAILED' && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  run(training.id, () =>
+                                    api(`${base}/${training.id}/retry`, { method: 'POST' }),
+                                  )
+                                }
+                                disabled={busyId !== null}
+                                className={buttonClass('secondary', 'sm')}
+                              >
+                                {busy ? t('page.retrying') : t('page.retry')}
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() =>
-                                run(training.id, () =>
-                                  api(`${base}/${training.id}/retry`, { method: 'POST' }),
-                                )
-                              }
+                              onClick={() => setSettingsOf(training)}
                               disabled={busyId !== null}
                               className={buttonClass('secondary', 'sm')}
                             >
-                              {busy ? t('page.retrying') : t('page.retry')}
+                              {t('page.tagsOnlyAction')}
                             </button>
-                          )
+                          </div>
                         ) : confirmingId === training.id ? (
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-zinc-600">{t('page.confirmRemove')}</span>

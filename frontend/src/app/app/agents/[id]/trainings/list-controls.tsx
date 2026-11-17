@@ -5,6 +5,7 @@ import { buttonClass } from '@/components/ui';
 import { useT } from '@/i18n';
 import {
   hasActiveTrainingFilters,
+  tagTone,
   toggleItem,
   type TrainingListFilters,
 } from '@/lib/training-list';
@@ -54,7 +55,7 @@ export function TrainingFilters({
           onChange={(e) =>
             onChange({ type: e.target.value ? [e.target.value as TrainingView['type']] : [] })
           }
-          className={`${inputClass} mt-0 w-auto`}
+          className={`${inputClass} mt-0 w-auto!`}
         >
           <option value="">{t('page.allTypes')}</option>
           {TYPES.map((type) => (
@@ -69,7 +70,7 @@ export function TrainingFilters({
           onChange={(e) =>
             onChange({ status: e.target.value ? [e.target.value as TrainingView['status']] : [] })
           }
-          className={`${inputClass} mt-0 w-auto`}
+          className={`${inputClass} mt-0 w-auto!`}
         >
           <option value="">{t('page.allStatuses')}</option>
           {STATUSES.map((status) => (
@@ -98,10 +99,8 @@ export function TrainingFilters({
                 type="button"
                 aria-pressed={on}
                 onClick={() => onChange({ tags: toggleItem(filters.tags, tag) })}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  on
-                    ? 'border-brand-500 bg-brand-50 text-brand-700'
-                    : 'border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-2 transition-colors ${tagTone(tag)} ${
+                  on ? 'ring-zinc-700' : 'ring-transparent'
                 }`}
               >
                 {tag}

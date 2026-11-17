@@ -912,12 +912,19 @@ describe('treinamentos dos agentes', () => {
         await expect(service.updateSettings(tenantId, agentId, row.id, {})).rejects.toThrow();
       });
 
-      it('treinamento gerado pela função é recusado', async () => {
+      it('treinamento gerado pela função aceita tags, mas não expiração', async () => {
         const row = await existing({ managed: true });
+        await service.updateSettings(tenantId, agentId, row.id, { tags: ['Vendas'] });
+        expect((await stored(row.id)).tags).toEqual(['vendas']);
+
         expect(
-          await errorOf(service.updateSettings(tenantId, agentId, row.id, { tags: ['x'] })),
-        ).toMatchObject({ code: 'TRAINING_MANAGED_BY_FUNCTION' });
-        expect((await stored(row.id)).tags).toEqual([]);
+          await errorOf(
+            service.updateSettings(tenantId, agentId, row.id, {
+              expiresAt: inFuture().toISOString(),
+            }),
+          ),
+        ).toMatchObject({ code: 'TRAINING_MANAGED_NO_EXPIRY', status: 400 });
+        expect((await stored(row.id)).expiresAt).toBeNull();
       });
 
       it('expirado é recusado com TRAINING_EXPIRED (409)', async () => {
