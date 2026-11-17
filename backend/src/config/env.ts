@@ -206,6 +206,14 @@ export const envSchema = z.object({
   VIBECODE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   /** Créditos debitados por campo revisado com a chave da CRMThink. */
   REVIEW_CREDITS_PER_FIELD: z.coerce.number().int().nonnegative().default(2),
+  /**
+   * Créditos debitados por análise de alucinação com a chave da CRMThink. Ausente (ou vazio) vale o
+   * preço de um campo revisado; vazio nunca vira 0, que deixaria a análise de graça.
+   */
+  HALLUCINATION_CREDITS_PER_ANALYSIS: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().nonnegative().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

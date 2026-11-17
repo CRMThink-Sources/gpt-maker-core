@@ -282,11 +282,18 @@ export function UsageSection({ cycleStart }: { cycleStart: string | null }) {
                           {t('usage.functionReview')}
                         </span>
                       )}
+                      {row.kind === 'HALLUCINATION_ANALYSIS' && (
+                        <span className="ml-2 text-xs text-zinc-500">
+                          {t('usage.hallucinationAnalysis')}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-4 text-right tabular-nums text-zinc-700">
                       {row.kind === 'FUNCTION_REVIEW'
                         ? t('usage.fields', { count: row.responses })
-                        : credits(format, row.responses)}
+                        : row.kind === 'HALLUCINATION_ANALYSIS'
+                          ? t('usage.analyses', { count: row.responses })
+                          : credits(format, row.responses)}
                     </td>
                     <td className="py-2 text-right tabular-nums text-zinc-900">
                       {credits(format, row.credits)}

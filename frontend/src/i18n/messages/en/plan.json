@@ -71,6 +71,8 @@
     "credits": "Credits",
     "noAgent": "No agent",
     "functionReview": "Function review",
+    "hallucinationAnalysis": "Hallucination analysis",
+    "analyses": "{count, plural, one {# analysis} other {# analyses}}",
     "fields": "{count, plural, one {# field} other {# fields}}",
     "total": "Total",
     "loadFailed": "Could not load the usage."

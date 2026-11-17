@@ -226,6 +226,8 @@ export const aiKeyViewSchema = z.object({
   verifiedAt: z.iso.datetime({ offset: true }).nullable(),
   /** Preço por campo com a chave da CRMThink. */
   creditsPerField: z.number().int().nonnegative(),
+  /** Preço de uma análise de alucinação com a chave da CRMThink; ausente, igual ao de um campo. */
+  creditsPerAnalysis: z.number().int().nonnegative().optional(),
   /** Há chave da CRMThink configurada: quem não tem chave própria ainda revisa. */
   platformAvailable: z.boolean(),
 });

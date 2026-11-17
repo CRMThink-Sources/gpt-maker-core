@@ -31,6 +31,8 @@ export class AiKeyService {
       last4: row?.last4 ?? null,
       verifiedAt: row?.verifiedAt.toISOString() ?? null,
       creditsPerField: this.env.REVIEW_CREDITS_PER_FIELD,
+      creditsPerAnalysis:
+        this.env.HALLUCINATION_CREDITS_PER_ANALYSIS ?? this.env.REVIEW_CREDITS_PER_FIELD,
       platformAvailable: !!platformKey(this.env),
     };
   }

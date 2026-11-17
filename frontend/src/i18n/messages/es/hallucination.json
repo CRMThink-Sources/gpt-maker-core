@@ -1,0 +1,98 @@
+{
+  "button": "Analizar alucinación",
+  "panel": {
+    "title": "¿El agente inventó algo?",
+    "intro": "Elija una conversación en la que el agente se equivocó. La IA compara lo que dijo con la base y sugiere la corrección."
+  },
+  "modal": {
+    "title": "Analizar alucinación",
+    "close": "Cerrar",
+    "back": "Volver"
+  },
+  "source": {
+    "label": "Origen",
+    "TEST": "Prueba",
+    "REAL": "Reales"
+  },
+  "list": {
+    "loading": "Cargando conversaciones…",
+    "empty": "No hay conversaciones en este origen.",
+    "more": "Cargar más",
+    "messages": "{count, plural, one {# mensaje} other {# mensajes}}",
+    "noDate": "sin fecha",
+    "choose": "Elegir"
+  },
+  "messages": {
+    "title": "Marque la respuesta que falló",
+    "optional": "(opcional)",
+    "hint": "Sin marcar nada, la IA revisa todas las respuestas del agente.",
+    "truncated": "{count, plural, one {Un mensaje anterior quedó} other {# mensajes anteriores quedaron}} fuera del análisis.",
+    "attachment": "[adjunto]",
+    "flag": "Marcar como sospechosa",
+    "flagged": "Sospechosa",
+    "loading": "Cargando la conversación…",
+    "noReply": "Esta conversación no tiene respuesta del agente para analizar."
+  },
+  "roles": {
+    "CUSTOMER": "Cliente",
+    "AGENT": "Agente",
+    "OTHER": "Otro"
+  },
+  "note": {
+    "label": "¿Qué estaba mal?",
+    "help": "Opcional. Ej.: \"el plazo de 5 días no existe\"."
+  },
+  "privacy": {
+    "own": "El texto de la conversación y de las respuestas de la función va a Vibecode, en su cuenta. Puede haber datos de clientes finales.",
+    "platform": "El texto de la conversación y de las respuestas de la función va a Vibecode, en la cuenta de CRMThink. Puede haber datos de clientes finales."
+  },
+  "cost": {
+    "none": "sin uso de créditos",
+    "credits": "{count, plural, one {# crédito} other {# créditos}}"
+  },
+  "analyze": {
+    "button": "Analizar ({cost})",
+    "running": "Analizando…"
+  },
+  "key": {
+    "required": "Para analizar, informe la clave de Vibecode.",
+    "configure": "Configurar la clave",
+    "askAdmin": "Pida a un administrador del portal."
+  },
+  "result": {
+    "title": "Resultado del análisis",
+    "none": "La IA no encontró afirmaciones del agente para revisar.",
+    "claim": "El agente dijo",
+    "source": "Origen en la base: {label}",
+    "sourceItem": "Origen en la base: {label}, elemento {number}",
+    "charged": "Costo: {cost}.",
+    "again": "Analizar otra conversación",
+    "behaviorNote": "La causa está en el comportamiento del agente: no hay texto para aplicar."
+  },
+  "verdict": {
+    "SUPPORTED": "Respaldada por la base",
+    "UNSUPPORTED": "Sin base",
+    "CONTRADICTS": "Contradice la base"
+  },
+  "cause": {
+    "MISSING_IN_BASE": "Falta en la base",
+    "CONFLICTING_BASE": "Elementos de la base en conflicto",
+    "PERMISSIVE_BEHAVIOR": "Comportamiento permisivo",
+    "MODEL_EXTRAPOLATION": "El modelo fue más allá de la base"
+  },
+  "suggestion": {
+    "add": "Sugerencia: nuevo elemento en \"{field}\"",
+    "replace": "Sugerencia: cambiar el texto del elemento {number} de \"{field}\"",
+    "apply": "Aplicar",
+    "applied": "Aplicado al formulario (aún sin guardar)",
+    "stale": "El formulario cambió y la sugerencia ya no cabe."
+  },
+  "readOnly": {
+    "GENERIC": "Solo lectura: la sugerencia no cabe en este campo.",
+    "FULL": "Solo lectura: el campo ya está en el máximo de elementos.",
+    "LIMIT": "Solo lectura: algún texto supera el límite de caracteres del campo.",
+    "REQUIRED": "Solo lectura: falta un campo obligatorio del elemento."
+  },
+  "failed": "No se pudo analizar la conversación. Inténtelo de nuevo.",
+  "loadFailed": "No se pudieron cargar las conversaciones ahora. Inténtelo en unos instantes."
+}
