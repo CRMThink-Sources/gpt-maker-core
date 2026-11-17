@@ -119,7 +119,7 @@ describe('conversas do agente para análise', () => {
           request: {
             method: 'GET',
             urlPath: '/v2/workspace/ws-test/chats',
-            queryParameters: { page: { equalTo: String(page) } },
+            queryParameters: { page: { equalTo: String(page + 1) } },
           },
           response: { status: 200, jsonBody: body },
         }),
@@ -332,7 +332,7 @@ describe('conversas do agente para análise', () => {
       expect(result.nextCursor).toBeNull();
     });
 
-    it('API com página começando em 1 (a 0 repete a 1) não trunca a lista', async () => {
+    it('lista a partir da página 1 do GPTMaker (a 0 repete a 1) sem truncar', async () => {
       const owner = await newTenantAgent('gm-a');
       const first = Array.from({ length: 12 }, (_, i) =>
         chat(owner, `a${i}`, { time: 1_700_000_000 + i }),
@@ -340,8 +340,7 @@ describe('conversas do agente para análise', () => {
       const second = Array.from({ length: 12 }, (_, i) =>
         chat(owner, `b${i}`, { time: 1_700_001_000 + i }),
       );
-      // Página 0 e 1 devolvem o mesmo conteúdo; a 2 traz chats novos.
-      await stubChats([first, first, second, []]);
+      await stubChats([first, second, []]);
 
       const result = await service.list(owner.tenantId, owner.agentId, 'REAL', 0);
 
@@ -403,6 +402,40 @@ describe('conversas do agente para análise', () => {
         ['m5', 'OTHER', 'transferido', false],
       ]);
       expect(result.omitted).toBe(0);
+    });
+
+    it('lê as páginas do GPTMaker a partir da 1 (a mais recente primeiro) e ignora avisos do sistema', async () => {
+      const owner = await newTenantAgent('gm-a');
+      const id = chatId(owner, 'chat1');
+      const stubPage = (page: number, body: unknown[]) =>
+        wiremock.stub({
+          request: {
+            method: 'GET',
+            urlPath: `/v2/chat/${encodeURIComponent(id)}/messages`,
+            queryParameters: { page: { equalTo: String(page) } },
+          },
+          response: { status: 200, jsonBody: body },
+        });
+      // Como no GPTMaker real: a página 1 é o bloco mais recente; cada página vem em ordem crescente.
+      await stubPage(1, [
+        { id: 'm3', role: 'user', text: 'Terceira', time: 1_700_000_300_000 },
+        {
+          id: 'n1',
+          role: 'system',
+          type: 'NOTIFICATION',
+          text: 'Atendimento transferido',
+          time: 1_700_000_350_000,
+        },
+      ]);
+      await stubPage(2, [
+        { id: 'm1', role: 'user', text: 'Primeira', time: 1_700_000_100_000 },
+        { id: 'm2', role: 'assistant', type: 'TEXT', text: 'Segunda', time: 1_700_000_200_000 },
+      ]);
+      await stubPage(3, []);
+
+      const result = await service.messages(owner.tenantId, owner.agentId, 'REAL', id);
+
+      expect(result.messages.map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
     });
 
     it('conversa longa: fica com as 50 mais recentes e informa as omitidas', async () => {

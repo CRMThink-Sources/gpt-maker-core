@@ -22,7 +22,10 @@ import {
 
 /** Conversas por resposta da lista (as de teste e as reais). */
 export const CONVERSATIONS_PAGE_SIZE = 20;
-/** Página pedida ao GPTMaker; o máximo aceito não é documentado, então um valor conservador. */
+/**
+ * Página pedida ao GPTMaker. A listagem de chats aceita até 200 (acima disso responde 400);
+ * 50 é conservador (docs/gptmaker-api.md, §7, validado em 2026-11-17).
+ */
 const GPTMAKER_PAGE_SIZE = 50;
 /** Páginas do GPTMaker lidas por pedido da lista (o workspace é de todos os tenants; design D3). */
 const MAX_LIST_PAGES = 5;
@@ -166,7 +169,8 @@ export class ConversationSourceService {
     const found = new Map<string, ConversationSummary>();
     const seenIds = new Set<string>();
     let stale = 0;
-    let page = cursor;
+    // O cursor da tela começa em 0; a paginação do GPTMaker é 1-based (a página 0 repete a 1).
+    let page = cursor + 1;
     let exhausted = false;
     try {
       for (let read = 0; read < MAX_LIST_PAGES && found.size < CONVERSATIONS_PAGE_SIZE; read++) {
@@ -181,7 +185,7 @@ export class ConversationSourceService {
           break;
         }
         // Páginas que só repetem chats já vistos (a API pode ignorar `page`) encerram a lista, mas
-        // só depois de duas seguidas: se `page` for 1-based, a página 0 repete a 1 e a lista segue.
+        // só depois de duas seguidas, por tolerância a uma repetição isolada.
         const fresh = chats.filter((chat) => !seenIds.has(chat.id));
         for (const chat of chats) seenIds.add(chat.id);
         stale = fresh.length === 0 ? stale + 1 : 0;
@@ -199,7 +203,7 @@ export class ConversationSourceService {
     const conversations = [...found.values()].sort(
       (a, b) => (b.at ?? '').localeCompare(a.at ?? '') || a.id.localeCompare(b.id),
     );
-    return { conversations, nextCursor: exhausted ? null : page };
+    return { conversations, nextCursor: exhausted ? null : page - 1 };
   }
 
   private async realMessages(
@@ -211,7 +215,10 @@ export class ConversationSourceService {
     try {
       const seen = new Map<string, ConversationMessage & { order: number }>();
       let capped = true;
-      for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
+      // Páginas 1-based: a página 1 é o bloco mais recente e as seguintes vão para trás; dentro de
+      // cada página a ordem é crescente. Uma página pode vir com menos itens que `pageSize` sem ser
+      // a última, então só a vazia (ou repetida) encerra a leitura.
+      for (let page = 1; page <= MAX_MESSAGE_PAGES; page++) {
         const items = await this.gptmaker.listChatMessages(conversationId, {
           page,
           pageSize: GPTMAKER_PAGE_SIZE,
@@ -219,6 +226,9 @@ export class ConversationSourceService {
         const before = seen.size;
         for (const item of items) {
           if (seen.has(item.id)) continue;
+          // Avisos do sistema (transferência, etc.) são `NOTIFICATION`: não são fala de ninguém e
+          // gastariam o limite de mensagens da análise.
+          if (item.type === 'NOTIFICATION') continue;
           const text = (item.text ?? '').trim();
           const at = normalizeTime(item.time);
           seen.set(item.id, {
