@@ -315,6 +315,64 @@ describe('importação de treinamentos', () => {
     });
   });
 
+  describe('tags e expiração', () => {
+    it('arquivo antigo, sem tags, importa normalmente e sem tags no create', async () => {
+      const { run, trainings } = setup();
+
+      const result = await run(file([text('Preços'), site(), video()]));
+
+      expect(result.summary).toMatchObject({ created: 3, rejected: 0 });
+      for (const call of trainings.create.mock.calls) {
+        expect(call[2]).not.toHaveProperty('tags');
+      }
+    });
+
+    it('tags do arquivo são normalizadas: "Preços" e "preços" viram uma só', async () => {
+      const { run, trainings } = setup();
+
+      const result = await run(
+        file([
+          text('a', { tags: ['Preços', 'preços', '  Frete   Grátis '] }),
+          { ...site(), tags: ['SITE'] },
+          { ...video(), tags: ['Vídeo'] },
+        ]),
+      );
+
+      expect(result.summary).toMatchObject({ created: 3, rejected: 0 });
+      expect(
+        trainings.create.mock.calls.map((call) => (call[2] as { tags?: string[] }).tags),
+      ).toEqual([['preços', 'frete grátis'], ['site'], ['vídeo']]);
+    });
+
+    it('item com expiresAt é recusado com o motivo e nada é criado para ele', async () => {
+      const { run, trainings } = setup();
+
+      const result = await run(
+        file([text('ok'), text('vence', { expiresAt: '2030-01-01T00:00:00.000Z' }), text('ok 2')]),
+      );
+
+      expect(result.summary).toMatchObject({ created: 2, rejected: 1 });
+      expect(result.items[1]).toMatchObject({
+        position: 2,
+        status: 'REJECTED',
+        trainingId: null,
+        reason: { code: 'INVALID_ITEM' },
+      });
+      expect(result.items[1]?.reason?.message).toMatch(/expiresAt/);
+      expect(trainings.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('tags acima do limite recusam só o item', async () => {
+      const { run, trainings } = setup();
+      const many = Array.from({ length: 11 }, (_, n) => `tag${n}`);
+
+      const result = await run(file([text('a', { tags: many }), text('b')]));
+
+      expect(result.items.map((item) => item.status)).toEqual(['REJECTED', 'CREATED']);
+      expect(trainings.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('arquivo recusado por inteiro', () => {
     it.each([
       ['versão desconhecida', file([text('a')], 2), 'TRAINING_IMPORT_UNSUPPORTED_VERSION'],
@@ -409,6 +467,29 @@ describe('item do arquivo de exportação', () => {
     expect(
       toTransferItem(row({ type: 'VIDEO', url: 'https://youtu.be/x', id: 'interno' })),
     ).toEqual({ type: 'VIDEO', url: 'https://youtu.be/x' });
+  });
+
+  it('tags saem nos três tipos e a expiração nunca vai no arquivo', () => {
+    const settings = { tags: ['preços', 'frete'], expiresAt: new Date('2030-01-01') };
+    const text = toTransferItem(row({ content: 'Preços', ...settings }));
+    const site = toTransferItem(
+      row({ type: 'WEBSITE', url: 'https://a.com', trainingSubPages: true, ...settings }),
+    );
+    const video = toTransferItem(row({ type: 'VIDEO', url: 'https://youtu.be/x', ...settings }));
+
+    expect(text).toEqual({ type: 'TEXT', text: 'Preços', tags: ['preços', 'frete'] });
+    expect(site).toMatchObject({ type: 'WEBSITE', tags: ['preços', 'frete'] });
+    expect(video).toEqual({ type: 'VIDEO', url: 'https://youtu.be/x', tags: ['preços', 'frete'] });
+    for (const item of [text, site, video]) {
+      expect(JSON.stringify(item)).not.toMatch(/expires|expired|2030/i);
+    }
+  });
+
+  it('sem tags (lista vazia) o item sai sem o campo', () => {
+    expect(toTransferItem(row({ content: 'Preços', tags: [] }))).toEqual({
+      type: 'TEXT',
+      text: 'Preços',
+    });
   });
 
   it('documento e linha sem conteúdo ficam de fora', () => {

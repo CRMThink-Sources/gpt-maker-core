@@ -28,3 +28,18 @@ describe('rotas de exportar e importar treinamentos', () => {
     expect(Reflect.getMetadata('path', handler('import'))).toBe('import');
   });
 });
+
+describe('rota de tags e expiração', () => {
+  it('exige permissão de gerenciar: consulta é recusada pelo guard', () => {
+    expect(access('updateSettings')).toBe('manage');
+    expect(guards('updateSettings')).toContain(AppSessionGuard);
+  });
+
+  it('fica em PATCH :id/settings, sob o agente do tenant', () => {
+    expect(Reflect.getMetadata('path', handler('updateSettings'))).toBe(':id/settings');
+  });
+
+  it('a listagem é de leitura', () => {
+    expect(access('list')).toBe('read');
+  });
+});

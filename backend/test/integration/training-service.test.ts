@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
+import { listTrainingsQuerySchema } from '@gptmaker/contracts';
 import { eq } from 'drizzle-orm';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Redis from 'ioredis';
@@ -52,6 +53,9 @@ describe('treinamentos dos agentes', () => {
   let redis: Redis;
   let storage: FakeStorage;
   let service: TrainingService;
+  /** Primeira página sem filtros (tamanho padrão cobre os testes antigos). */
+  const listed = async (tenantId: string, agentId: string) =>
+    (await service.list(tenantId, agentId, listTrainingsQuerySchema.parse({}))).trainings;
   let client: GptMakerClient;
   const ENV = {
     API_PUBLIC_URL: API,
@@ -315,7 +319,7 @@ describe('treinamentos dos agentes', () => {
       await service.applyCallback(token, { status: 'DONE' });
 
       expect(await stored(view.id)).toMatchObject({ status: 'DONE', error: null });
-      expect((await service.list(tenantId, agentId))[0]).toMatchObject({ status: 'DONE' });
+      expect((await listed(tenantId, agentId))[0]).toMatchObject({ status: 'DONE' });
     });
 
     it('falha guarda o motivo; conclusão depois (reprocessado) limpa', async () => {
@@ -495,7 +499,7 @@ describe('treinamentos dos agentes', () => {
       expect(await wiremock.count('DELETE', TRAINING_PATH('tr-doc'))).toBe(1);
       expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
       expect(storage.objects.has(key)).toBe(false);
-      expect(await service.list(tenantId, agentId)).toEqual([]);
+      expect(await listed(tenantId, agentId)).toEqual([]);
     });
 
     it('já ausente no GPTMaker: remove só aqui', async () => {
@@ -739,13 +743,539 @@ describe('treinamentos dos agentes', () => {
     });
   });
 
+  describe('tags e expiração (spec training-tags, training-expiration)', () => {
+    const HOUR = 3_600_000;
+    const inFuture = (ms = 24 * HOUR) => new Date(Date.now() + ms);
+    const REMOTE = (id: string) => `/v2/training/${id}`;
+    const stored = async (id: string) =>
+      (await db.select().from(training).where(eq(training.id, id)))[0]!;
+
+    async function existing(values: Partial<typeof training.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(training)
+        .values({
+          tenantId,
+          agentId,
+          type: 'TEXT',
+          content: 'Trocas em 7 dias',
+          gptmakerTrainingId: 'tr-1',
+          status: 'DONE',
+          ...values,
+        })
+        .returning();
+      return row!;
+    }
+
+    async function stubRemote(method: 'PUT' | 'DELETE', id: string) {
+      await wiremock.stub({
+        request: { method, urlPath: REMOTE(id) },
+        response: { status: 200, jsonBody: { success: true } },
+      });
+    }
+
+    async function onPlan(maxTrainings: number | null) {
+      const planSpaId = `plan-${randomUUID()}`;
+      await db.insert(planEntitlement).values({
+        planSpaId,
+        planType: 'subscription',
+        creditsPerCycle: 1000,
+        maxTrainings,
+        maxDocumentStorageMb: null,
+      });
+      await db.insert(subscriptionState).values({
+        tenantId,
+        subscriptionId: `sub-${randomUUID()}`,
+        status: 'active',
+        modality: 'stripe',
+        planId: planSpaId,
+        version: 1,
+      });
+    }
+
+    describe('criação', () => {
+      it('grava tags normalizadas e a expiração, e a view devolve os campos', async () => {
+        await stubCreate();
+        await stubList('TEXT', []);
+        const expiresAt = inFuture();
+
+        const view = await service.create(tenantId, agentId, {
+          type: 'TEXT',
+          text: 'Oi',
+          tags: ['Preços', ' preços ', 'Frete  Grátis'],
+          expiresAt: expiresAt.toISOString(),
+        });
+
+        expect(view).toMatchObject({
+          tags: ['preços', 'frete grátis'],
+          expiresAt: expiresAt.toISOString(),
+          expiredAt: null,
+        });
+        expect(await stored(view.id)).toMatchObject({
+          tags: ['preços', 'frete grátis'],
+          expiresAt,
+          expiredAt: null,
+        });
+      });
+
+      it.each([
+        ['site', { type: 'WEBSITE' as const, url: 'https://loja.exemplo.com.br' }],
+        ['vídeo', { type: 'VIDEO' as const, url: 'https://youtu.be/x' }],
+      ])('%s também aceita tags e expiração', async (_nome, input) => {
+        await stubCreate();
+        await stubList(input.type, []);
+
+        const view = await service.create(tenantId, agentId, {
+          ...input,
+          tags: ['ofertas'],
+          expiresAt: inFuture().toISOString(),
+        } as never);
+
+        expect(view.tags).toEqual(['ofertas']);
+        expect(view.expiresAt).not.toBeNull();
+      });
+
+      it('sem tags nem expiração: lista vazia e sem prazo', async () => {
+        await stubCreate();
+        await stubList('TEXT', []);
+        const view = await service.create(tenantId, agentId, { type: 'TEXT', text: 'Oi' });
+        expect(view).toMatchObject({ tags: [], expiresAt: null, expiredAt: null });
+      });
+
+      it('expiração no passado é recusada sem chamar o GPTMaker', async () => {
+        await stubCreate();
+        await expect(
+          service.create(tenantId, agentId, {
+            type: 'TEXT',
+            text: 'Oi',
+            expiresAt: new Date(Date.now() - HOUR).toISOString(),
+          }),
+        ).rejects.toThrow();
+        expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
+        expect(await rows()).toHaveLength(0);
+      });
+
+      it('treinamento gerado pela função não aceita tags nem expiração', async () => {
+        await stubCreate();
+        const error = await errorOf(
+          service.create(
+            tenantId,
+            agentId,
+            { type: 'TEXT', text: 'Oi', tags: ['x'] },
+            { managed: true },
+          ),
+        );
+        expect(error).toMatchObject({ code: 'TRAINING_MANAGED_NO_SETTINGS', status: 400 });
+        expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
+      });
+    });
+
+    describe('ajustes (updateSettings)', () => {
+      it('site DONE continua DONE e o GPTMaker não é chamado', async () => {
+        const row = await existing({
+          type: 'WEBSITE',
+          content: null,
+          url: 'https://a.com',
+          status: 'DONE',
+        });
+        const expiresAt = inFuture();
+
+        const view = await service.updateSettings(tenantId, agentId, row.id, {
+          tags: ['Catálogo', 'catálogo'],
+          expiresAt: expiresAt.toISOString(),
+        });
+
+        expect(view).toMatchObject({
+          status: 'DONE',
+          tags: ['catálogo'],
+          expiresAt: expiresAt.toISOString(),
+        });
+        expect(await stored(row.id)).toMatchObject({ status: 'DONE', tags: ['catálogo'] });
+        for (const method of ['POST', 'PUT', 'DELETE', 'GET']) {
+          expect(await wiremock.count(method, TRAININGS_PATH)).toBe(0);
+          expect(await wiremock.count(method, REMOTE('tr-1'))).toBe(0);
+        }
+      });
+
+      it('só tags não mexe na expiração e expiresAt null limpa o prazo', async () => {
+        const expiresAt = inFuture();
+        const row = await existing({ tags: ['a'], expiresAt });
+
+        await service.updateSettings(tenantId, agentId, row.id, { tags: ['b'] });
+        expect(await stored(row.id)).toMatchObject({ tags: ['b'], expiresAt });
+
+        await service.updateSettings(tenantId, agentId, row.id, { expiresAt: null });
+        expect(await stored(row.id)).toMatchObject({ tags: ['b'], expiresAt: null });
+      });
+
+      it('objeto vazio é recusado', async () => {
+        const row = await existing();
+        await expect(service.updateSettings(tenantId, agentId, row.id, {})).rejects.toThrow();
+      });
+
+      it('treinamento gerado pela função é recusado', async () => {
+        const row = await existing({ managed: true });
+        expect(
+          await errorOf(service.updateSettings(tenantId, agentId, row.id, { tags: ['x'] })),
+        ).toMatchObject({ code: 'TRAINING_MANAGED_BY_FUNCTION' });
+        expect((await stored(row.id)).tags).toEqual([]);
+      });
+
+      it('expirado é recusado com TRAINING_EXPIRED (409)', async () => {
+        const row = await existing({ status: 'EXPIRED', expiredAt: new Date() });
+        expect(
+          await errorOf(service.updateSettings(tenantId, agentId, row.id, { tags: ['x'] })),
+        ).toMatchObject({ code: 'TRAINING_EXPIRED', status: 409 });
+        expect((await stored(row.id)).tags).toEqual([]);
+      });
+
+      it('agente de outro tenant: AGENT_NOT_FOUND e nada muda', async () => {
+        const row = await existing();
+        const other = await newTenantAgent('OUT_OF_SYNC');
+        expect(
+          await errorOf(service.updateSettings(other.tenantId, agentId, row.id, { tags: ['x'] })),
+        ).toMatchObject({ code: 'AGENT_NOT_FOUND' });
+        // Agente do outro tenant com o id do treinamento: o treinamento não existe para ele.
+        expect(
+          await errorOf(
+            service.updateSettings(other.tenantId, other.agentId, row.id, { tags: ['x'] }),
+          ),
+        ).toMatchObject({ code: 'TRAINING_NOT_FOUND' });
+        expect((await stored(row.id)).tags).toEqual([]);
+      });
+    });
+
+    describe('listagem paginada e filtros', () => {
+      const ids = (view: { trainings: Array<{ text?: string | null }> }) =>
+        view.trainings.map((item) => item.text);
+      const query = (params: Record<string, string | number> = {}) =>
+        listTrainingsQuerySchema.parse(
+          Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+        );
+
+      it('45 itens: páginas de 20, 20 e 5, na ordem de criação, com total certo', async () => {
+        await db.insert(training).values(
+          Array.from({ length: 45 }, (_, n) => ({
+            tenantId,
+            agentId,
+            type: 'TEXT' as const,
+            content: `item ${String(n).padStart(2, '0')}`,
+            createdAt: new Date(1_000 + n),
+          })),
+        );
+
+        const pages = [];
+        for (const page of [1, 2, 3]) {
+          pages.push(await service.list(tenantId, agentId, query({ page })));
+        }
+
+        expect(pages.map((p) => p.trainings.length)).toEqual([20, 20, 5]);
+        expect(pages[0]!.page).toEqual({ page: 1, pageSize: 20, total: 45, totalPages: 3 });
+        expect(ids(pages[0]!)[0]).toBe('item 00');
+        expect(ids(pages[1]!)[0]).toBe('item 20');
+        expect(ids(pages[2]!)).toEqual(['item 40', 'item 41', 'item 42', 'item 43', 'item 44']);
+        const all = pages.flatMap((p) => p.trainings.map((t) => t.id));
+        expect(new Set(all).size).toBe(45);
+      });
+
+      it('página além do fim vem vazia, com o total certo', async () => {
+        await db.insert(training).values(
+          Array.from({ length: 3 }, (_, n) => ({
+            tenantId,
+            agentId,
+            type: 'TEXT' as const,
+            content: `i${n}`,
+          })),
+        );
+        const result = await service.list(tenantId, agentId, query({ page: 9 }));
+        expect(result.trainings).toEqual([]);
+        expect(result.page).toEqual({ page: 9, pageSize: 20, total: 3, totalPages: 1 });
+      });
+
+      it('lista vazia: total 0 e zero páginas', async () => {
+        const result = await service.list(tenantId, agentId, query());
+        expect(result.page).toMatchObject({ total: 0, totalPages: 0 });
+        expect(result.availableTags).toEqual([]);
+      });
+
+      describe('filtros', () => {
+        beforeEach(async () => {
+          await db.insert(training).values([
+            {
+              tenantId,
+              agentId,
+              type: 'TEXT',
+              content: 'Tabela de Preços',
+              status: 'DONE',
+              tags: ['preços'],
+              createdAt: new Date(1),
+            },
+            {
+              tenantId,
+              agentId,
+              type: 'TEXT',
+              content: 'Prazo de entrega',
+              status: 'FAILED',
+              tags: ['frete', 'preços'],
+              createdAt: new Date(2),
+            },
+            {
+              tenantId,
+              agentId,
+              type: 'WEBSITE',
+              url: 'https://loja.exemplo.com.br/preços',
+              status: 'DONE',
+              tags: ['site'],
+              createdAt: new Date(3),
+            },
+            {
+              tenantId,
+              agentId,
+              type: 'VIDEO',
+              url: 'https://youtu.be/frete',
+              status: 'PROCESSING',
+              createdAt: new Date(4),
+            },
+            {
+              tenantId,
+              agentId,
+              type: 'DOCUMENT',
+              documentName: 'Manual de Preços.pdf',
+              status: 'EXPIRED',
+              tags: ['manual'],
+              createdAt: new Date(5),
+            },
+          ]);
+        });
+
+        const found = async (params: Record<string, string>) => {
+          const result = await service.list(tenantId, agentId, query(params));
+          return { result, count: result.page.total };
+        };
+
+        it('busca é insensível a maiúsculas e olha conteúdo, url e nome do documento', async () => {
+          const { result } = await found({ q: 'PREÇOS' });
+          expect(result.page.total).toBe(3);
+          expect(result.trainings.map((t) => t.type)).toEqual(['TEXT', 'WEBSITE', 'DOCUMENT']);
+        });
+
+        it.each([
+          ['tipo', { type: 'TEXT' }, 2],
+          ['vários tipos (OU)', { type: 'TEXT,VIDEO' }, 3],
+          ['estado', { status: 'DONE' }, 2],
+          ['vários estados (OU)', { status: 'FAILED,EXPIRED' }, 2],
+          ['tag', { tags: 'preços' }, 2],
+          ['várias tags (OU)', { tags: 'frete,site' }, 2],
+          ['tag normalizada no filtro', { tags: 'PREÇOS' }, 2],
+          ['tag inexistente', { tags: 'nada' }, 0],
+        ])('filtro por %s', async (_nome, params, total) => {
+          expect((await found(params)).count).toBe(total);
+        });
+
+        it('filtros combinados valem em conjunto (E entre eles)', async () => {
+          const { result } = await found({
+            q: 'preços',
+            type: 'TEXT',
+            status: 'DONE',
+            tags: 'preços',
+          });
+          expect(result.trainings.map((t) => t.text)).toEqual(['Tabela de Preços']);
+          expect(result.page.total).toBe(1);
+        });
+
+        it('total e páginas respeitam o filtro', async () => {
+          const result = await service.list(
+            tenantId,
+            agentId,
+            query({ tags: 'preços', pageSize: 1, page: 2 }),
+          );
+          expect(result.trainings.map((t) => t.text)).toEqual(['Prazo de entrega']);
+          expect(result.page).toEqual({ page: 2, pageSize: 1, total: 2, totalPages: 2 });
+        });
+
+        it('availableTags: todas as tags do agente, ordenadas, mesmo com filtro aplicado', async () => {
+          const result = await service.list(tenantId, agentId, query({ type: 'VIDEO' }));
+          expect(result.availableTags).toEqual(['frete', 'manual', 'preços', 'site']);
+        });
+      });
+
+      it('busca com "%" e "_" é literal, não curinga', async () => {
+        await db.insert(training).values([
+          { tenantId, agentId, type: 'TEXT', content: 'Desconto de 50% hoje' },
+          { tenantId, agentId, type: 'TEXT', content: 'Desconto de 500 reais' },
+          { tenantId, agentId, type: 'TEXT', content: 'codigo_a1' },
+          { tenantId, agentId, type: 'TEXT', content: 'codigoXa1' },
+        ]);
+
+        expect(ids(await service.list(tenantId, agentId, query({ q: '50%' })))).toEqual([
+          'Desconto de 50% hoje',
+        ]);
+        expect(ids(await service.list(tenantId, agentId, query({ q: 'o_a' })))).toEqual([
+          'codigo_a1',
+        ]);
+        expect(ids(await service.list(tenantId, agentId, query({ q: '%' })))).toEqual([
+          'Desconto de 50% hoje',
+        ]);
+      });
+
+      it('removidos, outro agente e outro tenant não aparecem nem vazam tags', async () => {
+        const sibling = await newTenantAgent('OUT_OF_SYNC');
+        await db.update(agent).set({ tenantId }).where(eq(agent.id, sibling.agentId));
+        const stranger = await newTenantAgent('OUT_OF_SYNC');
+        await db.insert(training).values([
+          { tenantId, agentId, type: 'TEXT', content: 'meu', tags: ['minha'] },
+          {
+            tenantId,
+            agentId,
+            type: 'TEXT',
+            content: 'apagado',
+            tags: ['apagada'],
+            deletedAt: new Date(),
+          },
+          { tenantId, agentId: sibling.agentId, type: 'TEXT', content: 'irmão', tags: ['irma'] },
+          {
+            tenantId: stranger.tenantId,
+            agentId: stranger.agentId,
+            type: 'TEXT',
+            content: 'alheio',
+            tags: ['alheia'],
+          },
+        ]);
+
+        const result = await service.list(tenantId, agentId, query());
+
+        expect(ids(result)).toEqual(['meu']);
+        expect(result.availableTags).toEqual(['minha']);
+        expect(await errorOf(service.list(stranger.tenantId, agentId, query()))).toMatchObject({
+          code: 'AGENT_NOT_FOUND',
+        });
+      });
+
+      it('usage é do tenant inteiro, independente de filtros e de página', async () => {
+        await db.insert(training).values([
+          { tenantId, agentId, type: 'TEXT', content: 'a', tags: ['x'] },
+          { tenantId, agentId, type: 'TEXT', content: 'b' },
+          { tenantId, agentId, type: 'VIDEO', url: 'https://youtu.be/c' },
+        ]);
+
+        const filtered = await service.list(tenantId, agentId, query({ tags: 'x' }));
+        const empty = await service.list(tenantId, agentId, query({ q: 'nao-existe' }));
+
+        expect(filtered.page.total).toBe(1);
+        expect(empty.page.total).toBe(0);
+        expect(filtered.usage.trainings.used).toBe(3);
+        expect(empty.usage).toEqual(filtered.usage);
+      });
+    });
+
+    describe('treinamento expirado', () => {
+      it('usage e limite ignoram EXPIRED: expirar libera a cota', async () => {
+        await onPlan(1);
+        const row = await existing({ expiresAt: new Date(Date.now() - HOUR) });
+        await stubCreate();
+        await stubList('TEXT', []);
+        await stubRemote('DELETE', 'tr-1');
+
+        expect(await service.usage(tenantId)).toMatchObject({ trainings: { used: 1, limit: 1 } });
+        expect(
+          await errorOf(service.create(tenantId, agentId, { type: 'TEXT', text: 'novo' })),
+        ).toMatchObject({ code: 'PLAN_TRAINING_LIMIT' });
+
+        expect(await service.expire({ id: row.id, tenantId, agentId })).toBe(true);
+
+        expect(await service.usage(tenantId)).toMatchObject({ trainings: { used: 0, limit: 1 } });
+        await expect(
+          service.create(tenantId, agentId, { type: 'TEXT', text: 'novo' }),
+        ).resolves.toBeDefined();
+      });
+
+      it('bytes de documento expirado não contam no uso', async () => {
+        await existing({ type: 'DOCUMENT', content: null, documentSizeBytes: 4000 });
+        await existing({
+          type: 'DOCUMENT',
+          content: null,
+          documentSizeBytes: 9000,
+          gptmakerTrainingId: 'tr-expirado',
+          status: 'EXPIRED',
+        });
+        expect((await service.usage(tenantId)).documentBytes.used).toBe(4000);
+      });
+
+      it('expirado continua listado, com status EXPIRED e expiredAt', async () => {
+        const expiredAt = new Date();
+        await existing({ status: 'EXPIRED', expiredAt });
+        const [view] = await listed(tenantId, agentId);
+        expect(view).toMatchObject({ status: 'EXPIRED', expiredAt: expiredAt.toISOString() });
+      });
+
+      it('updateText e retry são recusados com TRAINING_EXPIRED, sem chamar o GPTMaker', async () => {
+        await stubRemote('PUT', 'tr-1');
+        await stubCreate();
+        const row = await existing({ status: 'EXPIRED', expiredAt: new Date() });
+
+        for (const call of [
+          () => service.updateText(tenantId, agentId, row.id, { text: 'Outro' }),
+          () => service.retry(tenantId, agentId, row.id),
+        ]) {
+          expect(await errorOf(call())).toMatchObject({ code: 'TRAINING_EXPIRED', status: 409 });
+        }
+        expect(await wiremock.count('PUT', REMOTE('tr-1'))).toBe(0);
+        expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
+        expect(await stored(row.id)).toMatchObject({
+          status: 'EXPIRED',
+          content: 'Trocas em 7 dias',
+        });
+      });
+
+      it('remover expirado só marca deletedAt, sem chamar o GPTMaker', async () => {
+        await stubRemote('DELETE', 'tr-1');
+        const row = await existing({ status: 'EXPIRED', expiredAt: new Date() });
+
+        await service.remove(tenantId, agentId, row.id);
+
+        expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+        expect(await wiremock.count('DELETE', REMOTE('tr-1'))).toBe(0);
+        expect(await listed(tenantId, agentId)).toEqual([]);
+      });
+
+      it('remover expirado funciona mesmo com o GPTMaker fora do ar', async () => {
+        await wiremock.stub({
+          request: { method: 'DELETE', urlPath: REMOTE('tr-1') },
+          response: { status: 500, jsonBody: { error: 'falhou' } },
+        });
+        const row = await existing({ status: 'EXPIRED', expiredAt: new Date() });
+        await expect(service.remove(tenantId, agentId, row.id)).resolves.toBeUndefined();
+        expect((await stored(row.id)).deletedAt).toBeInstanceOf(Date);
+      });
+
+      it('callback tardio de expirado é ignorado e não ressuscita', async () => {
+        const row = await existing({
+          status: 'EXPIRED',
+          expiredAt: new Date(),
+          error: null,
+          callbackTokenHash: hashCallbackToken('tk-tardio'),
+        });
+
+        await service.applyCallback('tk-tardio', { status: 'DONE', trainingId: 'tr-novo' });
+        await service.applyCallback('tk-tardio', { status: 'FAILED', error: 'x' });
+
+        expect(await stored(row.id)).toMatchObject({
+          status: 'EXPIRED',
+          error: null,
+          gptmakerTrainingId: 'tr-1',
+        });
+      });
+    });
+  });
+
   it('agente de outro tenant: 404 sem chamar o GPTMaker', async () => {
     await stubCreate();
     const other = await newTenantAgent('OUT_OF_SYNC');
     await expect(
       service.create(other.tenantId, agentId, { type: 'TEXT', text: 'x' }),
     ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
-    await expect(service.list(other.tenantId, agentId)).rejects.toMatchObject({
+    await expect(
+      service.list(other.tenantId, agentId, listTrainingsQuerySchema.parse({})),
+    ).rejects.toMatchObject({
       code: 'AGENT_NOT_FOUND',
     });
     expect(await wiremock.count('POST', TRAININGS_PATH)).toBe(0);
@@ -764,9 +1294,6 @@ describe('treinamentos dos agentes', () => {
       { tenantId, agentId, type: 'TEXT', content: 'dois', createdAt: new Date(2000) },
       { tenantId, agentId, type: 'TEXT', content: 'removido', deletedAt: new Date() },
     ]);
-    expect((await service.list(tenantId, agentId)).map((view) => view.text)).toEqual([
-      'um',
-      'dois',
-    ]);
+    expect((await listed(tenantId, agentId)).map((view) => view.text)).toEqual(['um', 'dois']);
   });
 });

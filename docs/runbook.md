@@ -41,6 +41,7 @@ assinatura da plataforma recusada. Exemplo: `dc logs --since 1h backend-worker |
 | `trigger-retries`            | a cada 1 min   | retentativas de gatilhos                            |
 | `function-publication-sweep` | a cada 1 min   | publicação de funções do agente                     |
 | `trial-expiry`               | `*/15`         | expira créditos de trial vencidos                   |
+| `training-expiry`            | `*/15`         | expira treinamentos com prazo vencido (até 50/vez)  |
 | `grace-expiry`               | `*/15`         | encerra carência de pagamento                       |
 | `agent-webhooks-reconcile`   | `*/15`         | alinha webhooks do GPTMaker                         |
 | `workspace-health`           | `*/15`         | status e créditos do workspace                      |
@@ -393,3 +394,43 @@ CRM ligado no agente.
   ainda ser criado depois. Antes de criar, o servidor relê a agenda e a idempotência cobre 15 minutos, mas
   confira duplicados no Calendário do usuário em reclamações de "marcou duas vezes".
 - Não há proteção do Bitrix24 contra choque de horário: a garantia é do app (lock por usuário no Redis).
+
+## 10. Treinamentos: expiração, tags e listagem
+
+Spec: `training-expiration`, `training-tags`, `training-listing` (change `treinamentos-expiracao-tags-paginacao`).
+
+### Como funciona
+
+- O cliente define, por treinamento manual, uma data de expiração (opcional) e tags. Não vale para treinamentos
+  gerados pela função (`managed`).
+- O job `training-expiry` (`*/15`, lock `job:training-expiry`) pega até 50 vencidos por execução, do mais antigo
+  ao mais novo. Para cada um, sob o lock do agente: apaga no GPTMaker (já ausente conta como apagado; agente
+  `OUT_OF_SYNC` não chama nada), grava `status = EXPIRED` + `expired_at` e descarta documento e imagem.
+- Expirado **não conta** no limite do plano, aparece na lista com o selo "Expirado", não é editável nem
+  reenviável, e a sincronização (`training-sync`) o ignora.
+- `GET /app/agents/:agentId/trainings` é paginada (padrão 20, máx. 100) e aceita `q`, `type`, `status` e `tags`.
+  O formato da resposta mudou (`trainings`, `usage`, `page`, `availableTags`).
+
+### Conferir
+
+- Vencidos que ainda não expiraram:
+  `select id, agent_id, expires_at from training where expires_at <= now() and expired_at is null and deleted_at is null and managed = false order by expires_at;`
+- Falhas do job: log do worker `treinamento vencido não pôde ser expirado` (traz `trainingId`) e
+  `expiração de treinamentos falhou` (`alert: true`). Falha no GPTMaker é retentada sozinha na execução seguinte.
+- Mais de 50 vencidos de uma vez escoam em ~50 por 15 min.
+
+### Agir
+
+- Antecipar a expiração de um item: `update training set expires_at = now() where id = '<id>';` e esperar a
+  próxima execução (ou aguardar o `*/15`).
+- Cancelar a expiração: `update training set expires_at = null where id = '<id>' and expired_at is null;`
+  (antes de o job rodar). **Expirado não volta**: é preciso criar o treinamento de novo.
+
+### Deploy e rollback
+
+- A migration `0027` só adiciona (3 colunas, valor `EXPIRED` no enum, 2 índices). Ela roda no start da API.
+- Instâncias antigas não conhecem `EXPIRED`: conclua o deploy de **todas** as instâncias (API e worker) antes de
+  haver treinamentos expirando. Em produção, nada expira antes de o primeiro cliente definir uma data.
+- Voltar o código é seguro; o valor `EXPIRED` do enum não sai do banco. Se já existirem expirados, o código
+  antigo os mostra com um status que não conhece: ajuste à mão (`update training set status = 'FAILED' ...`) ou
+  avance a versão.

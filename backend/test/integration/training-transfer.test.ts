@@ -295,6 +295,28 @@ describe('exportar e importar treinamentos', () => {
       ]);
     });
 
+    it('leva as tags, nunca a expiração, e deixa de fora os expirados', async () => {
+      const owner = await newTenantAgent();
+      await addText(owner, {
+        content: 'ativo',
+        tags: ['preços'],
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: new Date('2026-01-01'),
+      });
+      await addText(owner, {
+        content: 'vencido',
+        status: 'EXPIRED',
+        tags: ['preços'],
+        expiredAt: new Date(),
+        createdAt: new Date('2026-01-02'),
+      });
+
+      const { file } = await transfer.export(owner.tenantId, owner.agentId);
+
+      expect(file.trainings).toEqual([{ type: 'TEXT', text: 'ativo', tags: ['preços'] }]);
+      expect(JSON.stringify(file)).not.toMatch(/expires|expired/i);
+    });
+
     it('agente sem treinamentos manuais gera lista vazia', async () => {
       const owner = await newTenantAgent();
       const { file } = await transfer.export(owner.tenantId, owner.agentId);

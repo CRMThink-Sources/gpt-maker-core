@@ -132,14 +132,17 @@ export class TrainingSyncService {
     for (const type of TRAINING_TYPES) {
       remote.push(...(await listRemoteTrainings(this.gptmaker, owner.gptmakerAgentId, type)));
     }
-    const local = await this.db
+    const all = await this.db
       .select()
       .from(training)
       .where(and(eq(training.agentId, owner.id), isNull(training.deletedAt)));
+    // Expirado foi apagado no GPTMaker de propósito: não é "sumiu" nem entra no casamento, mas o id
+    // dele continua reivindicado para não voltar como treinamento importado (spec training-expiration).
+    const local = all.filter((row) => row.status !== 'EXPIRED');
 
     const result = { linked: 0, imported: 0, updated: 0, removed: 0, lost: 0 };
     const remoteById = new Map(remote.map((item) => [item.id, item]));
-    const claimed = new Set(local.flatMap((row) => row.gptmakerTrainingId ?? []));
+    const claimed = new Set(all.flatMap((row) => row.gptmakerTrainingId ?? []));
 
     for (const row of local) {
       if (!row.gptmakerTrainingId) continue;

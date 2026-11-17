@@ -4,16 +4,34 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   createTrainingSchema,
   type CreateTrainingInput,
+  type ListTrainingsQuery,
   type TrainingImageView,
   type TrainingInterval,
   TRAINING_IMAGE_MAX_BYTES,
+  type TrainingListResponse,
   type TrainingUsage,
   type UploadedTrainingImage,
   type TrainingView,
   type UpdateTrainingInput,
+  type UpdateTrainingSettingsInput,
   updateTrainingSchema,
+  updateTrainingSettingsSchema,
 } from '@gptmaker/contracts';
-import { and, asc, count, eq, isNotNull, isNull, ne, sum } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+  sum,
+} from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
@@ -95,23 +113,73 @@ export class TrainingService {
     this.mediaPolicy = policy;
   }
 
-  async list(tenantId: string, agentId: string): Promise<TrainingView[]> {
+  /**
+   * Treinamentos do agente por página, com filtros (spec training-listing). `usage` é do tenant
+   * inteiro, sem filtros; `availableTags` são as tags usadas por qualquer treinamento do agente.
+   */
+  async list(
+    tenantId: string,
+    agentId: string,
+    query: ListTrainingsQuery,
+  ): Promise<TrainingListResponse> {
     const owner = await this.agents.getById(tenantId, agentId);
-    const rows = await this.db
-      .select()
-      .from(training)
-      .where(
-        and(
-          eq(training.tenantId, tenantId),
-          eq(training.agentId, owner.id),
-          isNull(training.deletedAt),
+    const base = and(
+      eq(training.tenantId, tenantId),
+      eq(training.agentId, owner.id),
+      isNull(training.deletedAt),
+    );
+    const filters = [base];
+    if (query.q) {
+      const like = `%${escapeLike(query.q)}%`;
+      filters.push(
+        or(
+          ilike(training.content, like),
+          ilike(training.url, like),
+          ilike(training.documentName, like),
         ),
-      )
-      .orderBy(asc(training.createdAt), asc(training.id));
+      );
+    }
+    if (query.type.length) filters.push(inArray(training.type, query.type));
+    if (query.status.length) filters.push(inArray(training.status, query.status));
+    if (query.tags.length) {
+      const list = sql.join(
+        query.tags.map((tag) => sql`${tag}`),
+        sql`, `,
+      );
+      filters.push(sql`${training.tags} && ARRAY[${list}]::text[]`);
+    }
+    const where = and(...filters);
+
+    const [rows, [totalRow], tagRows, usage] = await Promise.all([
+      this.db
+        .select()
+        .from(training)
+        .where(where)
+        .orderBy(asc(training.createdAt), asc(training.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize),
+      this.db.select({ total: count() }).from(training).where(where),
+      this.db
+        .selectDistinct({ tag: sql<string>`unnest(${training.tags})` })
+        .from(training)
+        .where(base),
+      this.usage(tenantId),
+    ]);
     const images = await this.images.findMany(
       rows.flatMap((row) => (row.imageId ? [row.imageId] : [])),
     );
-    return Promise.all(rows.map((row) => this.view(row, images)));
+    const total = totalRow?.total ?? 0;
+    return {
+      trainings: await Promise.all(rows.map((row) => this.view(row, images))),
+      usage,
+      page: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages: Math.ceil(total / query.pageSize),
+      },
+      availableTags: tagRows.map((entry) => entry.tag).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    };
   }
 
   /**
@@ -124,7 +192,14 @@ export class TrainingService {
       this.db
         .select({ trainings: count(), documentBytes: sum(training.documentSizeBytes) })
         .from(training)
-        .where(and(eq(training.tenantId, tenantId), isNull(training.deletedAt))),
+        .where(
+          and(
+            eq(training.tenantId, tenantId),
+            isNull(training.deletedAt),
+            // Expirado já saiu do GPTMaker e do storage: não ocupa o plano (spec training-expiration).
+            ne(training.status, 'EXPIRED'),
+          ),
+        ),
       // Imagens contam na mesma cota dos documentos, ligadas ou não (spec agent-training-image).
       this.db
         .select({ imageBytes: sum(trainingImage.sizeBytes) })
@@ -154,7 +229,18 @@ export class TrainingService {
         ? null
         : await this.mediaPolicy.refusal(owner.id, input.type);
     if (refusal) throw new DomainError(refusal, REFUSALS[refusal] ?? refusal, HttpStatus.CONFLICT);
+    if (access.managed && (input.tags?.length || input.expiresAt)) {
+      throw new DomainError(
+        'TRAINING_MANAGED_NO_SETTINGS',
+        'Treinamento gerado pela função não aceita tags nem expiração',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     const callback = this.newCallback();
+    const settings = {
+      tags: input.tags ?? [],
+      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+    };
 
     switch (input.type) {
       case 'TEXT': {
@@ -167,6 +253,7 @@ export class TrainingService {
             imageId: image?.id ?? null,
             callbackTokenHash: callback.hash,
             managed: access.managed === true,
+            ...settings,
           },
           {
             type: 'TEXT',
@@ -186,6 +273,7 @@ export class TrainingService {
             trainingSubPages: input.trainingSubPages,
             trainingInterval: input.trainingInterval,
             callbackTokenHash: callback.hash,
+            ...settings,
           },
           {
             type: 'WEBSITE',
@@ -199,7 +287,7 @@ export class TrainingService {
       case 'VIDEO':
         return this.createRemoteAndLocal(
           owner,
-          { type: 'VIDEO', url: input.url, callbackTokenHash: callback.hash },
+          { type: 'VIDEO', url: input.url, callbackTokenHash: callback.hash, ...settings },
           { type: 'VIDEO', video: input.url, callbackUrl: callback.url },
           (remote) => sameUrl(remote.video, input.url),
         );
@@ -222,6 +310,7 @@ export class TrainingService {
     return this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
       assertAccess(row, access);
+      assertNotExpired(row);
       if (row.type !== 'TEXT') {
         throw new DomainError(
           'TRAINING_NOT_EDITABLE',
@@ -268,6 +357,36 @@ export class TrainingService {
   }
 
   /**
+   * Tags e expiração de qualquer tipo de treinamento (spec training-tags, training-expiration).
+   * Só grava aqui: não chama o GPTMaker nem muda o `status`.
+   */
+  async updateSettings(
+    tenantId: string,
+    agentId: string,
+    id: string,
+    raw: UpdateTrainingSettingsInput,
+  ): Promise<TrainingView> {
+    const input = updateTrainingSettingsSchema.parse(raw);
+    const owner = await this.agents.getById(tenantId, agentId);
+    return this.withAgentLock(owner.id, async () => {
+      const row = await this.getRow(owner, id);
+      assertAccess(row, {});
+      assertNotExpired(row);
+      const patch: Partial<typeof training.$inferInsert> = {};
+      if (input.tags !== undefined) patch.tags = input.tags;
+      if (input.expiresAt !== undefined) {
+        patch.expiresAt = input.expiresAt === null ? null : new Date(input.expiresAt);
+      }
+      const [updated] = await this.db
+        .update(training)
+        .set(patch)
+        .where(and(eq(training.id, row.id), eq(training.tenantId, tenantId)))
+        .returning();
+      return this.view(updated!);
+    });
+  }
+
+  /**
    * Remove no GPTMaker e marca o registro local como removido; o documento sai do storage. Já
    * ausente no GPTMaker (ou agente fora de sincronia, sem treinamentos lá) só remove aqui.
    */
@@ -281,21 +400,66 @@ export class TrainingService {
     await this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
       assertAccess(row, access);
-      if (owner.status !== 'OUT_OF_SYNC') {
-        const remoteId = await this.remoteIdOf(owner, row);
-        if (remoteId) {
-          await this.callGptMaker(async () => {
-            try {
-              await this.gptmaker.deleteTraining(remoteId);
-            } catch (error) {
-              if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
-            }
-          });
-        }
-      }
+      // Expirado já foi retirado do GPTMaker e da mídia pelo job: só sai da lista.
+      if (row.status !== 'EXPIRED') await this.deleteRemoteAndMedia(owner, row);
       await this.db.update(training).set({ deletedAt: new Date() }).where(eq(training.id, row.id));
-      if (row.documentKey) await this.discardObject(row.documentKey);
-      await this.images.discard(row.imageId);
+    });
+  }
+
+  /**
+   * Apaga o treinamento no GPTMaker (ausente lá conta como apagado; agente fora de sincronia ou
+   * sem id remoto não chama nada) e descarta documento e imagem do storage.
+   */
+  private async deleteRemoteAndMedia(owner: Agent | undefined, row: Training): Promise<void> {
+    if (owner && owner.status !== 'OUT_OF_SYNC') {
+      const remoteId = await this.remoteIdOf(owner, row);
+      if (remoteId) {
+        await this.callGptMaker(async () => {
+          try {
+            await this.gptmaker.deleteTraining(remoteId);
+          } catch (error) {
+            if (!(error instanceof GptMakerError && error.kind === 'NOT_FOUND')) throw error;
+          }
+        });
+      }
+    }
+    if (row.documentKey) await this.discardObject(row.documentKey);
+    await this.images.discard(row.imageId);
+  }
+
+  /**
+   * Expira um treinamento vencido (spec training-expiration; chamado pelo job). Sob o lock do
+   * agente, relê a linha e só age se ainda estiver vencida e ativa. O GPTMaker é apagado antes de
+   * marcar localmente: falha remota deixa tudo como estava e o job tenta de novo. Agente já
+   * removido não tem o que apagar lá. Devolve `true` se expirou; erros sobem para o job registrar.
+   */
+  async expire(
+    ref: { id: string; tenantId: string; agentId: string },
+    now = new Date(),
+  ): Promise<boolean> {
+    const owner = await this.agents.findById(ref.tenantId, ref.agentId);
+    return this.withAgentLock(ref.agentId, async () => {
+      const [row] = await this.db
+        .select()
+        .from(training)
+        .where(
+          and(
+            eq(training.id, ref.id),
+            eq(training.tenantId, ref.tenantId),
+            isNull(training.deletedAt),
+            ne(training.status, 'EXPIRED'),
+            eq(training.managed, false),
+            isNotNull(training.expiresAt),
+            lte(training.expiresAt, now),
+          ),
+        );
+      if (!row) return false;
+      await this.deleteRemoteAndMedia(owner ?? undefined, row);
+      await this.db
+        .update(training)
+        .set({ status: 'EXPIRED', expiredAt: now, error: null, documentKey: null, imageId: null })
+        .where(and(eq(training.id, row.id), eq(training.tenantId, ref.tenantId)));
+      return true;
     });
   }
 
@@ -308,6 +472,7 @@ export class TrainingService {
     const owner = await this.trainableAgent(tenantId, agentId);
     return this.withAgentLock(owner.id, async () => {
       const row = await this.getRow(owner, id);
+      assertNotExpired(row);
       if (row.status !== 'FAILED') {
         throw new DomainError(
           'TRAINING_NOT_FAILED',
@@ -472,6 +637,9 @@ export class TrainingService {
         HttpStatus.NOT_FOUND,
       );
     }
+
+    // Callback tardio de um treinamento já expirado (e apagado no GPTMaker): não ressuscita.
+    if (row.status === 'EXPIRED') return;
 
     const outcome = interpretCallback(payload);
     // Formato não documentado: o corpo fica no log até ser confirmado em staging (tarefa 10.1).
@@ -842,6 +1010,22 @@ function assertAccess(row: Training, access: ManagedAccess): void {
   }
 }
 
+/** Treinamento expirado não é editado nem reenviado (spec training-expiration). */
+function assertNotExpired(row: Training): void {
+  if (row.status === 'EXPIRED') {
+    throw new DomainError(
+      'TRAINING_EXPIRED',
+      'Este treinamento expirou e foi retirado do agente',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/** Escapa `%`, `_` e a barra invertida para a busca tratar o termo como texto literal. */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (char) => '\\' + char);
+}
+
 function toView(row: Training, image: TrainingImageView | null = null): TrainingView {
   return {
     id: row.id,
@@ -861,6 +1045,9 @@ function toView(row: Training, image: TrainingImageView | null = null): Training
             sizeBytes: row.documentSizeBytes ?? 0,
           }
         : null,
+    tags: row.tags,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    expiredAt: row.expiredAt?.toISOString() ?? null,
     error: row.error,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
