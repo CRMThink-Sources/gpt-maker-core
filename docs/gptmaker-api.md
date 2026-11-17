@@ -513,6 +513,29 @@ O estado atual é exposto pelo campo `humanTalk` (boolean) do schema `Chat`, ret
 
 **`chatId` de uma conversa pela API (observado em 2026-10-01):** `public-api-<agentId>-<contextId>`, onde `<contextId>` é o valor mandado em `/conversation` (§6). A listagem de chats devolve esse `id`, com o `contextId` original em `recipient` e `type: "API"`; é o mesmo valor que chega como `contextId` nos webhooks (§5.4.1). O app calcula o `chatId` sem consultar a listagem. Ainda não testado: `start-human`/`stop-human` com esse id.
 
+### 7.3 Listar chats e ler mensagens (leitura; validado em 2026-11-17)
+
+Usado pela análise de alucinação (spec `agent-hallucination-analysis`). Medido por GET num workspace real compartilhado; só estrutura e valores foram registrados, nunca texto de conversa nem dados pessoais.
+
+- **`GET /v2/workspace/{workspaceId}/chats`** — `page`, `pageSize` e `agentId` (o filtro por agente funciona). **Todos os tenants vêm no mesmo workspace**: o filtro de tenant é do app, pelo `id` do chat (`public-api-<agentId>-<tenantId>:<diálogo>`) e pelo `recipient` (`<tenantId>:<diálogo>`), que concordaram em 100% dos chats amostrados.
+- **`GET /v2/chat/{chatId}/messages`** — `page` e `pageSize`. O `chatId` precisa ir codificado na URL (tem `:`).
+
+| Ponto | Observado |
+| --- | --- |
+| Base de `page` | **1-based**; `page=0` devolve o mesmo que `page=1` (nos chats e nas mensagens). |
+| `pageSize` máximo | Chats: **200**; acima disso, `400 {"error":"pageSize max 200"}`. Mensagens: 1000 foi aceito, sem teto encontrado. Sem `pageSize`, as mensagens vêm 10 por vez. |
+| Resposta | Array simples nas duas rotas, sem total. |
+| Ordem dos chats | Decrescente por `time` (última atividade), em milissegundos. |
+| Ordem das mensagens | A página 1 é o bloco **mais recente** e as seguintes vão para trás; **dentro de cada página a ordem é crescente** (`time` e `sequence`). O chat inteiro numa página só vem todo crescente. |
+| Tamanho da página | Pode vir **menor que `pageSize` sem ser a última** (ex.: `pageSize=5` deu 5,5,4,5,4,…). Só a página vazia indica o fim. Lendo até a vazia, as mensagens cobrem o chat inteiro, sem repetir. |
+| `time` | Sempre **milissegundos** (nenhum valor abaixo de 1e12 em 532 mensagens e 100 chats). |
+| `role` | `user`, `assistant` e `system`. |
+| `type` (mensagem) | `TEXT`, `IMAGE`, `AUDIO` e `NOTIFICATION`. |
+| Combinações vistas | `user/TEXT`, `assistant/TEXT`, `assistant/IMAGE`, `user/AUDIO` e `system/NOTIFICATION` (cerca de 25% das mensagens: avisos do sistema, não fala de ninguém). |
+| `type` (chat) | `API`; todos os chats têm `id` `public-api-…`. |
+
+O app lê as mensagens a partir da página 1 até a vazia (no máximo 10 páginas), descarta `NOTIFICATION`, trata `system` e papéis desconhecidos como `OTHER` e normaliza `time` por `conversation-normalize.ts`.
+
 ---
 
 ## 8. Consumo de créditos por agente
@@ -644,7 +667,7 @@ Comportamento informado pelo time: depois da troca, o chat (`public-api-<agente 
 1. Payload, headers, método, assinatura e retries dos webhooks. Capturados `onFirstInteraction`, `onStartInteraction` e `onNewMessage` (§5.4.1); faltam `onTransfer`, `onLackKnowLedge`, `onFinishInteraction`, `onCreateEvent`, `onCancelEvent`, os callbacks da conversa e o `callbackUrl` de treinamento, além de headers, assinatura e retries de todos.
 2. Resposta imediata da conversa quando `callbackUrl` é informado (modo assíncrono).
 3. Rate limits (`429`, headers, cotas).
-4. Paginação: base de `page`, padrão/máximo de `pageSize`, ausência de total.
+4. Paginação: base de `page`, padrão/máximo de `pageSize`, ausência de total. Chats e mensagens validados em 2026-11-17 (§7.3); falta validar nas demais rotas de lista (agentes, treinamentos, intenções).
 5. Campos obrigatórios reais em `NewAssistant`, settings, webhooks e criação de treinamento (OpenAPI não marca `required`).
 6. Semântica de PUT (merge parcial ou substituição) em agente, settings e webhooks; forma de limpar um webhook.
 7. Enum completo de `status` do agente (observados `ACTIVE` e `DISABLED`; o campo não está no OpenAPI).
