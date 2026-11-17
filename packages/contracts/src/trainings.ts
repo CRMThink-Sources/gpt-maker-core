@@ -102,3 +102,68 @@ export interface TrainingView {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Máximo de itens por arquivo de importação (spec agent-training-transfer). */
+export const TRAINING_IMPORT_MAX_ITEMS = 100;
+
+/**
+ * Item do arquivo de exportação: o mesmo conteúdo da criação manual, sem identificadores
+ * internos. Estrito para o arquivo nunca criar treinamento `managed`, de documento ou ligar
+ * imagem por id (design D5). `imageUrl` é a URL pública da imagem do texto (design D5b).
+ */
+export const trainingTransferItemSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('TEXT'),
+    text: z.string().trim().min(1).max(TRAINING_TEXT_MAX),
+    imageUrl: httpUrl.optional(),
+  }),
+  z.strictObject({
+    type: z.literal('WEBSITE'),
+    url: httpUrl,
+    trainingSubPages: z.boolean().default(false),
+    trainingInterval: trainingIntervalSchema.default('NEVER'),
+  }),
+  z.strictObject({ type: z.literal('VIDEO'), url: httpUrl }),
+]);
+export type TrainingTransferItem = z.infer<typeof trainingTransferItemSchema>;
+
+/** Arquivo gerado pela exportação (`version` literal: formatos futuros são recusados). */
+export const trainingExportSchema = z.object({
+  version: z.literal(1),
+  exportedAt: z.iso.datetime(),
+  trainings: z.array(trainingTransferItemSchema).max(TRAINING_IMPORT_MAX_ITEMS),
+});
+export type TrainingExport = z.infer<typeof trainingExportSchema>;
+
+/**
+ * Envelope da importação: só a versão e o limite de itens recusam o arquivo inteiro; cada item
+ * (`unknown`) é validado à parte com `trainingTransferItemSchema`, para um item inválido não
+ * derrubar os demais.
+ */
+export const trainingImportRequestSchema = z.object({
+  version: z.literal(1),
+  trainings: z.array(z.unknown()).max(TRAINING_IMPORT_MAX_ITEMS),
+});
+export type TrainingImportRequest = z.infer<typeof trainingImportRequestSchema>;
+
+export interface TrainingImportReason {
+  code: string;
+  message: string;
+}
+
+/** Resultado de um item do arquivo (`position` conta de 1, na ordem do arquivo). */
+export interface TrainingImportItemResult {
+  position: number;
+  type: string | null;
+  status: 'CREATED' | 'REJECTED' | 'FAILED';
+  trainingId: string | null;
+  /** Por que não foi criado (`REJECTED`/`FAILED`). */
+  reason: TrainingImportReason | null;
+  /** Item criado, mas sem algo do arquivo (ex.: imagem que não pôde ser copiada). */
+  warnings: TrainingImportReason[];
+}
+
+export interface TrainingImportResult {
+  summary: { created: number; rejected: number; failed: number; withWarnings: number };
+  items: TrainingImportItemResult[];
+}

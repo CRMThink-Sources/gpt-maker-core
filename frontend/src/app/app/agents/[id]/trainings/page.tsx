@@ -1,16 +1,34 @@
 'use client';
 
-import type { AgentFunctionConfigView, TrainingUsage, TrainingView } from '@gptmaker/contracts';
+import {
+  type AgentFunctionConfigView,
+  TRAINING_IMPORT_MAX_ITEMS,
+  type TrainingExport,
+  type TrainingUsage,
+  type TrainingView,
+} from '@gptmaker/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
-import { BookIcon, FileIcon, GlobeIcon, PlusIcon, TextIcon, VideoIcon } from '@/components/icons';
+import {
+  BookIcon,
+  DownloadIcon,
+  FileIcon,
+  GlobeIcon,
+  PlusIcon,
+  TextIcon,
+  UploadIcon,
+  VideoIcon,
+} from '@/components/icons';
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading, Spinner } from '@/components/ui';
 import { type createFormat, type T, useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { inputClass } from '../../agent-fields';
 import { ApiRequestError } from '@/lib/platform-session';
 import {
+  downloadJsonFile,
+  exportHasImages,
   formatBytes,
+  trainingExportFileName,
   trainingIntervalLabel,
   trainingStatus,
   trainingTitle,
@@ -20,6 +38,7 @@ import { useAppSession } from '../../../session-provider';
 import { useAgent } from '../agent-context';
 import { AddTrainingModal } from './add-training-modal';
 import { EditTextTrainingModal } from './edit-text-modal';
+import { ImportTrainingsModal } from './import-trainings-modal';
 
 /** Enquanto houver treinamento processando, a lista se atualiza sozinha (o status vem do callback). */
 const POLL_MS = 5000;
@@ -96,6 +115,9 @@ export default function AgentTrainingsPage() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<TrainingView | null>(null);
   // Site e vídeo só no modo avançado; agente sem função (anterior às funções) segue livre.
   const [mediaAllowed, setMediaAllowed] = useState<boolean | null>(null);
@@ -180,6 +202,26 @@ export default function AgentTrainingsPage() {
     }
   }
 
+  /** Baixa os treinamentos manuais; sem nenhum, só avisa (spec agent-training-transfer). */
+  async function exportTrainings() {
+    setExporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const file = await api<TrainingExport>(`${base}/export`);
+      if (file.trainings.length === 0) {
+        setNotice(t('page.exportEmpty'));
+        return;
+      }
+      downloadJsonFile(file, trainingExportFileName(agent.name));
+      if (exportHasImages(file)) setNotice(t('page.exportImages'));
+    } catch (e) {
+      setError(errorMessage(e, t('page.exportError'), translateError));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // Texto é sempre liberado; site e vídeo dependem do modo avançado (`mediaAllowed`).
   const add = canManage && (
     <button type="button" onClick={() => setAdding(true)} className={buttonClass('primary')}>
@@ -215,12 +257,38 @@ export default function AgentTrainingsPage() {
             {t('page.noCredits')}
           </p>
         </div>
-        {add}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={exportTrainings}
+            disabled={exporting || listing === null}
+            className={buttonClass('secondary')}
+          >
+            <DownloadIcon className="size-4" />
+            {exporting ? t('page.exporting') : t('page.export')}
+          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setImporting(true)}
+              className={buttonClass('secondary')}
+            >
+              <UploadIcon className="size-4" />
+              {t('page.import')}
+            </button>
+          )}
+          {add}
+        </div>
       </div>
 
       {error && (
         <Alert tone="error" className="mb-6">
           {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert tone="warning" className="mb-6">
+          {notice}
         </Alert>
       )}
 
@@ -416,6 +484,15 @@ export default function AgentTrainingsPage() {
             setAdding(false);
             void reload();
           }}
+        />
+      )}
+
+      {importing && (
+        <ImportTrainingsModal
+          agentId={agent.id}
+          maxItems={TRAINING_IMPORT_MAX_ITEMS}
+          onClose={() => setImporting(false)}
+          onImported={() => void reload()}
         />
       )}
 

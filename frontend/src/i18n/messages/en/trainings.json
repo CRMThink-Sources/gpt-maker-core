@@ -50,7 +50,13 @@
     "showing": "Showing {shown} of {total}",
     "showMore": "Show more",
     "loadError": "Could not load the trainings.",
-    "actionError": "Could not complete the action. Try again."
+    "actionError": "Could not complete the action. Try again.",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "import": "Import",
+    "exportEmpty": "There are no manual trainings to export.",
+    "exportImages": "The file keeps the link to the images, not the images themselves. Anyone with the file can open them while they exist on this agent.",
+    "exportError": "Could not export. Try again."
   },
   "add": {
     "title": "Add training",
@@ -107,6 +113,42 @@
     "TRAINING_IMAGE_IN_USE": "This image is already used in another training; upload the image again.",
     "PLAN_TRAINING_LIMIT": "You have reached your plan's training limit. Remove some or change plans.",
     "GPTMAKER_REJECTED": "GPTMaker rejected the training. Review the content and try again.",
-    "GPTMAKER_UNAVAILABLE": "Could not send the training to GPTMaker right now. Try again shortly."
+    "GPTMAKER_UNAVAILABLE": "Could not send the training to GPTMaker right now. Try again shortly.",
+    "TRAINING_IMPORT_UNSUPPORTED_VERSION": "This file version is not supported. Export the trainings again.",
+    "TRAINING_IMPORT_TOO_MANY": "The file exceeds the limit of trainings per import.",
+    "TRAINING_IMPORT_INVALID_FILE": "The file is not a valid trainings export.",
+    "TRAINING_IMPORT_BUSY": "Another import is in progress; try again shortly."
+  },
+  "import": {
+    "title": "Import trainings",
+    "description": "Upload a file exported by the app. Trainings are added to the ones the agent already has; nothing existing is changed or removed.",
+    "fileLabel": "Trainings file (.json)",
+    "chosen": "Items in the file: {count}",
+    "notJson": "The file is not a valid trainings export.",
+    "invalid": "The file is not a valid trainings export.",
+    "version": "This file version is not supported. Export the trainings again.",
+    "tooMany": "The file exceeds the limit of {max} trainings per import.",
+    "imagesNotice": "{count} text(s) with an image: the image is copied if it still exists; otherwise the text is added without it.",
+    "duplicatesNotice": "Importing the same file again creates the trainings again.",
+    "submit": "Import",
+    "sending": "Importing…",
+    "close": "Close",
+    "error": "Could not import. Try again.",
+    "summary": "Created: {created} · Not created: {notCreated}",
+    "withWarnings": "Created with a warning",
+    "notCreated": "Not created",
+    "item": "Item {position} ({type})",
+    "reasons": {
+      "PLAN_TRAINING_LIMIT": "Plan training limit reached.",
+      "TRAINING_ADVANCED_ONLY": "Websites and videos are only available in the agent advanced mode.",
+      "GPTMAKER_REJECTED": "GPTMaker rejected this training.",
+      "GPTMAKER_UNAVAILABLE": "GPTMaker did not respond for this training.",
+      "IMPORT_ITEM_FAILED": "Could not create this training right now.",
+      "IMAGE_URL_NOT_SUPPORTED": "Image not imported: the address is not from this service.",
+      "IMAGE_NOT_FOUND": "Image not imported: it no longer exists.",
+      "IMAGE_INVALID": "Image not imported: invalid format or size.",
+      "IMAGE_QUOTA": "Image not imported: not enough space in the plan.",
+      "IMAGE_FAILED": "Image not imported."
+    }
   }
 }
