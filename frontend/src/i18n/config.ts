@@ -13,6 +13,7 @@ import ptBR_crm from './messages/pt-BR/crm.json';
 import ptBR_calendar from './messages/pt-BR/calendar.json';
 import ptBR_testChat from './messages/pt-BR/testChat.json';
 import ptBR_assist from './messages/pt-BR/assist.json';
+import ptBR_hallucination from './messages/pt-BR/hallucination.json';
 import ptBR_plan from './messages/pt-BR/plan.json';
 import ptBR_aiKey from './messages/pt-BR/aiKey.json';
 import ptBR_permissions from './messages/pt-BR/permissions.json';
@@ -33,6 +34,7 @@ import en_crm from './messages/en/crm.json';
 import en_calendar from './messages/en/calendar.json';
 import en_testChat from './messages/en/testChat.json';
 import en_assist from './messages/en/assist.json';
+import en_hallucination from './messages/en/hallucination.json';
 import en_plan from './messages/en/plan.json';
 import en_aiKey from './messages/en/aiKey.json';
 import en_permissions from './messages/en/permissions.json';
@@ -53,6 +55,7 @@ import es_crm from './messages/es/crm.json';
 import es_calendar from './messages/es/calendar.json';
 import es_testChat from './messages/es/testChat.json';
 import es_assist from './messages/es/assist.json';
+import es_hallucination from './messages/es/hallucination.json';
 import es_plan from './messages/es/plan.json';
 import es_aiKey from './messages/es/aiKey.json';
 import es_permissions from './messages/es/permissions.json';
@@ -76,6 +79,7 @@ const ptBR = {
   calendar: ptBR_calendar,
   testChat: ptBR_testChat,
   assist: ptBR_assist,
+  hallucination: ptBR_hallucination,
   plan: ptBR_plan,
   aiKey: ptBR_aiKey,
   permissions: ptBR_permissions,
@@ -99,6 +103,7 @@ const en = {
   calendar: en_calendar,
   testChat: en_testChat,
   assist: en_assist,
+  hallucination: en_hallucination,
   plan: en_plan,
   aiKey: en_aiKey,
   permissions: en_permissions,
@@ -122,6 +127,7 @@ const es = {
   calendar: es_calendar,
   testChat: es_testChat,
   assist: es_assist,
+  hallucination: es_hallucination,
   plan: es_plan,
   aiKey: es_aiKey,
   permissions: es_permissions,

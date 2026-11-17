@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createTrainingSchema,
+  listTrainingsQuerySchema,
   TRAINING_IMPORT_MAX_ITEMS,
   trainingExportSchema,
   trainingImportRequestSchema,
+  trainingTagsSchema,
   trainingTransferItemSchema,
+  updateTrainingSettingsSchema,
 } from './trainings';
 
 const IMAGE_URL = 'https://api.exemplo.com/public/training-images/abc123';
@@ -90,5 +94,126 @@ describe('envelope da importação', () => {
     expect(trainingImportRequestSchema.safeParse({ version: 1, trainings: 'x' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('tags de treinamento', () => {
+  it('normaliza caixa, espaços e duplicatas', () => {
+    expect(trainingTagsSchema.parse(['Preços', 'preços ', 'PREÇOS', '  novo   plano '])).toEqual([
+      'preços',
+      'novo plano',
+    ]);
+  });
+
+  it('descarta tags vazias', () => {
+    expect(trainingTagsSchema.parse(['', '   ', 'a'])).toEqual(['a']);
+  });
+
+  it('aceita 10 tags e recusa 11', () => {
+    const tags = (n: number) => Array.from({ length: n }, (_, i) => `tag${i}`);
+    expect(trainingTagsSchema.safeParse(tags(10)).success).toBe(true);
+    expect(trainingTagsSchema.safeParse(tags(11)).success).toBe(false);
+  });
+
+  it('aceita tag de 30 caracteres e recusa 31', () => {
+    expect(trainingTagsSchema.safeParse(['a'.repeat(30)]).success).toBe(true);
+    expect(trainingTagsSchema.safeParse(['a'.repeat(31)]).success).toBe(false);
+  });
+});
+
+describe('criação com tags e expiração', () => {
+  const future = () => new Date(Date.now() + 86_400_000).toISOString();
+
+  it.each([
+    ['texto', { type: 'TEXT', text: 'x' }],
+    ['site', { type: 'WEBSITE', url: 'https://exemplo.com' }],
+    ['vídeo', { type: 'VIDEO', url: 'https://youtu.be/x' }],
+  ])('%s aceita tags e expiração futura', (_nome, base) => {
+    const parsed = createTrainingSchema.parse({ ...base, tags: ['A', 'a'], expiresAt: future() });
+    expect(parsed).toMatchObject({ tags: ['a'] });
+  });
+
+  it('recusa expiração no passado', () => {
+    const past = new Date(Date.now() - 86_400_000).toISOString();
+    expect(
+      createTrainingSchema.safeParse({ type: 'TEXT', text: 'x', expiresAt: past }).success,
+    ).toBe(false);
+  });
+});
+
+describe('ajustes do treinamento (tags e expiração)', () => {
+  it('aceita só tags, só expiração ou expiração nula para limpar', () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    expect(updateTrainingSettingsSchema.safeParse({ tags: ['a'] }).success).toBe(true);
+    expect(updateTrainingSettingsSchema.safeParse({ expiresAt: future }).success).toBe(true);
+    expect(updateTrainingSettingsSchema.parse({ expiresAt: null })).toEqual({ expiresAt: null });
+  });
+
+  it('recusa objeto vazio e campos desconhecidos', () => {
+    expect(updateTrainingSettingsSchema.safeParse({}).success).toBe(false);
+    expect(updateTrainingSettingsSchema.safeParse({ tags: ['a'], text: 'x' }).success).toBe(false);
+  });
+});
+
+describe('query da listagem de treinamentos', () => {
+  it('usa os padrões', () => {
+    expect(listTrainingsQuerySchema.parse({})).toEqual({
+      page: 1,
+      pageSize: 20,
+      type: [],
+      status: [],
+      tags: [],
+    });
+  });
+
+  it('lê listas separadas por vírgula e normaliza tags', () => {
+    expect(
+      listTrainingsQuerySchema.parse({
+        page: '2',
+        type: 'TEXT,WEBSITE',
+        status: 'EXPIRED',
+        tags: 'Preços, preços,horários',
+        q: ' garantia ',
+      }),
+    ).toMatchObject({
+      page: 2,
+      type: ['TEXT', 'WEBSITE'],
+      status: ['EXPIRED'],
+      tags: ['preços', 'horários'],
+      q: 'garantia',
+    });
+  });
+
+  it.each([
+    ['pageSize acima do máximo', { pageSize: '500' }],
+    ['página zero', { page: '0' }],
+    ['tipo desconhecido', { type: 'AUDIO' }],
+    ['estado desconhecido', { status: 'X' }],
+  ])('recusa %s', (_nome, query) => {
+    expect(listTrainingsQuerySchema.safeParse(query).success).toBe(false);
+  });
+});
+
+describe('item de transferência com tags', () => {
+  it('aceita tags e normaliza', () => {
+    expect(
+      trainingTransferItemSchema.parse({ type: 'TEXT', text: 'x', tags: ['Preços', 'preços'] }),
+    ).toMatchObject({ tags: ['preços'] });
+  });
+
+  it('arquivo antigo, sem tags, continua válido', () => {
+    expect(
+      trainingTransferItemSchema.safeParse({ type: 'VIDEO', url: 'https://youtu.be/x' }).success,
+    ).toBe(true);
+  });
+
+  it('recusa expiresAt no item', () => {
+    expect(
+      trainingTransferItemSchema.safeParse({
+        type: 'TEXT',
+        text: 'x',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
   });
 });

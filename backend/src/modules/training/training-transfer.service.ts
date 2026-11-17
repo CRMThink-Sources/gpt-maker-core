@@ -11,7 +11,7 @@ import {
   trainingImportRequestSchema,
   trainingTransferItemSchema,
 } from '@gptmaker/contracts';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { enrichContext } from '../../shared/context/request-context';
 import { DB, type Database } from '../../shared/database/database.module';
@@ -76,6 +76,8 @@ export class TrainingTransferService {
           eq(training.managed, false),
           inArray(training.type, ['TEXT', 'WEBSITE', 'VIDEO']),
           isNull(training.deletedAt),
+          // Expirado já não existe no GPTMaker; exportá-lo recriaria conteúdo vencido (spec).
+          ne(training.status, 'EXPIRED'),
         ),
       )
       .orderBy(asc(training.createdAt), asc(training.id));
@@ -253,27 +255,31 @@ function toCreateInput(
   item: TrainingTransferItem,
   imageId: string | undefined,
 ): CreateTrainingInput {
+  const tags = item.tags?.length ? { tags: item.tags } : {};
   switch (item.type) {
     case 'TEXT':
-      return { type: 'TEXT', text: item.text, ...(imageId && { imageId }) };
+      return { type: 'TEXT', text: item.text, ...(imageId && { imageId }), ...tags };
     case 'WEBSITE':
       return {
         type: 'WEBSITE',
         url: item.url,
         trainingSubPages: item.trainingSubPages,
         trainingInterval: item.trainingInterval,
+        ...tags,
       };
     case 'VIDEO':
-      return { type: 'VIDEO', url: item.url };
+      return { type: 'VIDEO', url: item.url, ...tags };
   }
 }
 
 /** Linha do banco para o item do arquivo; `null` se faltar o conteúdo (não seria importável). */
 export function toTransferItem(row: Row, imageUrl?: string): TrainingTransferItem | null {
+  // Tags saem só quando existem; a expiração nunca vai no arquivo (ficaria vencida ao reimportar).
+  const tags = row.tags?.length ? { tags: row.tags } : {};
   switch (row.type) {
     case 'TEXT':
       return row.content
-        ? { type: 'TEXT', text: row.content, ...(imageUrl && { imageUrl }) }
+        ? { type: 'TEXT', text: row.content, ...(imageUrl && { imageUrl }), ...tags }
         : null;
     case 'WEBSITE':
       return row.url
@@ -282,10 +288,11 @@ export function toTransferItem(row: Row, imageUrl?: string): TrainingTransferIte
             url: row.url,
             trainingSubPages: row.trainingSubPages ?? false,
             trainingInterval: (row.trainingInterval as TrainingInterval | null) ?? 'NEVER',
+            ...tags,
           }
         : null;
     case 'VIDEO':
-      return row.url ? { type: 'VIDEO', url: row.url } : null;
+      return row.url ? { type: 'VIDEO', url: row.url, ...tags } : null;
     case 'DOCUMENT':
       return null;
   }

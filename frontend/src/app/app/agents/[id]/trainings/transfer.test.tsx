@@ -9,6 +9,11 @@ const session = { canManage: true };
 vi.mock('../../../session-provider', () => ({
   useAppSession: () => ({ session, api: (...a: unknown[]) => api(...a) }),
 }));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => '/app/agents/ag1/trainings',
+}));
 vi.mock('../agent-context', () => ({
   useAgent: () => ({ agent: { id: 'ag1', name: 'Atendente Comercial', status: 'ACTIVE' } }),
 }));
@@ -19,7 +24,12 @@ vi.mock('@/lib/trainings', async (importOriginal) => ({
   downloadJsonFile: (...a: unknown[]) => download(...a),
 }));
 
-const EMPTY_LISTING = { trainings: [], usage: { trainings: { used: 0, limit: null } } };
+const EMPTY_LISTING = {
+  trainings: [],
+  usage: { trainings: { used: 0, limit: null } },
+  page: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
+  availableTags: [],
+};
 const exported = (trainings: unknown[]) => ({
   version: 1,
   exportedAt: '2026-11-16T12:00:00.000Z',

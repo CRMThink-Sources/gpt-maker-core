@@ -160,6 +160,13 @@
     "AI_BUSY": "Demasiadas revisiones en este momento. Intente de nuevo en unos instantes.",
     "AI_FIELD_TOO_LARGE": "Este campo es demasiado grande para la revisión.",
     "AI_BAD_OUTPUT": "No fue posible revisar este campo.",
-    "NO_CREDIT": "Sus créditos de IA se agotaron. Agregue créditos para continuar."
+    "NO_CREDIT": "Sus créditos de IA se agotaron. Agregue créditos para continuar.",
+    "CONVERSATIONS_UNAVAILABLE": "No se pudieron cargar las conversaciones ahora. Inténtelo en unos instantes.",
+    "CONVERSATION_NOT_FOUND": "Conversación no encontrada.",
+    "HALLUCINATION_NOTHING_TO_ANALYZE": "Esta conversación no tiene respuesta del agente para analizar.",
+    "HALLUCINATION_FLAGGED_NOT_FOUND": "Las respuestas marcadas no están en esta conversación.",
+    "REVIEW_RATE_LIMITED": "Demasiados análisis en poco tiempo. Espere unos minutos.",
+    "HALLUCINATION_ALREADY_ANALYZED": "Este análisis ya se hizo. Elija la conversación de nuevo para analizarla otra vez.",
+    "HALLUCINATION_IN_PROGRESS": "Ya hay un análisis en curso. Espere a que termine e inténtelo de nuevo."
   }
 }

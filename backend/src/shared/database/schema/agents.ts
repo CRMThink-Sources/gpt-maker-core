@@ -121,7 +121,12 @@ export const agentBot = pgTable(
 );
 
 export const trainingType = pgEnum('training_type', ['TEXT', 'WEBSITE', 'VIDEO', 'DOCUMENT']);
-export const trainingStatus = pgEnum('training_status', ['PROCESSING', 'DONE', 'FAILED']);
+export const trainingStatus = pgEnum('training_status', [
+  'PROCESSING',
+  'DONE',
+  'FAILED',
+  'EXPIRED',
+]);
 
 /**
  * Imagem enviada para um treinamento de texto (spec agent-training-image). Existe antes de ser
@@ -189,6 +194,15 @@ export const training = pgTable(
     /** Imagem do treinamento `TEXT` (spec agent-training-image). */
     imageId: uuid('image_id').references((): AnyPgColumn => trainingImage.id),
     status: trainingStatus('status').notNull().default('PROCESSING'),
+    /** Tags livres, já normalizadas (spec training-tags). */
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Quando o job de expiração deve retirar o treinamento do GPTMaker (spec training-expiration). */
+    expiresAt: timestamptz('expires_at'),
+    /** Quando o job o expirou; junto com `status = EXPIRED`. */
+    expiredAt: timestamptz('expired_at'),
     /** Gerado pela função do agente: só a publicação dela altera (spec agent-training). */
     managed: boolean('managed').notNull().default(false),
     /** Hash do token do `callbackUrl` de status. */
@@ -204,6 +218,12 @@ export const training = pgTable(
       .on(t.agentId)
       .where(sql`${t.deletedAt} is null`),
     index('training_tenant_idx').on(t.tenantId),
+    // Varredura do job de expiração. Sem o literal `EXPIRED` no predicado: valor novo de enum não
+    // pode ser usado na mesma transação da migration que o cria.
+    index('training_expiry_scan_idx')
+      .on(t.expiresAt)
+      .where(sql`${t.expiresAt} is not null and ${t.expiredAt} is null and ${t.deletedAt} is null`),
+    index('training_tags_gin_idx').using('gin', t.tags),
   ],
 );
 
