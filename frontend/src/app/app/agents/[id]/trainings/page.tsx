@@ -4,11 +4,20 @@ import {
   type AgentFunctionConfigView,
   TRAINING_IMPORT_MAX_ITEMS,
   type TrainingExport,
-  type TrainingUsage,
+  type TrainingListResponse,
   type TrainingView,
 } from '@gptmaker/contracts';
 import Link from 'next/link';
-import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type SVGProps,
+} from 'react';
 import {
   BookIcon,
   DownloadIcon,
@@ -22,8 +31,15 @@ import {
 import { Alert, Badge, buttonClass, Card, EmptyState, Loading, Spinner } from '@/components/ui';
 import { type createFormat, type T, useErrorMessage, useFormat, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
-import { inputClass } from '../../agent-fields';
 import { ApiRequestError } from '@/lib/platform-session';
+import {
+  changeTrainingFilters,
+  EMPTY_TRAINING_FILTERS,
+  hasActiveTrainingFilters,
+  parseTrainingFilters,
+  trainingFiltersQuery,
+  type TrainingListFilters,
+} from '@/lib/training-list';
 import {
   downloadJsonFile,
   exportHasImages,
@@ -39,12 +55,14 @@ import { useAgent } from '../agent-context';
 import { AddTrainingModal } from './add-training-modal';
 import { EditTextTrainingModal } from './edit-text-modal';
 import { ImportTrainingsModal } from './import-trainings-modal';
+import { TrainingFilters, TrainingPagination } from './list-controls';
+import { TrainingSettingsModal } from './settings-modal';
 
 /** Enquanto houver treinamento processando, a lista se atualiza sozinha (o status vem do callback). */
 const POLL_MS = 5000;
 const POLL_MAX = 120;
-/** Quantos treinamentos aparecem por vez; o resto entra em "Mostrar mais". */
-const PAGE_SIZE = 20;
+/** Espera o usuário parar de digitar antes de buscar. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 const ICONS: Record<TrainingView['type'], ComponentType<SVGProps<SVGSVGElement>>> = {
   TEXT: TextIcon,
@@ -52,11 +70,6 @@ const ICONS: Record<TrainingView['type'], ComponentType<SVGProps<SVGSVGElement>>
   VIDEO: VideoIcon,
   DOCUMENT: FileIcon,
 };
-
-interface Listing {
-  trainings: TrainingView[];
-  usage: TrainingUsage;
-}
 
 function UsageMeter({
   label,
@@ -101,18 +114,49 @@ function details(training: TrainingView, t: T, format: ReturnType<typeof createF
     }
   }
   parts.push(format.dateTime(new Date(training.createdAt), { dateStyle: 'short' }));
+  if (training.status === 'EXPIRED' && training.expiredAt) {
+    parts.push(
+      t('page.expiredOn', {
+        date: format.dateTime(new Date(training.expiredAt), { dateStyle: 'short' }),
+      }),
+    );
+  } else if (training.expiresAt) {
+    parts.push(
+      t('page.expiresOn', {
+        date: format.dateTime(new Date(training.expiresAt), {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }),
+      }),
+    );
+  }
   return parts.join(' · ');
 }
 
-/** Aba Treinamentos: o que o agente sabe, com o uso dos limites do plano. */
+/** `useSearchParams` pede um `Suspense` acima (build estático do Next). */
 export default function AgentTrainingsPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <AgentTrainings />
+    </Suspense>
+  );
+}
+
+/** Aba Treinamentos: o que o agente sabe, com o uso dos limites do plano. */
+function AgentTrainings() {
   const { session, api } = useAppSession();
   const { agent } = useAgent();
   const t = useT('trainings');
   const tc = useT('common');
   const format = useFormat();
   const translateError = useErrorMessage('trainings');
-  const [listing, setListing] = useState<Listing | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Página e filtros vivem na URL: recarregar e compartilhar o link mantêm o contexto.
+  const filters = useMemo(() => parseTrainingFilters(searchParams), [searchParams]);
+  const [search, setSearch] = useState(filters.q);
+  const [listing, setListing] = useState<TrainingListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -125,13 +169,42 @@ export default function AgentTrainingsPage() {
   const [takenOver, setTakenOver] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [visible, setVisible] = useState(PAGE_SIZE);
+  const [settingsOf, setSettingsOf] = useState<TrainingView | null>(null);
 
   const canManage = session.canManage && agent.status !== 'OUT_OF_SYNC';
   const base = `/app/agents/${agent.id}/trainings`;
 
-  const fetchListing = useCallback(() => api<Listing>(base), [api, base]);
+  const apply = useCallback(
+    (next: TrainingListFilters) => {
+      const query = trainingFiltersQuery(next);
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [router, pathname],
+  );
+  const changeFilters = (patch: Partial<Omit<TrainingListFilters, 'page'>>) =>
+    apply(changeTrainingFilters(filters, patch));
+
+  const listQuery = trainingFiltersQuery(filters);
+  const fetchListing = useCallback(
+    () => api<TrainingListResponse>(listQuery ? `${base}?${listQuery}` : base),
+    [api, base, listQuery],
+  );
+
+  // A busca só vai à URL (e à API) depois de uma pausa na digitação.
+  useEffect(() => {
+    if (search.trim() === filters.q.trim()) return;
+    const timer = window.setTimeout(
+      () => apply(changeTrainingFilters(filters, { q: search })),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [search, filters, apply]);
+  // Voltar/limpar pela URL também atualiza o campo (ajuste durante o render, sem effect).
+  const [syncedQ, setSyncedQ] = useState(filters.q);
+  if (syncedQ !== filters.q) {
+    setSyncedQ(filters.q);
+    setSearch(filters.q);
+  }
 
   const reload = useCallback(async () => {
     try {
@@ -173,6 +246,13 @@ export default function AgentTrainingsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [fetchListing]);
+
+  // Página que deixou de existir (ex.: removeu o último item dela): volta para a última.
+  const lastPage = listing?.page.totalPages ?? 1;
+  const outOfRange = listing !== null && listing.trainings.length === 0 && filters.page > lastPage;
+  useEffect(() => {
+    if (outOfRange) apply({ ...filters, page: Math.max(lastPage, 1) });
+  }, [outOfRange, lastPage, filters, apply]);
 
   const processing = listing?.trainings.some((training) => training.status === 'PROCESSING');
   useEffect(() => {
@@ -230,11 +310,7 @@ export default function AgentTrainingsPage() {
     </button>
   );
 
-  const term = query.trim().toLowerCase();
-  const filtered = (listing?.trainings ?? []).filter(
-    (training) => !term || trainingTitle(training, t).toLowerCase().includes(term),
-  );
-  const shown = filtered.slice(0, visible);
+  const filtering = hasActiveTrainingFilters(filters);
   // O link da aba Função fica no meio da frase: a tradução marca o lugar com {link}.
   const [introBefore, introAfter = ''] = t('page.intro', { link: '' }).split('');
 
@@ -305,25 +381,29 @@ export default function AgentTrainingsPage() {
             />
           </div>
 
-          {listing.trainings.length > PAGE_SIZE && (
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setVisible(PAGE_SIZE);
-              }}
-              placeholder={t('page.searchPlaceholder')}
-              aria-label={t('page.searchLabel')}
-              className={`${inputClass} mb-4`}
+          {(listing.page.total > 0 || filtering || listing.availableTags.length > 0) && (
+            <TrainingFilters
+              filters={filters}
+              search={search}
+              onSearch={setSearch}
+              availableTags={listing.availableTags}
+              onChange={changeFilters}
+              onClear={() => apply(EMPTY_TRAINING_FILTERS)}
             />
           )}
 
           <Card>
-            {listing.trainings.length > 0 && filtered.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-zinc-500">
-                {t('page.noMatch', { query: query.trim() })}
-              </p>
+            {listing.trainings.length === 0 && filtering ? (
+              <div className="px-5 py-8 text-center text-sm text-zinc-500">
+                <p>{t('page.noResults')}</p>
+                <button
+                  type="button"
+                  onClick={() => apply(EMPTY_TRAINING_FILTERS)}
+                  className={`${buttonClass('secondary', 'sm')} mt-3`}
+                >
+                  {t('page.clearFilters')}
+                </button>
+              </div>
             ) : listing.trainings.length === 0 ? (
               <EmptyState
                 icon={<BookIcon className="size-6" />}
@@ -333,10 +413,11 @@ export default function AgentTrainingsPage() {
               />
             ) : (
               <ul className="divide-y divide-zinc-100">
-                {shown.map((training) => {
+                {listing.trainings.map((training) => {
                   const Icon = ICONS[training.type];
                   const status = trainingStatus(training.status, t);
                   const busy = busyId === training.id;
+                  const expired = training.status === 'EXPIRED';
                   return (
                     <li key={training.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
                       {training.image ? (
@@ -373,6 +454,29 @@ export default function AgentTrainingsPage() {
                         <p className="mt-0.5 text-xs text-zinc-500">
                           {details(training, t, format)}
                         </p>
+                        {training.tags.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {training.tags.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() =>
+                                  changeFilters({
+                                    tags: filters.tags.includes(tag)
+                                      ? filters.tags
+                                      : [...filters.tags, tag],
+                                  })
+                                }
+                                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-200"
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {expired && (
+                          <p className="mt-1 text-xs text-zinc-500">{t('page.expiredHint')}</p>
+                        )}
                         {training.status === 'FAILED' && training.error && (
                           <p className="mt-1 text-xs text-amber-800">{training.error}</p>
                         )}
@@ -434,7 +538,17 @@ export default function AgentTrainingsPage() {
                                 {busy ? t('page.retrying') : t('page.retry')}
                               </button>
                             )}
-                            {training.type === 'TEXT' && (
+                            {!expired && (
+                              <button
+                                type="button"
+                                onClick={() => setSettingsOf(training)}
+                                disabled={busyId !== null}
+                                className={buttonClass('secondary', 'sm')}
+                              >
+                                {t('page.tagsAction')}
+                              </button>
+                            )}
+                            {training.type === 'TEXT' && !expired && (
                               <button
                                 type="button"
                                 onClick={() => setEditing(training)}
@@ -460,17 +574,11 @@ export default function AgentTrainingsPage() {
               </ul>
             )}
           </Card>
-          {filtered.length > shown.length && (
-            <div className="mt-4 flex items-center justify-center gap-3 text-sm text-zinc-500">
-              <span>{t('page.showing', { shown: shown.length, total: filtered.length })}</span>
-              <button
-                type="button"
-                onClick={() => setVisible((current) => current + PAGE_SIZE)}
-                className={buttonClass('secondary', 'sm')}
-              >
-                {t('page.showMore')}
-              </button>
-            </div>
+          {listing.page.total > 0 && (
+            <TrainingPagination
+              info={listing.page}
+              onPage={(page) => apply({ ...filters, page })}
+            />
           )}
         </>
       )}
@@ -479,6 +587,7 @@ export default function AgentTrainingsPage() {
         <AddTrainingModal
           agentId={agent.id}
           mediaAllowed={mediaAllowed === true}
+          availableTags={listing?.availableTags ?? []}
           onClose={() => setAdding(false)}
           onCreated={() => {
             setAdding(false);
@@ -493,6 +602,19 @@ export default function AgentTrainingsPage() {
           maxItems={TRAINING_IMPORT_MAX_ITEMS}
           onClose={() => setImporting(false)}
           onImported={() => void reload()}
+        />
+      )}
+
+      {settingsOf && (
+        <TrainingSettingsModal
+          agentId={agent.id}
+          training={settingsOf}
+          availableTags={listing?.availableTags ?? []}
+          onClose={() => setSettingsOf(null)}
+          onSaved={() => {
+            setSettingsOf(null);
+            void reload();
+          }}
         />
       )}
 

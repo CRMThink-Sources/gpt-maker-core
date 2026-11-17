@@ -18,7 +18,8 @@
   "status": {
     "done": "Pronto",
     "failed": "Falhou",
-    "processing": "Processando"
+    "processing": "Processando",
+    "expired": "Expirado"
   },
   "page": {
     "heading": "O que o agente sabe",
@@ -32,9 +33,8 @@
     "usageLabel": "Treinamentos (todos os agentes)",
     "noLimit": " · sem limite",
     "ofLimit": " de {limit}",
-    "searchPlaceholder": "Buscar treinamento pelo título",
+    "searchPlaceholder": "Buscar no texto, endereço ou nome do arquivo",
     "searchLabel": "Buscar treinamento",
-    "noMatch": "Nenhum treinamento encontrado para “{query}”.",
     "emptyTitle": "Nenhum treinamento ainda",
     "emptyDescription": "Preencha a base de conhecimento no formulário da aba Função e publique, ou adicione um texto por aqui.",
     "imageAlt": "Imagem do treinamento",
@@ -47,8 +47,6 @@
     "remove": "Remover",
     "removing": "Removendo…",
     "edit": "Editar",
-    "showing": "Mostrando {shown} de {total}",
-    "showMore": "Mostrar mais",
     "loadError": "Não foi possível carregar os treinamentos.",
     "actionError": "Não foi possível concluir. Tente de novo.",
     "export": "Exportar",
@@ -56,7 +54,22 @@
     "import": "Importar",
     "exportEmpty": "Não há treinamentos manuais para exportar.",
     "exportImages": "O arquivo guarda o link das imagens, não o arquivo delas. Quem tiver o arquivo consegue abri-las enquanto existirem neste agente.",
-    "exportError": "Não foi possível exportar. Tente de novo."
+    "exportError": "Não foi possível exportar. Tente de novo.",
+    "typeLabel": "Tipo",
+    "statusLabel": "Estado",
+    "tagsLabel": "Tags",
+    "allTypes": "Todos os tipos",
+    "allStatuses": "Todos os estados",
+    "clearFilters": "Limpar filtros",
+    "noResults": "Nenhum treinamento atende aos filtros.",
+    "total": "{total} treinamentos",
+    "pageOf": "Página {page} de {totalPages}",
+    "previous": "Anterior",
+    "next": "Próxima",
+    "tagsAction": "Tags e prazo",
+    "expiresOn": "expira em {date}",
+    "expiredOn": "expirou em {date}",
+    "expiredHint": "Retirado do agente; só o registro continua aqui."
   },
   "add": {
     "title": "Adicionar treinamento",
@@ -117,11 +130,13 @@
     "TRAINING_IMPORT_UNSUPPORTED_VERSION": "A versão deste arquivo não é suportada. Exporte os treinamentos de novo.",
     "TRAINING_IMPORT_TOO_MANY": "O arquivo passa do limite de treinamentos por importação.",
     "TRAINING_IMPORT_INVALID_FILE": "O arquivo não é uma exportação de treinamentos válida.",
-    "TRAINING_IMPORT_BUSY": "Outra importação está em andamento; tente de novo em instantes."
+    "TRAINING_IMPORT_BUSY": "Outra importação está em andamento; tente de novo em instantes.",
+    "TRAINING_EXPIRED": "Este treinamento expirou e foi retirado do agente.",
+    "TRAINING_MANAGED_NO_SETTINGS": "Treinamento gerado pela função não aceita tags nem prazo."
   },
   "import": {
     "title": "Importar treinamentos",
-    "description": "Envie um arquivo exportado pelo app. Os treinamentos entram somados aos que o agente já tem; nada existente é alterado ou removido.",
+    "description": "Envie um arquivo exportado pelo app. Os treinamentos entram somados aos que o agente já tem; nada existente é alterado ou removido. As tags vão no arquivo; o prazo de expiração não.",
     "fileLabel": "Arquivo de treinamentos (.json)",
     "chosen": "Itens no arquivo: {count}",
     "notJson": "O arquivo não é uma exportação de treinamentos válida.",
@@ -150,5 +165,22 @@
       "IMAGE_QUOTA": "Imagem não importada: faltou espaço no plano.",
       "IMAGE_FAILED": "Imagem não importada."
     }
+  },
+  "fields": {
+    "tagsLabel": "Tags",
+    "tagsHint": "Até {max} tags de {length} caracteres. Enter ou vírgula adiciona.",
+    "tagsPlaceholder": "Ex.: preços",
+    "tagRemove": "Remover a tag {tag}",
+    "tagSuggestions": "Já usadas neste agente:",
+    "expiresLabel": "Expira em",
+    "expiresHint": "Ao vencer, o treinamento é retirado do agente automaticamente. Deixe vazio para não expirar.",
+    "expiresPast": "Escolha uma data futura."
+  },
+  "settings": {
+    "title": "Tags e prazo",
+    "description": "Organize o treinamento e defina quando ele deixa de valer. Não reenvia nada ao agente.",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "error": "Não foi possível salvar. Tente de novo."
   }
 }

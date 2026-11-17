@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -16,13 +17,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import {
   type CreateTrainingInput,
   createTrainingSchema,
+  type ListTrainingsQuery,
+  listTrainingsQuerySchema,
   type TrainingExport,
   type TrainingImportResult,
-  type TrainingUsage,
+  type TrainingListResponse,
   TRAINING_IMAGE_MAX_BYTES,
   type TrainingView,
   type UploadedTrainingImage,
   updateTrainingSchema,
+  updateTrainingSettingsSchema,
 } from '@gptmaker/contracts';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
 import type { Response } from 'express';
@@ -31,6 +35,7 @@ import { TrainingService } from './training.service';
 import { TrainingTransferService } from './training-transfer.service';
 
 class UpdateTrainingDto extends createZodDto(updateTrainingSchema) {}
+class UpdateTrainingSettingsDto extends createZodDto(updateTrainingSettingsSchema) {}
 
 /** Treinamentos de um agente do tenant da sessão (spec agent-training). */
 @Controller('app/agents/:agentId/trainings')
@@ -68,17 +73,15 @@ export class TrainingsController {
     return this.transfer.import(session.tenantId, agentId, body);
   }
 
+  /** Página de treinamentos com filtros (spec training-listing). */
   @Get()
   @AppAuth()
-  async list(
+  list(
     @CurrentSession() session: AppSession,
     @Param('agentId') agentId: string,
-  ): Promise<{ trainings: TrainingView[]; usage: TrainingUsage }> {
-    const [trainings, usage] = await Promise.all([
-      this.trainings.list(session.tenantId, agentId),
-      this.trainings.usage(session.tenantId),
-    ]);
-    return { trainings, usage };
+    @Query(new ZodValidationPipe(listTrainingsQuerySchema)) query: ListTrainingsQuery,
+  ): Promise<TrainingListResponse> {
+    return this.trainings.list(session.tenantId, agentId, query);
   }
 
   /** Texto, site ou vídeo (JSON); documento não é mais aceito (spec agent-training). */
@@ -103,6 +106,18 @@ export class TrainingsController {
     @Body() body: UpdateTrainingDto,
   ): Promise<TrainingView> {
     return this.trainings.updateText(session.tenantId, agentId, id, body);
+  }
+
+  /** Tags e expiração de qualquer tipo; não reenvia nada ao GPTMaker (spec training-tags). */
+  @Patch(':id/settings')
+  @AppAuth('manage')
+  updateSettings(
+    @CurrentSession() session: AppSession,
+    @Param('agentId') agentId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateTrainingSettingsDto,
+  ): Promise<TrainingView> {
+    return this.trainings.updateSettings(session.tenantId, agentId, id, body);
   }
 
   /**

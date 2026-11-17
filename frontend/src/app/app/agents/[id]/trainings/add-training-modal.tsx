@@ -11,10 +11,12 @@ import { Modal } from '@/components/modal';
 import { Alert, buttonClass } from '@/components/ui';
 import { useErrorMessage, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
+import { localInputToIso } from '@/lib/training-list';
 import { TRAINING_INTERVAL_KEYS, trainingIntervalLabel } from '@/lib/trainings';
 import { useAppSession } from '../../../session-provider';
 import { Field, inputClass } from '../../agent-fields';
 import { TrainingImageField } from '../../training-image-field';
+import { expiresInPast, ExpiresAtField, TagsField } from './training-fields';
 
 type Kind = 'TEXT' | 'WEBSITE' | 'VIDEO';
 
@@ -35,11 +37,14 @@ const KINDS: Array<{
 export function AddTrainingModal({
   agentId,
   mediaAllowed,
+  availableTags = [],
   onClose,
   onCreated,
 }: {
   agentId: string;
   mediaAllowed: boolean;
+  /** Tags já usadas no agente, para sugerir. */
+  availableTags?: string[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -55,6 +60,8 @@ export function AddTrainingModal({
   const [subPages, setSubPages] = useState(false);
   // Intervalo de re-treinamento do site.
   const [refresh, setRefresh] = useState<TrainingInterval>('NEVER');
+  const [tags, setTags] = useState<string[]>([]);
+  const [expires, setExpires] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -63,12 +70,22 @@ export function AddTrainingModal({
     setError(null);
     setSaving(true);
     try {
+      const settings = {
+        ...(tags.length > 0 && { tags }),
+        ...(expires && { expiresAt: localInputToIso(expires) ?? undefined }),
+      };
       const body: CreateTrainingInput =
         kind === 'TEXT'
-          ? { type: 'TEXT', text: text.trim(), ...(image && { imageId: image.id }) }
+          ? { type: 'TEXT', text: text.trim(), ...(image && { imageId: image.id }), ...settings }
           : kind === 'WEBSITE'
-            ? { type: 'WEBSITE', url, trainingSubPages: subPages, trainingInterval: refresh }
-            : { type: 'VIDEO', url };
+            ? {
+                type: 'WEBSITE',
+                url,
+                trainingSubPages: subPages,
+                trainingInterval: refresh,
+                ...settings,
+              }
+            : { type: 'VIDEO', url, ...settings };
       await api(`/app/agents/${agentId}/trainings`, { method: 'POST', body: JSON.stringify(body) });
       onCreated();
     } catch (e) {
@@ -95,7 +112,11 @@ export function AddTrainingModal({
           <button
             type="submit"
             form="add-training"
-            disabled={(kind === 'TEXT' ? text.trim() === '' : url.trim() === '') || saving}
+            disabled={
+              (kind === 'TEXT' ? text.trim() === '' : url.trim() === '') ||
+              expiresInPast(expires) ||
+              saving
+            }
             className={buttonClass('primary')}
           >
             {saving ? t('add.sending') : t('add.submit')}
@@ -218,6 +239,9 @@ export function AddTrainingModal({
               </Field>
             </>
           )}
+
+          <TagsField value={tags} onChange={setTags} suggestions={availableTags} />
+          <ExpiresAtField value={expires} onChange={setExpires} />
         </fieldset>
       </form>
     </Modal>

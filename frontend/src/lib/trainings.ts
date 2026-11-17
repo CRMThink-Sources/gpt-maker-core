@@ -36,6 +36,7 @@ export function trainingStatus(
 ): { label: string; tone: Tone } {
   if (status === 'DONE') return { label: t('status.done'), tone: 'green' };
   if (status === 'FAILED') return { label: t('status.failed'), tone: 'amber' };
+  if (status === 'EXPIRED') return { label: t('status.expired'), tone: 'zinc' };
   return { label: t('status.processing'), tone: 'brand' };
 }
 
