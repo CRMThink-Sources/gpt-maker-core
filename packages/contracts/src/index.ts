@@ -1,4 +1,6 @@
 export * from './admin';
+export * from './agent-conversations';
+export * from './agent-hallucination';
 export * from './agent-tests';
 export * from './agent-function-answers';
 export * from './agent-function-assist';

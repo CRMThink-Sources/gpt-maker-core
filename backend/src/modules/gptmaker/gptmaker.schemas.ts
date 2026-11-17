@@ -417,6 +417,63 @@ export const conversationResponseSchema = z
   .loose();
 export type GptMakerConversationResponse = z.infer<typeof conversationResponseSchema>;
 
+// ---- Chats e mensagens (leitura; docs: Chats > Listar chats e Listar mensagens)
+
+/**
+ * Chat do workspace. `id` é `public-api-<agentId>-<contextId>` e `recipient` o `contextId` original
+ * (`<tenantId>:<dialogId>`). Campos além de `id` são opcionais: a doc não garante nenhum.
+ */
+export const chatSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().nullish(),
+    title: z.string().nullish(),
+    agentId: z.string().nullish(),
+    recipient: z.string().nullish(),
+    type: z.string().nullish(),
+    createdAt: z.number().nullish(),
+    time: z.number().nullish(),
+  })
+  .loose();
+export type GptMakerChat = z.infer<typeof chatSchema>;
+
+/** Lista no envelope `{ data, count }` (o OpenAPI promete array); aceita os dois. */
+export const chatListSchema = z.union([
+  chatSchema.array(),
+  z
+    .object({ data: chatSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
+/**
+ * Mensagem de um chat. `role` e `type` ficam como texto livre (a doc não lista os valores) e
+ * `time` é número sem unidade documentada: a normalização é de quem usa (conversation-normalize).
+ */
+export const chatMessageSchema = z
+  .object({
+    id: z.string(),
+    role: z.string(),
+    type: z.string().nullish(),
+    text: z.string().nullish(),
+    time: z.number().nullish(),
+    userName: z.string().nullish(),
+    imageUrl: z.string().nullish(),
+    audioUrl: z.string().nullish(),
+    documentUrl: z.string().nullish(),
+    fileName: z.string().nullish(),
+  })
+  .loose();
+export type GptMakerChatMessage = z.infer<typeof chatMessageSchema>;
+
+export const chatMessageListSchema = z.union([
+  chatMessageSchema.array(),
+  z
+    .object({ data: chatMessageSchema.array() })
+    .loose()
+    .transform((body) => body.data),
+]);
+
 // ---- Consumo
 
 export const creditsSpentSchema = z

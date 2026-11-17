@@ -89,6 +89,7 @@ describe('chave de IA do cliente', () => {
       last4: null,
       verifiedAt: null,
       creditsPerField: 2,
+      creditsPerAnalysis: 2,
       platformAvailable: false,
     });
     platformKey = 'vibe_api_da_crmthink';

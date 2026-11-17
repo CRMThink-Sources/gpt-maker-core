@@ -160,6 +160,13 @@
     "AI_BUSY": "Too many reviews right now. Please try again shortly.",
     "AI_FIELD_TOO_LARGE": "This field is too large to be reviewed.",
     "AI_BAD_OUTPUT": "Could not review this field.",
-    "NO_CREDIT": "Your AI credits have run out. Add credits to continue."
+    "NO_CREDIT": "Your AI credits have run out. Add credits to continue.",
+    "CONVERSATIONS_UNAVAILABLE": "Could not load the conversations right now. Try again shortly.",
+    "CONVERSATION_NOT_FOUND": "Conversation not found.",
+    "HALLUCINATION_NOTHING_TO_ANALYZE": "This conversation has no agent reply to analyze.",
+    "HALLUCINATION_FLAGGED_NOT_FOUND": "The marked replies are not in this conversation.",
+    "REVIEW_RATE_LIMITED": "Too many analyses in a short time. Wait a few minutes.",
+    "HALLUCINATION_ALREADY_ANALYZED": "This analysis was already done. Choose the conversation again to analyze it once more.",
+    "HALLUCINATION_IN_PROGRESS": "An analysis is already in progress. Wait for it to finish and try again."
   }
 }

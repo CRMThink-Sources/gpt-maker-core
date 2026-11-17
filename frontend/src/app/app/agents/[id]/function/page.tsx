@@ -27,6 +27,7 @@ import { useTransferAgents } from '../../use-transfer-agents';
 import { Field, inputClass } from '../../agent-fields';
 import { BehaviorMeter, FunctionForm, FunctionFormOutline } from '../../function-form';
 import { BehaviorDiff, FunctionPreviewView } from '../../function-preview';
+import { HallucinationEntry } from '../../hallucination-modal';
 import { attentionCount, withGapItem } from '../../review-logic';
 import { ReviewPanel } from '../../review-ui';
 import { useAiKey, useFunctionReview } from '../../use-function-review';
@@ -485,6 +486,18 @@ export default function AgentFunctionPage() {
           onAddGap={addGap}
           onReview={(ids) => void review.run(ids, answers, expectation)}
           onRetryFailed={(ids) => void review.run(ids, answers)}
+        />
+      )}
+
+      {!readOnly && (
+        <HallucinationEntry
+          agentId={agent.id}
+          form={config.form}
+          answers={answers}
+          aiKey={aiKey}
+          canConfigureKey={session.user.isAdmin}
+          disabled={locked || busy}
+          onApply={setAnswers}
         />
       )}
 

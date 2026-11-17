@@ -4,6 +4,8 @@ import { GptMakerError, kindFromStatus, parseRetryAfter } from './gptmaker.error
 import { GptMakerResilience } from './gptmaker.resilience';
 import {
   assistantListSchema,
+  chatListSchema,
+  chatMessageListSchema,
   assistantSchema,
   agentSettingsSchema,
   conversationRequestSchema,
@@ -13,6 +15,8 @@ import {
   errorBodySchema,
   GptMakerAgent,
   GptMakerAgentSettings,
+  GptMakerChat,
+  GptMakerChatMessage,
   GptMakerConversationRequest,
   GptMakerConversationResponse,
   GptMakerCreateTraining,
@@ -462,6 +466,35 @@ export class GptMakerClient {
 
   async stopHuman(chatId: string): Promise<void> {
     await this.success('chat.stop-human', 'PUT', `/chat/${enc(chatId)}/stop-human`);
+  }
+
+  // ---- Chats e mensagens (somente leitura)
+
+  /** Chats do workspace (todos os tenants); quem usa filtra por tenant pelo `recipient`. */
+  listChats(query: PageQuery & { agentId?: string } = {}): Promise<GptMakerChat[]> {
+    return this.request({
+      operation: 'chat.list',
+      method: 'GET',
+      path: `/workspace/${this.ws()}/chats`,
+      query: {
+        agentId: query.agentId,
+        page: query.page,
+        pageSize: query.pageSize,
+        query: query.query,
+      },
+      response: chatListSchema,
+    });
+  }
+
+  /** Mensagens de um chat, paginadas; a ordem não é documentada, quem usa reordena. */
+  listChatMessages(chatId: string, page: PageQuery = {}): Promise<GptMakerChatMessage[]> {
+    return this.request({
+      operation: 'chat.messages',
+      method: 'GET',
+      path: `/chat/${enc(chatId)}/messages`,
+      query: { page: page.page, pageSize: page.pageSize },
+      response: chatMessageListSchema,
+    });
   }
 
   // ---- Consumo

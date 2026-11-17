@@ -41,17 +41,18 @@ export class CreditStatementService {
 
   async usage(tenantId: string, query: CreditUsageQuery): Promise<CreditUsageView> {
     const day = sql<string>`to_char(${creditLedger.createdAt} at time zone ${TZ}, 'YYYY-MM-DD')`;
-    // Revisão da função por IA (`ref_id` = a revisão): conta campos revisados, sem o sufixo da
-    // carteira na chave, em vez de respostas.
+    // Revisão da função por IA (`ref_id` = a revisão) e análise de alucinação (`ref_id` = a análise):
+    // contam campos revisados e análises, sem o sufixo da carteira na chave, em vez de respostas.
     const isReview = sql`${creditLedger.refType} = 'function_review'`;
-    const kind = sql<CreditUsageKind>`case when ${isReview} then 'FUNCTION_REVIEW' else 'RESPONSE' end`;
+    const isAnalysis = sql`${creditLedger.refType} = 'hallucination_analysis'`;
+    const kind = sql<CreditUsageKind>`case when ${isReview} then 'FUNCTION_REVIEW' when ${isAnalysis} then 'HALLUCINATION_ANALYSIS' else 'RESPONSE' end`;
     const rows = await this.db
       .select({
         day,
         agentId: creditLedger.agentId,
         agentName: agent.name,
         kind,
-        responses: sql<string>`count(distinct case when ${isReview}
+        responses: sql<string>`count(distinct case when ${isReview} or ${isAnalysis}
           then regexp_replace(${creditLedger.idempotencyKey}, ':(TRIAL|PLAN|EXTRA)$', '')
           else ${creditLedger.refId} end)`,
         credits: sql<string>`-sum(${creditLedger.amount})`,

@@ -71,6 +71,8 @@
     "credits": "Créditos",
     "noAgent": "Sem agente",
     "functionReview": "Revisão da função",
+    "hallucinationAnalysis": "Análise de alucinação",
+    "analyses": "{count, plural, one {# análise} other {# análises}}",
     "fields": "{count, plural, one {# campo} other {# campos}}",
     "total": "Total",
     "loadFailed": "Não foi possível carregar o consumo."

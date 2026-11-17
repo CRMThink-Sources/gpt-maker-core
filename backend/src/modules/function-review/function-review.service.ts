@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   assistFields,
   assistKnowledgeMode,
@@ -20,27 +20,21 @@ import {
   type ReviewCrossInput,
   type ReviewCrossResult,
   reviewCrossResultSchema,
-  type ReviewErrorCode,
   type ReviewFieldInput,
   type ReviewFieldResult,
-  type ReviewKeySource,
   reviewModelFieldOutputSchema,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
-import type { z } from 'zod';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DB, type Database } from '../../shared/database/database.module';
-import { agentFunctionConfig } from '../../shared/database/schema/index';
 import { DomainError } from '../../shared/http/api-exception.filter';
-import { RateLimitExceededError, RedisRateLimiter } from '../../shared/redis/rate-limiter';
 import { REDIS } from '../../shared/redis/redis.module';
 import { AgentRepository } from '../agents';
 import { FunctionCatalog } from '../agent-functions';
 import { BalanceReader, CreditAlerts, LedgerService } from '../billing';
-import { VibecodeClient, VibecodeError, type VibecodeMessage } from '../vibecode';
+import { VibecodeClient } from '../vibecode';
 import { AiKeyService } from './ai-key.service';
 import {
   type AssistableField,
@@ -60,31 +54,18 @@ import {
   type ReviewableField,
   toFieldResult,
 } from './review-prompt';
-import { platformKey } from './platform-key';
-import { reviewError } from './review-errors';
+import { type AgentFunctionTemplate, FunctionTemplateReader } from './function-template.reader';
+import { type AiSession, ReviewAiRunner } from './review-ai.runner';
 import { ReviewSessionStore } from './review-session.store';
 
-/** Campos por tenant na janela (design D7). */
-export const TENANT_FIELDS_PER_WINDOW = 60;
-export const TENANT_WINDOW_MS = 10 * 60 * 1000;
-/**
- * Janela do limite global da chave da CRMThink. 10 s dão vagas inteiras para qualquer RPM razoável
- * (com 5 s, 20 por minuto virava 1 por janela: 12 por minuto). A espera cobre uma janela inteira.
- */
-export const PLATFORM_WINDOW_MS = 10_000;
-export const PLATFORM_MAX_WAIT_MS = 10_000;
+export {
+  PLATFORM_MAX_WAIT_MS,
+  PLATFORM_WINDOW_MS,
+  TENANT_FIELDS_PER_WINDOW,
+  TENANT_WINDOW_MS,
+} from './review-ai.runner';
 
-const TEMPERATURE = 0.2;
-
-/** Erros do Vibecode com a chave da CRMThink: o cliente não vê detalhes da conta dela (design D5). */
-const PLATFORM_HIDDEN: ReadonlySet<ReviewErrorCode> = new Set([
-  'AI_KEY_INVALID',
-  'AI_KEY_SCOPE',
-  'AI_NO_BALANCE',
-  'AI_MODEL_UNAVAILABLE',
-]);
-
-type Session = { tenantId: string; keySource: ReviewKeySource };
+type Session = AiSession;
 
 const notFound = () =>
   new DomainError('REVIEW_NOT_FOUND', 'Revisão não encontrada ou expirada', HttpStatus.NOT_FOUND);
@@ -97,7 +78,8 @@ const notFound = () =>
 @Injectable()
 export class FunctionReviewService {
   private readonly logger = new Logger(FunctionReviewService.name);
-  private readonly platformLimiter: RedisRateLimiter;
+  private readonly ai: ReviewAiRunner;
+  private readonly templates: FunctionTemplateReader;
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -111,13 +93,12 @@ export class FunctionReviewService {
     private readonly balance: BalanceReader,
     private readonly ledger: LedgerService,
     private readonly alerts: CreditAlerts,
+    // Os mesmos providers do módulo (um só limiter e um só log); sem eles (testes), nascem aqui.
+    @Optional() runner?: ReviewAiRunner,
+    @Optional() templates?: FunctionTemplateReader,
   ) {
-    this.platformLimiter = new RedisRateLimiter(redis, {
-      name: 'review:platform',
-      perSecond: Math.max(1, Math.floor((env.VIBECODE_PLATFORM_RPM * PLATFORM_WINDOW_MS) / 60_000)),
-      windowMs: PLATFORM_WINDOW_MS,
-      maxWaitMs: PLATFORM_MAX_WAIT_MS,
-    });
+    this.ai = runner ?? new ReviewAiRunner(env, redis, keys, vibecode, balance, ledger, alerts);
+    this.templates = templates ?? new FunctionTemplateReader(db, agentRows, catalog);
   }
 
   async create(
@@ -140,7 +121,7 @@ export class FunctionReviewService {
       );
     }
 
-    const keySource = await this.chooseKey(tenantId);
+    const keySource = await this.ai.chooseKey(tenantId);
     const reviewId = randomUUID();
     // Cobertura: todos os campos de base, inclusive os vazios (nao entram em `fieldIds`).
     const gapFieldIds = input.withGaps
@@ -193,7 +174,7 @@ export class FunctionReviewService {
       );
     }
 
-    await this.tenantLimit(tenantId);
+    await this.ai.tenantLimit(tenantId);
     if (!(await this.sessions.reserve(reviewId, field.id))) {
       throw new DomainError(
         'REVIEW_FIELD_RESERVED',
@@ -238,9 +219,9 @@ export class FunctionReviewService {
       return { ...entry, label: labels.get(entry.fieldId) ?? entry.fieldId };
     });
 
-    const apiKey = await this.apiKey(session);
-    await this.tenantLimit(tenantId);
-    const output = await this.ask(
+    const apiKey = await this.ai.apiKey(session);
+    await this.ai.tenantLimit(tenantId);
+    const output = await this.ai.ask(
       session,
       apiKey,
       crossMessages(summaries),
@@ -317,7 +298,7 @@ export class FunctionReviewService {
       .map((field) => gapBase(field, answers, summaries.get(field.id)));
     if (bases.length === 0) return { gaps: [], covered: [] };
 
-    await this.tenantLimit(tenantId);
+    await this.ai.tenantLimit(tenantId);
     if (!(await this.sessions.reserve(reviewId, GAPS_FIELD_ID))) {
       throw new DomainError(
         'REVIEW_FIELD_RESERVED',
@@ -327,8 +308,8 @@ export class FunctionReviewService {
     }
     try {
       await this.assertBalance(session);
-      const apiKey = await this.apiKey(session);
-      const output = await this.ask(
+      const apiKey = await this.ai.apiKey(session);
+      const output = await this.ai.ask(
         session,
         apiKey,
         gapsMessages(expectation, bases, { functionName, agentName }),
@@ -452,17 +433,13 @@ export class FunctionReviewService {
   ): Promise<AssistResult> {
     const ids = fields.map((field) => field.id);
     const eligibleIds = new Set(ids);
-    const session: Session = { tenantId, keySource: await this.chooseKey(tenantId) };
-    await this.tenantLimit(tenantId);
+    const session: Session = { tenantId, keySource: await this.ai.chooseKey(tenantId) };
+    await this.ai.tenantLimit(tenantId);
     const price = this.env.REVIEW_CREDITS_PER_FIELD;
     // Sem saldo para todos os campos pedidos, a IA nem é chamada.
-    if (session.keySource === 'platform' && price > 0) {
-      if ((await this.balance.total(tenantId)) < price * fields.length) {
-        throw reviewError('NO_CREDIT');
-      }
-    }
-    const apiKey = await this.apiKey(session);
-    const output = await this.ask(
+    await this.ai.assertBalance(session, price * fields.length);
+    const apiKey = await this.ai.apiKey(session);
+    const output = await this.ai.ask(
       session,
       apiKey,
       assistMessages({
@@ -512,14 +489,12 @@ export class FunctionReviewService {
   // Internos ---------------------------------------------------------------------------------
 
   /** Com a chave da CRMThink, sem saldo para um campo a IA nem é chamada (design D9). */
-  private async assertBalance(session: Session): Promise<void> {
-    const price = this.env.REVIEW_CREDITS_PER_FIELD;
-    if (session.keySource !== 'platform' || price <= 0) return;
-    if ((await this.balance.total(session.tenantId)) < price) throw reviewError('NO_CREDIT');
+  private assertBalance(session: Session): Promise<void> {
+    return this.ai.assertBalance(session, this.env.REVIEW_CREDITS_PER_FIELD);
   }
 
   /** Débito de um campo (idempotente pela chave); só com a chave da CRMThink, depois da saída válida. */
-  private async charge(
+  private charge(
     session: Session,
     reviewId: string,
     agentId: string | undefined,
@@ -527,32 +502,14 @@ export class FunctionReviewService {
     key = `review:${reviewId}:${fieldKey}`,
     amount = this.env.REVIEW_CREDITS_PER_FIELD,
   ): Promise<void> {
-    const price = this.env.REVIEW_CREDITS_PER_FIELD;
-    if (session.keySource !== 'platform' || price <= 0) return;
-    const { tenantId } = session;
-    try {
-      const debit = await this.ledger.debit({
-        tenantId,
-        key,
-        amount,
-        // O razão exige o modelo no débito; aqui é o da revisão, que não casa com o catálogo de
-        // atendimento (a reconciliação só olha os modelos do catálogo).
-        modelCode: this.env.VIBECODE_REVIEW_MODEL,
-        unitCost: amount,
-        agentId,
-        refType: 'function_review',
-        refId: reviewId,
-        createdBy: 'system:review',
-      });
-      if (debit.applied) await this.alerts.afterDebit(tenantId, debit.balance);
-    } catch (error) {
-      // A IA já foi chamada e esse custo fica com a CRMThink; o cliente não recebe o resultado.
-      this.logger.error(
-        { alert: true, err: error, tenantId, reviewId, fieldKey },
-        'débito da revisão falhou; sem resultado',
-      );
-      throw error;
-    }
+    return this.ai.charge(session, {
+      key,
+      amount,
+      refType: 'function_review',
+      refId: reviewId,
+      agentId,
+      label: fieldKey,
+    });
   }
 
   private async run(
@@ -566,9 +523,9 @@ export class FunctionReviewService {
     // Sem saldo, o campo nem chega à IA (design D9).
     await this.assertBalance(session);
 
-    const apiKey = await this.apiKey(session);
+    const apiKey = await this.ai.apiKey(session);
     const items = reviewItems(field, answers);
-    const output = await this.ask(
+    const output = await this.ai.ask(
       session,
       apiKey,
       fieldMessages(field, items, context),
@@ -578,120 +535,6 @@ export class FunctionReviewService {
 
     await this.charge(session, reviewId, agentId, field.id);
     return result;
-  }
-
-  /**
-   * Pergunta ao Vibecode e valida a saída; fora do formato, uma nova tentativa com o erro da
-   * validação, e de novo fora, `AI_BAD_OUTPUT` (design D4).
-   */
-  private async ask<S extends z.ZodType>(
-    session: Session,
-    apiKey: string,
-    messages: VibecodeMessage[],
-    schema: S,
-  ): Promise<z.output<S>> {
-    let conversation = messages;
-    for (let attempt = 1; ; attempt++) {
-      const content = await this.chat(session, apiKey, conversation);
-      const checked = checkOutput(schema, content);
-      if (checked.ok) return checked.data;
-      if (attempt >= 2) {
-        this.logger.warn({ tenantId: session.tenantId }, 'saída da IA fora do formato');
-        throw reviewError('AI_BAD_OUTPUT');
-      }
-      conversation = [
-        ...messages,
-        { role: 'assistant', content },
-        {
-          role: 'user',
-          content: `A resposta não segue o formato pedido (${checked.message}). Responda de novo, só com o JSON.`,
-        },
-      ];
-    }
-  }
-
-  private async chat(
-    session: Session,
-    apiKey: string,
-    messages: VibecodeMessage[],
-  ): Promise<string> {
-    if (session.keySource === 'platform') await this.platformSlot();
-    try {
-      const result = await this.vibecode.chat({
-        apiKey,
-        model: this.env.VIBECODE_REVIEW_MODEL,
-        messages,
-        temperature: TEMPERATURE,
-        json: true,
-      });
-      this.logger.log(
-        { tenantId: session.tenantId, keySource: session.keySource, usage: result.usage },
-        'revisão: chamada ao Vibecode concluída',
-      );
-      return result.content;
-    } catch (error) {
-      throw this.translate(session, error);
-    }
-  }
-
-  /** Vaga no limite global da chave da CRMThink; sem vaga, `AI_BUSY` sem cobrança (design D7). */
-  private async platformSlot(): Promise<void> {
-    try {
-      await this.platformLimiter.acquire();
-    } catch (error) {
-      if (error instanceof RateLimitExceededError) throw reviewError('AI_BUSY');
-      throw error;
-    }
-  }
-
-  private async tenantLimit(tenantId: string): Promise<void> {
-    const limiter = new RedisRateLimiter(this.redis, {
-      name: `review:tenant:${tenantId}`,
-      perSecond: TENANT_FIELDS_PER_WINDOW,
-      windowMs: TENANT_WINDOW_MS,
-      maxWaitMs: 0,
-    });
-    try {
-      await limiter.acquire();
-    } catch (error) {
-      if (error instanceof RateLimitExceededError) {
-        throw new DomainError(
-          'REVIEW_RATE_LIMITED',
-          'Muitas revisões em pouco tempo. Aguarde alguns minutos.',
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      throw error;
-    }
-  }
-
-  /** Erro do Vibecode → mensagem do spec; com a chave da CRMThink, sem detalhes da conta dela. */
-  private translate(session: Session, error: unknown): unknown {
-    if (!(error instanceof VibecodeError)) return error;
-    if (session.keySource === 'platform' && PLATFORM_HIDDEN.has(error.code)) {
-      this.logger.error(
-        { alert: true, code: error.code, vibecodeCode: error.vibecodeCode, status: error.status },
-        'chave da CRMThink recusada pelo Vibecode na revisão',
-      );
-      return reviewError('AI_UNAVAILABLE');
-    }
-    return reviewError(error.code);
-  }
-
-  /** Chave do cliente ou da CRMThink, a que ficou presa à revisão (sem trocar no meio). */
-  private async apiKey(session: Session): Promise<string> {
-    const key =
-      session.keySource === 'tenant'
-        ? await this.keys.find(session.tenantId)
-        : platformKey(this.env);
-    if (!key) throw reviewError('AI_KEY_REQUIRED');
-    return key;
-  }
-
-  private async chooseKey(tenantId: string): Promise<ReviewKeySource> {
-    if (await this.keys.find(tenantId)) return 'tenant';
-    if (platformKey(this.env)) return 'platform';
-    throw reviewError('AI_KEY_REQUIRED');
   }
 
   private async session(
@@ -706,41 +549,12 @@ export class FunctionReviewService {
   }
 
   /** Template da versão a que a configuração do agente está presa (ou a mais recente, com `latest`). */
-  private async template(
+  private template(
     tenantId: string,
     agentId: string,
     options: { latest?: boolean } = {},
-  ): Promise<{
-    content: FunctionTemplateContent;
-    functionName: string;
-    functionDescription: string;
-    agentName: string;
-  }> {
-    const agent = await this.agentRows.getById(tenantId, agentId);
-    const [config] = await this.db
-      .select({
-        templateId: agentFunctionConfig.templateId,
-        versionId: agentFunctionConfig.versionId,
-      })
-      .from(agentFunctionConfig)
-      .where(eq(agentFunctionConfig.agentId, agentId));
-    if (!config) {
-      throw new DomainError(
-        'FUNCTION_NOT_CONFIGURED',
-        'Este agente não tem função configurada',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-    const published =
-      config.versionId && !options.latest
-        ? await this.catalog.versionById(config.versionId)
-        : await this.catalog.latestOfTemplate(config.templateId);
-    return {
-      content: published.content,
-      functionName: published.name,
-      functionDescription: published.description,
-      agentName: agent.name,
-    };
+  ): Promise<AgentFunctionTemplate> {
+    return this.templates.forAgent(tenantId, agentId, options);
   }
 }
 
@@ -764,25 +578,4 @@ function helpWording(error: unknown): unknown {
 
 function isReviewable(field: { kind: string }): field is ReviewableField {
   return field.kind === 'TEXT' || field.kind === 'TEXT_LIST' || field.kind === 'KNOWLEDGE';
-}
-
-function checkOutput<S extends z.ZodType>(
-  schema: S,
-  content: string,
-): { ok: true; data: z.output<S> } | { ok: false; message: string } {
-  let json: unknown;
-  try {
-    json = JSON.parse(content);
-  } catch {
-    return { ok: false, message: 'não é um JSON válido' };
-  }
-  const parsed = schema.safeParse(json);
-  if (parsed.success) return { ok: true, data: parsed.data };
-  return {
-    ok: false,
-    message: parsed.error.issues
-      .slice(0, 3)
-      .map((issue) => `${issue.path.join('.') || 'raiz'}: ${issue.message}`)
-      .join('; '),
-  };
 }

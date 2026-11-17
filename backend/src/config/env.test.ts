@@ -55,6 +55,26 @@ describe('loadEnv', () => {
     );
   });
 
+  it('análise de alucinação: sem preço próprio, vazio e valor explícito', () => {
+    expect(loadEnv(base).HALLUCINATION_CREDITS_PER_ANALYSIS).toBeUndefined();
+    // Vazio no .env conta como ausente: nunca vira 0 (de graça).
+    expect(
+      loadEnv({ ...base, HALLUCINATION_CREDITS_PER_ANALYSIS: '  ' })
+        .HALLUCINATION_CREDITS_PER_ANALYSIS,
+    ).toBeUndefined();
+    expect(
+      loadEnv({ ...base, HALLUCINATION_CREDITS_PER_ANALYSIS: '5' })
+        .HALLUCINATION_CREDITS_PER_ANALYSIS,
+    ).toBe(5);
+    expect(
+      loadEnv({ ...base, HALLUCINATION_CREDITS_PER_ANALYSIS: '0' })
+        .HALLUCINATION_CREDITS_PER_ANALYSIS,
+    ).toBe(0);
+    expect(() => loadEnv({ ...base, HALLUCINATION_CREDITS_PER_ANALYSIS: '-1' })).toThrow(
+      /HALLUCINATION_CREDITS_PER_ANALYSIS/,
+    );
+  });
+
   it('revisão por IA: lê as variáveis', () => {
     expect(
       loadEnv({

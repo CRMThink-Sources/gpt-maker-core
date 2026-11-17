@@ -1,0 +1,98 @@
+{
+  "button": "Analyze hallucination",
+  "panel": {
+    "title": "Did the agent make something up?",
+    "intro": "Pick a conversation where the agent got it wrong. The AI checks what it said against the base and suggests a fix."
+  },
+  "modal": {
+    "title": "Analyze hallucination",
+    "close": "Close",
+    "back": "Back"
+  },
+  "source": {
+    "label": "Source",
+    "TEST": "Test",
+    "REAL": "Real"
+  },
+  "list": {
+    "loading": "Loading conversations…",
+    "empty": "No conversations found for this source.",
+    "more": "Load more",
+    "messages": "{count, plural, one {# message} other {# messages}}",
+    "noDate": "no date",
+    "choose": "Choose"
+  },
+  "messages": {
+    "title": "Mark the reply that was wrong",
+    "optional": "(optional)",
+    "hint": "With nothing marked, the AI checks every agent reply.",
+    "truncated": "{count, plural, one {One earlier message was} other {# earlier messages were}} left out of the analysis.",
+    "attachment": "[attachment]",
+    "flag": "Mark as suspicious",
+    "flagged": "Suspicious",
+    "loading": "Loading the conversation…",
+    "noReply": "This conversation has no agent reply to analyze."
+  },
+  "roles": {
+    "CUSTOMER": "Customer",
+    "AGENT": "Agent",
+    "OTHER": "Other"
+  },
+  "note": {
+    "label": "What was wrong?",
+    "help": "Optional. E.g.: \"the 5-day deadline does not exist\"."
+  },
+  "privacy": {
+    "own": "The conversation text and your function answers go to Vibecode, on your account. It may contain end-customer data.",
+    "platform": "The conversation text and your function answers go to Vibecode, on the CRMThink account. It may contain end-customer data."
+  },
+  "cost": {
+    "none": "no credits used",
+    "credits": "{count, plural, one {# credit} other {# credits}}"
+  },
+  "analyze": {
+    "button": "Analyze ({cost})",
+    "running": "Analyzing…"
+  },
+  "key": {
+    "required": "To analyze, provide your Vibecode key.",
+    "configure": "Set up the key",
+    "askAdmin": "Ask a portal administrator."
+  },
+  "result": {
+    "title": "Analysis result",
+    "none": "The AI found no agent claims to check.",
+    "claim": "The agent said",
+    "source": "Origin in the base: {label}",
+    "sourceItem": "Origin in the base: {label}, item {number}",
+    "charged": "Cost: {cost}.",
+    "again": "Analyze another conversation",
+    "behaviorNote": "The cause is the agent behavior: there is no text to apply."
+  },
+  "verdict": {
+    "SUPPORTED": "Supported by the base",
+    "UNSUPPORTED": "No basis",
+    "CONTRADICTS": "Contradicts the base"
+  },
+  "cause": {
+    "MISSING_IN_BASE": "Missing from the base",
+    "CONFLICTING_BASE": "Conflicting base items",
+    "PERMISSIVE_BEHAVIOR": "Permissive behavior",
+    "MODEL_EXTRAPOLATION": "The model went beyond the base"
+  },
+  "suggestion": {
+    "add": "Suggestion: new item in \"{field}\"",
+    "replace": "Suggestion: replace the text of item {number} in \"{field}\"",
+    "apply": "Apply",
+    "applied": "Applied to the form (not saved yet)",
+    "stale": "The form changed and the suggestion no longer fits."
+  },
+  "readOnly": {
+    "GENERIC": "Read only: the suggestion does not fit this field.",
+    "FULL": "Read only: the field is already at its maximum number of items.",
+    "LIMIT": "Read only: some text exceeds the field character limit.",
+    "REQUIRED": "Read only: a required field of the item is empty."
+  },
+  "failed": "Could not analyze the conversation. Try again.",
+  "loadFailed": "Could not load the conversations right now. Try again shortly."
+}
