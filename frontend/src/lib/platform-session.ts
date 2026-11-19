@@ -43,7 +43,15 @@ export class PlatformSessionClient {
   private session: PlatformSession | undefined;
   private pending: Promise<PlatformSession> | undefined;
 
+  /** Idioma ativo da interface, enviado em `Accept-Language` (spec function-template-i18n). */
+  private locale: string | undefined;
+
   constructor(private readonly config: ClientConfig) {}
+
+  /** A API devolve o formulário das funções no idioma informado; vale a partir da próxima chamada. */
+  setLocale(locale: string | undefined): void {
+    this.locale = locale;
+  }
 
   async current(): Promise<PlatformSession> {
     const session = this.session;
@@ -72,6 +80,9 @@ export class PlatformSessionClient {
   private send(path: string, init: RequestInit, session: PlatformSession): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${session.token}`);
+    if (this.locale && !headers.has('Accept-Language')) {
+      headers.set('Accept-Language', this.locale);
+    }
     // JSON por padrão; FormData (upload) deixa o navegador montar o multipart com o boundary.
     if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
     return fetch(`${this.config.apiBaseUrl.replace(/\/+$/, '')}${path}`, { ...init, headers });

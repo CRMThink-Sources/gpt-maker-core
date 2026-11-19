@@ -57,6 +57,7 @@ Em `/admin/functions`, cada função abre num editor em abas. O JSON é a últim
 | `blocks` | Blocos incluídos (`comum`, `registro`, `duvida`, `transferir`, `crm`) |
 | `crmAccess` | Exige o acesso ao CRM do agente; também vem de um bloco incluído com `crmAccess` |
 | `fields` | Perguntas do formulário |
+| `translations` | Formulário em `en` e `es` (o que o cliente lê); o português é o texto-base |
 | `behavior` | Texto do comportamento com `{{marcadores}}` |
 | `intentions` | Ações geradas, com condição opcional |
 
@@ -83,6 +84,16 @@ Em `/admin/functions`, cada função abre num editor em abas. O JSON é a últim
 - **Ids** de campo: minúsculas com ponto (`sdr.perfil_ideal`), únicos no template inteiro, inclusive dependentes e blocos.
 - **Pior caso ≤ 3000:** texto fixo + todos os campos no limite + o trecho mais longo de cada escolha + todas as opções de múltipla escolha + instruções adicionais (400) + nome do agente (100).
 - **Intenções compilam em toda variação:** a checagem compila uma vez por opção de cada escolha e valida as ações.
+
+## Traduções do formulário
+
+O app é traduzido (`pt-BR`, `en`, `es`) e o formulário da função também: nome e descrição, rótulo, ajuda e exemplo dos campos, rótulo das opções, subcampos da base, valores de SPA e perguntas da ajuda da IA. As traduções ficam em `translations` (rascunho, bloco e versão publicada), **chaveadas por id** do campo, opção ou subcampo, e o cliente recebe o formulário no idioma da interface, com volta ao português para o que faltar.
+
+- **Não se traduz** o texto do agente: `behavior`, trechos das opções (`snippet`), `format`, intenções e transferências vão ao GPTMaker em português. O idioma de fala do agente é uma decisão de produto à parte.
+- Id inexistente nas traduções, chave desconhecida e texto acima do limite do original **bloqueiam** a publicação; falta de tradução só avisa (aba **Traduções** do editor mostra "N de M traduzidos" por idioma).
+- Os campos de um bloco são traduzidos **no bloco** (Blocos compartilhados); o template só traduz os próprios campos e, se precisar, sobrescreve um campo de bloco pelo mesmo id.
+- Mudar só as traduções cria uma versão nova (o agente existente vê "atualização disponível"; republicar não muda o que vai ao GPTMaker).
+- Campo novo ou texto editado em português: atualize `en` e `es` na mesma publicação. Formato completo em `.claude/skills/gptthink-criar-funcao/referencia/formato.md`.
 
 ## Orçamento: como caber em 3000
 
@@ -154,6 +165,7 @@ Regras para escrever a função de agenda (modelo: `exemplos/agendamento-calenda
 - [ ] Prévia sem erros, e o comportamento compilado lido com as opções mais longas.
 - [ ] Contador de pior caso com folga razoável (se estiver acima de 2950, revise).
 - [ ] Cada trecho de opção relido no contexto do marcador.
+- [ ] Aba **Traduções** sem pendência em `en` e `es` (ou pendência conhecida e aceita).
 - [ ] Nenhuma ação citada no texto sem intenção correspondente (e vice-versa).
 - [ ] Sandbox: os cenários abaixo testados.
 - [ ] Diff contra a versão anterior revisado: o que mudou para os agentes que republicarem.

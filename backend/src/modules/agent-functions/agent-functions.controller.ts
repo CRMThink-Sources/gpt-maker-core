@@ -7,10 +7,12 @@ import {
   type FunctionPreview,
   functionPublishSchema,
   type FunctionTemplateContent,
+  type Locale,
   previewNewAgentSchema,
   saveFunctionDraftSchema,
 } from '@gptmaker/contracts';
 import { createZodDto } from 'nestjs-zod';
+import { RequestLocale } from '../../shared/http/request-locale';
 import { AppAuth, type AppSession, CurrentSession } from '../tenancy';
 import { AgentFunctionService, type PublishResult } from './agent-function.service';
 
@@ -26,8 +28,11 @@ export class AgentFunctionsController {
 
   @Get('agent-functions')
   @AppAuth()
-  async list(@CurrentSession() session: AppSession): Promise<{ functions: AgentFunctionView[] }> {
-    return { functions: await this.functions.listFunctions(session.tenantId) };
+  async list(
+    @CurrentSession() session: AppSession,
+    @RequestLocale() locale: Locale,
+  ): Promise<{ functions: AgentFunctionView[] }> {
+    return { functions: await this.functions.listFunctions(session.tenantId, locale) };
   }
 
   @Get('agent-functions/:code')
@@ -35,8 +40,9 @@ export class AgentFunctionsController {
   form(
     @CurrentSession() session: AppSession,
     @Param('code') code: string,
+    @RequestLocale() locale: Locale,
   ): Promise<AgentFunctionView & { form: FunctionTemplateContent }> {
-    return this.functions.functionForm(session.tenantId, code);
+    return this.functions.functionForm(session.tenantId, code, locale);
   }
 
   @Post('agent-functions/preview')
@@ -60,8 +66,9 @@ export class AgentFunctionsController {
   get(
     @CurrentSession() session: AppSession,
     @Param('id') id: string,
+    @RequestLocale() locale: Locale,
   ): Promise<AgentFunctionConfigView> {
-    return this.functions.view(session.tenantId, id);
+    return this.functions.view(session.tenantId, id, locale);
   }
 
   @Put('agents/:id/function/draft')
@@ -70,8 +77,9 @@ export class AgentFunctionsController {
     @CurrentSession() session: AppSession,
     @Param('id') id: string,
     @Body() body: SaveDraftDto,
+    @RequestLocale() locale: Locale,
   ): Promise<AgentFunctionConfigView> {
-    return this.functions.saveDraft(session.tenantId, id, body);
+    return this.functions.saveDraft(session.tenantId, id, body, locale);
   }
 
   @Post('agents/:id/function/preview')
@@ -102,7 +110,8 @@ export class AgentFunctionsController {
   retry(
     @CurrentSession() session: AppSession,
     @Param('id') id: string,
+    @RequestLocale() locale: Locale,
   ): Promise<AgentFunctionConfigView> {
-    return this.functions.retry(session.tenantId, id);
+    return this.functions.retry(session.tenantId, id, locale);
   }
 }

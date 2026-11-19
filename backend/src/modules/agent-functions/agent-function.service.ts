@@ -8,12 +8,16 @@ import {
   compileAgent,
   type CreateAgentInput,
   createAgentSchema,
+  DEFAULT_LOCALE,
   type FunctionAnswers,
   type FunctionMode,
   type FunctionPreview,
   type FunctionPublishInput,
   functionPublishSchema,
   type FunctionTemplateContent,
+  type Locale,
+  localizeFunctionText,
+  localizeTemplateContent,
   planPublication,
   type PreviewNewAgentInput,
   previewNewAgentSchema,
@@ -72,21 +76,22 @@ export class AgentFunctionService {
     @Inject(DB) private readonly db: Database,
   ) {}
 
-  listFunctions(tenantId: string): Promise<AgentFunctionView[]> {
-    return this.catalog.listPublished(tenantId);
+  listFunctions(tenantId: string, locale: Locale = DEFAULT_LOCALE): Promise<AgentFunctionView[]> {
+    return this.catalog.listPublished(tenantId, locale);
   }
 
   async functionForm(
     tenantId: string,
     code: string,
+    locale: Locale = DEFAULT_LOCALE,
   ): Promise<AgentFunctionView & { form: FunctionTemplateContent }> {
     const fn = await this.catalog.latestPublished(code, tenantId);
+    // Só o que o cliente lê é traduzido; compilação e publicação seguem no texto-base.
     return {
       code: fn.code,
-      name: fn.name,
-      description: fn.description,
+      ...localizeFunctionText(fn, fn.content.translations, locale),
       version: fn.version,
-      form: fn.content,
+      form: localizeTemplateContent(fn.content, locale),
     };
   }
 
@@ -167,7 +172,11 @@ export class AgentFunctionService {
     return view;
   }
 
-  async view(tenantId: string, agentId: string): Promise<AgentFunctionConfigView> {
+  async view(
+    tenantId: string,
+    agentId: string,
+    locale: Locale = DEFAULT_LOCALE,
+  ): Promise<AgentFunctionConfigView> {
     const config = await this.config(tenantId, agentId);
     const [latest, current, tenant] = await Promise.all([
       this.catalog.latestOfTemplate(config.templateId),
@@ -175,7 +184,10 @@ export class AgentFunctionService {
       this.tenants.findById(tenantId),
     ]);
     return {
-      function: { code: latest.code, name: latest.name, description: latest.description },
+      function: {
+        code: latest.code,
+        ...localizeFunctionText(latest, latest.content.translations, locale),
+      },
       version: current?.version ?? null,
       latestVersion: latest.version,
       updateAvailable:
@@ -188,7 +200,7 @@ export class AgentFunctionService {
       publication: { status: config.publicationStatus, error: config.publicationError },
       needsRepublishReason: config.needsRepublishReason,
       canTakeOver: tenant?.isPartner === true || config.mode === 'TAKEN_OVER',
-      form: latest.content,
+      form: localizeTemplateContent(latest.content, locale),
     };
   }
 
@@ -197,6 +209,7 @@ export class AgentFunctionService {
     tenantId: string,
     agentId: string,
     raw: SaveFunctionDraftInput,
+    locale: Locale = DEFAULT_LOCALE,
   ): Promise<AgentFunctionConfigView> {
     const input = saveFunctionDraftSchema.parse(raw);
     const config = await this.config(tenantId, agentId);
@@ -213,7 +226,7 @@ export class AgentFunctionService {
       .update(agentFunctionConfig)
       .set({ draftAnswers: answers })
       .where(eq(agentFunctionConfig.agentId, agentId));
-    return this.view(tenantId, agentId);
+    return this.view(tenantId, agentId, locale);
   }
 
   async preview(
@@ -285,7 +298,11 @@ export class AgentFunctionService {
   }
 
   /** Repete uma publicação que falhou, com o mesmo alvo. */
-  async retry(tenantId: string, agentId: string): Promise<AgentFunctionConfigView> {
+  async retry(
+    tenantId: string,
+    agentId: string,
+    locale: Locale = DEFAULT_LOCALE,
+  ): Promise<AgentFunctionConfigView> {
     const config = await this.config(tenantId, agentId);
     if (config.publicationStatus !== 'FAILED' || !config.publicationTarget) {
       throw new DomainError(
@@ -299,7 +316,7 @@ export class AgentFunctionService {
       .set({ publicationStatus: 'PENDING', publicationError: null })
       .where(eq(agentFunctionConfig.agentId, agentId));
     await this.enqueue(tenantId, agentId);
-    return this.view(tenantId, agentId);
+    return this.view(tenantId, agentId, locale);
   }
 
   // Internos ---------------------------------------------------------------------------------

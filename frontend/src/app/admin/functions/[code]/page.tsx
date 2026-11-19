@@ -16,6 +16,7 @@ import {
   type FunctionVersionDiff,
   flattenFields,
   stableStringify,
+  translationCompleteness,
 } from '@gptmaker/contracts';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -248,6 +249,10 @@ function FunctionEditor({
   const [busy, setBusy] = useState(false);
 
   const live = useLiveTemplate(draft, blocks);
+  // Aviso de publicação (spec function-template-i18n): faltar tradução não bloqueia.
+  const missingTranslations = translationCompleteness(live.content, { name, description })
+    .filter((item) => item.missing.length > 0)
+    .map((item) => `${item.missing.length} em ${item.locale === 'en' ? 'inglês' : 'espanhol'}`);
   const problems = templateProblems(live).length;
   const current = JSON.stringify(draft);
   const dirty = current !== saved || name !== view.name || description !== view.description;
@@ -731,6 +736,7 @@ function FunctionEditor({
               onSaved={(next) => setView(next)}
             />
           }
+          identityMeta={{ name, description }}
           identity={
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Nome" hint="O cliente vê ao escolher a função.">
@@ -789,6 +795,12 @@ function FunctionEditor({
             {tested !== current && (
               <Alert tone="error">
                 Esta versão ainda não foi testada no sandbox. Recomendado antes de publicar.
+              </Alert>
+            )}
+            {missingTranslations.length > 0 && (
+              <Alert tone="warning">
+                Traduções incompletas: {missingTranslations.join(' e ')}. O que falta aparece em
+                português para o cliente. Complete na seção Traduções, se quiser.
               </Alert>
             )}
             <ChangeList title="Perguntas novas" items={publishing.fields.added} tone="green" />

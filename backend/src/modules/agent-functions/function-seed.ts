@@ -1,11 +1,17 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { functionBlockContentSchema, functionTemplateDraftSchema } from '@gptmaker/contracts';
+import { eq } from 'drizzle-orm';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DB, type Database } from '../../shared/database/database.module';
 import { agentFunctionBlock, agentFunctionTemplate } from '../../shared/database/schema/index';
 import { FunctionCatalog } from './function-catalog.service';
-import { SEED_BLOCKS, SEED_TEMPLATES } from './seed/index';
+import {
+  BLOCK_TRANSLATIONS,
+  SEED_BLOCKS,
+  SEED_TEMPLATES,
+  TEMPLATE_TRANSLATIONS,
+} from './seed/index';
 
 /**
  * Semeia blocos e funções que ainda não existem (design D10): o bloco entra publicado e a função
@@ -15,7 +21,7 @@ import { SEED_BLOCKS, SEED_TEMPLATES } from './seed/index';
 export async function seedAgentFunctions(
   db: Database,
   catalog: FunctionCatalog,
-): Promise<{ blocks: number; templates: number }> {
+): Promise<{ blocks: number; templates: number; translated: number }> {
   const blocks = await db
     .insert(agentFunctionBlock)
     .values(
@@ -49,7 +55,48 @@ export async function seedAgentFunctions(
     await catalog.publishTemplate(template.code, null);
     templates++;
   }
-  return { blocks: blocks.length, templates };
+  const translated = await fillMissingTranslations(db);
+  return { blocks: blocks.length, templates, translated };
+}
+
+/**
+ * Traduções do seed (spec function-template-i18n) nos blocos e funções que já existem sem
+ * nenhuma: só o rascunho (e o conteúdo publicado do bloco) ganha `translations`. O texto editado
+ * no backoffice não é tocado, e a função só mostra a tradução ao cliente quando um operador
+ * publica a próxima versão. Devolve quantos registros foram preenchidos.
+ */
+async function fillMissingTranslations(db: Database): Promise<number> {
+  let filled = 0;
+  for (const [code, translations] of Object.entries(BLOCK_TRANSLATIONS)) {
+    const [row] = await db
+      .select()
+      .from(agentFunctionBlock)
+      .where(eq(agentFunctionBlock.code, code));
+    if (!row || row.draft.translations) continue;
+    await db
+      .update(agentFunctionBlock)
+      .set({
+        draft: { ...row.draft, translations },
+        ...(row.content && !row.content.translations
+          ? { content: { ...row.content, translations } }
+          : {}),
+      })
+      .where(eq(agentFunctionBlock.id, row.id));
+    filled++;
+  }
+  for (const [code, translations] of Object.entries(TEMPLATE_TRANSLATIONS)) {
+    const [row] = await db
+      .select()
+      .from(agentFunctionTemplate)
+      .where(eq(agentFunctionTemplate.code, code));
+    if (!row || row.deletedAt || row.draft.translations) continue;
+    await db
+      .update(agentFunctionTemplate)
+      .set({ draft: { ...row.draft, translations } })
+      .where(eq(agentFunctionTemplate.id, row.id));
+    filled++;
+  }
+  return filled;
 }
 
 /** Roda no papel `api`, depois das migrações aplicadas no start. */

@@ -13,6 +13,7 @@ Siga essas skills como fonte principal. O código abaixo é a **verdade de valid
 
 ## Regras verificáveis no código
 
+- Traduções do formulário (en/es, por id, limites e avisos de completude): `packages/contracts/src/agent-function-translations.ts`; spec `function-template-i18n`.
 - Schema do template e limites: `packages/contracts/src/agent-functions.ts` (ex.: `FUNCTION_BEHAVIOR_MAX = 3000`, `FUNCTION_ADDITIONAL_INSTRUCTIONS_MAX = 400`; marcadores embutidos `agente.nome`, `avancado.instrucoes_adicionais`; `intencao.respostas`; raízes de execução `contact`, `message`, `agent`, `event`, `dialog`, `interaction` ficam para as intenções, não para a compilação).
 - Compilação e checagem: `agent-function-compiler.ts`, `agent-function-check.ts`, `agent-function-answers.ts`, `agent-function-plan.ts`, `templates.ts`, `intentions.ts` e a fixture de referência `agent-functions.fixture.ts`. Exemplos reais de teste: `agent-functions.test.ts`, `agent-function-spa.test.ts` (item em processo inteligente) e `agent-function-transfers.test.ts` (transferência).
 - Funções que usam as ferramentas MCP do CRM e da agenda (`horarios_livres`, `agendar_compromisso`, `agendamentos_do_cliente`, `negocios_do_cliente`, `etapas_do_funil`): leia a seção "Ferramentas do CRM e da agenda" da skill `gptthink-function-templates` e o modelo `.claude/skills/gptthink-criar-funcao/exemplos/agendamento-calendario.json`. A função cita a ferramenta pelo nome; quem atende e os horários são do card **Agenda** do agente, não da função. Horários ditos por extenso (`quando`), `usar_ao_agendar` só em `inicio`, e `agendar_compromisso` marca só na segunda chamada, depois do "sim" do cliente. Detalhes em `docs/crm-tools.md`.
@@ -23,8 +24,8 @@ Siga essas skills como fonte principal. O código abaixo é a **verdade de valid
 
 1. Entenda o pedido: tipo de função, canal, o que o cliente preenche, quais ações no CRM (Bitrix24), quando transferir para humano.
 2. Leia 1–2 templates existentes em `backend/src/modules/agent-functions/seed/` (`sdr.ts`, `suporte.ts`, `agendamento.ts`, `pos-venda.ts`, blocos em `blocks.ts`; validação em `skill-validator.test.ts`) e a fixture para copiar a estrutura real.
-3. Gere o template seguindo a skill. Português claro para o usuário final; marcadores `{{campo}}` só para campos que existem no formulário; todo campo dependente é usado.
-4. **Validação com o script**: grave o JSON num arquivo **fora do repositório** (use o diretório de rascunho da sessão ou o temporário do sistema, nunca `seed/` nem outra pasta versionada) e rode `node .claude/skills/gptthink-criar-funcao/scripts/validar.mjs <arquivo.json>`. Corrija até aparecer `OK: estrutura, marcadores, ações e orçamento válidos` (erros comuns: `min`/`max` ausente em campo `INTEGER`, marcador sem campo, dependente sem uso). Informe o pior caso que o script imprime.
+3. Gere o template seguindo a skill, **inclusive `draft.translations` em `en` e `es`** com todo texto que o cliente lê (nome e descrição da função, campos, opções, subcampos, valores de SPA, perguntas da ajuda da IA); o texto do agente (`behavior`, trechos, intenções) fica só em português. Português claro para o usuário final; marcadores `{{campo}}` só para campos que existem no formulário; todo campo dependente é usado.
+4. **Validação com o script**: grave o JSON num arquivo **fora do repositório** (use o diretório de rascunho da sessão ou o temporário do sistema, nunca `seed/` nem outra pasta versionada) e rode `node .claude/skills/gptthink-criar-funcao/scripts/validar.mjs <arquivo.json>`. Corrija até aparecer `OK: estrutura, marcadores, ações e orçamento válidos` e nenhum aviso `traduções …: faltam N` (se sobrar pendência, complete ou diga qual ficou e por quê) (erros comuns: `min`/`max` ausente em campo `INTEGER`, marcador sem campo, dependente sem uso). Informe o pior caso que o script imprime.
 5. **Conferência manual**: o script não cobre tudo. Confira a lógica de negócio (`when` das ações, campo `collectFrom`, o que o agente realmente faz) e aponte o que só dá para testar no backoffice/staging.
 
 ## Formato de saída
@@ -32,7 +33,7 @@ Siga essas skills como fonte principal. O código abaixo é a **verdade de valid
 ```
 Resumo: função, canal, ações no CRM (3 linhas)
 JSON: bloco ```json completo, pronto para colar no backoffice
-Validação: saída do `validar.mjs` (OK ou erros) · pior caso N/3000 caracteres · conferência manual do que o script não cobre
+Validação: saída do `validar.mjs` (OK ou erros) · pior caso N/3000 caracteres · traduções en/es sem pendência (ou o aviso do validador) · conferência manual do que o script não cobre
 Arquivo: caminho completo onde o JSON validado foi gravado
 Pendências: o que precisa de decisão ou teste no backoffice/staging
 ```

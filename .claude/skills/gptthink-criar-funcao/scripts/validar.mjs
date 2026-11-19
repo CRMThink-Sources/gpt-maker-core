@@ -247,6 +247,97 @@ for (const f of all) {
   byId.set(f.id, f);
 }
 
+// ---------- traduções (spec function-template-i18n) ----------
+// `draft.translations` e `translations` dos blocos: en/es por id, só o que o cliente lê. Id
+// inexistente, chave desconhecida e texto acima do limite são erros (a publicação recusa); texto
+// sem tradução é só aviso, porque cai em português para o cliente.
+{
+  const LOCALES = ['en', 'es'];
+  const FIELD_KEYS = ['label', 'help', 'placeholder', 'options', 'subfields', 'spaValues', 'assistQuestions'];
+  const parts = (loc) => [...included.map((b) => b.translations?.[loc]), draft.translations?.[loc]].filter(Boolean);
+  const merged = (loc) => ({
+    name: draft.translations?.[loc]?.name,
+    description: draft.translations?.[loc]?.description,
+    fields: Object.assign({}, ...parts(loc).map((p) => p.fields ?? {})),
+  });
+  const limit = (at, v, max) => {
+    if (typeof v !== 'string' || v.trim().length < 1 || v.length > max) err(`${at}: texto de 1 a ${max} caracteres`);
+  };
+  const owners = [['template', draft.translations], ...included.map((b, i) => [`bloco ${draft.blocks?.[i] ?? i}`, b.translations])];
+  for (const [owner, translations] of owners) {
+    if (translations === undefined) continue;
+    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) { err(`${owner}: translations precisa ser um objeto com en e/ou es`); continue; }
+    for (const loc of Object.keys(translations)) if (!LOCALES.includes(loc)) err(`${owner}: idioma de tradução não suportado: ${loc} (use en ou es)`);
+    for (const loc of LOCALES) {
+      const entry = translations[loc];
+      if (entry === undefined) continue;
+      for (const key of Object.keys(entry)) if (!['name', 'description', 'fields'].includes(key)) err(`${owner} ${loc}: chave desconhecida "${key}" (use name, description, fields)`);
+      if (entry.name !== undefined) limit(`${owner} ${loc}: name`, entry.name, 100);
+      if (entry.description !== undefined) limit(`${owner} ${loc}: description`, entry.description, 500);
+    }
+  }
+  // Conteúdo (template + blocos) é a referência dos ids.
+  const spaIds = (f) => (f.values ?? []).map((v) => v.id);
+  for (const loc of LOCALES) {
+    for (const [id, entry] of Object.entries(merged(loc).fields)) {
+      const at = `tradução ${loc}`;
+      const f = byId.get(id);
+      if (!f) { err(`${at}: campo inexistente: ${id}`); continue; }
+      for (const key of Object.keys(entry)) if (!FIELD_KEYS.includes(key)) err(`${at} ${id}: chave desconhecida "${key}"`);
+      if (entry.label !== undefined) limit(`${at} ${id}: label`, entry.label, 120);
+      if (entry.help !== undefined) limit(`${at} ${id}: help`, entry.help, 300);
+      if (entry.placeholder !== undefined) limit(`${at} ${id}: placeholder`, entry.placeholder, 200);
+      for (const [k, v] of Object.entries(entry.options ?? {})) {
+        if (!(f.options ?? []).some((o) => o.value === k)) err(`${at}: opção inexistente em ${id}: ${k}`);
+        limit(`${at} ${id}: opção ${k}`, v, 120);
+      }
+      for (const [k, v] of Object.entries(entry.subfields ?? {})) {
+        if (!(f.subfields ?? []).some((s) => s.id === k)) err(`${at}: subcampo inexistente em ${id}: ${k}`);
+        limit(`${at} ${id}: subcampo ${k}`, v, 120);
+      }
+      for (const [k, v] of Object.entries(entry.spaValues ?? {})) {
+        if (!spaIds(f).includes(k)) err(`${at}: valor de SPA inexistente em ${id}: ${k}`);
+        if (v?.label !== undefined) limit(`${at} ${id}: valor ${k} (label)`, v.label, 120);
+        if (v?.help !== undefined) limit(`${at} ${id}: valor ${k} (help)`, v.help, 300);
+      }
+      if (entry.assistQuestions !== undefined) {
+        if (!Array.isArray(entry.assistQuestions)) err(`${at} ${id}: assistQuestions precisa ser uma lista`);
+        else {
+          if (entry.assistQuestions.length > (f.assist?.questions?.length ?? 0)) err(`${at}: mais perguntas do assistente que as de ${id}`);
+          entry.assistQuestions.forEach((q, i) => { if (q !== '') limit(`${at} ${id}: pergunta ${i + 1}`, q, 200); });
+        }
+      }
+    }
+  }
+  // Completude: o que o cliente lê e ainda não tem tradução.
+  const texts = [];
+  if (input.draft) {
+    if (input.name) texts.push(['name', (e) => e.name]);
+    if (input.description) texts.push(['description', (e) => e.description]);
+  }
+  for (const f of all) {
+    const at = (e) => e.fields?.[f.id] ?? {};
+    texts.push([`${f.id}.label`, (e) => at(e).label]);
+    if (f.help) texts.push([`${f.id}.help`, (e) => at(e).help]);
+    if ((f.kind === 'TEXT' || f.kind === 'TEXT_LIST') && f.placeholder) texts.push([`${f.id}.placeholder`, (e) => at(e).placeholder]);
+    for (const o of f.kind === 'CHOICE' || f.kind === 'MULTI_CHOICE' ? f.options : []) texts.push([`${f.id}.options.${o.value}`, (e) => at(e).options?.[o.value]]);
+    for (const s of f.kind === 'KNOWLEDGE' ? f.subfields : []) texts.push([`${f.id}.subfields.${s.id}`, (e) => at(e).subfields?.[s.id]]);
+    for (const v of f.kind === 'BITRIX_SPA' ? f.values ?? [] : []) {
+      texts.push([`${f.id}.spaValues.${v.id}.label`, (e) => at(e).spaValues?.[v.id]?.label]);
+      if (v.help) texts.push([`${f.id}.spaValues.${v.id}.help`, (e) => at(e).spaValues?.[v.id]?.help]);
+    }
+    if (['TEXT', 'TEXT_LIST', 'KNOWLEDGE'].includes(f.kind)) (f.assist?.questions ?? []).forEach((_, i) => texts.push([`${f.id}.assistQuestions.${i}`, (e) => at(e).assistQuestions?.[i]]));
+  }
+  for (const loc of LOCALES) {
+    const entry = merged(loc);
+    const missing = texts.filter(([, get]) => !String(get(entry) ?? '').trim()).map(([path]) => path);
+    if (missing.length) {
+      const sample = missing.slice(0, 5).join(', ');
+      warnings.push(`traduções ${loc}: faltam ${missing.length} de ${texts.length} textos (aparecem em português para o cliente): ${sample}${missing.length > 5 ? '…' : ''}`);
+    }
+  }
+}
+
 // ---------- marcadores ----------
 const known = new Set([...byId.keys(), ...BUILTINS]);
 for (const f of all) if (f.kind === 'BITRIX_STAGE') { known.add(`${f.id}.categoryId`); known.add(`${f.id}.stageId`); }

@@ -19,7 +19,8 @@ export function corsOptions(frontendOrigins: string[]): CorsOptionsDelegate<{ ur
   const app: CorsOptions = {
     origin: frontendOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    // `Accept-Language`: idioma da interface para o formulário das funções (spec function-template-i18n).
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language'],
     exposedHeaders: ['x-trace-id'],
     maxAge: 600,
   };
