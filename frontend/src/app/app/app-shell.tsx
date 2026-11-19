@@ -9,6 +9,7 @@ import {
   ChatIcon,
   CloseIcon,
   DatabaseIcon,
+  HelpIcon,
   MenuIcon,
   UsersIcon,
   WalletIcon,
@@ -43,13 +44,6 @@ const NAV: Array<{ titleKey?: string; items: NavItem[] }> = [
         href: '/app',
         match: (path) => path === '/app' || path.startsWith('/app/agents'),
       },
-      {
-        label: 'crm',
-        icon: DatabaseIcon,
-        href: '/app/crm',
-        match: (path) => path.startsWith('/app/crm'),
-        requiresCrm: true,
-      },
       // Treinamentos, intenções e gatilhos ficam em cada agente (abas).
       {
         label: 'plan',
@@ -70,13 +64,6 @@ const NAV: Array<{ titleKey?: string; items: NavItem[] }> = [
         adminOnly: true,
       },
       {
-        label: 'aiKey',
-        icon: DatabaseIcon,
-        href: '/app/ai-key',
-        match: (path) => path.startsWith('/app/ai-key'),
-        adminOnly: true,
-      },
-      {
         label: 'notifications',
         icon: BellIcon,
         href: '/app/notifications',
@@ -85,10 +72,39 @@ const NAV: Array<{ titleKey?: string; items: NavItem[] }> = [
       },
     ],
   },
-  // Canal direto com a CRMThink (spec support-channel): visível a todos os papéis.
+  // Recursos técnicos fora do uso diário (spec app-navigation).
+  {
+    titleKey: 'advanced',
+    items: [
+      {
+        label: 'crm',
+        icon: DatabaseIcon,
+        href: '/app/crm',
+        match: (path) => path.startsWith('/app/crm'),
+        requiresCrm: true,
+      },
+      {
+        label: 'aiKey',
+        icon: DatabaseIcon,
+        href: '/app/ai-key',
+        match: (path) => path.startsWith('/app/ai-key'),
+        adminOnly: true,
+      },
+    ],
+  },
+  // Ajuda do app (spec app-help) e canal direto com a CRMThink (spec support-channel):
+  // visíveis a todos os papéis.
   {
     titleKey: 'support',
-    items: [{ label: 'supportLink', icon: ChatIcon, external: 'support' }],
+    items: [
+      {
+        label: 'help',
+        icon: HelpIcon,
+        href: '/app/help',
+        match: (path) => path.startsWith('/app/help'),
+      },
+      { label: 'supportLink', icon: ChatIcon, external: 'support' },
+    ],
   },
 ];
 

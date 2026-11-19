@@ -20,6 +20,7 @@ import ptBR_permissions from './messages/pt-BR/permissions.json';
 import ptBR_notifications from './messages/pt-BR/notifications.json';
 import ptBR_home from './messages/pt-BR/home.json';
 import ptBR_landing from './messages/pt-BR/landing.json';
+import ptBR_help from './messages/pt-BR/help.json';
 import en_common from './messages/en/common.json';
 import en_errors from './messages/en/errors.json';
 import en_shell from './messages/en/shell.json';
@@ -41,6 +42,7 @@ import en_permissions from './messages/en/permissions.json';
 import en_notifications from './messages/en/notifications.json';
 import en_home from './messages/en/home.json';
 import en_landing from './messages/en/landing.json';
+import en_help from './messages/en/help.json';
 import es_common from './messages/es/common.json';
 import es_errors from './messages/es/errors.json';
 import es_shell from './messages/es/shell.json';
@@ -62,6 +64,7 @@ import es_permissions from './messages/es/permissions.json';
 import es_notifications from './messages/es/notifications.json';
 import es_home from './messages/es/home.json';
 import es_landing from './messages/es/landing.json';
+import es_help from './messages/es/help.json';
 
 // Um arquivo JSON por namespace e idioma (cada área da UI é dona do seu).
 const ptBR = {
@@ -86,6 +89,7 @@ const ptBR = {
   notifications: ptBR_notifications,
   home: ptBR_home,
   landing: ptBR_landing,
+  help: ptBR_help,
 };
 
 const en = {
@@ -110,6 +114,7 @@ const en = {
   notifications: en_notifications,
   home: en_home,
   landing: en_landing,
+  help: en_help,
 };
 
 const es = {
@@ -134,6 +139,7 @@ const es = {
   notifications: es_notifications,
   home: es_home,
   landing: es_landing,
+  help: es_help,
 };
 
 export type Messages = typeof ptBR;
