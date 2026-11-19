@@ -1,0 +1,76 @@
+{
+  "title": "Ajuda",
+  "description": "Primeiros passos e respostas para as dúvidas mais comuns.",
+  "stepsTitle": "Primeiros passos",
+  "steps": {
+    "s1": {
+      "title": "Crie o agente",
+      "text": "Em Agentes, crie um agente e descreva como ele deve se comportar no atendimento."
+    },
+    "s2": {
+      "title": "Treine com o seu conteúdo",
+      "text": "Na aba de treinamentos do agente, adicione textos, perguntas e respostas que ele deve conhecer."
+    },
+    "s3": {
+      "title": "Teste e ative no canal",
+      "text": "Converse com o agente no chat de teste e, quando estiver bom, ative-o no canal aberto do Bitrix24."
+    }
+  },
+  "faqTitle": "Perguntas frequentes",
+  "topics": {
+    "agents": {
+      "title": "Criar e treinar o agente",
+      "items": {
+        "create": {
+          "q": "Como criar um agente?",
+          "a": "Abra Agentes e use o botão de novo agente. Informe o nome e o comportamento esperado; você pode ajustar tudo depois."
+        },
+        "train": {
+          "q": "O que posso usar para treinar o agente?",
+          "a": "Textos, perguntas e respostas e outros conteúdos adicionados na aba de treinamentos do agente. Quanto mais claro o conteúdo, melhores as respostas."
+        },
+        "test": {
+          "q": "Como sei se o agente está respondendo bem?",
+          "a": "Use o chat de teste do agente antes de ativá-lo. Se ele errar, complemente o treinamento e teste de novo."
+        }
+      }
+    },
+    "credits": {
+      "title": "Créditos e plano",
+      "items": {
+        "charge": {
+          "q": "Como os créditos são consumidos?",
+          "a": "Cada resposta do agente consome créditos conforme o modelo de IA usado. O saldo e o histórico ficam em Créditos e plano."
+        },
+        "empty": {
+          "q": "O que acontece se os créditos acabarem?",
+          "a": "O agente deixa de responder até o saldo ser reposto. Os administradores recebem avisos antes disso, nos destinatários definidos em Avisos."
+        },
+        "plan": {
+          "q": "Como mudo de plano?",
+          "a": "Em Créditos e plano você vê os planos disponíveis e pode contratar ou trocar o seu."
+        }
+      }
+    },
+    "channel": {
+      "title": "Atendimento e transferência para humano",
+      "items": {
+        "connect": {
+          "q": "Como o agente atende no Bitrix24?",
+          "a": "Ele responde nas conversas do canal aberto em que for ativado, e pode consultar e registrar dados no CRM quando essas ferramentas estiverem habilitadas."
+        },
+        "handoff": {
+          "q": "Como o cliente fala com uma pessoa?",
+          "a": "Configure a transferência para humano no agente. Quando a regra é atingida, a conversa segue para a fila de atendentes do canal."
+        },
+        "offHours": {
+          "q": "E fora do horário de atendimento?",
+          "a": "Defina o horário do agente. Fora dele, o agente avisa o cliente conforme a configuração escolhida."
+        }
+      }
+    }
+  },
+  "supportTitle": "Ainda precisa de ajuda?",
+  "supportText": "Fale com o time de suporte da CRMThink.",
+  "supportButton": "Falar com o suporte"
+}

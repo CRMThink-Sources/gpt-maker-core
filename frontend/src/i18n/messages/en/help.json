@@ -1,0 +1,76 @@
+{
+  "title": "Help",
+  "description": "Getting started and answers to the most common questions.",
+  "stepsTitle": "Getting started",
+  "steps": {
+    "s1": {
+      "title": "Create the agent",
+      "text": "Under Agents, create an agent and describe how it should behave when serving customers."
+    },
+    "s2": {
+      "title": "Train it with your content",
+      "text": "In the agent's trainings tab, add the texts, questions and answers it should know."
+    },
+    "s3": {
+      "title": "Test it and enable the channel",
+      "text": "Chat with the agent in the test chat and, when it looks good, enable it on the Bitrix24 open channel."
+    }
+  },
+  "faqTitle": "Frequently asked questions",
+  "topics": {
+    "agents": {
+      "title": "Creating and training the agent",
+      "items": {
+        "create": {
+          "q": "How do I create an agent?",
+          "a": "Open Agents and use the new agent button. Enter the name and the expected behavior; you can adjust everything later."
+        },
+        "train": {
+          "q": "What can I use to train the agent?",
+          "a": "Texts, questions and answers and other content added in the training tab of the agent. The clearer the content, the better the answers."
+        },
+        "test": {
+          "q": "How do I know the agent is answering well?",
+          "a": "Use the agent test chat before enabling it. If it gets something wrong, add to the training and test again."
+        }
+      }
+    },
+    "credits": {
+      "title": "Credits and plan",
+      "items": {
+        "charge": {
+          "q": "How are credits used?",
+          "a": "Each agent reply uses credits according to the AI model used. Your balance and history are under Credits and plan."
+        },
+        "empty": {
+          "q": "What happens if credits run out?",
+          "a": "The agent stops answering until the balance is topped up. Administrators get notices before that, sent to the recipients set under Notices."
+        },
+        "plan": {
+          "q": "How do I change my plan?",
+          "a": "Under Credits and plan you can see the available plans and subscribe to or switch your plan."
+        }
+      }
+    },
+    "channel": {
+      "title": "Support and handoff to a human",
+      "items": {
+        "connect": {
+          "q": "How does the agent serve customers on Bitrix24?",
+          "a": "It replies in the open-channel conversations where it is enabled, and can look up and record CRM data when those tools are enabled."
+        },
+        "handoff": {
+          "q": "How does the customer reach a person?",
+          "a": "Set up handoff to a human on the agent. When the rule is met, the conversation moves to the channel agents queue."
+        },
+        "offHours": {
+          "q": "What about outside business hours?",
+          "a": "Set the agent business hours. Outside them, the agent tells the customer according to the option you chose."
+        }
+      }
+    }
+  },
+  "supportTitle": "Still need help?",
+  "supportText": "Talk to the CRMThink support team.",
+  "supportButton": "Contact support"
+}
