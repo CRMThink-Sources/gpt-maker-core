@@ -1,6 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
-import type { FunctionAnswers } from '@gptmaker/contracts';
+import {
+  flattenFields,
+  type FunctionAnswers,
+  type FunctionTemplateContent,
+} from '@gptmaker/contracts';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -1175,6 +1179,93 @@ describe('publicação da função do agente', () => {
       expect(back.version).toBe(back.latestVersion);
       const [simple] = await db.select().from(agent).where(eq(agent.id, view.id));
       expect(simple!.behavior).toContain('Você é Ana, da CRMThink.');
+    });
+  });
+
+  // Formulário no idioma da interface (spec function-template-i18n).
+  describe('traduções do formulário', () => {
+    const labelOf = (form: FunctionTemplateContent, id: string) =>
+      flattenFields(form.fields).find((field) => field.id === id)?.label;
+
+    it('devolve a lista e o formulário no idioma pedido, com volta ao português por texto', async () => {
+      const [template] = await db
+        .select()
+        .from(agentFunctionTemplate)
+        .where(eq(agentFunctionTemplate.code, 'SDR'));
+      const draft = template!.draft;
+      const original = flattenFields(draft.fields).find((f) => f.id === 'sdr.perfil_ideal')!.label;
+      await catalog.saveTemplateDraft('SDR', {
+        name: template!.name,
+        draft: {
+          ...draft,
+          translations: {
+            en: {
+              name: 'Sales (SDR)',
+              fields: { 'sdr.perfil_ideal': { label: 'Ideal customer profile' } },
+            },
+          },
+        },
+      });
+      await catalog.publishTemplate('SDR', null);
+
+      const listIn = async (locale: 'pt-BR' | 'en' | 'es') =>
+        (await functions.listFunctions(owner.tenantId, locale)).find((fn) => fn.code === 'SDR')!;
+      expect((await listIn('en')).name).toBe('Sales (SDR)');
+      expect((await listIn('es')).name).toBe(template!.name);
+      expect((await listIn('pt-BR')).name).toBe(template!.name);
+
+      const en = await functions.functionForm(owner.tenantId, 'SDR', 'en');
+      expect(en.name).toBe('Sales (SDR)');
+      expect(labelOf(en.form, 'sdr.perfil_ideal')).toBe('Ideal customer profile');
+      // campo do bloco `comum`: a tradução do bloco entra junto com a do template
+      expect(labelOf(en.form, 'empresa.nome')).toBe('Company name');
+      expect(
+        labelOf(
+          (await functions.functionForm(owner.tenantId, 'SDR', 'es')).form,
+          'sdr.perfil_ideal',
+        ),
+      ).toBe(original);
+      // a resposta nunca carrega as traduções
+      expect('translations' in en.form).toBe(false);
+    });
+
+    it('a configuração do agente também vem no idioma, com as mesmas respostas', async () => {
+      const view = await createAgent();
+      const pt = await functions.view(owner.tenantId, view.id, 'pt-BR');
+      const en = await functions.view(owner.tenantId, view.id, 'en');
+      expect(labelOf(en.form, 'sdr.perfil_ideal')).toBe('Ideal customer profile');
+      expect(labelOf(pt.form, 'sdr.perfil_ideal')).not.toBe('Ideal customer profile');
+      expect(en.function.name).toBe('Sales (SDR)');
+      // as respostas guardadas são as mesmas, qualquer que seja o idioma
+      expect(en.answers).toEqual(pt.answers);
+    });
+
+    it('bloco com tradução de campo inexistente não salva nem publica', async () => {
+      const block = await catalog.getBlock('comum');
+      const invalid = {
+        ...block.draft,
+        translations: { en: { fields: { 'nao.existe': { label: 'X' } } } },
+      };
+      const saving = await rejection(catalog.saveBlockDraft('comum', { draft: invalid }));
+      expect(saving.code).toBe('FUNCTION_BLOCK_INVALID');
+      expect((await catalog.getBlock('comum')).draft).toEqual(block.draft);
+    });
+
+    it('recusa tradução de campo inexistente na publicação', async () => {
+      const [template] = await db
+        .select()
+        .from(agentFunctionTemplate)
+        .where(eq(agentFunctionTemplate.code, 'SDR'));
+      await catalog.saveTemplateDraft('SDR', {
+        draft: {
+          ...template!.draft,
+          translations: { es: { fields: { 'nao.existe': { label: 'X' } } } },
+        },
+      });
+      const error = await rejection(catalog.publishTemplate('SDR', null));
+      expect(error.code).toBe('FUNCTION_TEMPLATE_INVALID');
+      // restaura o rascunho válido para os testes seguintes
+      await catalog.saveTemplateDraft('SDR', { draft: template!.draft });
     });
   });
 });

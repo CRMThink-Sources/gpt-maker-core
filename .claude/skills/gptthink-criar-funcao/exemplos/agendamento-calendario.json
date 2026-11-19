@@ -142,5 +142,99 @@
     }
   ],
   "behavior": "Você é {{agente.nome}}, do agendamento da {{empresa.nome}}. {{empresa.descricao}}\nSua função é marcar horários na agenda da empresa. Você não inventa horários.\n\n{{bloco.crm}}\n\nCOMO AGENDAR\n- Antes de agendar, identifique o cliente com a ação \"Consultar cliente no CRM\". Sem cliente identificado, não agende. {{agenda.sem_horario}}\n- {{agenda.assunto}}\n- Chame `horarios_livres` e ofereça no máximo 3 horários, ditos por extenso como em `quando` (ex.: quinta-feira, 12 de novembro, às 9h30). Nunca mostre datas como 2026-11-12 nem `usar_ao_agendar`. Peça que o cliente escolha.\n- `agendar_compromisso` marca só na 2ª chamada. Na 1ª (`inicio` = `usar_ao_agendar`, sem alterar), ela diz que nada foi marcado: diga data, hora e com quem será e peça a confirmação. Com o \"sim\", chame de novo, igual.\n- Nunca invente nem prometa horário fora da lista. Se o horário não estiver mais livre, ofereça as alternativas devolvidas.\n- Informe os horários no horário de Brasília, como a agenda devolve.\n- Se o cliente perguntar o que já tem marcado, use `agendamentos_do_cliente` e diga só data, hora e com quem.\n- Nunca fale de ids, ferramentas ou termos técnicos.\n\nSEM HORÁRIO OU AGENDA INDISPONÍVEL\n{{agenda.sem_horario}}\n\nREMARCAR OU CANCELAR\n{{agenda.alterar}}\n\n{{bloco.duvida}}\n\nESTILO\n{{comum.tom}} {{comum.emojis}} Respostas curtas e diretas.\n\n{{avancado.instrucoes_adicionais}}",
-  "intentions": []
+  "intentions": [],
+  "translations": {
+    "en": {
+      "fields": {
+        "agenda.assunto": {
+          "label": "Ask for the appointment subject",
+          "options": {
+            "sim": "Yes, ask for the subject",
+            "nao": "Do not ask"
+          }
+        },
+        "agenda.sem_horario": {
+          "label": "No free slot, calendar unavailable or customer not identified",
+          "options": {
+            "transferir": "Transfer to an agent",
+            "retorno": "Say the team will get back"
+          }
+        },
+        "agenda.alterar": {
+          "label": "Customer wants to reschedule or cancel",
+          "help": "The agent only books times; rescheduling and canceling are left to the team.",
+          "options": {
+            "transferir": "Transfer to an agent",
+            "orientar": "Guide them to talk to the team"
+          }
+        },
+        "agenda.contato": {
+          "label": "Team contact (optional)",
+          "help": "E.g.: \" on WhatsApp (11) 99999-0000\". Starts with the connective word.",
+          "placeholder": "by phone (11) 3000-0000"
+        },
+        "base.servicos": {
+          "label": "Services and topics covered",
+          "help": "What can be booked, duration and preparation.",
+          "subfields": {
+            "titulo": "Service",
+            "descricao": "Description"
+          }
+        },
+        "base.faq": {
+          "label": "Frequently asked questions",
+          "subfields": {
+            "pergunta": "Question",
+            "resposta": "Answer"
+          }
+        }
+      }
+    },
+    "es": {
+      "fields": {
+        "agenda.assunto": {
+          "label": "Preguntar el asunto de la cita",
+          "options": {
+            "sim": "Sí, preguntar el asunto",
+            "nao": "No preguntar"
+          }
+        },
+        "agenda.sem_horario": {
+          "label": "Sin horario libre, agenda no disponible o cliente no identificado",
+          "options": {
+            "transferir": "Transferir a un agente",
+            "retorno": "Avisar que el equipo responderá"
+          }
+        },
+        "agenda.alterar": {
+          "label": "El cliente quiere reprogramar o cancelar",
+          "help": "El agente solo agenda horarios; reprogramar y cancelar quedan con el equipo.",
+          "options": {
+            "transferir": "Transferir a un agente",
+            "orientar": "Orientar a hablar con el equipo"
+          }
+        },
+        "agenda.contato": {
+          "label": "Contacto del equipo (opcional)",
+          "help": "Ej.: \" por WhatsApp (11) 99999-0000\". Empieza con el conector.",
+          "placeholder": "por teléfono (11) 3000-0000"
+        },
+        "base.servicos": {
+          "label": "Servicios y asuntos atendidos",
+          "help": "Qué se puede agendar, duración y preparación.",
+          "subfields": {
+            "titulo": "Servicio",
+            "descricao": "Descripción"
+          }
+        },
+        "base.faq": {
+          "label": "Preguntas frecuentes",
+          "subfields": {
+            "pergunta": "Pregunta",
+            "resposta": "Respuesta"
+          }
+        }
+      }
+    }
+  }
 }

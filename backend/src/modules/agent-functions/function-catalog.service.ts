@@ -13,6 +13,7 @@ import {
   createFunctionBlockSchema,
   type CreateFunctionTemplateInput,
   createFunctionTemplateSchema,
+  DEFAULT_LOCALE,
   diffLines,
   expandBlocks,
   flattenFields,
@@ -21,10 +22,14 @@ import {
   type FunctionField,
   type FunctionTemplateContent,
   type FunctionTemplateDraft,
+  type FunctionTranslations,
   type FunctionVersionDiff,
+  type Locale,
+  localizeFunctionText,
   type PreviewFunctionDraftInput,
   previewFunctionDraftSchema,
   type SaveFunctionBlockInput,
+  translationIssues,
   saveFunctionBlockSchema,
   type SaveFunctionTemplateInput,
   saveFunctionTemplateSchema,
@@ -273,7 +278,10 @@ export class FunctionCatalog {
    * Funções que o portal pode escolher: publicadas, ativas e liberadas para ele (sem restrição
    * de portais, ou com o portal na lista; design D14).
    */
-  async listPublished(tenantId: string): Promise<AgentFunctionView[]> {
+  async listPublished(
+    tenantId: string,
+    locale: Locale = DEFAULT_LOCALE,
+  ): Promise<AgentFunctionView[]> {
     const rows = await this.db
       .select()
       .from(agentFunctionTemplate)
@@ -286,10 +294,40 @@ export class FunctionCatalog {
         ),
       )
       .orderBy(agentFunctionTemplate.code);
+    // Nome e descrição traduzidos moram na versão publicada (spec function-template-i18n).
+    const versions = rows.length
+      ? await this.db
+          .select({
+            templateId: agentFunctionTemplateVersion.templateId,
+            version: agentFunctionTemplateVersion.version,
+            translations: sql<FunctionTranslations | null>`${agentFunctionTemplateVersion.content}->'translations'`,
+          })
+          .from(agentFunctionTemplateVersion)
+          // Só a última versão publicada de cada função: as traduções antigas não interessam.
+          .innerJoin(
+            agentFunctionTemplate,
+            and(
+              eq(agentFunctionTemplate.id, agentFunctionTemplateVersion.templateId),
+              eq(agentFunctionTemplate.latestVersion, agentFunctionTemplateVersion.version),
+            ),
+          )
+          .where(
+            inArray(
+              agentFunctionTemplateVersion.templateId,
+              rows.map((row) => row.id),
+            ),
+          )
+      : [];
+    const translationsOf = new Map(
+      versions.map((v) => [`${v.templateId}:${v.version}`, v.translations ?? undefined]),
+    );
     return rows.map((row) => ({
       code: row.code,
-      name: row.name,
-      description: row.description,
+      ...localizeFunctionText(
+        { name: row.name, description: row.description },
+        translationsOf.get(`${row.id}:${row.latestVersion}`),
+        locale,
+      ),
       version: row.latestVersion!,
     }));
   }
@@ -433,6 +471,7 @@ export class FunctionCatalog {
         HttpStatus.CONFLICT,
       );
     }
+    assertBlockTranslations(input.draft);
     await this.db.insert(agentFunctionBlock).values(input);
     return this.getBlock(input.code);
   }
@@ -440,6 +479,7 @@ export class FunctionCatalog {
   async saveBlockDraft(code: string, raw: SaveFunctionBlockInput): Promise<AdminFunctionBlockView> {
     const input = saveFunctionBlockSchema.parse(raw);
     const row = await this.block(code);
+    assertBlockTranslations(input.draft);
     await this.db
       .update(agentFunctionBlock)
       .set({ draft: input.draft, ...(input.name ? { name: input.name } : {}) })
@@ -450,6 +490,7 @@ export class FunctionCatalog {
   /** Publica o rascunho do bloco: entra nos templates quando eles publicarem nova versão. */
   async publishBlock(code: string): Promise<AdminFunctionBlockView> {
     const row = await this.block(code);
+    assertBlockTranslations(row.draft);
     await this.db
       .update(agentFunctionBlock)
       .set({ content: row.draft, publishedAt: new Date() })
@@ -723,6 +764,18 @@ function summary(
     agents,
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** Tradução de campo, opção ou subcampo que o bloco não tem: recusa (spec function-template-i18n). */
+function assertBlockTranslations(content: FunctionBlockContent): void {
+  const issues = translationIssues(content);
+  if (issues.length === 0) return;
+  throw new DomainError(
+    'FUNCTION_BLOCK_INVALID',
+    'As traduções do bloco têm problemas',
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    { errors: issues },
+  );
 }
 
 function published(template: TemplateRow, version: VersionRow): PublishedFunction {

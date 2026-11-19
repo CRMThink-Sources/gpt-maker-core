@@ -9,6 +9,7 @@ export * from './agent-function-check';
 export * from './agent-function-compiler';
 export * from './agent-function-plan';
 export * from './agent-function-review';
+export * from './agent-function-translations';
 export * from './agent-knowledge-review';
 export * from './agent-functions';
 export * from './agent-functions-admin';

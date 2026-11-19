@@ -36,7 +36,11 @@ describe('seed das funções do agente', () => {
 
   it('publica as quatro funções como versão 1 e não sobrescreve na segunda vez', async () => {
     // comum, crm, duvida, registro e transferir.
-    expect(await seedAgentFunctions(db, catalog)).toEqual({ blocks: 5, templates: 4 });
+    expect(await seedAgentFunctions(db, catalog)).toEqual({
+      blocks: 5,
+      templates: 4,
+      translated: 0,
+    });
     const published = await catalog.listPublished(randomUUID());
     expect(published.map((fn) => [fn.code, fn.version])).toEqual([
       ['POST_SALES', 1],
@@ -52,7 +56,11 @@ describe('seed das funções do agente', () => {
       .set({ name: 'SDR renomeado' })
       .where(eq(agentFunctionTemplate.code, 'SDR'));
 
-    expect(await seedAgentFunctions(db, catalog)).toEqual({ blocks: 0, templates: 0 });
+    expect(await seedAgentFunctions(db, catalog)).toEqual({
+      blocks: 0,
+      templates: 0,
+      translated: 0,
+    });
     const sdr = await catalog.getTemplate('SDR');
     expect(sdr).toMatchObject({ name: 'SDR renomeado', latestVersion: 2 });
     expect(await db.select().from(agentFunctionTemplateVersion)).toHaveLength(5);
@@ -60,8 +68,66 @@ describe('seed das funções do agente', () => {
 
   it('função padrão excluída não volta pelo seed', async () => {
     await catalog.remove('POST_SALES');
-    expect(await seedAgentFunctions(db, catalog)).toEqual({ blocks: 0, templates: 0 });
+    expect(await seedAgentFunctions(db, catalog)).toEqual({
+      blocks: 0,
+      templates: 0,
+      translated: 0,
+    });
     expect((await catalog.listTemplates()).map((row) => row.code)).not.toContain('POST_SALES');
+  });
+
+  it('a versão 1 do seed já sai com as traduções em en e es', async () => {
+    const sdr = await catalog.latestPublished('SDR', randomUUID());
+    expect(sdr.content.translations?.en?.name).toBe('SDR / Qualification');
+    expect(sdr.content.translations?.es?.fields?.['empresa.nome']?.label).toBe(
+      'Nombre de la empresa',
+    );
+  });
+
+  it('função e bloco existentes sem traduções recebem as do seed no rascunho, sem publicar', async () => {
+    const [template] = await db
+      .select()
+      .from(agentFunctionTemplate)
+      .where(eq(agentFunctionTemplate.code, 'SUPPORT'));
+    const draft = { ...template!.draft, translations: undefined };
+    await db
+      .update(agentFunctionTemplate)
+      .set({ draft })
+      .where(eq(agentFunctionTemplate.id, template!.id));
+    // Bloco sem traduções (rascunho e publicado): o seed preenche os dois.
+    const [comum] = await db
+      .select()
+      .from(schema.agentFunctionBlock)
+      .where(eq(schema.agentFunctionBlock.code, 'comum'));
+    await db
+      .update(schema.agentFunctionBlock)
+      .set({
+        draft: { ...comum!.draft, translations: undefined },
+        content: { ...comum!.content!, translations: undefined },
+      })
+      .where(eq(schema.agentFunctionBlock.code, 'comum'));
+
+    const result = await seedAgentFunctions(db, catalog);
+    expect(result).toEqual({ blocks: 0, templates: 0, translated: 2 });
+
+    const after = await catalog.getTemplate('SUPPORT');
+    expect(after.draft.translations?.en?.name).toBe('Support');
+    const [block] = await db
+      .select()
+      .from(schema.agentFunctionBlock)
+      .where(eq(schema.agentFunctionBlock.code, 'comum'));
+    expect(block!.draft.translations?.en?.fields?.['empresa.nome']?.label).toBe('Company name');
+    expect(block!.content?.translations?.es?.fields?.['empresa.nome']?.label).toBe(
+      'Nombre de la empresa',
+    );
+    // o publicado do template não mudou: o cliente só vê a tradução na próxima publicação
+    expect(after.latestVersion).toBe(1);
+    // o seed seguinte não repete
+    expect(await seedAgentFunctions(db, catalog)).toEqual({
+      blocks: 0,
+      templates: 0,
+      translated: 0,
+    });
   });
 
   it('a versão do seed traz os blocos expandidos', async () => {

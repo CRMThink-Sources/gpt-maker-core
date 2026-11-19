@@ -1,9 +1,17 @@
 'use client';
 
 import type { Locale } from '@gptmaker/contracts';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { LogoMark } from '@/components/logo';
-import { useT } from '@/i18n';
+import { useLocale, useT } from '@/i18n';
 import { Spinner } from '@/components/ui';
 import { insideBitrix } from '@/lib/bx24';
 import { ApiRequestError, type ClientConfig, PlatformSessionClient } from '@/lib/platform-session';
@@ -56,7 +64,13 @@ export function SessionProvider({
   config: ClientConfig;
   children: ReactNode;
 }) {
+  const { locale } = useLocale();
   const client = useMemo(() => new PlatformSessionClient(config), [config]);
+  // O efeito de layout roda antes dos efeitos de carga das páginas: a primeira chamada de cada
+  // tela já sai com o idioma ativo, sem trocar a identidade de `api` a cada mudança de idioma.
+  useLayoutEffect(() => {
+    client.setLocale(locale);
+  }, [client, locale]);
   const t = useT('session');
   const [state, setState] = useState<State>({ kind: 'loading' });
 

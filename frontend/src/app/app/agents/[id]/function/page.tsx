@@ -16,10 +16,10 @@ import {
   FUNCTION_BEHAVIOR_MAX,
 } from '@gptmaker/contracts';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '@/components/modal';
 import { Alert, Badge, buttonClass, Card, Loading } from '@/components/ui';
-import { useErrorMessage, useT } from '@/i18n';
+import { useErrorMessage, useLocale, useT } from '@/i18n';
 import { errorMessage } from '@/lib/agents';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../../../session-provider';
@@ -127,6 +127,26 @@ export default function AgentFunctionPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- o idioma não refaz a leitura
   }, [api, base, apply]);
+
+  // Trocar o idioma recarrega o formulário no novo idioma sem mexer no que está sendo editado
+  // (spec function-template-i18n).
+  const { locale } = useLocale();
+  const shownLocale = useRef(locale);
+  useEffect(() => {
+    if (shownLocale.current === locale) return;
+    shownLocale.current = locale;
+    let cancelled = false;
+    api<AgentFunctionConfigView>(`${base}/function`)
+      .then((view) => !cancelled && apply(view, false))
+      .catch(
+        (e: unknown) => !cancelled && setError(errorMessage(e, t('loadError'), translateError)),
+      );
+    return () => {
+      cancelled = true;
+    };
+    // `t` e `translateError` mudam só com o idioma: só a troca dispara a recarga.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, api, base, apply]);
 
   // Publicação em andamento: acompanha até terminar e atualiza o agente do cabeçalho. O
   // formulário fica travado: ao terminar ele volta ao que foi salvo, e uma edição se perderia.

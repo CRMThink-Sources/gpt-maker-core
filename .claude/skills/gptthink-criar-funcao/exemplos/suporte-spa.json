@@ -379,6 +379,238 @@
         "instructions": "Confirme que o chamado foi aberto e avise que um atendente vai continuar a conversa.",
         "collectFrom": "suporte.perguntas"
       }
-    ]
+    ],
+    "translations": {
+      "en": {
+        "name": "Support with ticket (SPA)",
+        "description": "First-line support: tries to solve with the known solutions in the knowledge base, assesses priority and, when it cannot solve, opens a ticket in a Bitrix24 smart process (SPA) and transfers to the team.",
+        "fields": {
+          "suporte.excluidos": {
+            "label": "Topics that go straight to a ticket",
+            "help": "The agent does not try to solve them: it opens the ticket and transfers.",
+            "placeholder": "Cancellations"
+          },
+          "suporte.identificacao": {
+            "label": "Data to identify the customer",
+            "options": {
+              "nome": "Name",
+              "email": "Email",
+              "documento": "Tax ID",
+              "pedido": "Order number",
+              "contrato": "Contract number",
+              "dominio": "Bitrix24 address"
+            }
+          },
+          "suporte.prioridade_urgente": {
+            "label": "When the ticket is URGENT",
+            "help": "Up to 55 characters. E.g.: system down for everyone or data loss."
+          },
+          "suporte.prioridade_alta": {
+            "label": "When the ticket is HIGH priority",
+            "help": "Up to 55 characters. E.g.: an important feature stopped for some users."
+          },
+          "suporte.prioridade_normal": {
+            "label": "When the ticket is NORMAL priority",
+            "help": "Up to 55 characters. E.g.: error with a workaround or slowness. The rest is LOW."
+          },
+          "suporte.perguntas": {
+            "label": "Questions before opening the ticket",
+            "help": "The agent asks one at a time before opening the ticket. The answers go to the SPA item.",
+            "placeholder": "Since when has the problem been happening?"
+          },
+          "suporte.chamado": {
+            "label": "Where to open the ticket",
+            "help": "Choose the tickets smart process (SPA), the initial stage and which field each piece of information goes to.",
+            "spaValues": {
+              "origem": {
+                "label": "Source",
+                "help": "List field: the agent always writes CHAT. Link each option to an item."
+              },
+              "prioridade": {
+                "label": "Priority",
+                "help": "List field: link each level to an item."
+              },
+              "problema": {
+                "label": "Reported problem"
+              },
+              "respostas": {
+                "label": "Answers to the questions",
+                "help": "Each question with the customer answer."
+              },
+              "chat": {
+                "label": "Source chat",
+                "help": "Chat number, e.g.: 9498."
+              },
+              "dialogo": {
+                "label": "Source dialog",
+                "help": "Dialog with the prefix, e.g.: chat9498."
+              },
+              "sessao": {
+                "label": "Open Channels session"
+              }
+            }
+          },
+          "suporte.depois_chamado": {
+            "label": "Who to transfer to after opening the ticket",
+            "options": {
+              "usuario": "Chosen agents",
+              "fila": "Open Channel queue"
+            }
+          },
+          "suporte.atendentes": {
+            "label": "Agents who receive the conversation",
+            "help": "With more than one, conversations are distributed in rotation."
+          },
+          "suporte.vendas": {
+            "label": "Purchase or quote request",
+            "options": {
+              "chamado": "Open a ticket and transfer",
+              "canal": "Share the sales channel"
+            }
+          },
+          "suporte.canal_vendas": {
+            "label": "Sales channel"
+          },
+          "base.problemas": {
+            "label": "Known problem solutions",
+            "help": "The problem as the customer describes it and the step-by-step solution. The agent only solves what is here.",
+            "subfields": {
+              "problema": "Problem",
+              "solucao": "Solution"
+            }
+          },
+          "base.faq": {
+            "label": "Frequently asked questions",
+            "subfields": {
+              "pergunta": "Question",
+              "resposta": "Answer"
+            }
+          },
+          "base.politicas": {
+            "label": "Policies",
+            "help": "Exchanges, warranty, deadlines, business hours.",
+            "subfields": {
+              "titulo": "Title",
+              "texto": "Text"
+            }
+          }
+        }
+      },
+      "es": {
+        "name": "Soporte con ticket (SPA)",
+        "description": "Primer nivel de soporte: intenta resolver con las soluciones conocidas de la base, evalúa la prioridad y, cuando no resuelve, abre un ticket en un proceso inteligente (SPA) de Bitrix24 y transfiere al equipo.",
+        "fields": {
+          "suporte.excluidos": {
+            "label": "Asuntos que van directo al ticket",
+            "help": "El agente no intenta resolverlos: abre el ticket y transfiere.",
+            "placeholder": "Cancelaciones"
+          },
+          "suporte.identificacao": {
+            "label": "Datos para identificar al cliente",
+            "options": {
+              "nome": "Nombre",
+              "email": "Correo electrónico",
+              "documento": "Documento fiscal",
+              "pedido": "Número de pedido",
+              "contrato": "Número de contrato",
+              "dominio": "Dirección de Bitrix24"
+            }
+          },
+          "suporte.prioridade_urgente": {
+            "label": "Cuando el ticket es URGENTE",
+            "help": "Hasta 55 caracteres. Ej.: sistema caído para todos o pérdida de datos."
+          },
+          "suporte.prioridade_alta": {
+            "label": "Cuando el ticket es de prioridad ALTA",
+            "help": "Hasta 55 caracteres. Ej.: una función importante dejó de funcionar para parte de los usuarios."
+          },
+          "suporte.prioridade_normal": {
+            "label": "Cuando el ticket es de prioridad NORMAL",
+            "help": "Hasta 55 caracteres. Ej.: error con alternativa o lentitud. El resto queda LOW."
+          },
+          "suporte.perguntas": {
+            "label": "Preguntas antes de abrir el ticket",
+            "help": "El agente hace una por vez antes de abrir el ticket. Las respuestas van al ítem del SPA.",
+            "placeholder": "¿Desde cuándo ocurre el problema?"
+          },
+          "suporte.chamado": {
+            "label": "Dónde abrir el ticket",
+            "help": "Elija el proceso inteligente (SPA) de tickets, la etapa inicial y en qué campo va cada información.",
+            "spaValues": {
+              "origem": {
+                "label": "Origen",
+                "help": "Campo lista: el agente siempre graba CHAT. Vincule cada opción a un ítem."
+              },
+              "prioridade": {
+                "label": "Prioridad",
+                "help": "Campo lista: vincule cada nivel a un ítem."
+              },
+              "problema": {
+                "label": "Problema informado"
+              },
+              "respostas": {
+                "label": "Respuestas a las preguntas",
+                "help": "Cada pregunta con la respuesta del cliente."
+              },
+              "chat": {
+                "label": "Chat de origen",
+                "help": "Número del chat, ej.: 9498."
+              },
+              "dialogo": {
+                "label": "Diálogo de origen",
+                "help": "Diálogo con el prefijo, ej.: chat9498."
+              },
+              "sessao": {
+                "label": "Sesión de Canales Abiertos"
+              }
+            }
+          },
+          "suporte.depois_chamado": {
+            "label": "A quién transferir después de abrir el ticket",
+            "options": {
+              "usuario": "Agentes elegidos",
+              "fila": "Cola del Canal Abierto"
+            }
+          },
+          "suporte.atendentes": {
+            "label": "Agentes que reciben la conversación",
+            "help": "Con más de uno, las conversaciones se distribuyen en rotación."
+          },
+          "suporte.vendas": {
+            "label": "Pedido de compra o presupuesto",
+            "options": {
+              "chamado": "Abrir ticket y transferir",
+              "canal": "Informar el canal de ventas"
+            }
+          },
+          "suporte.canal_vendas": {
+            "label": "Canal de ventas"
+          },
+          "base.problemas": {
+            "label": "Soluciones de problemas conocidos",
+            "help": "El problema como lo describe el cliente y el paso a paso de la solución. El agente solo resuelve lo que esté aquí.",
+            "subfields": {
+              "problema": "Problema",
+              "solucao": "Solución"
+            }
+          },
+          "base.faq": {
+            "label": "Preguntas frecuentes",
+            "subfields": {
+              "pergunta": "Pregunta",
+              "resposta": "Respuesta"
+            }
+          },
+          "base.politicas": {
+            "label": "Políticas",
+            "help": "Cambios, garantía, plazos, horarios.",
+            "subfields": {
+              "titulo": "Título",
+              "texto": "Texto"
+            }
+          }
+        }
+      }
+    }
   }
 }

@@ -23,6 +23,7 @@
 | `behavior` | string | 1–3000 caracteres crus; pior caso compilado ≤3000 |
 | `intentions` | intenção[] | ≤10 próprias |
 | `transfers` | transferência[] | ≤5; transferências para outro agente (abaixo) |
+| `translations` | `{ en?, es? }` | traduções do formulário que o cliente lê (seção "Traduções"). Toda função nova sai com `en` e `es` completos |
 
 ### `settings` (todas opcionais)
 
@@ -117,6 +118,47 @@ Chaves fora dessas duas são recusadas. A ajuda só aparece quando o template te
   }
 }
 ```
+
+## Traduções (`translations`)
+
+O português é o texto-base. `translations` guarda o formulário em `en` e `es` para o cliente que usa o app nesses idiomas; o que falta cai em português. **Só o que o cliente lê é traduzido**: `behavior`, `snippet`, `format`, intenções e transferências vão para o GPTMaker em português e **não** entram aqui. Tudo é chaveado por **id** (não por posição) e vale para os campos próprios do rascunho e os de blocos incluídos (os blocos do seed já vêm traduzidos).
+
+```json
+"translations": {
+  "en": {
+    "name": "Collections",
+    "description": "Reminds customers about overdue invoices...",
+    "fields": {
+      "cobranca.pagamento": {
+        "label": "Accepted payment methods",
+        "help": "...",
+        "placeholder": "...",
+        "options": { "pix": "Pix", "boleto": "Bank slip" },
+        "subfields": { "titulo": "Title" },
+        "spaValues": { "prioridade": { "label": "Priority", "help": "..." } },
+        "assistQuestions": ["Which...?", "How...?"]
+      }
+    }
+  },
+  "es": { "...": "mesmo formato" }
+}
+```
+
+| Chave | Traduz | Limite |
+|---|---|---|
+| `name`, `description` | nome e descrição da função (do formulário "Nova função") | 100 e 500 |
+| `fields.<id>.label` / `help` / `placeholder` | rótulo, ajuda e exemplo do campo (placeholder só em `TEXT`/`TEXT_LIST`) | 120 / 300 / 200 |
+| `fields.<id>.options.<value>` | rótulo de cada opção (`CHOICE`/`MULTI_CHOICE`), pelo `value` | 120 |
+| `fields.<id>.subfields.<id>` | rótulo dos subcampos de `KNOWLEDGE` | 120 |
+| `fields.<id>.spaValues.<id>` | `{ label, help }` de cada valor de `BITRIX_SPA` | 120 / 300 |
+| `fields.<id>.assistQuestions` | perguntas da ajuda da IA, **na mesma posição** das de `assist.questions` | 200 cada |
+
+Regras:
+- Campo dependente (`dependents`) tem id próprio: entra em `fields` como qualquer outro.
+- Id, opção, subcampo ou valor de SPA que não existe no formulário, chave desconhecida e idioma que não seja `en`/`es` são **erro**. Texto acima do limite também.
+- Texto sem tradução é só **aviso** (o validador conta quantos faltam por idioma), mas funções novas devem sair sem pendência.
+- Não traduza `assist.instructions`, `review.rubric` nem `review.examples`: só a IA lê.
+- `help` e `placeholder` do original que são frases em português para o texto do agente (ex.: um conectivo como `" pelo telefone ..."`) traduzem-se como exemplo, sem espaço no começo.
 
 ## Intenções
 

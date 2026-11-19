@@ -2,6 +2,8 @@ import {
   type FunctionField,
   type FunctionOption,
   type FunctionTemplateContent,
+  type FunctionTranslations,
+  FUNCTION_TRANSLATION_LOCALES,
   intentionJsonName,
 } from '@gptmaker/contracts';
 
@@ -158,6 +160,10 @@ function renameMarkers(text: string, from: string, to: string): string {
  */
 export function renameId<T>(value: T, from: string, to: string): T {
   const walk = (node: unknown, key?: string): unknown => {
+    // Traduções: o id é a chave (não há marcadores nos textos), e acompanha a renomeação.
+    if (key === 'translations') {
+      return renameTranslationField(node as FunctionTranslations | undefined, from, to);
+    }
     if (typeof node === 'string') {
       if ((key === 'field' || key === 'collectFrom') && node === from) return to;
       return renameMarkers(node, from, to);
@@ -169,6 +175,54 @@ export function renameId<T>(value: T, from: string, to: string): T {
     return node;
   };
   return walk(value) as T;
+}
+
+/** Troca a chave de um campo nas traduções, para a tradução não ficar órfã (spec function-template-i18n). */
+export function renameTranslationField(
+  translations: FunctionTranslations | undefined,
+  from: string,
+  to: string,
+): FunctionTranslations | undefined {
+  if (!translations) return translations;
+  const result: FunctionTranslations = {};
+  for (const locale of FUNCTION_TRANSLATION_LOCALES) {
+    const entry = translations[locale];
+    if (!entry) continue;
+    result[locale] = entry.fields
+      ? {
+          ...entry,
+          fields: Object.fromEntries(
+            Object.entries(entry.fields).map(([id, value]) => [id === from ? to : id, value]),
+          ),
+        }
+      : entry;
+  }
+  return result;
+}
+
+/** Troca o valor de uma opção nas traduções de um campo (rótulo da opção). */
+export function renameTranslationOption(
+  translations: FunctionTranslations | undefined,
+  fieldId: string,
+  from: string,
+  to: string,
+): FunctionTranslations | undefined {
+  if (!translations) return translations;
+  const result: FunctionTranslations = {};
+  for (const locale of FUNCTION_TRANSLATION_LOCALES) {
+    const entry = translations[locale];
+    const field = entry?.fields?.[fieldId];
+    if (!entry) continue;
+    if (!field?.options || !(from in field.options)) {
+      result[locale] = entry;
+      continue;
+    }
+    const options = Object.fromEntries(
+      Object.entries(field.options).map(([value, text]) => [value === from ? to : value, text]),
+    );
+    result[locale] = { ...entry, fields: { ...entry.fields, [fieldId]: { ...field, options } } };
+  }
+  return result;
 }
 
 /** Renomeia o valor de uma opção nas condições das intenções. */

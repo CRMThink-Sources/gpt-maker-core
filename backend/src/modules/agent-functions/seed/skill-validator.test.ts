@@ -9,6 +9,8 @@ import {
   functionBlockContentSchema,
   type FunctionTemplateDraftInput,
   functionTemplateDraftSchema,
+  templateIssues,
+  translationCompleteness,
 } from '@gptmaker/contracts';
 import { describe, expect, it } from 'vitest';
 import { SEED_BLOCKS, SEED_TEMPLATES } from './index';
@@ -258,7 +260,11 @@ describe('critério de revisão (review) na skill', () => {
 });
 
 describe('ajuda da IA (assist) na skill', () => {
-  const sdr = SEED_TEMPLATES.find((template) => template.code === 'SDR')!.draft;
+  // Sem as traduções do seed: elas citam as perguntas originais e estes testes trocam as perguntas.
+  const sdr: FunctionTemplateDraftInput = {
+    ...SEED_TEMPLATES.find((template) => template.code === 'SDR')!.draft,
+    translations: undefined,
+  };
   type Raw = { id: string };
   const patched = (id: string, change: Record<string, unknown>): FunctionTemplateDraftInput => ({
     ...sdr,
@@ -355,5 +361,86 @@ describe('ajuda da IA (assist) na skill', () => {
       expect(result.ok).toBe(false);
       expect(result.output).toContain('assist: precisa ser { enabled: true/false }');
     }
+  });
+});
+
+describe('traduções na skill (spec function-template-i18n)', () => {
+  const EXAMPLES = [
+    'sdr',
+    'suporte',
+    'cobranca',
+    'recepcao',
+    'agendamento-calendario',
+    'suporte-spa',
+  ];
+  const load = (name: string) =>
+    JSON.parse(readFileSync(join(SKILL, `exemplos/${name}.json`), 'utf8'));
+  const sdr = SEED_TEMPLATES.find((template) => template.code === 'SDR')!.draft;
+
+  it.each(EXAMPLES)('exemplo %s: traduzido em en e es, sem problema no contrato', (name) => {
+    const example = load(name);
+    const draft = (example.draft ?? example) as FunctionTemplateDraftInput;
+    const { content } = expandBlocks(functionTemplateDraftSchema.parse(draft), blocks);
+    expect(templateIssues(content)).toEqual([]);
+    for (const locale of translationCompleteness(content, {
+      name: example.name,
+      description: example.description,
+    })) {
+      expect({ locale: locale.locale, missing: locale.missing }).toEqual({
+        locale: locale.locale,
+        missing: [],
+      });
+    }
+    const result = validate(draft);
+    expect(result.output).toContain('OK');
+    expect(result.output).not.toContain('traduções');
+  });
+
+  it('campo e opção inexistentes: os dois recusam com a mesma mensagem', () => {
+    const invalid = {
+      ...sdr,
+      translations: {
+        en: {
+          fields: {
+            'nao.existe': { label: 'X' },
+            'comum.tom': { options: { inexistente: 'Y' } },
+          },
+        },
+      },
+    } as FunctionTemplateDraftInput;
+    const { content } = expandBlocks(functionTemplateDraftSchema.parse(invalid), blocks);
+    const messages = templateIssues(content).map((issue) => issue.message);
+    const result = validate(invalid);
+    expect(result.ok).toBe(false);
+    for (const message of [
+      'tradução en: campo inexistente: nao.existe',
+      'tradução en: opção inexistente em comum.tom: inexistente',
+    ]) {
+      expect(messages).toContain(message);
+      expect(result.output).toContain(message);
+    }
+  });
+
+  it('texto acima do limite e idioma desconhecido: o schema e o validador recusam', () => {
+    const tooLong = {
+      ...sdr,
+      translations: { en: { fields: { 'empresa.nome': { label: 'x'.repeat(121) } } } },
+    } as FunctionTemplateDraftInput;
+    expect(functionTemplateDraftSchema.safeParse(tooLong).success).toBe(false);
+    expect(validate(tooLong).ok).toBe(false);
+    const unknownLocale = {
+      ...sdr,
+      translations: { fr: { name: 'Ventes' } },
+    } as unknown as FunctionTemplateDraftInput;
+    expect(functionTemplateDraftSchema.safeParse(unknownLocale).success).toBe(false);
+    expect(validate(unknownLocale).output).toContain('idioma de tradução não suportado: fr');
+  });
+
+  it('falta de tradução é só aviso, com a contagem por idioma', () => {
+    const result = validate({ ...sdr, translations: undefined });
+    expect(result.ok).toBe(true);
+    expect(result.output).toMatch(/aviso: traduções en: faltam \d+ de \d+ textos/);
+    expect(result.output).toMatch(/aviso: traduções es: faltam \d+ de \d+ textos/);
+    expect(result.output).toContain('OK');
   });
 });

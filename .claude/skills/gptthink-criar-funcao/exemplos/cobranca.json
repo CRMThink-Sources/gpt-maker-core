@@ -329,6 +329,180 @@
         "responseMode": "INSTRUCTIONS",
         "instructions": "Agradeça o compromisso. {{cobranca.acompanhamento}} Reenvie a forma de pagamento escolhida."
       }
-    ]
+    ],
+    "translations": {
+      "en": {
+        "name": "Collections",
+        "description": "Reminds customers about overdue invoices, explains how to pay, negotiates only within the company rules, records the payment promise in Bitrix24 and transfers to an agent when the customer disputes the charge.",
+        "fields": {
+          "cobranca.identificacao": {
+            "label": "Data to find the invoice",
+            "help": "The agent asks for this data when it does not recognize the customer from the CRM.",
+            "options": {
+              "nome": "Full name",
+              "documento": "Tax ID",
+              "fatura": "Invoice number",
+              "contrato": "Contract number",
+              "email": "Email"
+            }
+          },
+          "cobranca.pagamento": {
+            "label": "Accepted payment methods",
+            "options": {
+              "pix": "Pix",
+              "boleto": "Bank slip",
+              "link": "Payment link (card)"
+            }
+          },
+          "cobranca.chave_pix": {
+            "label": "Pix key",
+            "placeholder": "billing@company.com"
+          },
+          "cobranca.link_boleto": {
+            "label": "Bank slip reissue link"
+          },
+          "cobranca.link_pagamento": {
+            "label": "Payment link"
+          },
+          "cobranca.parcelamento": {
+            "label": "Can the agent offer installments?",
+            "options": {
+              "nao": "No, upfront payment only",
+              "sim": "Yes, up to a number of installments"
+            }
+          },
+          "cobranca.max_parcelas": {
+            "label": "Maximum installments"
+          },
+          "cobranca.regras_parcelamento": {
+            "label": "Installment terms",
+            "help": "E.g.: minimum installment, interest, down payment.",
+            "placeholder": "Minimum installment of $50, no down payment, 2% monthly interest."
+          },
+          "cobranca.prazo_promessa": {
+            "label": "Maximum payment promise deadline (days)",
+            "help": "Up to how many days from today the customer can promise to pay."
+          },
+          "cobranca.acompanhamento": {
+            "label": "After recording the promise",
+            "options": {
+              "registrar": "Only record it in Bitrix24",
+              "tarefa": "Record it and create a follow-up task"
+            }
+          },
+          "cobranca.responsavel": {
+            "label": "Task owner"
+          },
+          "cobranca.ja_pagou": {
+            "label": "Customer says they already paid",
+            "options": {
+              "comprovante": "Ask for the receipt and say the team will check",
+              "transferir": "Transfer to an agent"
+            }
+          },
+          "base.politicas": {
+            "label": "Collection policies",
+            "help": "Penalty, interest, clearing times, consequences of delay.",
+            "subfields": {
+              "titulo": "Title",
+              "texto": "Text"
+            }
+          },
+          "base.faq": {
+            "label": "Frequently asked questions",
+            "subfields": {
+              "pergunta": "Question",
+              "resposta": "Answer"
+            }
+          }
+        }
+      },
+      "es": {
+        "name": "Cobranza",
+        "description": "Recuerda a los clientes las facturas vencidas, informa cómo pagar, negocia solo dentro de las reglas de la empresa, registra la promesa de pago en Bitrix24 y transfiere a un agente cuando el cliente cuestiona el cobro.",
+        "fields": {
+          "cobranca.identificacao": {
+            "label": "Datos para localizar la factura",
+            "help": "El agente pide estos datos cuando no reconoce al cliente por el CRM.",
+            "options": {
+              "nome": "Nombre completo",
+              "documento": "Documento fiscal",
+              "fatura": "Número de factura",
+              "contrato": "Número de contrato",
+              "email": "Correo electrónico"
+            }
+          },
+          "cobranca.pagamento": {
+            "label": "Formas de pago aceptadas",
+            "options": {
+              "pix": "Pix",
+              "boleto": "Boleto",
+              "link": "Enlace de pago (tarjeta)"
+            }
+          },
+          "cobranca.chave_pix": {
+            "label": "Clave Pix",
+            "placeholder": "cobranzas@empresa.com"
+          },
+          "cobranca.link_boleto": {
+            "label": "Enlace de la segunda vía del boleto"
+          },
+          "cobranca.link_pagamento": {
+            "label": "Enlace de pago"
+          },
+          "cobranca.parcelamento": {
+            "label": "¿El agente puede ofrecer cuotas?",
+            "options": {
+              "nao": "No, solo pago al contado",
+              "sim": "Sí, hasta un número de cuotas"
+            }
+          },
+          "cobranca.max_parcelas": {
+            "label": "Máximo de cuotas"
+          },
+          "cobranca.regras_parcelamento": {
+            "label": "Condiciones de las cuotas",
+            "help": "Ej.: cuota mínima, intereses, entrada.",
+            "placeholder": "Cuota mínima de $50, sin entrada, intereses del 2% mensual."
+          },
+          "cobranca.prazo_promessa": {
+            "label": "Plazo máximo de la promesa de pago (días)",
+            "help": "Hasta cuántos días desde hoy el cliente puede prometer pagar."
+          },
+          "cobranca.acompanhamento": {
+            "label": "Después de registrar la promesa",
+            "options": {
+              "registrar": "Solo registrar en Bitrix24",
+              "tarefa": "Registrar y crear una tarea de seguimiento"
+            }
+          },
+          "cobranca.responsavel": {
+            "label": "Responsable de la tarea"
+          },
+          "cobranca.ja_pagou": {
+            "label": "El cliente dice que ya pagó",
+            "options": {
+              "comprovante": "Pedir el comprobante y avisar que el equipo lo verifica",
+              "transferir": "Transferir a un agente"
+            }
+          },
+          "base.politicas": {
+            "label": "Políticas de cobranza",
+            "help": "Multa, intereses, plazos de acreditación, consecuencias del atraso.",
+            "subfields": {
+              "titulo": "Título",
+              "texto": "Texto"
+            }
+          },
+          "base.faq": {
+            "label": "Preguntas frecuentes",
+            "subfields": {
+              "pergunta": "Pregunta",
+              "resposta": "Respuesta"
+            }
+          }
+        }
+      }
+    }
   }
 }
