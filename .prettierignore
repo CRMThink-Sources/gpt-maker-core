@@ -11,3 +11,7 @@ frontend/CLAUDE.md
 frontend/next-env.d.ts
 .claude
 .cursor
+.agents
+.logo-draft
+.superpowers
+docs/superpowers

@@ -172,6 +172,88 @@
         "instructions": "Quando o assunto for boleto, segunda via, pagamento, cobrança ou nota fiscal.",
         "returnOnFinish": false
       }
-    ]
+    ],
+    "translations": {
+      "en": {
+        "name": "Reception",
+        "description": "Receives every contact, understands what the customer needs and hands the conversation to the right agent: sales, support or finance. When the topic fits none of them, it transfers to an agent.",
+        "fields": {
+          "recepcao.agente_vendas": {
+            "label": "Sales agent",
+            "help": "The agent that serves people who want to buy or ask for a price or quote. It must be another agent in this portal."
+          },
+          "recepcao.agente_suporte": {
+            "label": "Support agent",
+            "help": "The agent that serves existing customers with a problem or a usage question. When it finishes, the conversation returns to reception."
+          },
+          "recepcao.financeiro": {
+            "label": "Who handles bank slips, payments and invoices?",
+            "options": {
+              "agente": "Another AI agent",
+              "canal": "An open channel queue",
+              "atendente": "An agent, like the other topics"
+            }
+          },
+          "recepcao.agente_financeiro": {
+            "label": "Finance agent",
+            "help": "The agent that handles collections and payments."
+          },
+          "recepcao.canal_financeiro": {
+            "label": "Finance open channel",
+            "help": "The conversation joins this Bitrix24 channel queue."
+          },
+          "recepcao.coleta": {
+            "label": "What to ask before transferring",
+            "help": "The team receiving the conversation already starts with this data.",
+            "options": {
+              "nome": "Name",
+              "email": "Email",
+              "empresa": "Company",
+              "pedido": "Order number (if already a customer)"
+            }
+          }
+        }
+      },
+      "es": {
+        "name": "Recepción",
+        "description": "Recibe todos los contactos, entiende lo que necesita el cliente y pasa la conversación al agente correcto: ventas, soporte o finanzas. Cuando el tema no es de ninguno, transfiere a un agente.",
+        "fields": {
+          "recepcao.agente_vendas": {
+            "label": "Agente de ventas",
+            "help": "El agente que atiende a quien quiere comprar o pedir precio o presupuesto. Debe ser otro agente de este portal."
+          },
+          "recepcao.agente_suporte": {
+            "label": "Agente de soporte",
+            "help": "El agente que atiende a quien ya es cliente y tiene un problema o duda de uso. Cuando termina, la conversación vuelve a la recepción."
+          },
+          "recepcao.financeiro": {
+            "label": "¿Quién atiende boletos, pagos y facturas?",
+            "options": {
+              "agente": "Otro agente de IA",
+              "canal": "La cola de un canal abierto",
+              "atendente": "Un agente, como los demás temas"
+            }
+          },
+          "recepcao.agente_financeiro": {
+            "label": "Agente de finanzas",
+            "help": "El agente que se ocupa de cobranzas y pagos."
+          },
+          "recepcao.canal_financeiro": {
+            "label": "Canal abierto de finanzas",
+            "help": "La conversación entra en la cola de este canal de Bitrix24."
+          },
+          "recepcao.coleta": {
+            "label": "Qué pedir antes de transferir",
+            "help": "El equipo que recibe la conversación ya empieza con estos datos.",
+            "options": {
+              "nome": "Nombre",
+              "email": "Correo electrónico",
+              "empresa": "Empresa",
+              "pedido": "Número de pedido (si ya es cliente)"
+            }
+          }
+        }
+      }
+    }
   }
 }

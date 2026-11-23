@@ -213,4 +213,27 @@ describe('review não entra no comportamento nem no orçamento', () => {
   it('mantém o pior caso do orçamento igual', () => {
     expect(worstCaseBudget(reviewed)).toEqual(worstCaseBudget(sdrFixture));
   });
+
+  // Spec function-template-i18n: o texto do agente não depende das traduções do formulário.
+  describe('com traduções do formulário', () => {
+    const translated = {
+      ...sdrFixture,
+      translations: {
+        en: { name: 'Sales', fields: { 'empresa.nome': { label: 'Company name' } } },
+        es: { fields: { 'comum.tom': { options: { formal: 'Formal', normal: 'Cordial' } } } },
+      },
+    };
+
+    it('compila exatamente o mesmo agente', () => {
+      const valid = validateFunctionAnswers(sdrFixture, raw);
+      const input = { answers: valid.answers, agentName: 'Ana', mode: 'SIMPLE' as const };
+      expect(compileAgent({ content: translated, ...input })).toEqual(
+        compileAgent({ content: sdrFixture, ...input }),
+      );
+    });
+
+    it('mantém o pior caso do orçamento igual', () => {
+      expect(worstCaseBudget(translated)).toEqual(worstCaseBudget(sdrFixture));
+    });
+  });
 });

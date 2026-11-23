@@ -520,19 +520,19 @@ Usado pela análise de alucinação (spec `agent-hallucination-analysis`). Medid
 - **`GET /v2/workspace/{workspaceId}/chats`** — `page`, `pageSize` e `agentId` (o filtro por agente funciona). **Todos os tenants vêm no mesmo workspace**: o filtro de tenant é do app, pelo `id` do chat (`public-api-<agentId>-<tenantId>:<diálogo>`) e pelo `recipient` (`<tenantId>:<diálogo>`), que concordaram em 100% dos chats amostrados.
 - **`GET /v2/chat/{chatId}/messages`** — `page` e `pageSize`. O `chatId` precisa ir codificado na URL (tem `:`).
 
-| Ponto | Observado |
-| --- | --- |
-| Base de `page` | **1-based**; `page=0` devolve o mesmo que `page=1` (nos chats e nas mensagens). |
-| `pageSize` máximo | Chats: **200**; acima disso, `400 {"error":"pageSize max 200"}`. Mensagens: 1000 foi aceito, sem teto encontrado. Sem `pageSize`, as mensagens vêm 10 por vez. |
-| Resposta | Array simples nas duas rotas, sem total. |
-| Ordem dos chats | Decrescente por `time` (última atividade), em milissegundos. |
-| Ordem das mensagens | A página 1 é o bloco **mais recente** e as seguintes vão para trás; **dentro de cada página a ordem é crescente** (`time` e `sequence`). O chat inteiro numa página só vem todo crescente. |
-| Tamanho da página | Pode vir **menor que `pageSize` sem ser a última** (ex.: `pageSize=5` deu 5,5,4,5,4,…). Só a página vazia indica o fim. Lendo até a vazia, as mensagens cobrem o chat inteiro, sem repetir. |
-| `time` | Sempre **milissegundos** (nenhum valor abaixo de 1e12 em 532 mensagens e 100 chats). |
-| `role` | `user`, `assistant` e `system`. |
-| `type` (mensagem) | `TEXT`, `IMAGE`, `AUDIO` e `NOTIFICATION`. |
-| Combinações vistas | `user/TEXT`, `assistant/TEXT`, `assistant/IMAGE`, `user/AUDIO` e `system/NOTIFICATION` (cerca de 25% das mensagens: avisos do sistema, não fala de ninguém). |
-| `type` (chat) | `API`; todos os chats têm `id` `public-api-…`. |
+| Ponto               | Observado                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base de `page`      | **1-based**; `page=0` devolve o mesmo que `page=1` (nos chats e nas mensagens).                                                                                                             |
+| `pageSize` máximo   | Chats: **200**; acima disso, `400 {"error":"pageSize max 200"}`. Mensagens: 1000 foi aceito, sem teto encontrado. Sem `pageSize`, as mensagens vêm 10 por vez.                              |
+| Resposta            | Array simples nas duas rotas, sem total.                                                                                                                                                    |
+| Ordem dos chats     | Decrescente por `time` (última atividade), em milissegundos.                                                                                                                                |
+| Ordem das mensagens | A página 1 é o bloco **mais recente** e as seguintes vão para trás; **dentro de cada página a ordem é crescente** (`time` e `sequence`). O chat inteiro numa página só vem todo crescente.  |
+| Tamanho da página   | Pode vir **menor que `pageSize` sem ser a última** (ex.: `pageSize=5` deu 5,5,4,5,4,…). Só a página vazia indica o fim. Lendo até a vazia, as mensagens cobrem o chat inteiro, sem repetir. |
+| `time`              | Sempre **milissegundos** (nenhum valor abaixo de 1e12 em 532 mensagens e 100 chats).                                                                                                        |
+| `role`              | `user`, `assistant` e `system`.                                                                                                                                                             |
+| `type` (mensagem)   | `TEXT`, `IMAGE`, `AUDIO` e `NOTIFICATION`.                                                                                                                                                  |
+| Combinações vistas  | `user/TEXT`, `assistant/TEXT`, `assistant/IMAGE`, `user/AUDIO` e `system/NOTIFICATION` (cerca de 25% das mensagens: avisos do sistema, não fala de ninguém).                                |
+| `type` (chat)       | `API`; todos os chats têm `id` `public-api-…`.                                                                                                                                              |
 
 O app lê as mensagens a partir da página 1 até a vazia (no máximo 10 páginas), descarta `NOTIFICATION`, trata `system` e papéis desconhecidos como `OTHER` e normaliza `time` por `conversation-normalize.ts`.
 

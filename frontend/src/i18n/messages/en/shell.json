@@ -3,6 +3,7 @@
   "crm": "CRM for the agent",
   "plan": "Credits and plan",
   "settings": "Settings",
+  "advanced": "Advanced",
   "permissions": "Permissions",
   "aiKey": "Vibecode key",
   "notifications": "Notices",
@@ -15,6 +16,7 @@
   "authError": "Bitrix24 rejected the app authorization and the agents' service is paused. A portal administrator needs to reinstall the app to restore access.",
   "soon": "Soon",
   "support": "Support",
+  "help": "Help",
   "supportLink": "Talk to support",
   "tagline": "AI agents for Bitrix24"
 }

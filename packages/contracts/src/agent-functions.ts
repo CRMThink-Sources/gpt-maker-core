@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { stableStringify } from './agent-function-plan';
+import {
+  fieldTranslationsOnly,
+  functionTranslationsSchema,
+  mergeTranslations,
+  omitFieldTranslations,
+  translationIssues,
+} from './agent-function-translations';
 import { agentSettingsSchema, agentTypeSchema, communicationTypeSchema } from './agents';
 import { intentionFieldTypeSchema, intentionJsonName } from './intentions';
 import { TEMPLATE_VARIABLES } from './templates';
@@ -490,6 +497,8 @@ export const functionTemplateContentSchema = z.object({
   assist: z
     .object({ enabled: z.boolean(), knowledgeMode: z.enum(['write', 'skeleton']).optional() })
     .default({ enabled: false }),
+  /** Traduções do formulário (spec function-template-i18n); o português é o texto-base. */
+  translations: functionTranslationsSchema.optional(),
 });
 export type FunctionTemplateContent = z.output<typeof functionTemplateContentSchema>;
 export type FunctionTemplateContentInput = z.input<typeof functionTemplateContentSchema>;
@@ -502,6 +511,8 @@ export const functionBlockContentSchema = z.object({
   transfers: z.array(functionTransferSchema).max(5).default([]),
   /** Template que inclui o bloco passa a exigir o acesso ao CRM (`crmAccess` do template). */
   crmAccess: z.boolean().default(false),
+  /** Traduções dos campos do bloco (só `fields`); entram nas do template ao expandir. */
+  translations: functionTranslationsSchema.optional(),
 });
 export type FunctionBlockContent = z.output<typeof functionBlockContentSchema>;
 export type FunctionBlockContentInput = z.input<typeof functionBlockContentSchema>;
@@ -604,6 +615,8 @@ export function templateIssues(content: FunctionTemplateContent): TemplateIssue[
       add(where, `marcador sem campo em ${label}: {{${marker}}}`);
     }
   };
+
+  for (const message of translationIssues(content)) add({ section: 'general' }, message);
 
   check(content.behavior, 'comportamento', { section: 'behavior' });
   check(content.profile.jobName, 'perfil', { section: 'general' });
@@ -1009,6 +1022,14 @@ export function expandBlocks(
     crmAccess: draft.crmAccess || included.some((block) => block.crmAccess),
     assist: draft.assist ?? { enabled: false },
   };
+  // Bloco primeiro, template por cima: em conflito vale o texto do template.
+  // Do bloco só valem os textos dos campos (`name`/`description` são da função).
+  const translations = included.reduce<FunctionBlockContent['translations']>(
+    (acc, block) => mergeTranslations(acc, fieldTranslationsOnly(block.translations)),
+    undefined,
+  );
+  const merged = mergeTranslations(translations, draft.translations);
+  if (merged) content.translations = merged;
   return { content, errors };
 }
 
@@ -1057,6 +1078,12 @@ export function collapseBlocks(
     crmAccess: included.some((block) => block!.crmAccess) ? false : content.crmAccess,
     assist: content.assist ?? { enabled: false },
   };
+  // As traduções dos campos que vieram dos blocos voltam para eles; o resto é do template.
+  const blockFieldIds = new Set(
+    included.flatMap((block) => flattenFields(block!.fields).map((field) => field.id)),
+  );
+  const ownTranslations = omitFieldTranslations(content.translations, blockFieldIds);
+  if (ownTranslations) draft.translations = ownTranslations;
   const blockMarkers = (text: string) => text.match(/\{\{\s*bloco\.[a-z][a-z0-9_]*\s*\}\}/g) ?? [];
   const kept = new Set(blockMarkers(draft.behavior).map((marker) => marker.replace(/\s/g, '')));
   if (blockMarkers(current.behavior).some((marker) => !kept.has(marker.replace(/\s/g, '')))) {

@@ -123,6 +123,22 @@ describe('idioma do portal Bitrix', () => {
     parent.mockRestore();
   });
 
+  it('usa o LANG da URL do app sem esperar o SDK do Bitrix', async () => {
+    const bx24 = await import('@/lib/bx24');
+    const spy = vi.spyOn(bx24, 'loadBx24').mockReturnValue(new Promise(() => undefined));
+    const parent = vi.spyOn(window, 'parent', 'get').mockReturnValue({} as never);
+    window.history.pushState({}, '', '/app?DOMAIN=x.bitrix24.com&LANG=en');
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('locale').textContent).toBe('en'));
+    window.history.pushState({}, '', '/');
+    spy.mockRestore();
+    parent.mockRestore();
+  });
+
   it('a preferência salva vence o idioma do portal', async () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es');
     const bx24 = await import('@/lib/bx24');

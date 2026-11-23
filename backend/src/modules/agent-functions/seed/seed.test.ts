@@ -5,6 +5,7 @@ import {
   type FunctionBlockContent,
   functionBlockContentSchema,
   functionTemplateDraftSchema,
+  translationCompleteness,
 } from '@gptmaker/contracts';
 import { describe, expect, it } from 'vitest';
 import { SEED_BLOCKS, SEED_TEMPLATES } from './index';
@@ -24,6 +25,34 @@ const plainBlocks = new Map<string, FunctionBlockContent>(
     functionBlockContentSchema.parse(withoutReview(block.content)),
   ]),
 );
+
+describe('traduções do seed (spec function-template-i18n)', () => {
+  it.each(SEED_TEMPLATES.map((template) => [template.code, template] as const))(
+    '%s: todo texto lido pelo cliente está traduzido em en e es',
+    (_code, template) => {
+      const draft = functionTemplateDraftSchema.parse(template.draft);
+      const { content } = expandBlocks(draft, blocks);
+      const meta = { name: template.name, description: template.description };
+      for (const locale of translationCompleteness(content, meta)) {
+        expect({ locale: locale.locale, missing: locale.missing }).toEqual({
+          locale: locale.locale,
+          missing: [],
+        });
+        expect(locale.total).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it.each(SEED_BLOCKS.map((block) => [block.code, block] as const))(
+    'bloco %s: campos traduzidos em en e es',
+    (_code, block) => {
+      const content = functionBlockContentSchema.parse(block.content);
+      for (const locale of translationCompleteness(content)) {
+        expect(locale.missing).toEqual([]);
+      }
+    },
+  );
+});
 
 describe('seed das funções', () => {
   it.each(SEED_TEMPLATES.map((template) => [template.code, template] as const))(

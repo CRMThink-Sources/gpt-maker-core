@@ -11,12 +11,12 @@ import {
   type FunctionTemplateContent,
   validateFunctionAnswers,
 } from '@gptmaker/contracts';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { BotIcon, CheckIcon } from '@/components/icons';
 import { Modal } from '@/components/modal';
 import { Stepper } from '@/components/stepper';
 import { Alert, buttonClass, Loading } from '@/components/ui';
-import { useT } from '@/i18n';
+import { useLocale, useT } from '@/i18n';
 import { ApiRequestError } from '@/lib/platform-session';
 import { useAppSession } from '../session-provider';
 import { useTransferAgents } from './use-transfer-agents';
@@ -73,15 +73,19 @@ export function CreateAgentWizard({
   const [busy, setBusy] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
 
+  // Cada carga da lista de funções leva um número: a resposta de uma carga mais antiga (outro
+  // idioma) nunca sobrescreve a mais nova.
+  const loadSeq = useRef(0);
   useEffect(() => {
     let cancelled = false;
+    const mine = ++loadSeq.current;
     Promise.all([
       api<{ functions: AgentFunctionView[] }>('/app/agent-functions'),
       api<{ models: AvailableModel[] }>('/app/models'),
     ])
       .then(([fn, md]) => {
         if (cancelled) return;
-        setFunctions(fn.functions);
+        if (mine === loadSeq.current) setFunctions(fn.functions);
         setModels(md.models);
         setValues(initialValues(undefined, md.models));
       })
@@ -92,6 +96,32 @@ export function CreateAgentWizard({
     // `failure` e `t` mudam só com o idioma: não refazem a carga.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
+
+  // Trocar o idioma recarrega o formulário das funções no novo idioma; as respostas e o nome
+  // digitados ficam, porque dependem só dos ids (spec function-template-i18n).
+  const { locale } = useLocale();
+  const shownLocale = useRef(locale);
+  useEffect(() => {
+    if (shownLocale.current === locale) return;
+    shownLocale.current = locale;
+    let cancelled = false;
+    const mine = ++loadSeq.current;
+    api<{ functions: AgentFunctionView[] }>('/app/agent-functions')
+      .then((fn) => !cancelled && mine === loadSeq.current && setFunctions(fn.functions))
+      .catch((e: unknown) => !cancelled && setError(failure(e, t('failures.loadFunctions'))));
+    if (chosen) {
+      api<AgentFunctionView & { form: FunctionTemplateContent }>(
+        `/app/agent-functions/${encodeURIComponent(chosen)}`,
+      )
+        .then((fn) => !cancelled && mine === loadSeq.current && setForm(fn.form))
+        .catch((e: unknown) => !cancelled && setError(failure(e, t('failures.loadForm'))));
+    }
+    return () => {
+      cancelled = true;
+    };
+    // `chosen` é lido no momento da troca; só o idioma dispara a recarga.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   const set = <K extends keyof AgentFormValues>(key: K, value: AgentFormValues[K]) =>
     setValues((current) => (current ? { ...current, [key]: value } : current));

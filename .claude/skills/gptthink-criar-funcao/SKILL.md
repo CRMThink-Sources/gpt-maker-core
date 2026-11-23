@@ -24,8 +24,9 @@ Arquivos desta skill:
 2. **Leia** `referencia/formato.md` e o exemplo mais parecido.
 3. **Escreva o JSON** no formato de saída abaixo, num arquivo (ex.: `funcao-cobranca.json`).
 4. **Ajuda da IA:** para cada campo `TEXT`, `TEXT_LIST` ou `KNOWLEDGE` que um leigo acha difícil de preencher (critério, perfil do cliente, assuntos que o agente não resolve), escreva 1 a 3 perguntas de entrevista no `assist.questions`, nas palavras do próprio cliente e concretas ("Que sinais fazem um lead valer uma ligação sua?", "Cite 2 problemas que não podem esperar até amanhã"). Se quiser orientar a IA, acrescente `assist.instructions` (até 500 caracteres). Em `KNOWLEDGE`, as perguntas pedem a lista de itens ("Que produtos vocês vendem?") e as instruções dizem o que é um item. Ligue `"assist": { "enabled": true }` no JSON quando ao menos um campo tiver perguntas; para a IA só montar o esqueleto da base (título e perguntas guia) sem redigir o conteúdo, use `"knowledgeMode": "skeleton"`. Formato e limites em `referencia/formato.md` (seção "Ajuda da IA").
-5. **Valide:** `node <pasta-da-skill>/scripts/validar.mjs funcao-cobranca.json`. Corrija até aparecer `OK`. O validador mostra quanto cada campo pesa no pior caso: corte primeiro o maior.
-6. **Entregue** no formato abaixo, com o resultado do validador (pior caso / 3000).
+5. **Traduza o formulário:** escreva `draft.translations` em `en` e `es` com **todo** texto que o cliente lê (nome e descrição da função, rótulo, ajuda e exemplo dos campos, opções, subcampos, valores de SPA e perguntas da ajuda da IA), pelo id de cada campo. O texto do agente (`behavior`, trechos das opções, intenções) fica só em português. Formato e limites em `referencia/formato.md` (seção "Traduções"); os campos dos blocos do seed já vêm traduzidos.
+6. **Valide:** `node <pasta-da-skill>/scripts/validar.mjs funcao-cobranca.json`. Corrija até aparecer `OK` e **sem** aviso `traduções …: faltam N`. O validador mostra quanto cada campo pesa no pior caso: corte primeiro o maior.
+7. **Entregue** no formato abaixo, com o resultado do validador (pior caso / 3000).
 
 ## Formato de saída
 
@@ -39,6 +40,8 @@ A aba JSON do backoffice aceita **só o rascunho** (o objeto que começa em `"ag
 | Nome | Cobrança (até 100) |
 | Descrição | Uma ou duas frases que o cliente lê ao escolher a função (até 500) |
 
+O nome e a descrição **em inglês e espanhol** vão no JSON, em `translations.en.name`/`description` e `translations.es.name`/`description`.
+
 **2. JSON para a aba JSON:** um bloco de código com o rascunho, e nada em volta:
 
 ```json
@@ -49,6 +52,7 @@ A aba JSON do backoffice aceita **só o rascunho** (o objeto que começa em `"ag
   "blocks": ["comum", "registro", "duvida", "transferir", "crm"],
   "crmAccess": false,
   "assist": { "enabled": true },
+  "translations": { "en": { "name": "...", "description": "...", "fields": { ... } }, "es": { ... } },
   "fields": [ { "kind": "TEXT", "id": "sdr.criterio", "label": "...", "required": true, "maxLength": 200, "assist": { "questions": ["Que sinais fazem um lead valer uma ligação sua?"] } }, ... ],
   "behavior": "Você é {{agente.nome}}, ...",
   "intentions": [ ... ],
@@ -182,6 +186,9 @@ Inclua sempre `comum`, `registro`, `duvida` e `transferir` (exceção: função 
 | `{{fields.x}}` não é campo coletado | O nome vem de `fields[].name` normalizado: "Dados do cliente" → `fields.dados_do_cliente` |
 | `categoryId` / `responsibleId` como texto com mais coisa | Número, ou um marcador sozinho: `"{{cobranca.funil.categoryId}}"` |
 | Ação citada no texto sem intenção | Crie a intenção, ou cite uma ação de bloco existente |
+| `tradução en: campo inexistente: x` / `opção inexistente em x: y` | A tradução cita um id que não existe no formulário (ou nos blocos incluídos). Confira id, `value` da opção e id do subcampo |
+| `aviso: traduções es: faltam N de M textos` | Faltou traduzir algum texto lido pelo cliente; os caminhos de exemplo aparecem no aviso. Complete antes de entregar |
+| `idioma de tradução não suportado: fr` | Só `en` e `es` |
 | `transferência x: escolha um campo de agente` | `agent` precisa ser só `"{{id}}"` de um campo `AGENT` |
 | `Transferência x usa "...", que só existe com ...` | O campo `AGENT` é dependente: ponha na transferência o `when` com a opção pai |
 | `Escolha outro agente em "..."` (ao publicar) | O cliente escolheu o próprio agente ou um agente removido no campo `AGENT` |

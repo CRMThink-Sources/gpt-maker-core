@@ -12,6 +12,7 @@ import {
   type FunctionBlockContent,
   functionBlockContentSchema,
   type FunctionTemplateDraft,
+  type FunctionTranslations,
   functionTemplateDraftSchema,
   type TemplateCheck,
   type TemplateIssue,
@@ -34,6 +35,7 @@ import {
   CodeIcon,
   DatabaseIcon,
   EyeIcon,
+  GlobeIcon,
   HistoryIcon,
   LayersIcon,
   ListIcon,
@@ -56,16 +58,20 @@ import {
   type Published,
   renameId,
   renameOption,
+  renameTranslationOption,
 } from './model';
 import { CompiledBehavior, PreviewTab } from './preview-tab';
+import { TranslationsEditor } from './translations-editor';
 
-type Tab = 'general' | 'form' | 'behavior' | 'actions' | 'preview' | 'versions' | 'json';
+type Tab =
+  'general' | 'form' | 'behavior' | 'actions' | 'translations' | 'preview' | 'versions' | 'json';
 
 const TAB_LABELS: Record<Tab, string> = {
   general: 'Geral',
   form: 'Formulário',
   behavior: 'Texto do agente',
   actions: 'Ações',
+  translations: 'Traduções',
   preview: 'Testar',
   versions: 'Versões',
   json: 'JSON',
@@ -76,6 +82,7 @@ const TAB_ICONS: Record<Tab, ComponentType<SVGProps<SVGSVGElement>>> = {
   form: ListIcon,
   behavior: TextIcon,
   actions: BoltIcon,
+  translations: GlobeIcon,
   preview: EyeIcon,
   versions: HistoryIcon,
   json: CodeIcon,
@@ -88,6 +95,8 @@ const TAB_HINTS: Record<Tab, string> = {
   behavior:
     'O texto que o agente segue. Cada resposta entra no seu marcador {{…}}; numa escolha, entra o texto da opção.',
   actions: 'O que o agente faz no Bitrix24 e quando.',
+  translations:
+    'O formulário em inglês e espanhol, como o cliente vê com a interface nesses idiomas.',
   preview:
     'Responda como um cliente e veja o agente que sai. Atualiza enquanto você edita, sem salvar.',
   versions: 'Cada publicação vira uma versão imutável. Compare ou restaure uma anterior.',
@@ -421,9 +430,16 @@ function withFields<
   let next = { ...value, fields };
   if (rename?.kind === 'id') next = renameId(next, rename.from, rename.to);
   if (rename?.kind === 'option') {
+    const translations = renameTranslationOption(
+      (next as { translations?: FunctionTranslations }).translations,
+      rename.fieldId,
+      rename.from,
+      rename.to,
+    );
     next = {
       ...next,
       intentions: renameOption(next.intentions, rename.fieldId, rename.from, rename.to),
+      ...(translations ? { translations } : {}),
     };
   }
   return next;
@@ -528,6 +544,7 @@ export function TemplateEditor({
   agentName,
   onAgentName,
   identity,
+  identityMeta,
   availability,
   versions,
   progress,
@@ -549,6 +566,8 @@ export function TemplateEditor({
   onAgentName: (name: string) => void;
   /** Nome e descrição da função: primeira seção de Geral. */
   identity: ReactNode;
+  /** Nome e descrição como estão no editor (a aba Traduções os traduz também). */
+  identityMeta?: { name: string; description: string };
   /** Portais em que a função aparece: seção de Geral logo após a identidade (só funções). */
   availability?: ReactNode;
   /** Lista de versões publicadas (seção Versões). */
@@ -634,7 +653,7 @@ export function TemplateEditor({
               versions: versions.count,
             }}
             groups={[
-              { title: 'Montar', tabs: ['general', 'form', 'behavior', 'actions'] },
+              { title: 'Montar', tabs: ['general', 'form', 'behavior', 'actions', 'translations'] },
               { title: 'Validar', tabs: ['preview', 'versions', 'json'] },
             ]}
           />
@@ -1002,6 +1021,21 @@ export function TemplateEditor({
             />
           )}
 
+          {tab === 'translations' && (
+            <TranslationsEditor
+              fields={draft.fields}
+              translations={draft.translations}
+              meta={identityMeta}
+              disabled={disabled}
+              note={
+                blockFields.length > 0
+                  ? 'Os campos que vêm dos blocos incluídos são traduzidos em Blocos compartilhados.'
+                  : undefined
+              }
+              onChange={(translations) => set({ translations })}
+            />
+          )}
+
           {tab === 'versions' && versions.content}
 
           {tab === 'json' && (
@@ -1083,7 +1117,11 @@ export function BlockEditor({
           onChange={(crmAccess) => onChange({ ...value, crmAccess })}
         />
       </div>
-      <PillTabs tab={tab} onTab={setTab} tabs={['form', 'behavior', 'actions', 'json']} />
+      <PillTabs
+        tab={tab}
+        onTab={setTab}
+        tabs={['form', 'behavior', 'actions', 'translations', 'json']}
+      />
       {tab === 'form' && (
         <FieldList
           fields={value.fields}
@@ -1123,6 +1161,14 @@ export function BlockEditor({
             onChange={(transfers) => onChange({ ...value, transfers })}
           />
         </div>
+      )}
+      {tab === 'translations' && (
+        <TranslationsEditor
+          fields={value.fields}
+          translations={value.translations}
+          disabled={disabled}
+          onChange={(translations) => onChange({ ...value, translations })}
+        />
       )}
       {tab === 'json' && (
         <JsonTab

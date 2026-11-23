@@ -59,6 +59,11 @@ describe('corsOptions', () => {
     expect(res.headers['access-control-allow-origin']).toBe('*');
   });
 
+  it('a API aceita o cabeçalho Accept-Language do frontend (idioma da interface)', async () => {
+    const res = await preflight('/app/agent-functions', FRONTEND, 'authorization,accept-language');
+    expect(res.headers['access-control-allow-headers']).toMatch(/Accept-Language/i);
+  });
+
   it('o resto da API só aceita o frontend', async () => {
     const other = await preflight('/app/session', GPTMAKER);
     expect(other.headers['access-control-allow-origin']).toBeUndefined();

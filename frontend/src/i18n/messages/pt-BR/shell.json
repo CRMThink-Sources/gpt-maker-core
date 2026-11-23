@@ -3,6 +3,7 @@
   "crm": "CRM para o agente",
   "plan": "Créditos e plano",
   "settings": "Configurações",
+  "advanced": "Avançado",
   "permissions": "Permissões",
   "aiKey": "Chave Vibecode",
   "notifications": "Avisos",
@@ -15,6 +16,7 @@
   "authError": "O Bitrix24 recusou a autorização do app e o atendimento dos agentes está pausado. Um administrador do portal precisa reinstalar o app para restabelecer o acesso.",
   "soon": "Em breve",
   "support": "Suporte",
+  "help": "Ajuda",
   "supportLink": "Falar com o suporte",
   "tagline": "Agentes de IA para Bitrix24"
 }

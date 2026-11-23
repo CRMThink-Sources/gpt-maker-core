@@ -45,6 +45,12 @@ export const BellIcon = (p: P) => (
     d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.66V5a2 2 0 1 0-4 0v.34A6 6 0 0 0 6 11v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"
   />
 );
+export const HelpIcon = (p: P) => (
+  <Icon
+    {...p}
+    d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-2.5-11.5a2.5 2.5 0 1 1 3.6 2.25c-.7.35-1.1.85-1.1 1.75M12 16.5h.01"
+  />
+);
 export const BoltIcon = (p: P) => <Icon {...p} d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" />;
 export const WalletIcon = (p: P) => (
   <Icon
