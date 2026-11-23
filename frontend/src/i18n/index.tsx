@@ -17,7 +17,8 @@ const I18nContext = createContext<I18nValue | null>(null);
 
 /**
  * Idioma da interface do `/app` (spec app-i18n): preferência salva → idioma do portal Bitrix
- * (`BX24.getLang()`) → `en`. Enquanto o portal não responde, a tela sai em pt-BR.
+ * (`LANG` da URL, confirmado por `BX24.getLang()`) → `en`. Sem nenhuma dessas fontes a tela sai
+ * em pt-BR.
  */
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
@@ -28,6 +29,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- preferência só existe no navegador
       setLocaleState(stored);
       return;
+    }
+    // O Bitrix abre o app com `LANG` na URL: vale já na primeira renderização, sem esperar o SDK
+    // (que pode demorar ou falhar e deixaria a tela em pt-BR num portal em inglês).
+    const urlLang = new URLSearchParams(window.location.search).get('LANG');
+    if (urlLang) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- idioma só é conhecido no navegador
+      setLocaleState(localeFromBitrixLang(urlLang));
     }
     if (window.parent === window) return;
     let cancelled = false;
