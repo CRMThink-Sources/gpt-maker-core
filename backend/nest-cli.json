@@ -5,6 +5,8 @@
   "entryFile": "main.api",
   "compilerOptions": {
     "tsConfigPath": "tsconfig.build.json",
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "assets": ["modules/help-skill/content/*.md"],
+    "watchAssets": true
   }
 }

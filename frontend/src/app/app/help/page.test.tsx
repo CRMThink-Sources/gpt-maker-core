@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n';
 import HelpPage from './page';
@@ -8,7 +8,7 @@ const SUPPORT_URL = 'https://www.bitrix24.net/oauth/select/?preset=im&IM_DIALOG=
 let supportUrl: string | null = SUPPORT_URL;
 
 vi.mock('../session-provider', () => ({
-  useAppSession: () => ({ config: { supportUrl } }),
+  useAppSession: () => ({ config: { supportUrl, apiBaseUrl: 'https://api.exemplo.com' } }),
 }));
 
 function renderPage() {
@@ -36,14 +36,32 @@ describe('página Ajuda (spec app-help)', () => {
   });
 
   it('as perguntas começam recolhidas (resposta dentro de <details> fechado)', () => {
-    const { container } = renderPage();
-    const items = Array.from(container.querySelectorAll('details'));
+    renderPage();
+    const faq = screen.getByRole('region', { name: 'Perguntas frequentes' });
+    const items = Array.from(faq.querySelectorAll('details'));
     expect(items).toHaveLength(9);
     expect(items.every((item) => !item.open)).toBe(true);
     // cada pergunta é o <summary> do seu <details>, com a resposta junto
     const first = screen.getByText('Como criar um agente?');
     expect(first.tagName).toBe('SUMMARY');
     expect(first.parentElement?.textContent).toContain('Abra Agentes');
+  });
+
+  it('oferece o download da skill em nova aba, sem repassar a origem', () => {
+    renderPage();
+    const card = screen.getByRole('region', { name: 'Tire dúvidas no seu Claude' });
+    const link = within(card).getByRole('link', { name: 'Baixar skill' });
+    expect(link.getAttribute('href')).toBe('https://api.exemplo.com/public/help-skill/download');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('explica como instalar e como liberar o acesso, com o domínio da API', () => {
+    renderPage();
+    const card = screen.getByRole('region', { name: 'Tire dúvidas no seu Claude' });
+    expect(within(card).getByText('Como instalar').tagName).toBe('SUMMARY');
+    expect(within(card).getByText('Como receber o conteúdo atualizado').tagName).toBe('SUMMARY');
+    expect(card.textContent).toContain('api.exemplo.com');
   });
 
   it('com o canal configurado, o botão abre o suporte em nova aba sem repassar a origem', () => {
@@ -68,5 +86,7 @@ describe('página Ajuda (spec app-help)', () => {
     expect(screen.getByText('Getting started')).toBeTruthy();
     expect(screen.getByText('How do I create an agent?')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Contact support' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Download skill' })).toBeTruthy();
+    expect(screen.getByText(/allow network access to the domain api\.exemplo\.com/)).toBeTruthy();
   });
 });
