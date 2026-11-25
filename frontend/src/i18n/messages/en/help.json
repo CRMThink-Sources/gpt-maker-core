@@ -70,6 +70,20 @@
       }
     }
   },
+  "skill": {
+    "title": "Ask your Claude",
+    "description": "Download the skill and ask your Claude how to create and set up agents. It only answers questions: it doesn't access your account or change anything.",
+    "download": "Download skill",
+    "install": {
+      "title": "How to install",
+      "web": "In Claude (web or app), open settings, go to Capabilities, find skills and upload the downloaded .zip file.",
+      "code": "In Claude Code, extract the .zip into the .claude/skills folder."
+    },
+    "access": {
+      "title": "How to get up-to-date content",
+      "text": "In Claude's settings, allow network access to the domain {domain} and start a new conversation. Without it, the skill answers from the copy saved in the download and tells you its date."
+    }
+  },
   "supportTitle": "Still need help?",
   "supportText": "Talk to the CRMThink support team.",
   "supportButton": "Contact support"

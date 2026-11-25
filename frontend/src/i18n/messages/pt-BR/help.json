@@ -70,6 +70,20 @@
       }
     }
   },
+  "skill": {
+    "title": "Tire dúvidas no seu Claude",
+    "description": "Baixe a skill e pergunte ao seu Claude como criar e configurar agentes. Ela só tira dúvidas: não acessa a sua conta nem altera nada.",
+    "download": "Baixar skill",
+    "install": {
+      "title": "Como instalar",
+      "web": "No Claude (site ou aplicativo), abra as configurações, vá em Capacidades, na parte de skills, e envie o arquivo .zip baixado.",
+      "code": "No Claude Code, extraia o .zip dentro da pasta .claude/skills."
+    },
+    "access": {
+      "title": "Como receber o conteúdo atualizado",
+      "text": "Nas configurações do Claude, libere o acesso à rede para o domínio {domain} e comece uma conversa nova. Sem isso, a skill responde com a cópia salva no download e avisa a data dela."
+    }
+  },
   "supportTitle": "Ainda precisa de ajuda?",
   "supportText": "Fale com o time de suporte da CRMThink.",
   "supportButton": "Falar com o suporte"

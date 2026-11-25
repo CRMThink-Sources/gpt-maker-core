@@ -333,6 +333,42 @@ export class FunctionCatalog {
   }
 
   /**
+   * Última versão publicada das funções abertas a todos os portais (sem restrição): o que pode
+   * sair em conteúdo público, onde não se sabe quem pergunta (spec customer-help-skill).
+   */
+  async listPublicForms(): Promise<
+    { name: string; description: string; content: FunctionTemplateContent }[]
+  > {
+    return this.db
+      .select({
+        name: agentFunctionTemplate.name,
+        description: agentFunctionTemplate.description,
+        content: agentFunctionTemplateVersion.content,
+      })
+      .from(agentFunctionTemplate)
+      .innerJoin(
+        agentFunctionTemplateVersion,
+        and(
+          eq(agentFunctionTemplateVersion.templateId, agentFunctionTemplate.id),
+          eq(agentFunctionTemplateVersion.version, agentFunctionTemplate.latestVersion),
+        ),
+      )
+      .where(
+        and(
+          eq(agentFunctionTemplate.active, true),
+          isNull(agentFunctionTemplate.deletedAt),
+          notExists(
+            this.db
+              .select({ one: sql`1` })
+              .from(agentFunctionTemplateTenant)
+              .where(eq(agentFunctionTemplateTenant.templateId, agentFunctionTemplate.id)),
+          ),
+        ),
+      )
+      .orderBy(agentFunctionTemplate.code);
+  }
+
+  /**
    * Última versão publicada da função para criar um agente no portal; recusa função sem versão,
    * inativa, excluída ou restrita a outros portais.
    */
