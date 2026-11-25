@@ -85,6 +85,11 @@ export const envSchema = z.object({
     .url()
     .default('http://localhost:3001')
     .transform((value) => value.replace(/\/+$/, '')),
+  /**
+   * Canal de suporte, o mesmo mostrado no app; a skill de ajuda o indica ao cliente. Vazio (como
+   * o compose repassa quando não há canal) vale como ausente.
+   */
+  PUBLIC_SUPPORT_URL: z.preprocess((value) => value || undefined, z.url().optional()),
 
   // crmthink-platform: instalação, tokens do Bitrix, sessão do iframe e cobrança (design D3/D9)
   /**

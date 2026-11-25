@@ -4,6 +4,7 @@ import { ChatIcon } from '@/components/icons';
 import { useT } from '@/i18n';
 import { buttonClass, Card, PageHeader } from '@/components/ui';
 import { useAppSession } from '../session-provider';
+import { SkillCard } from './skill-card';
 
 const STEPS = ['s1', 's2', 's3'] as const;
 
@@ -66,6 +67,8 @@ export default function HelpPage() {
           </div>
         ))}
       </section>
+
+      <SkillCard apiBaseUrl={config.apiBaseUrl} />
 
       {config.supportUrl && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-4">

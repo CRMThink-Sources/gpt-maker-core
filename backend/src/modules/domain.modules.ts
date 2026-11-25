@@ -17,6 +17,7 @@ import { BillingModule } from './billing';
 import { PaymentsModule } from './payments';
 import { ReconciliationModule } from './reconciliation';
 import { BackofficeModule } from './backoffice';
+import { HelpSkillModule } from './help-skill';
 
 /** Módulos de domínio, carregados pelos dois papéis. */
 export const DOMAIN_MODULES = [
@@ -39,4 +40,5 @@ export const DOMAIN_MODULES = [
   PaymentsModule,
   ReconciliationModule,
   BackofficeModule,
+  HelpSkillModule,
 ];
